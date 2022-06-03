@@ -1,5 +1,5 @@
-INSTALLATION
-============
+Install
+=======
 
 .. autosummary::
    :toctree: generated
