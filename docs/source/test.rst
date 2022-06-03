@@ -1,5 +1,5 @@
-TESTING
-=======
+Test
+====
 
 .. autosummary::
    :toctree: generated
