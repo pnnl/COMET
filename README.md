@@ -130,3 +130,16 @@ If you use COMET in your research or work, please cite any of the following rele
       doi={10.1109/LLVMHPC54804.2021.00009}
    }
 ```
+
+## Support
+
+The COMET compiler is supported in part by the [Data-Model Convergence (DMC)](https://www.pnnl.gov/projects/dmc) 
+initiative at the [Pacific Northwest National Laboratory](https://www.pnnl.gov/).
+
+This work is also supported in part by the [High Performance Data Analytics (HPDA)](https://www.pnnl.gov/computing/HPDA/) program
+at the [Pacific Northwest National Laboratory](https://www.pnnl.gov/).
+ 
+This work is also supported in part by the U.S. Department of Energy’s (DOE) [Office of Advanced Scientific Computing Research (ASCR)](https://www.energy.gov/science/ascr/advanced-scientific-computing-research>)
+as part of the [Center for Artificial Intelligence-focused Architectures and Algorithms (ARIAA)](https://www.pnnl.gov/projects/co-design-center-artificial-intelligence-focused-architectures-and-algorithms).
+
+![alt text](https://github.com/pnnl/COMET/blob/master/docs/source/DMC_PNNL.jpeg)
