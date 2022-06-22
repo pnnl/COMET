@@ -1,7 +1,15 @@
 [package]
 name = "comet-rs-impl"
 version = "0.1.0"
+authors = ["Ryan D. Friese <ryan.friese@pnnl.gov>", "Gokcen Kestor <gokcen.kestor@pnnl.gov>"]
 edition = "2021"
+description = "Rust eDSL for COMET: domain specific COMpiler for Extreme Targets"
+readme = "README.md"
+repository = "https://github.com/pnnl/COMET/tree/master/frontends/rust/comet-rs"
+homepage = "https://github.com/pnnl/COMET"
+license-file = "LICENSE"
+keywords = ["heterogeneous", "mlir", "compiler", "dsl", "COMET"]
+categories = ["compilers","hardware-support","science"]
 
 [lib]
 proc-macro = true
