@@ -37,7 +37,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```
 //! use comet_rs::*;
 //!
 //! comet_fn! { dense_dense_matrix_multiply, {
@@ -59,7 +59,7 @@
 //! # Operations
 //! 
 //! We have implemented the following tensor operations (most of which are not valid rust syntax, but are valid COMET eDSL syntax)
-//! please refer to the [COMET documentation](https://pnnl-comet.readthedocs.io/en/latest/operations) for more in-depth descriptions of each operation.
+//! please refer to the [COMET documentation](https://pnnl-comet.readthedocs.io/en/latest/operations.html) for more in-depth descriptions of each operation.
 //! - Multiplication: `A * B`
 //! - Elementwise Multiplication: `A .* B`
 //! - Semiring Operations: `@(op1, op2)`
@@ -78,20 +78,20 @@
 //! 
 //! # Optimizations
 //! We also support the ability to specify various optimizations to be performed by the COMET compiler.
-//! please refer to the [COMET documentation](https://pnnl-comet.readthedocs.io/en/latest/optimizations) for more in-depth descriptions of each optimization.
-//! - [Permutation TTGT](https://pnnl-comet.readthedocs.io/en/latest/passes/PermTTGT): `BestPermTtgt`
-//! - [Tensor Algebra to Index Tree](https://pnnl-comet.readthedocs.io/en/latest/passes/TAtoIT): `TaToIt`
-//! - [Tensor Contraction to TTGT](https://pnnl-comet.readthedocs.io/en/latest/passes/TC): `TcToTtgt`
-//! - [Loops](https://pnnl-comet.readthedocs.io/en/latest/passes/loops): `ToLoops`
-//! - [Matmult Kernel](https://pnnl-comet.readthedocs.io/en/latest/passes/mkernel): `MatMulKernel`
-//! - [Matmult Tiling](https://pnnl-comet.readthedocs.io/en/latest/passes/tiling): `MatMulTiling`
-//! - [Dense Transpose](https://pnnl-comet.readthedocs.io/en/latest/passes/transpose): `DenseTranspose`
-//! - [Workspace](https://pnnl-comet.readthedocs.io/en/latest/passes/workspace): `CompWorkspace`
+//! please refer to the [COMET documentation](https://pnnl-comet.readthedocs.io/en/latest/optimizations.html) for more in-depth descriptions of each optimization.
+//! - [Permutation TTGT](https://pnnl-comet.readthedocs.io/en/latest/passes/PermTTGT.html): `BestPermTtgt`
+//! - [Tensor Algebra to Index Tree](https://pnnl-comet.readthedocs.io/en/latest/passes/TAtoIT.html): `TaToIt`
+//! - [Tensor Contraction to TTGT](https://pnnl-comet.readthedocs.io/en/latest/passes/TC.html): `TcToTtgt`
+//! - [Loops](https://pnnl-comet.readthedocs.io/en/latest/passes/loops.html): `ToLoops`
+//! - [Matmult Kernel](https://pnnl-comet.readthedocs.io/en/latest/passes/mkernel.html): `MatMulKernel`
+//! - [Matmult Tiling](https://pnnl-comet.readthedocs.io/en/latest/passes/tiling.html): `MatMulTiling`
+//! - [Dense Transpose](https://pnnl-comet.readthedocs.io/en/latest/passes/transpose.html): `DenseTranspose`
+//! - [Workspace](https://pnnl-comet.readthedocs.io/en/latest/passes/workspace.html): `CompWorkspace`
 //!
 //! The above optimizations can be passed to the compiler as part of a custom syntax proivded as an argument to the `comet_fn` macro. 
 //!
 //! #### Example
-//! ```rust
+//! ```
 //! comet_fn! {function_name, {
 //!         eDSL code
 //! },
@@ -113,7 +113,7 @@ use comet_rs_impl;
 /// * `function_name` - is the (user defined) name of the COMET function and can be called directly from the rust program as `function_name()`.
 /// * `eDSL code` - is the eDSL code to be compiled by the COMET compiler.
 /// * `CometOptions` - are optional optimizations to pass to the COMET compiler.
-/// ```rust
+/// ```
 /// comet_rs::comet_fn! {function_name, {
 /// eDSL code
 /// }[,]
@@ -121,7 +121,7 @@ use comet_rs_impl;
 /// }
 /// ``` 
 /// # Example
-/// ```rust
+/// ```
 /// comet_rs::comet_fn! { print_dense, {
 ///    let i = Index::with_value(4);
 ///    let j = Index::with_value(4);

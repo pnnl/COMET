@@ -60,7 +60,7 @@ If you have changed the build locations from what was listed in the COMET build 
 ## Operations
  
  We have implemented the following tensor operations (most of which are not valid rust syntax, but are valid COMET eDSL syntax)
- please refer to the [COMET documentation](https://pnnl-comet.readthedocs.io/en/latest/operations) for more in-depth descriptions of each operation.
+ please refer to the [COMET documentation](https://pnnl-comet.readthedocs.io/en/latest/operations.html) for more in-depth descriptions of each operation.
  - Multiplication: `A * B`
  - Elementwise Multiplication: `A .* B`
  - Semiring Operations: `@(op1, op2)`
@@ -79,15 +79,15 @@ If you have changed the build locations from what was listed in the COMET build 
  
 ## Optimizations
  We also support the ability to specify various optimizations to be performed by the COMET compiler.
- please refer to the [COMET documentation](https://pnnl-comet.readthedocs.io/en/latest/optimizations) for more in-depth descriptions of each optimization.
- - [Permutation TTGT](https://pnnl-comet.readthedocs.io/en/latest/passes/PermTTGT): `BestPermTtgt`
- - [Tensor Algebra to Index Tree](https://pnnl-comet.readthedocs.io/en/latest/passes/TAtoIT): `TaToIt`
- - [Tensor Contraction to TTGT](https://pnnl-comet.readthedocs.io/en/latest/passes/TC): `TcToTtgt`
- - [Loops](https://pnnl-comet.readthedocs.io/en/latest/passes/loops): `ToLoops`
- - [Matmult Kernel](https://pnnl-comet.readthedocs.io/en/latest/passes/mkernel): `MatMulKernel`
- - [Matmult Tiling](https://pnnl-comet.readthedocs.io/en/latest/passes/tiling): `MatMulTiling`
- - [Dense Transpose](https://pnnl-comet.readthedocs.io/en/latest/passes/transpose): `DenseTranspose`
- - [Workspace](https://pnnl-comet.readthedocs.io/en/latest/passes/workspace): `CompWorkspace`
+ please refer to the [COMET documentation](https://pnnl-comet.readthedocs.io/en/latest/optimizations.html) for more in-depth descriptions of each optimization.
+ - [Permutation TTGT](https://pnnl-comet.readthedocs.io/en/latest/passes/PermTTGT.html): `BestPermTtgt`
+ - [Tensor Algebra to Index Tree](https://pnnl-comet.readthedocs.io/en/latest/passes/TAtoIT.html): `TaToIt`
+ - [Tensor Contraction to TTGT](https://pnnl-comet.readthedocs.io/en/latest/passes/TC.html): `TcToTtgt`
+ - [Loops](https://pnnl-comet.readthedocs.io/en/latest/passes/loops.html): `ToLoops`
+ - [Matmult Kernel](https://pnnl-comet.readthedocs.io/en/latest/passes/mkernel.html): `MatMulKernel`
+ - [Matmult Tiling](https://pnnl-comet.readthedocs.io/en/latest/passes/tiling.html): `MatMulTiling`
+ - [Dense Transpose](https://pnnl-comet.readthedocs.io/en/latest/passes/transpose.html): `DenseTranspose`
+ - [Workspace](https://pnnl-comet.readthedocs.io/en/latest/passes/workspace.html): `CompWorkspace`
 
  The above optimizations can be passed to the compiler as part of a custom syntax proivded as an argument to the `comet_fn` macro. 
 
