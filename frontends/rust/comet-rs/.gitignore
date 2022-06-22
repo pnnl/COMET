@@ -1,0 +1,12 @@
+/target
+**/*.rs.bk
+/.vscode
+/impl/target
+*.out
+expanded*.rs
+/comet_libs
+**/*.so
+**/*.llvm
+**/*.mlir
+**/*.bc
+**/*.o

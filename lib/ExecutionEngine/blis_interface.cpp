@@ -1,0 +1,62 @@
+//===- blis_interface.cpp - Simple Blis subset interface -----------------===//
+//
+// Copyright 2022 Battelle Memorial Institute
+//
+// Redistribution and use in source and binary forms, with or without modification,
+// are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this list of conditions
+// and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions
+// and the following disclaimer in the documentation and/or other materials provided with the distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+// INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+// GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//===----------------------------------------------------------------------===//
+//
+// Simple Blis subset interface implementation.
+//
+//===----------------------------------------------------------------------===//
+
+#include "comet/ExecutionEngine/blis_interface.h"
+#include <assert.h>
+#include <iostream>
+
+extern "C" void _mlir_ciface_linalg_matmul_viewsxsxf64_viewsxsxf64_viewsxsxf64(
+    StridedMemRefType<double, 2> *A, StridedMemRefType<double, 2> *B,
+    StridedMemRefType<double, 2> *C)
+{
+  if (A->strides[1] != B->strides[1] || A->strides[1] != C->strides[1] ||
+      A->strides[1] != 1 || A->sizes[0] < A->strides[1] ||
+      B->sizes[0] < B->strides[1] || C->sizes[0] < C->strides[1] ||
+      C->sizes[0] != A->sizes[0] || C->sizes[1] != B->sizes[1] ||
+      A->sizes[1] != B->sizes[0])
+  {
+    printMemRefMetaData(std::cerr, *A);
+    printMemRefMetaData(std::cerr, *B);
+    printMemRefMetaData(std::cerr, *C);
+    return;
+  }
+
+  double alpha = 1.0f;
+  double beta = 1.0f;
+  if (beta == -1.0)
+  {
+    alpha *= -1.0;
+    beta = 1.0;
+  }
+
+  // TODO(gkestor): check hardware type, if it is not haswell give a message
+  //  micro kernel for Intel Haswell
+  bli_dgemm_haswell_asm_6x8(A->sizes[1], &alpha, A->data + A->offset,
+                            B->data + B->offset, &beta,
+                            C->data + C->offset, C->strides[0], C->strides[1],
+                            NULL, NULL);
+}

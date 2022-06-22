@@ -1,0 +1,28 @@
+# RUN: comet-opt -opt-dense-transpose --convert-ta-to-it --convert-to-loops %s &> opt_dense_transpose.mlir
+# RUN: mlir-opt  --lower-affine --convert-scf-to-std --convert-std-to-llvm opt_dense_transpose.mlir &> opt_dense_transpose.llvm
+# RUN: mlir-cpu-runner opt_dense_transpose.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+#TODO(gkestor): read dense input from file
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [2];
+	IndexLabel [j] = [4];   
+	IndexLabel [k] = [8];    
+	IndexLabel [l] = [16];                     
+
+	#Tensor Declarations
+	Tensor<double> A([i, j, k, l], Dense);	  
+	Tensor<double> B([i, k, j, l], Dense);
+
+    #Tensor Readfile Operation      
+    A[i, j, k, l] = 3.7;
+
+	#Tensor Transpose
+	B[i, k, j, l] = transpose(A[i, j, k, l],{i, k, j, l});
+	print(B);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,3.7,

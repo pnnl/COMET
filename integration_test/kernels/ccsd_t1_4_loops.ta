@@ -1,0 +1,25 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> ccsd_t1_4_loops.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm ccsd_t1_4_loops.mlir &> ccsd_t1_4_loops.llvm
+# RUN: mlir-cpu-runner ccsd_t1_4_loops.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+def main() {
+    #IndexLabel Declarations
+    IndexLabel [i, c] = [2];
+    IndexLabel [m, a] = [4];
+
+    Tensor<double> v([c, i, m, a], {Dense});
+    Tensor<double> t1([m, c], {Dense});
+    Tensor<double> i0([i, a], {Dense});
+
+    v[c, i, m, a] = 2.3;
+    t1[m, c] = 3.4;
+    i0[i, a] = 0.0;
+
+    #Tensor contraction
+    i0[i, a] = v[c, i, m, a] * t1[m, c];   #ccsd_t1 4th expression
+    print(i0);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 62.56,62.56,62.56,62.56,62.56,62.56,62.56,62.56,

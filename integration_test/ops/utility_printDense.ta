@@ -1,0 +1,22 @@
+# RUN: comet-opt --convert-to-loops %s &> utility_printDense.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm utility_printDense.mlir &> utility_printDense.llvm
+# RUN: mlir-cpu-runner utility_printDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [4];
+	IndexLabel [j] = [4];
+	
+	#Tensor Declarations
+	Tensor<double> A([i, j], {Dense});	  
+
+	#Tensor Fill Operation
+	A[i, j] = 2.3;
+
+	#Print tensor A
+	print(A);
+}
+
+# Print tensor A.
+# CHECK: data = 
+# CHECK-NEXT: 2.3,2.3,2.3,2.3,2.3,2.3,2.3,2.3,2.3,2.3,2.3,2.3,2.3,2.3,2.3,2.3,
