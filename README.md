@@ -1,3 +1,0 @@
-# COMET
-
-Hello World!
