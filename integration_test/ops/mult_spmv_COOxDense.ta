@@ -1,0 +1,31 @@
+# Sparse matrix dense vector multiplication (SpMV)
+# Sparse matrix is in COO format
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> mult_spmv_COOxDense.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm mult_spmv_COOxDense.mlir &> mult_spmv_COOxDense.llvm
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
+# RUN: mlir-cpu-runner mult_spmv_COOxDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [a] = [?];
+	IndexLabel [b] = [?];           
+
+	#Tensor Declarations
+	Tensor<double> A([a, b], {COO});	  
+	Tensor<double> B([b], {Dense});
+	Tensor<double> C([a], {Dense});
+
+    A[a, b] = read_from_file(0);
+
+	#Tensor Fill Operation
+	B[b] = 1.7;
+	C[a] = 0.0;
+
+	C[a] = A[a, b] * B[b];
+	print(C);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 4.08,7.65,5.1,13.77,17.34,

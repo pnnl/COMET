@@ -1,0 +1,30 @@
+# Dense vector sparse matrix multiplication
+# Sparse matrix is in CSR format
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> mult_DenseVecxCSR.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm mult_DenseVecxCSR.mlir &> mult_DenseVecxCSR.llvm
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
+# RUN: mlir-cpu-runner mult_DenseVecxCSR.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [a] = [?];
+	IndexLabel [b] = [?];           
+
+	#Tensor Declarations
+	Tensor<double> B([a,b], {CSR});
+	Tensor<double> A([a], {Dense});	  
+	Tensor<double> C([b], {Dense});
+
+	#Tensor Fill Operation
+	A[a] = 1.7;
+	B[a, b] = read_from_file(0);
+	C[b] = 0.0;
+
+	C[b] = A[a] * B[a, b]; #1x5
+	print(C);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 8.67,12.24,5.1,9.18,12.75,

@@ -1,0 +1,29 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> utility_gettime.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm utility_gettime.mlir &> utility_gettime.llvm
+# RUN: mlir-cpu-runner utility_gettime.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [a] = [128];
+	IndexLabel [b] = [128];
+	IndexLabel [c] = [128];             
+
+	#Tensor Declarations
+	Tensor<double> A([a, b], {Dense});	  
+	Tensor<double> B([b, c], {Dense});
+	Tensor<double> C([a, c], {Dense});
+
+	#Tensor Fill Operation
+	A[a, b] = 3.5;
+	B[b, c] = 2.1;
+	C[a, c] = 0.0;
+
+	var start = getTime();
+	C[a, c] = A[a, b] * B[b, c];
+	var end = getTime();
+	printElapsedTime(start, end);
+}
+
+# Print the elapsed time for computation
+# CHECK: ELAPSED_TIME =  

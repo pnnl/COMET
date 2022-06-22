@@ -1,0 +1,26 @@
+# RUN: comet-opt --convert-to-loops %s &> sum_CSF.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm sum_CSF.mlir &> sum_CSF.llvm
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank3.tns
+# RUN: mlir-cpu-runner sum_CSF.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [?];
+	IndexLabel [j] = [?];           
+	IndexLabel [k] = [?];           
+
+	#Tensor Declarations
+	Tensor<double> A([i, j, k], {CSF});
+
+    #Tensor Readfile Operation 
+	A[i, j, k] = read_from_file(0);
+
+	#Tensor Transpose
+	var a = SUM(A[i, j, k]);
+	print(a);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 6.41,

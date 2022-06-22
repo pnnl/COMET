@@ -1,0 +1,26 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> mv_SemiringPlusTimes_DensexDense_oDense.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm mv_SemiringPlusTimes_DensexDense_oDense.mlir &> mv_SemiringPlusTimes_DensexDense_oDense.llvm
+# RUN: mlir-cpu-runner mv_SemiringPlusTimes_DensexDense_oDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [8];
+	IndexLabel [j] = [16];           
+
+	# Tensor Declarations
+	Tensor<double> A([i, j], {Dense});	  
+	Tensor<double> B([j], {Dense});
+	Tensor<double> C([i], {Dense});
+
+	# Tensor Fill Operation
+	A[i, j] = 2.3;
+	B[j] = 3.7;
+	C[i] = 0.0;
+
+	C[i] = A[i, j] @(+,*) B[j];
+	print(C);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 136.16,136.16,136.16,136.16,136.16,136.16,136.16,136.16,
