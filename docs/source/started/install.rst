@@ -7,7 +7,7 @@ Once the :doc:`requirements` of LLVM/MLIR are met. One can proceed with building
 
 :: 
 
-   $ cd comet
+   $ cd COMET
    $ mkdir llvm/build
    $ cd llvm/build
    $ cmake -G Ninja ../llvm \
@@ -22,7 +22,7 @@ Once the :doc:`requirements` of LLVM/MLIR are met. One can proceed with building
 
 ::
   
-   $ cd comet
+   $ cd ../../
    $ mkdir build
    $ cd build
    $ cmake -G Ninja .. \
