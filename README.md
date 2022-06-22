@@ -98,18 +98,16 @@ We will try our best to timely incorporate user requests.
 
 We encourage you to use GitHub’s tracking system to report any issues or for code contributions as mentioned above. 
 For any other queries, please feel free to contact us via email:
-* **Gokcen Kestor** (email: *first-name <dot> last-name <at> pnnl <dot> gov*), [Pacific Northwest National Laboratory (PNNL), United States.](https://www.pnnl.gov/)
-* **Rizwan Ashraf** (email: *first-name <dot> last-name <at> pnnl <dot> gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
-* **Ryan Friese** (email: *first-name <dot> last-name <at> pnnl <dot> gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
+* **Gokcen Kestor** (email: *first-name.last-name@pnnl.gov*), [Pacific Northwest National Laboratory (PNNL), United States.](https://www.pnnl.gov/)
+* **Rizwan Ashraf** (email: *first-name.last-name@pnnl.gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
+* **Ryan Friese** (email: *first-name.last-name@pnnl.gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
 
 ## Cite Our Project
 
 If you use COMET in your research or work, please cite any of the following relevant papers:
 
 * Erdal Mutlu, Ruiqin Tian, Bin Ren, Sriram Krishnamoorthy, Roberto Gioiosa, Jacques Pienaar & Gokcen Kestor, *COMET: A Domain-Specific Compilation of High-Performance Computational Chemistry,* In: Chapman, B., Moreira, J. (eds) Languages and Compilers for Parallel Computing, LCPC 2020, Lecture Notes in Computer Science, vol 13149, Springer, Cham. [DOI](https://doi.org/10.1007/978-3-030-95953-1_7) and [BIB](https://citation-needed.springer.com/v2/references/10.1007/978-3-030-95953-1_7?format=bibtex&flavour=citation).
-
-::
-
+```
    @InProceedings{COMET:LCPC-20,
       author={Mutlu, Erdal and Tian, Ruiqin and Ren, Bin and Krishnamoorthy, Sriram and Gioiosa, Roberto and Pienaar, Jacques and Kestor, Gokcen",
       editor={Chapman, Barbara and Moreira, Jos{\'e}},
@@ -120,11 +118,9 @@ If you use COMET in your research or work, please cite any of the following rele
       address={Cham},
       pages={87--103}
     }
-
+```
 * Ruiqin Tian, Luanzheng Guo, Jiajia Li, Bin Ren, & Gokcen Kestor, *A High Performance Sparse Tensor Algebra Compiler in MLIR,* In: IEEE/ACM 7th Workshop on the LLVM Compiler Infrastructure in HPC, LLVM-HPC 2021, November 14, 2021, St. Louis, MO, United States. [DOI](https://doi.org/10.1109/LLVMHPC54804.2021.00009) 
-
-::
-
+```
    @InProceedings{COMET:LLVM-HPC-2021,
       author={Tian, Ruiqin and Guo, Luanzheng and Li, Jiajia and Ren, Bin and Kestor, Gokcen},
       booktitle={2021 IEEE/ACM 7th Workshop on the LLVM Compiler Infrastructure in HPC (LLVM-HPC)}, 
@@ -133,3 +129,17 @@ If you use COMET in your research or work, please cite any of the following rele
       pages={27-38},
       doi={10.1109/LLVMHPC54804.2021.00009}
    }
+```
+
+## Support
+
+The COMET compiler is supported in part by the [Data-Model Convergence (DMC)](https://www.pnnl.gov/projects/dmc) 
+initiative at the [Pacific Northwest National Laboratory](https://www.pnnl.gov/).
+
+This work is also supported in part by the [High Performance Data Analytics (HPDA)](https://www.pnnl.gov/computing/HPDA/) program
+at the [Pacific Northwest National Laboratory](https://www.pnnl.gov/).
+ 
+This work is also supported in part by the U.S. Department of Energy’s (DOE) [Office of Advanced Scientific Computing Research (ASCR)](https://www.energy.gov/science/ascr/advanced-scientific-computing-research>)
+as part of the [Center for Artificial Intelligence-focused Architectures and Algorithms (ARIAA)](https://www.pnnl.gov/projects/co-design-center-artificial-intelligence-focused-architectures-and-algorithms).
+
+![alt text](https://github.com/pnnl/COMET/blob/master/docs/source/DMC_PNNL.jpeg)
