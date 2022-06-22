@@ -6,6 +6,5 @@
 .DS_Store
 __pycache__
 lit.site.cfg.py
-/llvm
 
 # External software
