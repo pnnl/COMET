@@ -35,7 +35,6 @@ the LLVM repository, you can manually "unshallow" the submodule.
 3) **Build and test LLVM/MLIR:**
 
 ```
-$ cd comet
 $ mkdir llvm/build
 $ cd llvm/build
 $ cmake -G Ninja ../llvm \
@@ -50,7 +49,7 @@ $ ninja check-mlir
 4) **Build and test COMET:**
 
 ```
-$ cd comet
+$ cd ../../
 $ mkdir build
 $ cd build
 $ cmake -G Ninja .. \
