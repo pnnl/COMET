@@ -31,8 +31,8 @@ Get Started Now
 License
 -------
 This project is licensed under the Simplified BSD License. 
-See the `LICENSE file <https://github.com/pnnl/COMET/LICENSE>`_ 
-and the `DISCLAIMER file <https://github.com/pnnl/COMET/DISCLAIMER.txt>`_ for more details.
+See the `LICENSE file <https://github.com/pnnl/COMET/blob/master/LICENSE>`_ 
+and the `DISCLAIMER file <https://github.com/pnnl/COMET/blob/master/DISCLAIMER.txt>`_ for more details.
 
 Reporting Issues
 ----------------

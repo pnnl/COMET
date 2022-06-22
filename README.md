@@ -75,3 +75,61 @@ To get something that runs fast, use `-DCMAKE_BUILD_TYPE=Release` or
 `-DCMAKE_BUILD_TYPE=RelWithDebInfo` if you want to go fast and optionally if
 you want debug info to go with it.  `Release` mode makes a very large difference
 in performance.
+
+## License
+
+This project is licensed under the Simplified BSD License. 
+See the [LICENSE file](https://github.com/pnnl/COMET/blob/master/LICENSE)
+and the [DISCLAIMER file](https://github.com/pnnl/COMET/blob/master/DISCLAIMER.txt) for more details.
+
+## Reporting Issues
+
+Issues with COMET can be reported through [GitHub](https://github.com/pnnl/COMET/issues). 
+We will try our best to timely address issues reported by users. 
+The community is also welcome to discuss any remedies or experience that may help to resolve issues.
+
+## Contributions
+
+Contributions to COMET are welcome. The community can get involved by contributing some new feature, reporting bugs, and/or improving documentation. 
+Please feel free to create a pull-request on [GitHub](https://github.com/pnnl/COMET/pulls) for code contributions. 
+We will try our best to timely incorporate user requests.
+
+## Contact Us
+
+We encourage you to use GitHub’s tracking system to report any issues or for code contributions as mentioned above. 
+For any other queries, please feel free to contact us via email:
+* **Gokcen Kestor** (email: *first-name <dot> last-name <at> pnnl <dot> gov*), [Pacific Northwest National Laboratory (PNNL), United States.](https://www.pnnl.gov/)
+* **Rizwan Ashraf** (email: *first-name <dot> last-name <at> pnnl <dot> gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
+* **Ryan Friese** (email: *first-name <dot> last-name <at> pnnl <dot> gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
+
+## Cite Our Project
+
+If you use COMET in your research or work, please cite any of the following relevant papers:
+
+* Erdal Mutlu, Ruiqin Tian, Bin Ren, Sriram Krishnamoorthy, Roberto Gioiosa, Jacques Pienaar & Gokcen Kestor, *COMET: A Domain-Specific Compilation of High-Performance Computational Chemistry,* In: Chapman, B., Moreira, J. (eds) Languages and Compilers for Parallel Computing, LCPC 2020, Lecture Notes in Computer Science, vol 13149, Springer, Cham. [DOI](https://doi.org/10.1007/978-3-030-95953-1_7) and [BIB](https://citation-needed.springer.com/v2/references/10.1007/978-3-030-95953-1_7?format=bibtex&flavour=citation).
+
+::
+
+   @InProceedings{COMET:LCPC-20,
+      author={Mutlu, Erdal and Tian, Ruiqin and Ren, Bin and Krishnamoorthy, Sriram and Gioiosa, Roberto and Pienaar, Jacques and Kestor, Gokcen",
+      editor={Chapman, Barbara and Moreira, Jos{\'e}},
+      title={COMET: A Domain-Specific Compilation of High-Performance Computational Chemistry},
+      booktitle={Languages and Compilers for Parallel Computing},
+      year={2022},
+      publisher={Springer International Publishing},
+      address={Cham},
+      pages={87--103}
+    }
+
+* Ruiqin Tian, Luanzheng Guo, Jiajia Li, Bin Ren, & Gokcen Kestor, *A High Performance Sparse Tensor Algebra Compiler in MLIR,* In: IEEE/ACM 7th Workshop on the LLVM Compiler Infrastructure in HPC, LLVM-HPC 2021, November 14, 2021, St. Louis, MO, United States. [DOI](https://doi.org/10.1109/LLVMHPC54804.2021.00009) 
+
+::
+
+   @InProceedings{COMET:LLVM-HPC-2021,
+      author={Tian, Ruiqin and Guo, Luanzheng and Li, Jiajia and Ren, Bin and Kestor, Gokcen},
+      booktitle={2021 IEEE/ACM 7th Workshop on the LLVM Compiler Infrastructure in HPC (LLVM-HPC)}, 
+      title={A High Performance Sparse Tensor Algebra Compiler in MLIR}, 
+      year={2021},
+      pages={27-38},
+      doi={10.1109/LLVMHPC54804.2021.00009}
+   }
