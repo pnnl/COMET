@@ -22,20 +22,15 @@ changed.
 
 ```
 $ git clone https://github.com/pnnl/COMET.git
-$ cd comet
+$ cd COMET
 $ git submodule init
 $ git submodule update
 ```
 
 *Note:* The repository is set up so that `git submodule update` performs a 
 shallow clone, meaning it downloads just enough of the LLVM repository to check 
-out the currently specified commit. If you wish to work with the full history of
-the LLVM repository, you can manually "unshallow" the the submodule:
-
-```
-$ cd llvm
-$ git fetch --unshallow
-```
+out the currently specified commit. Optionally, if you wish to work with the full history of
+the LLVM repository, you can manually "unshallow" the submodule.
 
 3) **Build and test LLVM/MLIR:**
 
