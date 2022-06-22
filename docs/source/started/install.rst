@@ -31,7 +31,6 @@ Once the :doc:`requirements` of LLVM/MLIR are met. One can proceed with building
       -DLLVM_ENABLE_ASSERTIONS=ON \
       -DCMAKE_BUILD_TYPE=DEBUG
    $ ninja
-   $ ninja check-comet
    $ ninja check-comet-integration # Run the integration tests.
 
 The ``-DCMAKE_BUILD_TYPE=DEBUG`` flag enables debug information, which makes the
