@@ -117,7 +117,11 @@ If you have changed the build locations from what was listed in the COMET build 
 
 These commands can be used to setup COMET project:
 This crate will not work without a successful COMET installation.
-1) **Install Dependencies** cmake and ninja are required to install the COMET compiler.
+1) **Install Dependencies** To install COMET and LLVM/MLIR, the following dependencies need to be installed:
+* [CMake (3.13.4 or later)](https://cmake.org/download),
+* [Ninja (1.5 or later)](https://ninja-build.org/),
+* C++ compiler toolchain as [mentioned here](https://llvm.org/docs/GettingStarted.html#requirements) and
+* [Python3 (3.6 or later)](https://www.python.org/downloads/). 
 
 2) **Check out LLVM and COMET repos.**  COMET contains LLVM as a git
 submodule.  The LLVM repo here includes staged changes to MLIR which
