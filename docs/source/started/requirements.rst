@@ -4,7 +4,10 @@ Requirements
 COMET compiler requires a specific version of LLVM/MLIR that has been included as git submodule inside the COMET repo.
 Therefore, there is no need to do a separate clone of the LLVM/MLIR repo. 
 Before proceeding with the build and testing of MLIR/LLVM and COMET, 
-please install `CMake <https://cmake.org/>`_, `Ninja <https://ninja-build.org/>`_ and a C++ compiler toolchain as `mentioned here <https://llvm.org/docs/GettingStarted.html#requirements>`_.
+please install `CMake (3.13.4 or later) <https://cmake.org/download>`_,
+`Ninja (1.5 or later) <https://ninja-build.org/>`_, 
+a C++ compiler toolchain as `mentioned here <https://llvm.org/docs/GettingStarted.html#requirements>`_,
+and `Python3 (3.6 or later) <https://www.python.org/downloads/>`_.
 
 **Check out COMET repo**: COMET contains LLVM/MLIR as a git
 submodule.  The LLVM repo here includes staged changes to MLIR which
