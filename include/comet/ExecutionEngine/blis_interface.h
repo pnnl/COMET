@@ -35,6 +35,7 @@
 #ifdef __GNUC__
 #pragma GCC diagnostic push 
 #pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wtype-limits"
 #include "comet/blis/blis.h"
 #endif
 

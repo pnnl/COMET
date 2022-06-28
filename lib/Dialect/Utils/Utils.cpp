@@ -666,7 +666,7 @@ namespace mlir
     /// Get the format of the tensor
     std::string getTensorFormat(std::vector<std::vector<std::string>> allFormats, unsigned int tensor_id)
     {
-      assert((tensor_id < TENSOR_NUMS && tensor_id >= 0) && "illegal tensor_id\n");
+      assert(tensor_id < TENSOR_NUMS && "illegal tensor_id\n");
       std::string format_ret = "";
       std::vector<std::string> format = allFormats[tensor_id];
 

@@ -882,7 +882,7 @@ void formSemiringLoopBody(std::string &opt_type, llvm::StringRef &semiringFirst,
   auto ctx = rewriter.getContext();
   IndexType indexType = IndexType::get(ctx);
 
-  if (semiringFirst.size() == 0 | semiringSecond.size() == 0)
+  if ((semiringFirst.size() == 0) | (semiringSecond.size() == 0))
     llvm::errs() << "Error during semiring parsing!"
                  << "\n";
 
@@ -1545,7 +1545,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
       // Find the last sparse index m, then loop_arg * all dense loop args
       unsigned lastSparseIndexLoc = allPerms[i].size();
-      for (unsigned int d = allPerms[i].size() - 1; d >= 0; d--)
+      for (int d = (int) allPerms[i].size() - 1; d >= 0; d--)
       {
         if (allFormats[i][d].compare(0, 1, "D") != 0 && allFormats[i][d].compare(0, 1, "S") != 0)
         { // sparse dimension and has a loop, i.e. "CU" or "CN"
