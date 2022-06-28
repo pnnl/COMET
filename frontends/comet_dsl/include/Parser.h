@@ -402,12 +402,14 @@ namespace tensorAlgebra
       {
         comet_errs() << " parse semirings start\n";
         //   return parseSemiringExpr();
+        break;
       }
 
       // for @(xx) monoid in ta
       case tok_monoid:
       {
         comet_errs() << " parse monoid start\n";
+        break;
       }
 
       // return parseIdentifierExpr();
@@ -427,6 +429,7 @@ namespace tensorAlgebra
       case tok_transpose:
         return ParseTranspose();
       }
+      return nullptr;
     }
 
     /// Recursively parse the right hand side of a binary expression, the ExprPrec
@@ -577,8 +580,8 @@ namespace tensorAlgebra
 
       if (lexer.getCurToken() != tok_index_label)
       {
-        ret.push_back(std::move(parseError<IndexLabelDeclExprAST>(
-            "IndexLabel", "to begin index label declaration")));
+        ret.push_back(parseError<IndexLabelDeclExprAST>(
+            "IndexLabel", "to begin index label declaration"));
         return ret;
       }
       auto loc = lexer.getLastLocation();
@@ -592,8 +595,8 @@ namespace tensorAlgebra
         {
           if (lexer.getCurToken() != tok_identifier)
           {
-            ret.push_back(std::move(parseError<IndexLabelDeclExprAST>(
-                "identifier", "after 'IndexLabel' declaration")));
+            ret.push_back(parseError<IndexLabelDeclExprAST>(
+                "identifier", "after 'IndexLabel' declaration"));
             return ret;
           }
           id_list.push_back(lexer.getId().str());
@@ -608,8 +611,8 @@ namespace tensorAlgebra
       {
         if (lexer.getCurToken() != tok_identifier)
         {
-          ret.push_back(std::move(parseError<IndexLabelDeclExprAST>(
-              "identifier", "after 'IndexLabel' declaration")));
+          ret.push_back(parseError<IndexLabelDeclExprAST>(
+              "identifier", "after 'IndexLabel' declaration"));
           return ret;
         }
 
@@ -619,8 +622,8 @@ namespace tensorAlgebra
 
       if (lexer.getCurToken() != '=')
       {
-        ret.push_back(std::move(parseError<IndexLabelDeclExprAST>(
-            "=", "after 'IndexLabel' declaration(s)")));
+        ret.push_back(parseError<IndexLabelDeclExprAST>(
+            "=", "after 'IndexLabel' declaration(s)"));
         return ret;
       }
 
@@ -628,8 +631,8 @@ namespace tensorAlgebra
 
       if (lexer.getCurToken() != '[')
       {
-        ret.push_back(std::move(
-            parseError<IndexLabelDeclExprAST>("[", "to begin range definition")));
+        ret.push_back(parseError<IndexLabelDeclExprAST>(
+            "[", "to begin range definition"));
         return ret;
       }
 
@@ -655,8 +658,8 @@ namespace tensorAlgebra
 
           for (auto &id : id_list)
           {
-            ret.push_back(std::move(std::make_unique<IndexLabelDeclExprAST>(
-                loc, std::move(id), start, end, incr)));
+            ret.push_back(std::make_unique<IndexLabelDeclExprAST>(
+                loc, std::move(id), start, end, incr));
             // comet_errs() << " Generate dynamic index label\n";
           }
 
@@ -664,8 +667,8 @@ namespace tensorAlgebra
         }
         else
         {
-          ret.push_back(std::move(
-              parseError<IndexLabelDeclExprAST>("]", "to end range definition")));
+          ret.push_back(parseError<IndexLabelDeclExprAST>(
+              "]", "to end range definition"));
           return ret;
         }
       }
@@ -687,16 +690,16 @@ namespace tensorAlgebra
           lexer.consume(Token(']')); // eat ]
           for (auto &id : id_list)
           {
-            ret.push_back(std::move(std::make_unique<IndexLabelDeclExprAST>(
-                loc, std::move(id), start, end, incr)));
+            ret.push_back(std::make_unique<IndexLabelDeclExprAST>(
+                loc, std::move(id), start, end, incr));
             // comet_errs() << " Generate dynamic index label\n";
           }
           return ret;
         }
         else
         {
-          ret.push_back(std::move(
-              parseError<IndexLabelDeclExprAST>("]", "to end range definition")));
+          ret.push_back(parseError<IndexLabelDeclExprAST>(
+              "]", "to end range definition"));
           return ret;
         }
       }
@@ -723,8 +726,8 @@ namespace tensorAlgebra
 
       if (lexer.getCurToken() != ']')
       {
-        ret.push_back(std::move(
-            parseError<IndexLabelDeclExprAST>("]", "to end range definition")));
+        ret.push_back(parseError<IndexLabelDeclExprAST>(
+            "]", "to end range definition"));
         return ret;
       }
 
@@ -732,8 +735,8 @@ namespace tensorAlgebra
 
       for (auto &id : id_list)
       {
-        ret.push_back(std::move(std::make_unique<IndexLabelDeclExprAST>(
-            loc, std::move(id), start, end, incr)));
+        ret.push_back(std::make_unique<IndexLabelDeclExprAST>(
+            loc, std::move(id), start, end, incr));
         comet_errs() << " Generate dynamic index label\n";
       }
 
@@ -750,8 +753,8 @@ namespace tensorAlgebra
 
       if (lexer.getCurToken() != tok_index_label_dynamic)
       {
-        ret.push_back(std::move(parseError<IndexLabelDeclDynamicExprAST>(
-            "IndexLabelDynamic", "to begin index label declaration")));
+        ret.push_back(parseError<IndexLabelDeclDynamicExprAST>(
+            "IndexLabelDynamic", "to begin index label declaration"));
         return ret;
       }
       auto loc = lexer.getLastLocation();
@@ -765,8 +768,8 @@ namespace tensorAlgebra
         {
           if (lexer.getCurToken() != tok_identifier)
           {
-            ret.push_back(std::move(parseError<IndexLabelDeclDynamicExprAST>(
-                "identifier", "after 'IndexLabel' declaration")));
+            ret.push_back(parseError<IndexLabelDeclDynamicExprAST>(
+                "identifier", "after 'IndexLabel' declaration"));
             return ret;
           }
           id_list.push_back(lexer.getId().str());
@@ -781,8 +784,8 @@ namespace tensorAlgebra
       {
         if (lexer.getCurToken() != tok_identifier)
         {
-          ret.push_back(std::move(parseError<IndexLabelDeclDynamicExprAST>(
-              "identifier", "after 'IndexLabel' declaration")));
+          ret.push_back(parseError<IndexLabelDeclDynamicExprAST>(
+              "identifier", "after 'IndexLabel' declaration"));
           return ret;
         }
 
@@ -792,8 +795,8 @@ namespace tensorAlgebra
 
       if (lexer.getCurToken() != '=')
       {
-        ret.push_back(std::move(parseError<IndexLabelDeclDynamicExprAST>(
-            "=", "after 'IndexLabel' declaration(s)")));
+        ret.push_back(parseError<IndexLabelDeclDynamicExprAST>(
+            "=", "after 'IndexLabel' declaration(s)"));
         return ret;
       }
 
@@ -801,8 +804,8 @@ namespace tensorAlgebra
 
       if (lexer.getCurToken() != '[')
       {
-        ret.push_back(std::move(
-            parseError<IndexLabelDeclDynamicExprAST>("[", "to begin range definition")));
+        ret.push_back(parseError<IndexLabelDeclDynamicExprAST>(
+            "[", "to begin range definition"));
         return ret;
       }
 
@@ -820,8 +823,8 @@ namespace tensorAlgebra
         }
         else
         {
-          ret.push_back(std::move(
-              parseError<IndexLabelDeclDynamicExprAST>("]", "to end range definition")));
+          ret.push_back(parseError<IndexLabelDeclDynamicExprAST>(
+              "]", "to end range definition"));
           return ret;
         }
       }
@@ -841,8 +844,8 @@ namespace tensorAlgebra
 
       if (lexer.getCurToken() != ']')
       {
-        ret.push_back(std::move(
-            parseError<IndexLabelDeclDynamicExprAST>("]", "to end range definition")));
+        ret.push_back(parseError<IndexLabelDeclDynamicExprAST>(
+            "]", "to end range definition"));
         return ret;
       }
 
@@ -850,8 +853,8 @@ namespace tensorAlgebra
 
       for (auto &id : id_list)
       {
-        ret.push_back(std::move(std::make_unique<IndexLabelDeclDynamicExprAST>(
-            loc, std::move(id), start, incr)));
+        ret.push_back(std::make_unique<IndexLabelDeclDynamicExprAST>(
+            loc, std::move(id), start, incr));
         comet_errs() << " Generate dynamic index label\n";
       }
 
@@ -1293,14 +1296,14 @@ namespace tensorAlgebra
       {
         comet_errs() << __FILE__ << __LINE__ << " TensorOpExprAST rhs is Expr_Transpose\n";
 
-        CallExprAST *call = llvm::cast<CallExprAST>(RHS.get());
-        llvm::StringRef callee = call->getCallee();
-        comet_errs() << __FILE__ << __LINE__ << " callee: " << callee << "\n";
+        //CallExprAST *call = llvm::cast<CallExprAST>(RHS.get());
+        //llvm::StringRef callee = call->getCallee();
+        //comet_errs() << __FILE__ << __LINE__ << " callee: " << callee << "\n";
       }
       else if (RHS.get()->getKind() == tensorAlgebra::ExprAST::Expr_Transpose)
       {
         comet_errs() << __FILE__ << __LINE__ << " TensorOpExprAST rhs is Expr_Transpose\n";
-        TransposeExprAST *call = llvm::cast<TransposeExprAST>(RHS.get());
+        //TransposeExprAST *call = llvm::cast<TransposeExprAST>(RHS.get());
       }
       return std::make_unique<TensorOpExprAST>(std::move(loc), op, std::move(LHS),
                                                std::move(RHS), beta);

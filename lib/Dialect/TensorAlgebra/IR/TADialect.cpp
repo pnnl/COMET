@@ -301,7 +301,9 @@ CallInterfaceCallable GenericCallOp::getCallableForCallee()
 
 /// Get the argument operands to the called function, this is required by the
 /// call interface.
-Operation::operand_range GenericCallOp::getArgOperands() {}
+Operation::operand_range GenericCallOp::getArgOperands() {
+  return nullptr;
+}
 
 //===----------------------------------------------------------------------===//
 // MulOp

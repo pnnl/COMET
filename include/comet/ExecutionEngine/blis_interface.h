@@ -24,7 +24,19 @@
 #define COMET_BLIS_INTERFACE_H_
 
 #include "mlir/ExecutionEngine/RunnerUtils.h"
+
+// suppress all warnings coming from inclusion of blis.h in source tree
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
 #include "comet/blis/blis.h"
+#endif
+
+#ifdef __GNUC__
+#pragma GCC diagnostic push 
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include "comet/blis/blis.h"
+#endif
 
 #ifdef _WIN32
 #ifndef COMET_BLIS_INTERFACE_EXPORT
@@ -44,5 +56,13 @@ extern "C" COMET_BLIS_INTERFACE_EXPORT void
 _mlir_ciface_linalg_matmul_viewsxsxf64_viewsxsxf64_viewsxsxf64(
     StridedMemRefType<double, 2> *A, StridedMemRefType<double, 2> *B,
     StridedMemRefType<double, 2> *C);
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 #endif // COMET_BLIS_INTERFACE_H_

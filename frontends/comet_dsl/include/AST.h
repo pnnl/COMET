@@ -63,19 +63,6 @@ namespace tensorAlgebra
     Tensor_Red_Sub,
   };
 
-  static std::string tensorOpStr(TensorOpKind op)
-  {
-    switch (op)
-    {
-    case TensorOpKind::Tensor_Set:
-      return "SetOp";
-    case TensorOpKind::Tensor_Acc:
-      return "AccOp";
-    default:
-      return "";
-    }
-  }
-
   /// Base class for all expression nodes.
   class ExprAST
   {
@@ -353,6 +340,22 @@ namespace tensorAlgebra
           RHS(std::move(RHS)), beta(in_beta) {}
 
     TensorOpKind getOp() { return Op; }
+    std::string getOpStr() {
+      std::string ret = "";
+      switch (Op)
+      {
+        case TensorOpKind::Tensor_Set:
+          ret = "SetOp";
+          break;
+        case TensorOpKind::Tensor_Acc:
+          ret = "AccOp";
+          break;
+        default:
+          ret = "";
+        break;
+      }
+      return ret;
+    }
     ExprAST *getLHS() { return LHS.get(); }
     ExprAST *getRHS() { return RHS.get(); }
     int getBeta() { return beta; }

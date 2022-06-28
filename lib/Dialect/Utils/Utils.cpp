@@ -226,10 +226,12 @@ namespace mlir
     void print_vector_value(std::vector<Value> vec)
     {
       // Special code for Array<bool>
+      #ifdef DEBUG_MODE_UTILS
       for (auto n : vec)
       {
         comet_vdump(n);
       }
+      #endif
     }
     /*
      ** Convert the Type* objects' dump() to screen information into string
@@ -636,7 +638,7 @@ namespace mlir
         else if (mlir::ArrayAttr formatArrayAttr = opFormatsArrayAttr[i].dyn_cast<mlir::ArrayAttr>())
         {
           comet_errs() << " yes " << formatArrayAttr.size() << " ";
-          for (int j = 0; j < formatArrayAttr.size(); j++)
+          for (unsigned long j = 0; j < formatArrayAttr.size(); j++)
           {
             if (mlir::StringAttr format = formatArrayAttr[j].dyn_cast<mlir::StringAttr>())
             {
@@ -778,7 +780,7 @@ namespace mlir
     {
       bool isDense = true;
       comet_errs() << "checkIsDense size: " << format.size() << "\n";
-      for (int i = 0; i < format.size(); i++)
+      for (unsigned long i = 0; i < format.size(); i++)
       {
         comet_errs() << "checkIsDense Format: " << format[i] << "\n";
         if (format[i].compare("D"))
@@ -1099,7 +1101,6 @@ namespace mlir
     {
       if (isa<indexTree::IndexTreeIndicesOp>(tcRootOp.getDefiningOp()))
       {
-      indexTree:
         IndexTreeIndicesOp workspaceop = dyn_cast<indexTree::IndexTreeIndicesOp>(tcRootOp.getDefiningOp());
 
         comet_errs() << " dfsRootOpTree\n";
@@ -1290,7 +1291,6 @@ namespace mlir
                                     std::vector<std::vector<int>> &opPerms,
                                     std::vector<std::vector<bool>> &inputOutputMapping)
     {
-      indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
       ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.allFormats();
       ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.allPerms();
@@ -1379,7 +1379,6 @@ namespace mlir
     /// Get the output tensors of the itCompute op
     void getOutputTensorsOfComputeOp(Value computeOp, std::vector<Value> &outputTensors)
     {
-      indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
       for (unsigned int i = 0; i < itComputeOp_lhs.getOperation()->getNumOperands(); i++)
       {
@@ -1400,7 +1399,7 @@ namespace mlir
       comet_errs() << " getFormatsInfo:Start Current op\n";
       comet_vdump(cur_op);
       comet_errs() << " getFormatsInfo:indices.size(): " << indices.size() << "\n";
-      for (auto i = 0; i < indices.size(); i++)
+      for (unsigned long i = 0; i < indices.size(); i++)
       {
         comet_errs() << " getFormatsInfo:indices[" << i << "]: " << indices[i] << "\n";
         // Info for each index
@@ -1413,7 +1412,7 @@ namespace mlir
         std::vector<Value> tensors_leafs;
         std::vector<unsigned int> ids_leafs;
 
-        for (auto j = 0; j < leafs.size(); j++)
+        for (unsigned long j = 0; j < leafs.size(); j++)
         {
           // Info for each index in leaf[j]
           comet_errs() << " getFormatsInfo:LeafOp: ";
@@ -1456,12 +1455,14 @@ namespace mlir
 
             std::vector<Value> leafop_tensors = leafop_inputTensors;
             leafop_tensors.insert(leafop_tensors.end(), leafop_outputTensors.begin(), leafop_outputTensors.end());
+            #ifdef DEBUG_MODE_UTILS
             comet_errs() << " getFormatsInfo:leafop_tensors.size(): " << leafop_tensors.size() << "\n";
             for (auto n : leafop_tensors)
             {
               comet_errs() << " ";
               comet_vdump(n);
             }
+            #endif
             // Check if this index is in this leaf's perms
 
             std::vector<std::string> formats_local;
@@ -1470,7 +1471,7 @@ namespace mlir
             std::vector<bool> rhs_vs_lhs;
             // This leafOp contain multiple tensors.
             comet_errs() << " getFormatsInfo:allPerms.size()" << allPerms.size() << "\n";
-            for (auto k = 0; k < allPerms.size(); k++)
+            for (unsigned long k = 0; k < allPerms.size(); k++)
             {
               comet_errs() << " getFormatsInfo:allPerms[" << k << "].size(): " << allPerms[k].size() << ", print allPerms[" << k << "]: ";
               print_vector<int>(allPerms[k]);
@@ -1489,7 +1490,7 @@ namespace mlir
             }
 
             comet_errs() << " getFormatsInfo:formats_local.size(): " << formats_local.size() << " \n";
-            for (auto k = 0; k < formats_local.size(); k++)
+            for (unsigned long k = 0; k < formats_local.size(); k++)
             {
               comet_errs() << " getFormatsInfo:formats_local[k]:" << formats_local[k] << " " << ids_local[k] << " ";
               comet_vdump(tensors_local[k]);
@@ -1503,7 +1504,7 @@ namespace mlir
               tensor_in_leaf = tensors_local[0];
               id_in_leaf = ids_local[0];
 
-              for (auto k = 1; k < formats_local.size(); k++)
+              for (unsigned long k = 1; k < formats_local.size(); k++)
               {
                 if (format_in_leaf.compare(0, 1, "D") == 0 && formats_local[k].compare(0, 1, "D") != 0 && rhs_vs_lhs[k])
                 // if the next format in the local format is not dense and not output
@@ -1543,13 +1544,13 @@ namespace mlir
         } // for(auto j = 0; j < leafs.size(); j++){
 
         comet_errs() << " getFormatsInfo:formats_leafs.size(): " << formats_leafs.size() << "\n";
-        for (auto k = 0; k < formats_leafs.size(); k++)
+        for (unsigned long k = 0; k < formats_leafs.size(); k++)
         {
           comet_errs() << " getFormatsInfo:formats_leafs[k]:" << formats_leafs[k] << "\n";
         }
 
         // analyze the _leafs info to get the current index format, tensor, id information
-        for (auto j = 0; j < formats_leafs.size(); j++)
+        for (unsigned long j = 0; j < formats_leafs.size(); j++)
         {
           if (j == 0)
           {
@@ -1597,7 +1598,7 @@ namespace mlir
     void findLeafs(Value tcRootOp, std::vector<int> indices, std::vector<Value> dfsOps, std::vector<Value> &ret)
     {
       std::vector<std::vector<Value>> allAncestors(dfsOps.size());
-      for (auto i = 0; i < dfsOps.size(); i++)
+      for (unsigned int i = 0; i < dfsOps.size(); i++)
       {
         if (IndexTreeComputeOp cur_op = dyn_cast<IndexTreeComputeOp>(dfsOps[i].getDefiningOp()))
         {
@@ -1613,7 +1614,7 @@ namespace mlir
       {
         comet_errs() << " ";
         comet_vdump(tcRootOp);
-        for (auto j = 0; j < dfsOps.size(); j++)
+        for (unsigned int j = 0; j < dfsOps.size(); j++)
         {
           auto idx = findIndexInVector_Value(allAncestors[j], tcRootOp);
           if (idx < allAncestors[j].size())
@@ -1645,7 +1646,7 @@ namespace mlir
       }
       comet_errs() << " ";
       comet_vdump(itComputeOp->getResult(0));
-      int whichOperand = findIndexInVector_Value(parentOldChildren, itComputeOp->getResult(0));
+      unsigned int whichOperand = findIndexInVector_Value(parentOldChildren, itComputeOp->getResult(0));
       comet_errs() << " which operand: " << whichOperand << "\n";
       std::vector<Value> newChildren;
       if (whichOperand < parentIndicesOp->getNumOperands())
@@ -1669,8 +1670,6 @@ namespace mlir
     /// Get the output tensors of the itCompute op
     void getTensorsOfComputeOp(Value computeOp, std::vector<Value> &tensors)
     {
-      indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
       comet_errs() << " ";
       comet_vdump(itComputeOp_rhs);
@@ -1690,7 +1689,6 @@ namespace mlir
     /// Get the perms and formats of the itCompute op
     void getRHSPermsOfComputeOp(Value computeOp, std::vector<std::vector<int>> &opPerms)
     {
-      indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
       ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.allPerms();
       // Get output format, vector of vector
@@ -1702,7 +1700,6 @@ namespace mlir
     /// Get the perms and formats of the itCompute op
     void getLHSPermsOfComputeOp(Value computeOp, std::vector<std::vector<int>> &opPerms)
     {
-      indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
       ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.allPerms();
 
@@ -1742,7 +1739,7 @@ namespace mlir
         // const int idx = loopOrder[dim_-1-i];
         // const int posB = findPos(idx, perm_);
         int idx;  // position in sourceOrder
-        int posB; // position in destOrder
+        int posB = 0; // position in destOrder
         for (unsigned ii = 0; ii < sourceOrder.size(); ii++)
         {
           if (sourceOrder[ii] == loopOrder[i])

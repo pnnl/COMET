@@ -198,7 +198,6 @@ namespace
         Value output_perm_num = rewriter.create<mlir::ConstantOp>(loc, i32Type, rewriter.getI32IntegerAttr(pnum[1]));
 
         Type unrankedMemrefType_f64 = UnrankedMemRefType::get(f64Type, 0);
-        Type unrankedMemrefType_i32 = UnrankedMemRefType::get(i32Type, 0);
         Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
 
         FuncOp transpose_func; // runtime call

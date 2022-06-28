@@ -108,7 +108,7 @@ namespace
     comet_pdump(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
     auto sptensor_construct_op = cast<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
 
-    for (int i = 0; i < 2 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
+    for (unsigned int i = 0; i < 2 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
     {
       comet_errs() << " in for loop\n";
       Value intput_tensorload_op = cast<memref::TensorLoadOp>(sptensor_construct_op.getOperand(i).getDefiningOp());
@@ -140,7 +140,7 @@ namespace
     comet_errs() << " ";
 
     // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
-    for (int i = 0; i < 2 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
+    for (unsigned int i = 0; i < 2 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
     {
       int sizes_i = i + 2 * (rshPerms[sparse_inputtensor_id].size()) + 1;
       comet_errs() << " ";
@@ -152,7 +152,7 @@ namespace
       array_sizes_vec.push_back(input_load_op);
     }
 
-    for (int i = 0; i < rshPerms[sparse_inputtensor_id].size(); i++)
+    for (unsigned int i = 0; i < rshPerms[sparse_inputtensor_id].size(); i++)
     {
       int sizes_i = i + 2 * (2 * (rshPerms[sparse_inputtensor_id].size()) + 1);
       comet_errs() << " ";
@@ -183,7 +183,6 @@ namespace
 
     Value cst_index_0 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(0));
     Value cst_index_1 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
-    Value cst_index_2 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(2));
 
     unsigned int tensor_rank = op.getOperation()->getNumOperands();
 
@@ -290,18 +289,6 @@ namespace
       comet_vdump(op);
       auto loc = op.getLoc();
 
-      IndexType indexType = IndexType::get(op.getContext());
-      FloatType f64Type = FloatType::getF64(op.getContext());
-      if (VALUETYPE.compare(0, 3, "f32") == 0)
-        f64Type = FloatType::getF32(op.getContext());
-
-      // A1_pos ... A_value
-      Type dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
-      Type dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
-
-      Type unrankedMemTy_index = UnrankedMemRefType::get(indexType, 0);
-      Type unrankedMemTy_f64 = UnrankedMemRefType::get(f64Type, 0);
-
       auto tensor_decl_value = cast<tensorAlgebra::DenseTensorDeclOp>(op);
 
       auto resultTensorType = op.getResult().getType();
@@ -325,8 +312,6 @@ namespace
             cur_indices.push_back(hi); // IndexCastOp
         }
       }
-      llvm::ArrayRef<int64_t> cur_memref_arrayref = llvm::ArrayRef<int64_t>(cur_memref);
-      MemRefType memrefType2 = MemRefType::get(cur_memref_arrayref, f64Type);
 
       auto alloc_sizes1 = rewriter.create<memref::AllocOp>(loc, resultMemTy, ValueRange(cur_indices));
       comet_errs() << " ";
@@ -431,7 +416,7 @@ namespace
         if (isFuncInMod("read_input_3D_f32", module) == false)
         {
           FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_3D_f32",
-                                        readInput3DF64Func, ArrayRef<NamedAttribute>{});
+                                        readInput3DF32Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
@@ -513,7 +498,7 @@ namespace
         {
           comet_errs() << " used in ta.tc op\n";
           auto p = cast<tensorAlgebra::TensorMultOp>(u1).getOperation();
-          for (auto i = 0; i < p->getNumOperands(); i++)
+          for (unsigned int i = 0; i < p->getNumOperands(); i++)
           {
             // comet_vdump(n);
             std::string n_str = dump2str(p->getOperand(i));
@@ -531,7 +516,7 @@ namespace
         {
           comet_errs() << " used in ta.set op\n";
           auto p = cast<tensorAlgebra::TensorSetOp>(u1).getOperation();
-          for (auto i = 0; i < p->getNumOperands(); i++)
+          for (unsigned int i = 0; i < p->getNumOperands(); i++)
           {
             // comet_vdump(n);
             comet_errs() << " the " << i << "th operand\n";
@@ -552,7 +537,7 @@ namespace
         {
           comet_errs() << " used in transpose op\n";
           auto p = cast<tensorAlgebra::TransposeOp>(u1).getOperation();
-          for (auto i = 0; i < p->getNumOperands(); i++)
+          for (unsigned int i = 0; i < p->getNumOperands(); i++)
           {
             std::string n_str = dump2str(p->getOperand(i));
             if (n_str.compare(0, op_str.size(), op_str) == 0)
@@ -965,7 +950,6 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
       // Sparse output tensor declaration happens after lowering to index tree dialect
-      auto module = op->getParentOfType<ModuleOp>();
       assert(isa<tensorAlgebra::OutputTensorDeclOp>(op));
       comet_errs() << "SparseOutputTensorDeclOpLowering in format begin\n";
       comet_vdump(op);
@@ -986,9 +970,6 @@ namespace
       // A1_pos ... A_value
       auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
       auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
-
-      Type unrankedMemTy_index = UnrankedMemRefType::get(indexType, 0);
-      Type unrankedMemTy_f64 = UnrankedMemRefType::get(f64Type, 0);
 
       comet_errs() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
@@ -1271,8 +1252,6 @@ namespace
                   comet_errs() << "\n";
                 }
 
-                auto rhsComputeOp = computeOp->getOperand(0).getDefiningOp();
-
                 bool isElementwise = checkIsElementwise(rhsPerms);
                 bool isMixedMode = checkIsMixedMode(rhsFormats);
 
@@ -1454,7 +1433,6 @@ namespace
     {
       assert(isa<tensorAlgebra::TensorFillOp>(op));
 
-      auto ctx = rewriter.getContext();
       auto loc = op->getLoc();
       auto tensorFillOp = cast<tensorAlgebra::TensorFillOp>(op);
 
@@ -1464,7 +1442,7 @@ namespace
       auto valueAttr = tensorFillOp.value();
       auto constantOp = rewriter.create<ConstantOp>(loc, valueAttr);
 
-      auto fillOp = rewriter.create<linalg::FillOp>(loc, memref, constantOp);
+      rewriter.create<linalg::FillOp>(loc, memref, constantOp);
       rewriter.eraseOp(op);
 
       return success();
@@ -1550,10 +1528,6 @@ void DenseTensorDeclLoweringPass::runOnFunction()
 //===----------------------------------------------------------------===//
 void SparseInputTensorDeclLoweringPass::runOnFunction()
 {
-
-  auto function = getFunction();
-  auto module = function.getOperation()->getParentOfType<ModuleOp>();
-  auto *ctx = &getContext();
   ConversionTarget target(getContext());
 
   target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, mlir::memref::MemRefDialect>();
@@ -1589,11 +1563,6 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
 void SparseOutputTensorDeclLoweringPass::runOnFunction()
 {
   comet_errs() << "start SparseOutputTensorDeclLoweringPass\n";
-  auto function = getFunction();
-  auto module = function.getOperation()->getParentOfType<ModuleOp>();
-  auto *ctx = &getContext();
-
-  comet_errs() << " ";
   ConversionTarget target(getContext());
 
   target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
@@ -1625,9 +1594,6 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
 void TensorFillLoweringPass::runOnFunction()
 {
   comet_errs() << "start TensorFillLoweringPass\n";
-  auto function = getFunction();
-  auto module = function.getOperation()->getParentOfType<ModuleOp>();
-  auto *ctx = &getContext();
 
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();

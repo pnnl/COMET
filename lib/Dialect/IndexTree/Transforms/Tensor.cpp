@@ -50,7 +50,7 @@ string Tensor::str(int withFormats)
   string s = getName();
   s += '[';
   bool first = true;
-  for (int i = 0; i < indices.size(); i++)
+  for (unsigned long i = 0; i < indices.size(); i++)
   {
     int index = getIndex(i);
 

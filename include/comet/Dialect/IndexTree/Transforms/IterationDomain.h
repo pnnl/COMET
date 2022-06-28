@@ -109,7 +109,6 @@ class BoolExpr
   T value;
   shared_ptr<BoolExpr> low;
   shared_ptr<BoolExpr> high;
-  int id;
   bool isConstantTrue = false;
   bool isConstantFalse = false;
 

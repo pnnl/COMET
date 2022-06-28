@@ -61,8 +61,6 @@ Type mlir::indexTree::ITDialect::parseType(DialectAsmParser &parser) const
   if (parser.parseKeyword(&keyword))
     return Type();
 
-  MLIRContext *context = getContext();
-
   parser.emitError(parser.getNameLoc(),
                    "unknown IndexTree type: " + keyword);
   return Type();

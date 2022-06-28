@@ -46,7 +46,7 @@ IterDomain *IterDomain::conjunct(std::vector<IterDomain *> &domains)
 {
   assert(!domains.empty());
   auto d = domains[0];
-  for (int i = 1; i < domains.size(); i++)
+  for (unsigned long i = 1; i < domains.size(); i++)
   {
     d = conjunct(d, domains[i]);
   }

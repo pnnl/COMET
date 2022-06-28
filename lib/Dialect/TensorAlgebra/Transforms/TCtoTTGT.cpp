@@ -271,7 +271,6 @@ namespace
       comet_pdump(op);
       assert(isa<tensorAlgebra::TensorMultOp>(op));
 
-      auto module = op->getParentOfType<ModuleOp>();
       auto ctx = rewriter.getContext();
       auto loc = op->getLoc();
       auto multop = cast<tensorAlgebra::TensorMultOp>(op);
@@ -376,8 +375,6 @@ namespace
       AffineMap rhs2InMap = AffineMap::getPermutationMap(getIdentityPermutation(allPerms[1].size()), ctx);
       AffineMap rhs2OutMap = AffineMap::getPermutationMap(rhs2Perm, ctx);
 
-      AffineMapAttr lhsInMapAttr = AffineMapAttr::get(AffineMap::getPermutationMap(
-          getIdentityPermutation(allPerms[2].size()), ctx));
       AffineMapAttr lhsOutMapAttr =
           AffineMapAttr::get(AffineMap::getPermutationMap(lhsPerm, ctx));
       AffineMap lhsInMap = AffineMap::getPermutationMap(
@@ -402,9 +399,13 @@ namespace
             MemRefType::get(rhs1Dims, rhs1MemrefType.getElementType()), loc,
             rewriter);
 
+        #ifdef DEBUG_MODE_TTGT
         auto rhs1LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
         comet_errs() << "\n";
         comet_vdump(rhs1LinalgCopy);
+        #else
+        rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
+        #endif
       }
 
       if (!rhs2OutMapAttr.getValue().isIdentity())
@@ -419,9 +420,13 @@ namespace
         rhs2Alloc = insertAllocAndDealloc(
             MemRefType::get(rhs2Dims, rhs2MemrefType.getElementType()), loc,
             rewriter);
+        #ifdef DEBUG_MODE_TTGT
         auto rhs2LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
         comet_errs() << " rhs2LinalgCopy op: " << __LINE__ << "\n";
         comet_vdump(rhs2LinalgCopy);
+        #else
+        rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
+        #endif
       }
 
       bool useLHSTranspose = false;
@@ -440,8 +445,7 @@ namespace
         useLHSTranspose = true;
         // TODO(gkestor): we might need this copy if we support update C[] += A[] *
         /// B[]
-        auto lhsLinalgCopy = rewriter.create<linalg::CopyOp>(
-            loc, lhsMemref, lhsAlloc, lhsInMap, lhsOutMap);
+        rewriter.create<linalg::CopyOp>(loc, lhsMemref, lhsAlloc, lhsInMap, lhsOutMap);
       }
 
       MemRefType collapsedMemrefType;
@@ -714,11 +718,14 @@ namespace
       // Copy back the result if needed
       if (lhsAlloc != lhsMemref && useLHSTranspose)
       {
-
+        #ifdef DEBUG_MODE_TTGT
         auto lhsFinalCopy =
             rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
         comet_errs() << "\n";
         comet_vdump(lhsFinalCopy);
+        #else
+        rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
+        #endif
       }
 
       if (printFlops)
