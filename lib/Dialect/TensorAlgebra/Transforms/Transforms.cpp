@@ -111,7 +111,6 @@ namespace
     {
       // comet_errs() << "MulOpFactorization begin\n";
       comet_pdump(op);
-      auto ctx = rewriter.getContext();
       auto loc = op->getLoc();
       auto lhsOp = operands[0].getDefiningOp();
       auto rhsOp = operands[1].getDefiningOp();
@@ -153,7 +152,6 @@ namespace
       // LabeledTensorOp to label set map
       std::map<Operation *, std::vector<Operation *>> lblMaps;
 
-      unsigned idx = 0;
       for (auto op : inLTOps)
       {
         auto labels = cast<tensorAlgebra::LabeledTensorOp>(op).labels();
@@ -187,7 +185,6 @@ namespace
 
       bool same_order = hasSameOrder(getIdentityPermutation(order.size()), order);
 
-      Value newRhs = operands[1];
       if (!same_order)
       {
 
@@ -388,11 +385,11 @@ namespace
         auto lhsLabels = lhsLT.labels();
         auto rhsLabels = rhsLT.labels();
         std::vector<Operation *> lhsLabelOps, rhsLabelOps;
-        for (const auto &lbl : lhsLabels)
+        for (const auto lbl : lhsLabels)
         {
           lhsLabelOps.push_back(lbl.getDefiningOp());
         }
-        for (const auto &lbl : rhsLabels)
+        for (const auto lbl : rhsLabels)
         {
           rhsLabelOps.push_back(lbl.getDefiningOp());
         }
@@ -434,7 +431,7 @@ namespace
 
       comet_pdump(rhsOp);
       comet_errs() << "\n";
-      replaceSetOp(rhsOp, lhsLT.tensor(), lhsLabels, loc, rewriter);
+      replaceSetOp(rhsOp, lhsTensor, lhsLabels, loc, rewriter);
       rewriter.eraseOp(op);
       comet_errs() << "SetOpLowering end\n";
       return success();
@@ -453,7 +450,6 @@ namespace
     {
       assert(isa<tensorAlgebra::TensorCopyOp>(op));
 
-      auto ctx = rewriter.getContext();
       auto loc = op->getLoc();
       auto tensorCopyOp = cast<tensorAlgebra::TensorCopyOp>(op);
 
@@ -497,6 +493,7 @@ namespace
       comet_errs() << "--------------TensorContractionLowering in format\n";
       // Here, should check the operands, at least one operand should be sparse;
       // Otherwise, if all dense operands, just return.
+      return success();
     }
   }; // TensorContractionLowering
 

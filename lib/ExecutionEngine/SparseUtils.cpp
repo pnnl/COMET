@@ -205,14 +205,16 @@ struct CooMatrix
 
         int row, col;
         T val;
+        double tempVal = 0.0;
 
         if (array)
         {
-          if (sscanf(line, "%lf", &val) != 1)
+          if (sscanf(line, "%lf", &tempVal) != 1)  // using tempVal instead of templated T val to avoid warning
           {
             fprintf(stderr, "Error parsing MARKET matrix: badly formed current_nz: '%s' at edge %d\n", line, current_nz);
             exit(1);
           }
+          val = (T) tempVal;
           col = (current_nz / num_rows);
           row = (current_nz - (num_rows * col));
           // std::cout << __LINE__ << "current_nz: " << current_nz << "\n";
@@ -1063,7 +1065,6 @@ struct Mg3DTensor
 
     int prev_index_i = -1;
     int prev_index_j = -1;
-    int prev_index_k = -1;
     for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
       int current_index_i = coo_3dtensor.coo_3dtuples[current_nz].index_i;

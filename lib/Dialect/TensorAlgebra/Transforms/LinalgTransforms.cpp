@@ -306,9 +306,13 @@ struct OptDenseTranspose : public ConversionPattern
 
     // Build loop body
     auto load_rhs = rewriter.create<memref::LoadOp>(loc, inputMemref, inputIVs);
+    #ifdef DEBUG_MODE_LINALGTRANSFORMS
     comet_vdump(load_rhs);
     auto store_lhs = rewriter.create<memref::StoreOp>(loc, load_rhs, outputMemref, outputIVs);
     comet_vdump(store_lhs);
+    #else
+    rewriter.create<memref::StoreOp>(loc, load_rhs, outputMemref, outputIVs);
+    #endif
 
     // CopyOp index permutation
     AffineMap invmap = op.inputPermutation().getValue();

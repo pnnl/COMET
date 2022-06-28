@@ -103,7 +103,6 @@ namespace
       }
 
       mlir::Value rhs = setnewop.rhs();
-      mlir::Value lhs = setnewop.lhs();
 
       auto LabeledTensoroperands = rhs.getDefiningOp()->getOperands();
 
@@ -324,9 +323,6 @@ namespace
       Value lhs = op.lhs();
       Value rhs = op.rhs();
 
-      auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-      auto step = rewriter.create<ConstantIndexOp>(loc, 1);
-
       auto rhsTy = rhs.getType().cast<mlir::TensorType>();
       std::vector<scf::ForOp> forloops;
       Value upperBound;
@@ -379,8 +375,6 @@ namespace
       }
 
       mlir::Value setOp_rhs = setnewop.rhs();
-      mlir::Value setOp_lhs = setnewop.lhs();
-
       auto def_setOp_rhs = setOp_rhs.getDefiningOp();
 
       memref::AllocOp SetOp_rhs_alloc;
@@ -397,7 +391,7 @@ namespace
         SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_setOp->getOperand(0).getDefiningOp());
       }
 
-      auto store_sum = rewriter.create<memref::StoreOp>(loc, sum, SetOp_rhs_alloc, InductionVars);
+      rewriter.create<memref::StoreOp>(loc, sum, SetOp_rhs_alloc, InductionVars);
       rewriter.setInsertionPointAfter(forloops[0]);
       rewriter.eraseOp(setnewop);
       rewriter.eraseOp(op);
@@ -416,9 +410,6 @@ namespace
       Location loc = op.getLoc();
       Value lhs = op.lhs();
       Value rhs = op.rhs();
-
-      auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-      auto step = rewriter.create<ConstantIndexOp>(loc, 1);
 
       auto rhsTy = rhs.getType().cast<mlir::TensorType>();
       std::vector<scf::ForOp> forloops;
@@ -473,8 +464,6 @@ namespace
       }
 
       mlir::Value setOp_rhs = setnewop.rhs();
-      mlir::Value setOp_lhs = setnewop.lhs();
-
       auto def_setOp_rhs = setOp_rhs.getDefiningOp();
 
       memref::AllocOp SetOp_rhs_alloc;
@@ -491,7 +480,7 @@ namespace
         SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_setOp->getOperand(0).getDefiningOp());
       }
 
-      auto store_sum = rewriter.create<memref::StoreOp>(loc, subtract, SetOp_rhs_alloc, InductionVars);
+      rewriter.create<memref::StoreOp>(loc, subtract, SetOp_rhs_alloc, InductionVars);
 
       rewriter.setInsertionPointAfter(forloops[0]);
       rewriter.eraseOp(setnewop);

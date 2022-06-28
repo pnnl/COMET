@@ -104,7 +104,7 @@ bool isNeedTensorDecl(t op)
     {
       comet_errs() << " used in ta.set_new op\n";
       auto p = cast<tensorAlgebra::TensorSetOp>(u1).getOperation();
-      for (auto i = 0; i < p->getNumOperands(); i++)
+      for (unsigned int i = 0; i < p->getNumOperands(); i++)
       {
         comet_errs() << " the " << i << "th operand\n";
         std::string n_str = dump2str(p->getOperand(i));
@@ -130,7 +130,7 @@ void addTensorDecl(t op)
   std::string ret_format;
   if (isa<tensorAlgebra::TransposeOp>(op))
   {
-    for (auto i = 1; i < op.getOperation()->getNumOperands(); i++)
+    for (unsigned int i = 1; i < op.getOperation()->getNumOperands(); i++)
     {
       comet_errs() << " ";
       comet_vdump(op.getOperation()->getOperand(i));
@@ -145,7 +145,7 @@ void addTensorDecl(t op)
   }
   else if (isa<tensorAlgebra::TensorMultOp>(op))
   {
-    for (auto i = 2; i < op.getOperation()->getNumOperands(); i++)
+    for (unsigned int i = 2; i < op.getOperation()->getNumOperands(); i++)
     {
       comet_errs() << " ";
       comet_vdump(op.getOperation()->getOperand(i));
@@ -160,7 +160,7 @@ void addTensorDecl(t op)
   }
   else if (isa<tensorAlgebra::TensorElewsMultOp>(op))
   {
-    for (auto i = 2; i < op.getOperation()->getNumOperands(); i++)
+    for (unsigned int i = 2; i < op.getOperation()->getNumOperands(); i++)
     {
       comet_errs() << " ";
       comet_vdump(op.getOperation()->getOperand(i));
@@ -187,12 +187,16 @@ void addTensorDecl(t op)
   op.replaceAllUsesWith(itensor);
 
   builder.setInsertionPointAfter(op);
+  #ifdef DEBUG_MODE_PreLoweringPass
   auto setop = builder.create<TensorSetOp>(location, ret_value, itensor);
   comet_errs() << " ";
   comet_vdump(setop);
 
   comet_errs() << " ";
   comet_vdump(ret_value);
+  #else
+  builder.create<TensorSetOp>(location, ret_value, itensor);
+  #endif
 }
 
 void PreLoweringPass::runOnFunction()

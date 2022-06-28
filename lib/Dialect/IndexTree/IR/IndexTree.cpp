@@ -121,7 +121,7 @@ Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, IndicesType &indices,
     auto t = valueToTensor[vp].get();
     auto tIndices = t->getIndices();
     assert(tIndices.size() == indices.size());
-    for (int i = 0; i < indices.size(); i++)
+    for (unsigned long i = 0; i < indices.size(); i++)
     {
       assert(tIndices[i] == indices[i]);
     }
@@ -148,7 +148,8 @@ unique_ptr<Index_Tree> Index_Tree::createTreeWithRoot()
 {
   auto tree = make_unique<Index_Tree>();
   tree->addRootNode();
-  return std::move(tree);
+  //return std::move(tree);
+  return tree;
 }
 
 void visitExpr(UnitExpression *expr, set<UnitExpression *> &visited,

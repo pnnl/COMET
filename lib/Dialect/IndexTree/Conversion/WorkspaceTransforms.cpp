@@ -299,12 +299,14 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
       comet_errs() << " finished calling replacereplaceOperands \n";
       // This parentIndicesOp is the operation that need to be splitted next time
 
+      #ifdef DEBUG_MODE_WorkspaceTransformsPass
       comet_vdump(indicesOp.getOperation()->getResult(0));
       for (auto ppp : indicesOp.getOperation()->getResult(0).getUsers())
       {
 
         comet_pdump(ppp);
       }
+      #endif
 
       Operation *parentIndicesOp = *(indicesOp.getOperation()->getResult(0).getUsers().begin());
 
@@ -470,6 +472,7 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
         }
         else
         {
+          #ifdef DEBUG_MODE_WorkspaceTransformsPass
           comet_vdump(curIndicesOp);
           int count = 0;
           for (auto p : curIndicesOp.getOperation()->getResult(0).getUsers())
@@ -478,6 +481,7 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
             count++;
           }
           comet_errs() << " count: " << count << "\n";
+          #endif
           assert(curIndicesOp.getOperation()->getResult(0).hasOneUse() && " indicesOp has more than one user\n");
           Operation *curIndicesOpParent = *(curIndicesOp.getOperation()->getResult(0).getUsers().begin());
 
@@ -563,7 +567,6 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   std::vector<std::vector<std::string>> formats = {opFormats[0], opFormats[1], opFormats[2], {"D"}};
   std::vector<std::vector<int>> perms = {opPerms[0], opPerms[1], opPerms[2], {sparseDimOutput}};
 
-  double f64_0 = 0.0;
   Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
   std::vector<mlir::Value> t1_tensors = {const_f64_0, w};
   std::vector<mlir::Value> t2_tensors = {tensors[0], tensors[1], w};
@@ -572,12 +575,12 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   std::vector<int> t1_perms_int_0;
   std::vector<int> t1_perms_int_1 = {sparseDimOutput};
   std::vector<std::vector<int>> t1_perms_int = {t1_perms_int_0, t1_perms_int_1};
-  ArrayAttr t1_perms = convert2DVectorToArrayAttrInt(t1_perms_int, builder); 
+  //ArrayAttr t1_perms = convert2DVectorToArrayAttrInt(t1_perms_int, builder); 
 
   std::vector<std::string> t1_formats_str_0;
   std::vector<std::string> t1_formats_str_1 = {"D"};
   std::vector<std::vector<std::string>> t1_formats_str = {t1_formats_str_0, t1_formats_str_1};
-  ArrayAttr t1_formats = convert2DVectorToArrayAttrStr(t1_formats_str, builder); 
+  //ArrayAttr t1_formats = convert2DVectorToArrayAttrStr(t1_formats_str, builder); 
 
   auto i64Type = builder.getI64Type();
   std::vector<mlir::Value> t1_rhs = {t1_tensors[0]};
@@ -606,14 +609,14 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   std::vector<int> t2_perms_int_1 = opPerms[1];
   std::vector<int> t2_perms_int_2 = {sparseDimOutput};
   std::vector<std::vector<int>> t2_perms_int = {t2_perms_int_0, t2_perms_int_1, t2_perms_int_2};
-  ArrayAttr t2_perms = convert2DVectorToArrayAttrInt(t2_perms_int, builder);
+  //ArrayAttr t2_perms = convert2DVectorToArrayAttrInt(t2_perms_int, builder);
 
   // Convert formats string array into StrAttr
   std::vector<std::string> t2_formats_str_0 = opFormats[0];
   std::vector<std::string> t2_formats_str_1 = opFormats[1];
   std::vector<std::string> t2_formats_str_2 = {"D"};
   std::vector<std::vector<std::string>> t2_formats_str = {t2_formats_str_0, t2_formats_str_1, t2_formats_str_2};
-  ArrayAttr t2_formats = convert2DVectorToArrayAttrStr(t2_formats_str, builder);
+  //ArrayAttr t2_formats = convert2DVectorToArrayAttrStr(t2_formats_str, builder);
   std::vector<mlir::Value> t2_rhs = {t2_tensors[0], t2_tensors[1]};
   mlir::Value t2_lhs = w;
 
@@ -641,14 +644,14 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   std::vector<int> t3_perms_int_0 = {sparseDimOutput};
   std::vector<int> t3_perms_int_1 = opPerms[2];
   std::vector<std::vector<int>> t3_perms_int = {t3_perms_int_0, t3_perms_int_1};
-  ArrayAttr t3_perms = convert2DVectorToArrayAttrInt(t3_perms_int, builder);
+  //ArrayAttr t3_perms = convert2DVectorToArrayAttrInt(t3_perms_int, builder);
 
   // Convert formats string array into StrAttr
   std::vector<std::string> t3_formats_str_0 = {"D"};
   std::vector<std::string> t3_formats_str_1 = opFormats[2];
   std::vector<std::vector<std::string>> t3_formats_str = {t3_formats_str_0, t3_formats_str_1};
-  ;
-  ArrayAttr t3_formats = convert2DVectorToArrayAttrStr(t3_formats_str, builder);
+
+  //ArrayAttr t3_formats = convert2DVectorToArrayAttrStr(t3_formats_str, builder);
   std::vector<mlir::Value> t3_rhs = {w};
   mlir::Value t3_lhs = t3_tensors[1];
   // auto t3_optype = builder.getIntegerAttr(builder.getIntegerType(64), 0);
@@ -853,12 +856,12 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   std::vector<int> t0_perms_int_0;
   std::vector<int> t0_perms_int_1;
   std::vector<std::vector<int>> t0_perms_int = {t0_perms_int_0, t0_perms_int_1};
-  ArrayAttr t0_perms = convert2DVectorToArrayAttrInt(t0_perms_int, builder);
+  //ArrayAttr t0_perms = convert2DVectorToArrayAttrInt(t0_perms_int, builder);
 
   std::vector<std::string> t0_formats_str_0;
   std::vector<std::string> t0_formats_str_1; // = {"D"};
   std::vector<std::vector<std::string>> t0_formats_str = {t0_formats_str_0, t0_formats_str_1};
-  ArrayAttr t0_formats = convert2DVectorToArrayAttrStr(t0_formats_str, builder);
+  //ArrayAttr t0_formats = convert2DVectorToArrayAttrStr(t0_formats_str, builder);
 
   // auto i64Type = builder.getI64Type();
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
@@ -889,7 +892,6 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   sparseDimsPerent.getDefiningOp()->insertOperands(0, t0);
   //////////  for t0 end
 
-  double f64_0 = 0.0;
   Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
   std::vector<mlir::Value> t1_tensors = {const_f64_0, w};
   std::vector<mlir::Value> t2_tensors = {tensors[0], tensors[1], w};
@@ -898,12 +900,12 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   std::vector<int> t1_perms_int_0;
   std::vector<int> t1_perms_int_1 = {sparseDimOutput};
   std::vector<std::vector<int>> t1_perms_int = {t1_perms_int_0, t1_perms_int_1};
-  ArrayAttr t1_perms = convert2DVectorToArrayAttrInt(t1_perms_int, builder);
+  //ArrayAttr t1_perms = convert2DVectorToArrayAttrInt(t1_perms_int, builder);
 
   std::vector<std::string> t1_formats_str_0;
   std::vector<std::string> t1_formats_str_1 = {"D"};
   std::vector<std::vector<std::string>> t1_formats_str = {t1_formats_str_0, t1_formats_str_1};
-  ArrayAttr t1_formats = convert2DVectorToArrayAttrStr(t1_formats_str, builder);
+  //ArrayAttr t1_formats = convert2DVectorToArrayAttrStr(t1_formats_str, builder);
 
   auto i64Type = builder.getI64Type();
   std::vector<mlir::Value> t1_rhs = {t1_tensors[0]};
@@ -933,14 +935,14 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   std::vector<int> t2_perms_int_1 = opPerms[1];
   std::vector<int> t2_perms_int_2 = {sparseDimOutput};
   std::vector<std::vector<int>> t2_perms_int = {t2_perms_int_0, t2_perms_int_1, t2_perms_int_2};
-  ArrayAttr t2_perms = convert2DVectorToArrayAttrInt(t2_perms_int, builder);
+  //ArrayAttr t2_perms = convert2DVectorToArrayAttrInt(t2_perms_int, builder);
 
   // Convert formats string array into StrAttr
   std::vector<std::string> t2_formats_str_0 = opFormats[0];
   std::vector<std::string> t2_formats_str_1 = opFormats[1];
   std::vector<std::string> t2_formats_str_2 = {"D"};
   std::vector<std::vector<std::string>> t2_formats_str = {t2_formats_str_0, t2_formats_str_1, t2_formats_str_2};
-  ArrayAttr t2_formats = convert2DVectorToArrayAttrStr(t2_formats_str, builder);
+  //ArrayAttr t2_formats = convert2DVectorToArrayAttrStr(t2_formats_str, builder);
   std::vector<mlir::Value> t2_rhs = {t2_tensors[0], t2_tensors[1]};
   // mlir::Value t2_lhs = w;
   std::vector<mlir::Value> t2_lhs = workspaceTensors;
@@ -969,14 +971,14 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   std::vector<int> t3_perms_int_0 = {sparseDimOutput};
   std::vector<int> t3_perms_int_1 = opPerms[2];
   std::vector<std::vector<int>> t3_perms_int = {t3_perms_int_0, t3_perms_int_1};
-  ArrayAttr t3_perms = convert2DVectorToArrayAttrInt(t3_perms_int, builder);
+  //ArrayAttr t3_perms = convert2DVectorToArrayAttrInt(t3_perms_int, builder);
 
   // Convert formats string array into StrAttr
   std::vector<std::string> t3_formats_str_0 = {"D"};
   std::vector<std::string> t3_formats_str_1 = opFormats[2];
   std::vector<std::vector<std::string>> t3_formats_str = {t3_formats_str_0, t3_formats_str_1};
-  ;
-  ArrayAttr t3_formats = convert2DVectorToArrayAttrStr(t3_formats_str, builder);
+
+  //ArrayAttr t3_formats = convert2DVectorToArrayAttrStr(t3_formats_str, builder);
   // std::vector<mlir::Value> t3_rhs = {w};
   std::vector<mlir::Value> t3_rhs = workspaceTensors;
   mlir::Value t3_lhs = t3_tensors[1];
@@ -1132,12 +1134,12 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
       std::vector<int> t1_perms_int_0;
       std::vector<int> t1_perms_int_1 = {sparseDimsInput[0].dim};
       std::vector<std::vector<int>> t1_perms_int = {t1_perms_int_0, t1_perms_int_1};
-      ArrayAttr t1_perms = convert2DVectorToArrayAttrInt(t1_perms_int, builder);
+      //ArrayAttr t1_perms = convert2DVectorToArrayAttrInt(t1_perms_int, builder);
 
       std::vector<std::string> t1_formats_str_0;
       std::vector<std::string> t1_formats_str_1 = {"D"};
       std::vector<std::vector<std::string>> t1_formats_str = {t1_formats_str_0, t1_formats_str_1};
-      ArrayAttr t1_formats = convert2DVectorToArrayAttrStr(t1_formats_str, builder);
+      //ArrayAttr t1_formats = convert2DVectorToArrayAttrStr(t1_formats_str, builder);
 
       auto i64Type = builder.getI64Type();
       Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
@@ -1168,15 +1170,13 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
       std::vector<int> t2_perms_int_0 = opPerms[sparseDimsInput[0].tensorId];
       std::vector<int> t2_perms_int_1 = {sparseDimsInput[0].dim};
       std::vector<std::vector<int>> t2_perms_int = {t2_perms_int_0, t2_perms_int_1};
-      ArrayAttr t2_perms = convert2DVectorToArrayAttrInt(t2_perms_int, builder);
+      //ArrayAttr t2_perms = convert2DVectorToArrayAttrInt(t2_perms_int, builder);
 
       std::vector<std::string> t2_formats_str_0 = opFormats[sparseDimsInput[0].tensorId];
       std::vector<std::string> t2_formats_str_1 = {"D"};
       std::vector<std::vector<std::string>> t2_formats_str = {t2_formats_str_0, t2_formats_str_1};
-      ArrayAttr t2_formats = convert2DVectorToArrayAttrStr(t2_formats_str, builder);
+      //ArrayAttr t2_formats = convert2DVectorToArrayAttrStr(t2_formats_str, builder);
 
-      // std::vector<mlir::Value> t2_rhs = {itComputeOp.getOperation()->getOperand(sparseDimsInput[0].tensorId)};
-      /// new version
       std::vector<mlir::Value> t2_rhs = {tensors[sparseDimsInput[0].tensorId]};
 
       mlir::Value t2_lhs = {v};
@@ -1205,7 +1205,7 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
       std::vector<int> t3_perms_int_1 = opPerms[1]; 
       std::vector<int> t3_perms_int_2 = opPerms[opPerms.size() - 1];
       std::vector<std::vector<int>> t3_perms_int = {t3_perms_int_0, t3_perms_int_1, t3_perms_int_2};
-      ArrayAttr t3_perms = convert2DVectorToArrayAttrInt(t3_perms_int, builder);
+      //ArrayAttr t3_perms = convert2DVectorToArrayAttrInt(t3_perms_int, builder);
 
       // Convert formats string array into StrAttr
       std::vector<std::string> t3_formats_str_0 = {"D"};
@@ -1213,7 +1213,7 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
       std::vector<std::string> t3_formats_str_2 = opFormats[opFormats.size() - 1];
       ;
       std::vector<std::vector<std::string>> t3_formats_str = {t3_formats_str_0, t3_formats_str_1, t3_formats_str_2};
-      ArrayAttr t3_formats = convert2DVectorToArrayAttrStr(t3_formats_str, builder);
+      //ArrayAttr t3_formats = convert2DVectorToArrayAttrStr(t3_formats_str, builder);
       std::vector<mlir::Value> t3_rhs = {v, tensors[1]};
 
       mlir::Value t3_lhs = {tensors[tensors.size() - 1]};
@@ -1327,12 +1327,12 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       std::vector<int> t1_perms_int_0;
       std::vector<int> t1_perms_int_1 = {sparseDimsInput[0].dim};
       std::vector<std::vector<int>> t1_perms_int = {t1_perms_int_0, t1_perms_int_1};
-      ArrayAttr t1_perms = convert2DVectorToArrayAttrInt(t1_perms_int, builder);
+      //ArrayAttr t1_perms = convert2DVectorToArrayAttrInt(t1_perms_int, builder);
 
       std::vector<std::string> t1_formats_str_0;
       std::vector<std::string> t1_formats_str_1 = {"D"};
       std::vector<std::vector<std::string>> t1_formats_str = {t1_formats_str_0, t1_formats_str_1};
-      ArrayAttr t1_formats = convert2DVectorToArrayAttrStr(t1_formats_str, builder);
+      //ArrayAttr t1_formats = convert2DVectorToArrayAttrStr(t1_formats_str, builder);
 
       auto i64Type = builder.getI64Type();
       Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
@@ -1363,16 +1363,13 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       std::vector<int> t2_perms_int_0 = opPerms[sparseDimsInput[0].tensorId];
       std::vector<int> t2_perms_int_1 = {sparseDimsInput[0].dim};
       std::vector<std::vector<int>> t2_perms_int = {t2_perms_int_0, t2_perms_int_1};
-      ArrayAttr t2_perms = convert2DVectorToArrayAttrInt(t2_perms_int, builder);
+      //ArrayAttr t2_perms = convert2DVectorToArrayAttrInt(t2_perms_int, builder);
 
       std::vector<std::string> t2_formats_str_0 = opFormats[sparseDimsInput[0].tensorId];
       std::vector<std::string> t2_formats_str_1 = {"D"};
       std::vector<std::vector<std::string>> t2_formats_str = {t2_formats_str_0, t2_formats_str_1};
-      ArrayAttr t2_formats = convert2DVectorToArrayAttrStr(t2_formats_str, builder);
+      //ArrayAttr t2_formats = convert2DVectorToArrayAttrStr(t2_formats_str, builder);
 
-      // std::vector<mlir::Value> t2_rhs = {itComputeOp.getOperation()->getOperand(sparseDimsInput[0].tensorId)};
-      /// new version
-      // std::vector<mlir::Value> t2_rhs = {tensors[sparseDimsInput[0].tensorId]};
       std::vector<mlir::Value> t2_rhs = {tensors_rhs[sparseDimsInput[0].tensorId]};
 
       mlir::Value t2_lhs = {v};
@@ -1400,15 +1397,15 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       std::vector<int> t3_perms_int_1 = opPerms[1]; 
       std::vector<int> t3_perms_int_2 = opPerms[opPerms.size() - 1];
       std::vector<std::vector<int>> t3_perms_int = {t3_perms_int_0, t3_perms_int_1, t3_perms_int_2};
-      ArrayAttr t3_perms = convert2DVectorToArrayAttrInt(t3_perms_int, builder);
+      //ArrayAttr t3_perms = convert2DVectorToArrayAttrInt(t3_perms_int, builder);
 
       // Convert formats string array into StrAttr
       std::vector<std::string> t3_formats_str_0 = {"D"};
       std::vector<std::string> t3_formats_str_1 = opFormats[1];
       std::vector<std::string> t3_formats_str_2 = opFormats[opFormats.size() - 1];
-      ;
+
       std::vector<std::vector<std::string>> t3_formats_str = {t3_formats_str_0, t3_formats_str_1, t3_formats_str_2};
-      ArrayAttr t3_formats = convert2DVectorToArrayAttrStr(t3_formats_str, builder);
+      //ArrayAttr t3_formats = convert2DVectorToArrayAttrStr(t3_formats_str, builder);
       std::vector<mlir::Value> t3_rhs = {v, tensors[1]};
 
       comet_errs() << " tensors.size(): " << tensors.size() << "\n";
@@ -1535,10 +1532,12 @@ void WorkspaceTransformsPass::WorkspaceTransforms(mlir::FuncOp funcop)
     }
     // initially here workspaceOutput content 
 
+    #ifdef DEBUG_MODE_WorkspaceTransformsPass
     // Should notice, the itree has been the new itree already after call workspaceOutput
     for(auto n : newComputeOps){
       comet_vdump(n);
     }
+    #endif
     // assert(sparseDimsInput.size() >= 1 && " More than one sparse index in the output, we are expecting to support it in the future\n"); 
     if(sparseDimsInput.size() == 1){
       comet_vdump(op);
@@ -1601,26 +1600,29 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
     std::vector<std::vector<bool> > inputOutputMapping;
     getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
 
+    #ifdef DEBUG_MODE_WorkspaceTransformsPass
     comet_errs() << "Print opFormats:\n";
     for (auto n : opFormats)
     {
       
       print_vector<std::string>(n);
     }
+    #endif
     
     indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-    // int optype = itComputeOp.op_type();
     std::string optype(itComputeOp.op_type().data());
     
     //Check the input tensors, and the output tensor, to see if it contains sparse dimensions
     //get the dim ids
     std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
     
+    #ifdef DEBUG_MODE_WorkspaceTransformsPass
     comet_errs() << " Print sparseDimsOutput: ";
     for(auto p : sparseDimsOutput){
       comet_errs() << p << " ";
     }
     comet_errs() << "\n";
+    #endif
 
     std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
 
@@ -1641,11 +1643,13 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
     }
     // initially here workspaceOutput content 
 
+    #ifdef DEBUG_MODE_WorkspaceTransformsPass
     // Should notice, the itree has been the new itree already after call workspaceOutput
     for(auto n : newComputeOps){
       
       comet_vdump(n);
     }
+    #endif
     // assert(sparseDimsInput.size() >= 1 && " More than one sparse index in the output, we are expecting to support it in the future\n"); 
     if(sparseDimsInput.size() == 1){
       comet_vdump(op);
@@ -1660,18 +1664,7 @@ void CompressedWorkspaceTransformsPass::runOnFunction()
   LLVM_DEBUG(llvm::dbgs() << "start CompressedWorkspaceTransformsPass\n");
   comet_errs() << __FILE__ << " " << __LINE__ << " start CompressedWorkspaceTransforms pass \n";
   auto function = getFunction();
-  auto module = function.getOperation()->getParentOfType<ModuleOp>();
-  auto *ctx = &getContext();
-
-  FloatType f64Type = FloatType::getF64(ctx);
-  if (VALUETYPE.compare("f32") == 0)
-    f64Type = FloatType::getF32(ctx);
-  auto printMemrefF64Func = FunctionType::get(ctx, {mlir::UnrankedMemRefType::get(f64Type, 0)}, {});
-  IndexType indexType = IndexType::get(ctx);
-  auto printMemrefIndexFunc = FunctionType::get(ctx, {mlir::UnrankedMemRefType::get(indexType, 0)}, {});
-  auto unrankedMemref_f64 = mlir::UnrankedMemRefType::get(f64Type, 0);
-  auto unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
-
+  
   // Traverse the function, only handle ta.itree operation
 
   CompressedWorkspaceTransforms(function);

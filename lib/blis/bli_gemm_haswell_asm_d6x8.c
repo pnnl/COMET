@@ -33,7 +33,22 @@
 
 */
 
+// suppress all warnings coming from inclusion of blis.h in source tree
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
 #include "comet/blis/blis.h"
+#pragma clang diagnostic pop
+#endif
+
+// suppress all warnings coming from inclusion of blis.h in source tree
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include "comet/blis/blis.h"
+#pragma GCC diagnostic pop
+#endif
+
 
 #define BLIS_ASM_SYNTAX_ATT
 #include "bli_x86_asm_macros.h"

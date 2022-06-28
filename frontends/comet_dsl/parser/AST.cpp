@@ -349,7 +349,7 @@ void ASTDumper::dump(LabeledTensorExprAST *node)
 void ASTDumper::dump(TensorOpExprAST *node)
 {
   INDENT();
-  llvm::errs() << "TensorOp: " << tensorOpStr(node->getOp()) << " " << loc(node)
+  llvm::errs() << "TensorOp: " << node->getOpStr() << " " << loc(node)
                << "\n";
   dump(node->getLHS());
   dump(node->getRHS());

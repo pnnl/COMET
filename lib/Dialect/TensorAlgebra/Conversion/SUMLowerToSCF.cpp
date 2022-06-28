@@ -103,7 +103,6 @@ namespace
       assert(isa<tensorAlgebra::SUMOp>(op));
       comet_errs() << "Lowering SUM operation to SCF\n";
 
-      auto module = op->getParentOfType<ModuleOp>();
       Location loc = op.getLoc();
       auto f64Type = rewriter.getF64Type();
       auto inputType = op->getOperand(0).getType();
@@ -200,7 +199,6 @@ namespace
       op.replaceAllUsesWith(res);
       rewriter.eraseOp(op);
 
-      // module->dump();
       return success();
     }
   }; // SUMLowering
@@ -216,7 +214,6 @@ namespace
 void SUMLowerToSCFPass::runOnFunction()
 {
   LLVM_DEBUG(llvm::dbgs() << "start SUMLowerToSCFPass\n");
-  auto function = getFunction();
 
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();

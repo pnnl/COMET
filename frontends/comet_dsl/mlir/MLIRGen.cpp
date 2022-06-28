@@ -255,7 +255,7 @@ namespace
       auto &protoArgs = funcAST.getProto()->getArgs();
 
       // Declare all the function arguments in the symbol table.
-      for (const auto &name_value :
+      for (const auto name_value :
            llvm::zip(protoArgs, entryBlock.getArguments()))
       {
         if (failed(declare(std::get<0>(name_value)->getName(),
@@ -398,7 +398,7 @@ namespace
       comet_vdump(rhs);
       comet_errs() << " " << lhsAST->getKind() << " " << rhsAST->getKind();
 
-      int op;
+      int op = 0;
       if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var &&
           rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var)
       {
@@ -584,7 +584,6 @@ namespace
         assert(lhs_tensor.isa<mlir::TensorType>());
 
         comet_pdump(lhs.getDefiningOp());
-        auto lhs_tensordecl = lhs.getDefiningOp()->getOperand(0);
         auto lhs_labeledtensor = lhs.getDefiningOp()->getOpResult(0);
 
         comet_vdump(lhs_labeledtensor); // ta.labeled_tensor
@@ -595,7 +594,6 @@ namespace
         comet_pdump(rhs.getDefiningOp());
         assert(rhs_tensor.isa<mlir::TensorType>());
 
-        auto rhs_tensordecl = rhs.getDefiningOp()->getOperand(0);
         auto rhs_labeledtensor = rhs.getDefiningOp()->getOpResult(0);
 
         comet_vdump(rhs_labeledtensor);
@@ -610,7 +608,7 @@ namespace
         std::vector<mlir::Value> lhs_lbls_value;
         if (isa<SparseTensorDeclOp, DenseTensorDeclOp>(lhs_labeledtensor.getDefiningOp()))
         {
-          for (auto i = 0; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          for (unsigned int i = 0; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
           {
 
             comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -619,7 +617,7 @@ namespace
         }
         else if (isa<LabeledTensorOp>(lhs_labeledtensor.getDefiningOp()))
         {
-          for (auto i = 1; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          for (unsigned int i = 1; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
           {
 
             comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -629,7 +627,7 @@ namespace
         else if (isa<TensorMultOp, TensorElewsMultOp>(lhs_labeledtensor.getDefiningOp()))
         {
           // check the output indices of ta.tc(), if it is
-          for (auto i = 2; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          for (unsigned int i = 2; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
           {
 
             comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -639,7 +637,7 @@ namespace
         else if (isa<TransposeOp>(lhs_labeledtensor.getDefiningOp()))
         {
           // check the output indices of ta.tc(), if it is
-          for (auto i = 1; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          for (unsigned int i = 1; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
           {
 
             comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -655,7 +653,7 @@ namespace
 
         if (isa<SparseTensorDeclOp, DenseTensorDeclOp>(rhs_labeledtensor.getDefiningOp()))
         {
-          for (auto i = 0; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          for (unsigned int i = 0; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
           {
 
             comet_vdump(rhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -664,7 +662,7 @@ namespace
         }
         else if (isa<LabeledTensorOp>(rhs_labeledtensor.getDefiningOp()))
         {
-          for (auto i = 1; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          for (unsigned int i = 1; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
           {
 
             comet_vdump(rhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -674,7 +672,7 @@ namespace
         else if (isa<TensorMultOp, TensorElewsMultOp>(rhs_labeledtensor.getDefiningOp()))
         {
           // check the output indices of ta.tc(), if it is
-          for (auto i = 2; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          for (unsigned int i = 2; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
           {
 
             comet_vdump(rhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -684,7 +682,7 @@ namespace
         else if (isa<TransposeOp>(rhs_labeledtensor.getDefiningOp()))
         {
           // check the output indices of ta.tc(), if it is
-          for (auto i = 1; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          for (unsigned int i = 1; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
           {
 
             comet_vdump(rhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -716,7 +714,7 @@ namespace
 
         std::vector<int> lhs_lbls;
         std::vector<int> rhs_lbls;
-        for (auto i = 0; i < all_lbls_value.size(); i++)
+        for (unsigned int i = 0; i < all_lbls_value.size(); i++)
         {
           auto result1 = std::find(lhs_lbls_value.begin(), lhs_lbls_value.end(), all_lbls_value[i]);
           if (result1 != lhs_lbls_value.end())
@@ -1096,6 +1094,7 @@ namespace
       llvm::StringRef callee = call.getCallee();
       auto location = loc(call.loc());
 
+      mlir::Value sumVal;
       if (callee == "SUM")
       {
         auto *expr = call.getArgs();
@@ -1107,7 +1106,7 @@ namespace
           auto name = rhsLT->getTensorName();
           mlir::Value tensorValue = symbolTable.lookup(name);
           comet_errs() << " generate ta.sum op\n";
-          return builder.create<SUMOp>(location, builder.getF64Type(), tensorValue);
+          sumVal = builder.create<SUMOp>(location, builder.getF64Type(), tensorValue);
         }
 
         // Case 2: SUM(A[i,j]*B[j,k])
@@ -1119,15 +1118,14 @@ namespace
           std::set<std::string> out_lbls = {};
           mlir::Value tensorValue = mlirGen(*expr, out_lbls);
           comet_errs() << " generate ta.sum op\n";
-          return builder.create<SUMOp>(location, builder.getF64Type(), tensorValue);
+          sumVal = builder.create<SUMOp>(location, builder.getF64Type(), tensorValue);
         }
       }
 
       // Otherwise this is a call to a user-defined function. Calls to ser-defined
       // functions are mapped to a custom call that takes the callee name as an
       // attribute.
-      // TODO(gkestor): removed by Lenny
-      // return builder.create<GenericCallOp>(location, callee, operands);
+      return sumVal;
     }
 
     /// Emit a print expression. It emits specific operations for two builtins:
@@ -1183,8 +1181,6 @@ namespace
         return nullptr;
       comet_errs() << " get rhs\n";
 
-      auto op = tensor_op.getOp();
-      auto result_type = lhs.getType();
       auto tens_beta = tensor_op.getBeta();
 
       auto ret_op = builder.create<TensorSetOp>(loc(tensor_op.loc()), rhs, lhs);
@@ -1203,7 +1199,7 @@ namespace
       mlir::Value tensor_op;
       std::vector<mlir::Value> labels;
 
-      if (tensor_op = symbolTable.lookup(tensor_name))
+      if ((tensor_op = symbolTable.lookup(tensor_name)) != NULL)
       {
         if (!isa<DenseTensorDeclOp>(tensor_op.getDefiningOp()) && !isa<SparseTensorDeclOp>(tensor_op.getDefiningOp()))
         {
@@ -1433,14 +1429,6 @@ namespace
           else if (isa<IndexLabelDynamicOp>(var.getDefiningOp()))
           {
             labels.push_back(var);
-            auto range = cast<IndexLabelDynamicOp>(var.getDefiningOp());
-            auto min_idx =
-                cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
-            auto step_idx =
-                cast<mlir::ConstantIndexOp>(range.step().getDefiningOp());
-
-            auto min = min_idx.getValue();
-            auto step = step_idx.getValue();
             dims_sizes.push_back(mlir::ShapedType::kDynamicSize);
           }
           else
@@ -1520,14 +1508,6 @@ namespace
           {
 
             labels.push_back(var);
-            auto range = cast<IndexLabelDynamicOp>(var.getDefiningOp());
-            auto min_idx =
-                cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
-            auto step_idx =
-                cast<mlir::ConstantIndexOp>(range.step().getDefiningOp());
-
-            auto min = min_idx.getValue();
-            auto step = step_idx.getValue();
             dims_sizes.push_back(mlir::ShapedType::kDynamicSize);
           }
           else
@@ -1631,7 +1611,7 @@ namespace
       {
         auto lhsLT_tensor_name = e->getTensorName();
         mlir::Value lhsLT_op;
-        if (lhsLT_op = symbolTable.lookup(lhsLT_tensor_name))
+        if ((lhsLT_op = symbolTable.lookup(lhsLT_tensor_name)) != NULL)
         {
           // comet_pdump(lhsLT_op.getDefiningOp());
           if (isa<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()))
@@ -1798,7 +1778,6 @@ namespace
                       ->getTensorName();
               auto call = llvm::cast<CallExprAST>(tensor_op->getRHS());
               llvm::StringRef callee = call->getCallee();
-              auto location = loc(call->loc());
 
               // Builting calls have their custom operation, meaning this is a
               // straightforward emission.
@@ -1934,19 +1913,22 @@ namespace
       if (type.shape.empty())
         return mlir::UnrankedTensorType::get(builder.getF64Type());
 
+      mlir::Type retType;
       switch (type.elt_ty)
       {
       case VarType::TY_FLOAT:
-        return mlir::RankedTensorType::get(type.shape, builder.getF32Type());
+        retType = mlir::RankedTensorType::get(type.shape, builder.getF32Type());
+        break;
       case VarType::TY_DOUBLE:
-        return mlir::RankedTensorType::get(type.shape, builder.getF64Type());
+        retType = mlir::RankedTensorType::get(type.shape, builder.getF64Type());
+        break;
       case VarType::TY_INT:
-        return mlir::RankedTensorType::get(type.shape,
+        retType = mlir::RankedTensorType::get(type.shape,
                                            builder.getIntegerType(64));
-      default:
-        return mlir::RankedTensorType::get(type.shape, builder.getF64Type());
         break;
       }
+
+      return retType;
     }
 
     ElType convertType(mlir::Type type)
@@ -2012,13 +1994,6 @@ namespace
         }
         else if (isa<IndexLabelDynamicOp>(lbl.getDefiningOp()))
         {
-
-          auto range = cast<IndexLabelDynamicOp>(lbl.getDefiningOp());
-          auto min_idx = cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
-          auto step_idx = cast<mlir::ConstantIndexOp>(range.step().getDefiningOp());
-
-          auto min = min_idx.getValue();
-          auto step = step_idx.getValue();
           dims_sizes.push_back(mlir::ShapedType::kDynamicSize);
         }
         else
@@ -2057,12 +2032,6 @@ namespace
         }
         else if (isa<IndexLabelDynamicOp>(lbl.getDefiningOp()))
         {
-          auto range = cast<IndexLabelDynamicOp>(lbl.getDefiningOp());
-          auto min_idx = cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
-          auto step_idx = cast<mlir::ConstantIndexOp>(range.step().getDefiningOp());
-
-          auto min = min_idx.getValue();
-          auto step = step_idx.getValue();
           dims_sizes.push_back(mlir::ShapedType::kDynamicSize);
         }
         else
@@ -2090,7 +2059,7 @@ namespace
       {
         auto lhsLT_tensor_name = e->getTensorName();
         mlir::Value lhsLT_op;
-        if (lhsLT_op = symbolTable.lookup(lhsLT_tensor_name))
+        if ((lhsLT_op = symbolTable.lookup(lhsLT_tensor_name)) != NULL)
         {
           if (isa<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()))
           {
@@ -2118,14 +2087,14 @@ namespace
       {
 
         auto op = builder.create<AddOp>(loc(tensor_op.loc()), tensors[1], tensors[0]);
-        auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
+        builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
       }
 
       else if (binop == TensorOpKind::Tensor_Red_Sub)
       {
 
         auto op = builder.create<SubstractOp>(loc(tensor_op.loc()), tensors[1], tensors[0]);
-        auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
+        builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
       }
 
       return mlir::success();
@@ -2141,7 +2110,6 @@ namespace
       LabeledTensorExprAST *lhsLT =
           llvm::cast<LabeledTensorExprAST>(tensor_op.getLHS());
       BinaryExprAST *rhsBinOp = llvm::cast<BinaryExprAST>(tensor_op.getRHS());
-      auto tens_op = tensor_op.getOp();
       auto tens_beta = tensor_op.getBeta();
       if (rhsBinOp->getLHS()->getKind() !=
               ExprAST::ExprASTKind::Expr_LabeledTensor ||
@@ -2220,7 +2188,7 @@ namespace
       {
         auto lhsLT_tensor_name = e->getTensorName();
         mlir::Value lhsLT_op;
-        if (lhsLT_op = symbolTable.lookup(lhsLT_tensor_name))
+        if ((lhsLT_op = symbolTable.lookup(lhsLT_tensor_name)) != NULL)
         {
           if (isa<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()))
           {
@@ -2338,7 +2306,7 @@ namespace
       std::vector<mlir::Value> lhs_lbls_value;
       if (isa<DenseTensorDeclOp>(lhs_labeledtensor.getDefiningOp()))
       {
-        for (auto i = 0; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+        for (unsigned int i = 0; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
         {
           comet_errs() << " a densor tensor decl.\n";
           comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -2347,7 +2315,7 @@ namespace
       }
       else if (isa<LabeledTensorOp>(lhs_labeledtensor.getDefiningOp()))
       {
-        for (auto i = 1; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+        for (unsigned i = 1; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
         {
           comet_errs() << " a labeled tensor op: it's lowering is currently not supported.\n";
           comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
@@ -2403,8 +2371,6 @@ namespace
                                                   StringRef tensor_name, StringRef filename)
     {
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
-      auto tensorType = tensorValue.getDefiningOp()->getOpResult(0).getType();
-      auto tensorElType = tensorType.cast<mlir::TensorType>().getElementType();
       mlir::StringAttr filenameAttr = builder.getStringAttr(filename);
       builder.create<TensorFillFromFileOp>(loc, tensorValue, filenameAttr);
 

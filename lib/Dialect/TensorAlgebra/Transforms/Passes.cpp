@@ -180,10 +180,6 @@ void LowerTAMulChainPass::runOnFunction()
 void STCRemoveDeadOpsPass::runOnFunction()
 {
   comet_errs() << " start STCRemoveDeadOpsPass \n";
-  auto function = getFunction();
-  auto module = function.getOperation()->getParentOfType<ModuleOp>();
-  auto *ctx = &getContext();
-
   ConversionTarget target(getContext());
 
   target.addLegalDialect<mlir::linalg::LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();

@@ -98,10 +98,7 @@ void doTensorMultOp(TensorMultOp op)
   Value rhs1 = op.rhs1();
   Value rhs2 = op.rhs2();
   Value lhs = getRealLhs(op);
-  Location loc = op->getLoc();
 
-  auto rhs1Def = rhs1.getDefiningOp();
-  auto rhs2Def = rhs2.getDefiningOp();
 
   auto allPerms = getAllPerms(op.indexing_maps());
   auto allFormats = getAllFormats(op.formatsAttr(), allPerms);
@@ -138,7 +135,7 @@ void doTensorMultOp(TensorMultOp op)
   auto lhsIndices = A->getIndices();
 
   TreeNode *parent = tree->getRoot();
-  for (int i = 0; i < indices.size(); i++)
+  for (unsigned long i = 0; i < indices.size(); i++)
   {
     int index = indices[i];
     auto &idomain = inputDomains.at(index);
@@ -155,7 +152,7 @@ void doTensorMultOp(TensorMultOp op)
     parent = node;
   }
 
-  auto node = tree->addComputeNode(std::move(e), parent);
+  tree->addComputeNode(std::move(e), parent);
 }
 
 void doElementWiseMultOp(TensorElewsMultOp op)
@@ -164,10 +161,6 @@ void doElementWiseMultOp(TensorElewsMultOp op)
   Value rhs1 = op.rhs1();
   Value rhs2 = op.rhs2();
   Value lhs = getRealLhs(op);
-  Location loc = op->getLoc();
-
-  auto rhs1Def = rhs1.getDefiningOp();
-  auto rhs2Def = rhs2.getDefiningOp();
 
   auto allPerms = getAllPerms(op.indexing_maps());
   auto allFormats = getAllFormats(op.formatsAttr(), allPerms);
@@ -204,7 +197,7 @@ void doElementWiseMultOp(TensorElewsMultOp op)
   auto lhsIndices = A->getIndices();
 
   TreeNode *parent = tree->getRoot();
-  for (int i = 0; i < indices.size(); i++)
+  for (unsigned long i = 0; i < indices.size(); i++)
   {
     int index = indices[i];
     auto &idomain = inputDomains.at(index);
@@ -221,7 +214,7 @@ void doElementWiseMultOp(TensorElewsMultOp op)
     parent = node;
   }
 
-  auto node = tree->addComputeNode(std::move(e), parent);
+  tree->addComputeNode(std::move(e), parent);
   // cout << "print tree after tc\n";
   // tree->print();
 }
@@ -376,8 +369,12 @@ void treeToDialect(Index_Tree *tree)
 
       if (node->getParent() != nullptr && node->getParent()->isFillerIndexNode())
       {
+        #ifdef DEBUG_MODE_IndexTreePass
         Value op = builder.create<indexTree::IndexTreeOp>(loc, i64Type, indexNodeOp);
         comet_vdump(op);
+        #else
+        builder.create<indexTree::IndexTreeOp>(loc, i64Type, indexNodeOp);
+        #endif
       }
     }
   }

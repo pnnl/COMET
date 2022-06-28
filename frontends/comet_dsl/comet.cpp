@@ -71,15 +71,15 @@ using namespace mlir::indexTree;
 #define DEBUG_MODE_COMET_DSL
 #endif
 
-#ifdef DEBUG_MODE_COMET_DSL
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
-#else
-#define comet_debug() llvm::nulls()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
+//#ifdef DEBUG_MODE_COMET_DSL
+//#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+//#define comet_pdump(n) n->dump()
+//#define comet_vdump(n) n.dump()
+//#else
+//#define comet_debug() llvm::nulls()
+//#define comet_pdump(n)
+//#define comet_vdump(n)
+//#endif
 // *********** For debug purpose *********//
 
 namespace cl = llvm::cl;
