@@ -72,7 +72,7 @@ def IndexTreeComputeOp : IT_Op<"itCompute", [NoSideEffect]>{
   }];
 
   let arguments = (ins Variadic<AnyType>:$rhs, 
-                   AnyType:$lhs, StrAttr:$op_type, StrAttr:$opt_type, StrAttr:$semiring); 
+                   AnyType:$lhs, StrAttr:$op_type, BoolAttr:$opt_type, StrAttr:$semiring); 
 
   let results = (outs I64:$output);
 
