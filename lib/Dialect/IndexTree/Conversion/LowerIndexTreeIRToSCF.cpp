@@ -95,13 +95,6 @@ using llvm::StringRef;
 #define TENSOR_NUMS 3
 #define INPUT_TENSOR_NUMS 2
 
-enum OperatorName
-{
-  eq = 0,
-  mul_eq,
-  add_eq
-};
-
 // Valid semiring operators.
 static const llvm::StringSet<> Semiring_ops{
     "atan2", "div", "eq", "first", "ge", "gt", "hypot",
@@ -859,7 +852,7 @@ Value getSemiringFirstVal(PatternRewriter &rewriter, Location loc,
   return reduceResult;
 }
 
-void formSemiringLoopBody(bool opt_type, llvm::StringRef &semiringFirst,
+void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                           llvm::StringRef &semiringSecond,
                           PatternRewriter &rewriter, Location loc, int lhs_loc,
                           std::vector<std::vector<Value>> main_tensors_all_Allocs,
@@ -900,7 +893,7 @@ void formSemiringLoopBody(bool opt_type, llvm::StringRef &semiringFirst,
   int main_tensor_nums = main_tensors_all_Allocs.size();
   bool compressedWorkspace = false;
 
-  if (opt_type) // always lhs is dense after workspace transformations
+  if (comp_worksp_opt) // always lhs is dense after workspace transformations
   {
     compressedWorkspace = true;
 
@@ -1288,9 +1281,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   comet_errs() << " Current IndexTreeComputeOp:";
   comet_vdump(cur_op);
 
-  const bool opt_type(cur_op.opt_type());
-  comet_errs() << " opt_type (bool: true is compressed): " << opt_type << "\n";
-  std::string op_type(cur_op.op_type().data());
+  const bool comp_worksp_opt(cur_op.comp_worksp_opt());
+  comet_errs() << " comp_worksp_opt (bool: true is compressed): " << comp_worksp_opt << "\n";
 
   // Two cases:
   // 1. for the initial workspace, only 1 auxiliary vector w
@@ -1603,7 +1595,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
     { // "a = 1.0"
       comet_errs() << " ";
       comet_vdump(cstop);
-      if (opt_type)  // true attr means compressed workspace
+      if (comp_worksp_opt)  // true attr means compressed workspace
       {
 
         comet_errs() << " compressed_workspace ComputeOp\n";
@@ -1727,7 +1719,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         comet_errs() << " ";
         comet_vdump(lhs_val);
 
-        if (opt_type)  // true attr means compressed workspace
+        if (comp_worksp_opt)  // true attr means compressed workspace
         {
           // Get the parent for op, change the upperbound as w_index_list_size
           auto last_insertionPoint = rewriter.saveInsertionPoint();
@@ -2012,7 +2004,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       assert(false && "Not supported semiring operator");
     }
 
-    formSemiringLoopBody(opt_type,
+    formSemiringLoopBody(comp_worksp_opt,
                          semiringParts.first, semiringParts.second,
                          rewriter, loc, lhs_loc,
                          main_tensors_all_Allocs,
