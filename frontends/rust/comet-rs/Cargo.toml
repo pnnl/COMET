@@ -447,8 +447,8 @@ name="dtranspose_mult_dense_dense"
 path="tests/chain_ops/dtranspose_mult_dense_dense.rs"
 
 [[example]]
-name="sp_transpose_csr_eltwise_csr_csr"
-path="tests/chain_ops/sp_transpose_csr_eltwise_csr_csr.rs"
+name="sp_transpose_csr_spmm_csr_dense"
+path="tests/chain_ops/sp_transpose_csr_spmm_csr_dense.rs"
 
 [[example]]
 name="sp_transpose_csr_eltwise_csr_dense"
