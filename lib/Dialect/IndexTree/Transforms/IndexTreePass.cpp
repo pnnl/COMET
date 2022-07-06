@@ -309,9 +309,9 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
                                                                       mlir::UnrankedTensorType::get(builder.getF64Type()), t_lhs,
                                                                       builder.getArrayAttr(allIndices_lhs),
                                                                       builder.getArrayAttr(allFormats_lhs));
-  std::string opt_type = " ";
+  bool opt_type = false;  // non-compressed workspace
   llvm::StringRef semiring = expr->getSemiring();
-  auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getStringAttr(optype), builder.getStringAttr(opt_type), builder.getStringAttr(semiring));
+  auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getStringAttr(optype), builder.getBoolAttr(opt_type), builder.getStringAttr(semiring));
 
   comet_pdump(leafop);
   return leafop;

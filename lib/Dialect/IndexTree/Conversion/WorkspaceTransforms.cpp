@@ -104,8 +104,8 @@ std::string eq_str = "=";
 std::string mul_eq_str = "*=";
 std::string add_eq_str = "+=";
 
-std::string workspace_str = "workspace";
-std::string compressedworkspace_str = "compressed_workspace";
+const bool workspace = false;
+const bool compressedworkspace = true;
 
 struct dimInTensor
 {
@@ -496,12 +496,11 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
   } // end for n
 }
 
-// std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree::IndexTreeComputeOp itComputeOp, std::vector<std::vector<std::string>> opFormats, std::vector<std::vector<int>> opPerms, int optype, std::map<int, mlir::Value> indexValueMap, OpBuilder & builder, indexTree::IndexTreeOp op){ // Location loc){
 std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree::IndexTreeComputeOp itComputeOp, std::vector<std::vector<std::string>> opFormats, std::vector<std::vector<int>> opPerms, std::string optype, std::map<int, mlir::Value> indexValueMap, OpBuilder &builder, indexTree::IndexTreeOp op)
-{ // Location loc){
+{
   Location loc = op.getLoc();
 
-  auto opt_type = builder.getStringAttr(workspace_str);
+  auto opt_type = builder.getBoolAttr(workspace);
 
   int sparseDimOutput = -1;
   int sparseDimOrderInOutput = -1;
@@ -751,10 +750,10 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
                                              std::vector<std::vector<int>> opPerms, std::string optype,
                                              std::map<int, mlir::Value> indexValueMap,
                                              OpBuilder &builder, indexTree::IndexTreeOp op)
-{ // Location loc){
+{
   Location loc = op.getLoc();
 
-  auto opt_type = builder.getStringAttr(compressedworkspace_str);
+  auto opt_type = builder.getBoolAttr(compressedworkspace);
 
   int sparseDimOutput = -1;
   int sparseDimOrderInOutput = -1;
@@ -1073,7 +1072,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
 void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location loc)
 {
-  auto opt_type = builder.getStringAttr(workspace_str);
+  auto opt_type = builder.getBoolAttr(workspace);
   for (auto computeOp : computeOps)
   {
 
@@ -1256,7 +1255,7 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
 
 void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location loc)
 {
-  auto opt_type = builder.getStringAttr(workspace_str);
+  auto opt_type = builder.getBoolAttr(workspace);
   for (auto computeOp : computeOps)
   {
 
@@ -1429,7 +1428,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       mlir::Value t3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_lhs, t3_lhsop_perms, t3_lhsop_formats);
 
       // for t3
-      mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, t3_optype, builder.getStringAttr(compressedworkspace_str), t3_semiring);
+      mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, t3_optype, opt_type, t3_semiring);
 
       /// old version for new children ops
       std::vector<mlir::Value> newComputeOps = {t1, t2, t3};

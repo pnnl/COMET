@@ -859,7 +859,7 @@ Value getSemiringFirstVal(PatternRewriter &rewriter, Location loc,
   return reduceResult;
 }
 
-void formSemiringLoopBody(std::string &opt_type, llvm::StringRef &semiringFirst,
+void formSemiringLoopBody(bool opt_type, llvm::StringRef &semiringFirst,
                           llvm::StringRef &semiringSecond,
                           PatternRewriter &rewriter, Location loc, int lhs_loc,
                           std::vector<std::vector<Value>> main_tensors_all_Allocs,
@@ -900,7 +900,7 @@ void formSemiringLoopBody(std::string &opt_type, llvm::StringRef &semiringFirst,
   int main_tensor_nums = main_tensors_all_Allocs.size();
   bool compressedWorkspace = false;
 
-  if (opt_type.compare("compressed_workspace") == 0) // always lhs is dense after workspace transformations
+  if (opt_type) // always lhs is dense after workspace transformations
   {
     compressedWorkspace = true;
 
@@ -1288,8 +1288,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   comet_errs() << " Current IndexTreeComputeOp:";
   comet_vdump(cur_op);
 
-  std::string opt_type(cur_op.opt_type().data());
-  comet_errs() << " opt_type: " << opt_type << "\n";
+  const bool opt_type(cur_op.opt_type());
+  comet_errs() << " opt_type (bool: true is compressed): " << opt_type << "\n";
   std::string op_type(cur_op.op_type().data());
 
   // Two cases:
@@ -1603,7 +1603,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
     { // "a = 1.0"
       comet_errs() << " ";
       comet_vdump(cstop);
-      if (opt_type.compare("compressed_workspace") == 0)
+      if (opt_type)  // true attr means compressed workspace
       {
 
         comet_errs() << " compressed_workspace ComputeOp\n";
@@ -1727,7 +1727,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         comet_errs() << " ";
         comet_vdump(lhs_val);
 
-        if (opt_type.compare("compressed_workspace") == 0)
+        if (opt_type)  // true attr means compressed workspace
         {
           // Get the parent for op, change the upperbound as w_index_list_size
           auto last_insertionPoint = rewriter.saveInsertionPoint();
