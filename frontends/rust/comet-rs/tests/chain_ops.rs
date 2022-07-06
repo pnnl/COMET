@@ -36,22 +36,13 @@ fn dtranspose_mult_dense_dense() {
 }
 
 #[test]
-fn sp_transpose_csr_eltwise_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "sp_transpose_csr_eltwise_csr_csr").unwrap();
+fn sp_transpose_csr_spmm_csr_dense() {
+    let output = Command::new(EX_DIR.to_owned() + "sp_transpose_csr_spmm_csr_dense").unwrap();
     compare_strings(
         &String::from_utf8_lossy(&output.stdout),
         "
     data = 
-    5,
-    data = 
-    0,
-    data = 
-    0,2,4,5,7,9,
-    data = 
-    0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    data = 
-    1,5.74,4,13,9,5.74,16,13,25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
+    5.1,5.1,5.1,5.1,5.1,7.2,7.2,7.2,7.2,7.2,3,3,3,3,3,5.4,5.4,5.4,5.4,5.4,7.5,7.5,7.5,7.5,7.5,",
     );
 }
 
