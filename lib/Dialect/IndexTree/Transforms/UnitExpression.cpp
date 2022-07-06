@@ -211,14 +211,6 @@ void UnitExpression::setOpType(const string &OpType)
 {
   opType = OpType;
 }
-const string &UnitExpression::getAssignType() const
-{
-  return assignmentType;
-}
-void UnitExpression::setAssignType(const string &AssignmentType)
-{
-  assignmentType = AssignmentType;
-}
 
 const llvm::StringRef &UnitExpression::getSemiring() const
 {

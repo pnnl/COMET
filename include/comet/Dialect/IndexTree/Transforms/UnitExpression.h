@@ -32,7 +32,6 @@ class UnitExpression {
   vector<UnitExpression*> users;
   mlir::Operation* operation;
   string opType;
-  string assignmentType;
   llvm::StringRef semiring;
   int numOps = 2;
 
@@ -124,8 +123,6 @@ public:
 
   const string &getOpType() const;
   void setOpType(const string &OpType);
-  const string &getAssignType() const;
-  void setAssignType(const string &AssignmentType);
   const llvm::StringRef &getSemiring() const;
   void setSemiring(const llvm::StringRef &Semiring);
 };

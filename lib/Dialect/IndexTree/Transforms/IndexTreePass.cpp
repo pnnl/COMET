@@ -111,7 +111,6 @@ void doTensorMultOp(TensorMultOp op)
   auto C = tree->getOrCreateTensor(rhs2, allPerms[1], allFormats[1]);
 
   auto e = make_unique<UnitExpression>(A, B, C, "*");
-  e->setAssignType("+=");
   e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue());
 
   e->setOperation(op);
@@ -174,7 +173,6 @@ void doElementWiseMultOp(TensorElewsMultOp op)
 
   auto e = make_unique<UnitExpression>(A, B, C, "*");
 
-  e->setAssignType("=");
   e->setOperation(op);
   e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue()); // for element-wise multiplication
   buildDefUseInfo(e.get());
@@ -262,17 +260,6 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
     allIndices_lhs.push_back(builder.getI64ArrayAttr(indices));
   }
 
-  std::string optype = "=";
-  auto &assignment = expr->getAssignType();
-  if (assignment == "+=")
-  {
-    optype = "+=";
-  }
-  else if (assignment == "*=")
-  {
-    optype = "*=";
-  }
-
   SmallVector<Attribute, 8> allFormats_rhs;
   for (auto t : expr->getOperands())
   {
@@ -309,9 +296,9 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
                                                                       mlir::UnrankedTensorType::get(builder.getF64Type()), t_lhs,
                                                                       builder.getArrayAttr(allIndices_lhs),
                                                                       builder.getArrayAttr(allFormats_lhs));
-  bool opt_type = false;  // non-compressed workspace
+  bool comp_worksp_opt = false;  // non-compressed workspace, this is a place-holder and it is updated in workspace transform pass.
   llvm::StringRef semiring = expr->getSemiring();
-  auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getStringAttr(optype), builder.getBoolAttr(opt_type), builder.getStringAttr(semiring));
+  auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getBoolAttr(comp_worksp_opt), builder.getStringAttr(semiring));
 
   comet_pdump(leafop);
   return leafop;

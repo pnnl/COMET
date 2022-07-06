@@ -155,8 +155,6 @@ namespace mlir
     /// Method 0:
     /// Search for the tensor which contains index i from workspace tree ops: ta.tc_root
     /// Return the tensor name and the index in the tensor
-    /// %5=ta.tc_leaf(%A,%B,%W){formats=[[D,CU],[D,CU],[D]], indices=[[0,1],[1,2],[2]], op_type=+=}
-    /// %2=ta.tc_workspace(%5){indices=[1,2]}  --- pass (%2, 1) and (%2, 2) .
     /// step: find the ancestor of each leaf, check the workspaceOp is in whose ancestorWP
     void findLeafs(Value tcRootOp, std::vector<int> indices, std::vector<Value> dfsOps, std::vector<Value> &ret);
     bool isRealRoot(Operation *op);

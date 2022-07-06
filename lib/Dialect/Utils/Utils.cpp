@@ -1592,8 +1592,6 @@ namespace mlir
     /// Method 0:
     /// Search for the tensor which contains index i from workspace tree ops: ta.tc_root
     /// Return the tensor name and the index in the tensor
-    /// %5=ta.tc_leaf(%A,%B,%W){formats=[[D,CU],[D,CU],[D]], indices=[[0,1],[1,2],[2]], op_type=+=}
-    /// %2=ta.tc_workspace(%5){indices=[1,2]}  --- pass (%2, 1) and (%2, 2) .
     /// step: find the ancestor of each leaf, check the workspaceOp is in whose ancestorWP
     void findLeafs(Value tcRootOp, std::vector<int> indices, std::vector<Value> dfsOps, std::vector<Value> &ret)
     {
@@ -1713,12 +1711,10 @@ namespace mlir
     /// Get the perms and formats of the itCompute op
     void getPermsOfComputeOp(Value computeOp, std::vector<std::vector<int>> &opPerms)
     {
-      indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
       ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.allPerms();
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
       ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.allPerms();
-      std::string optype = itComputeOp.op_type().data();
 
       // Get output format, vector of vector
       // Convert ArrayAttr into

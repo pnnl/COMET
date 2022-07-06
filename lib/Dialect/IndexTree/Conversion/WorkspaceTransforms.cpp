@@ -93,17 +93,6 @@ using llvm::StringRef;
 #define TENSOR_NUMS 3
 #define INPUT_TENSOR_NUMS 2
 
-enum OperatorName
-{
-  eq = 0, // =
-  mul_eq, //*=
-  add_eq  //+=
-};
-
-std::string eq_str = "=";
-std::string mul_eq_str = "*=";
-std::string add_eq_str = "+=";
-
 const bool workspace = false;
 const bool compressedworkspace = true;
 
@@ -496,11 +485,11 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
   } // end for n
 }
 
-std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree::IndexTreeComputeOp itComputeOp, std::vector<std::vector<std::string>> opFormats, std::vector<std::vector<int>> opPerms, std::string optype, std::map<int, mlir::Value> indexValueMap, OpBuilder &builder, indexTree::IndexTreeOp op)
+std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree::IndexTreeComputeOp itComputeOp, std::vector<std::vector<std::string>> opFormats, std::vector<std::vector<int>> opPerms, std::map<int, mlir::Value> indexValueMap, OpBuilder &builder, indexTree::IndexTreeOp op)
 {
   Location loc = op.getLoc();
 
-  auto opt_type = builder.getBoolAttr(workspace);
+  auto comp_worksp_opt = builder.getBoolAttr(workspace);
 
   int sparseDimOutput = -1;
   int sparseDimOrderInOutput = -1;
@@ -584,8 +573,6 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   auto i64Type = builder.getI64Type();
   std::vector<mlir::Value> t1_rhs = {t1_tensors[0]};
   mlir::Value t1_lhs = {t1_tensors[1]};
-  // auto t1_optype = builder.getIntegerAttr(builder.getIntegerType(64), 0);
-  auto t1_optype = builder.getStringAttr(eq_str);
   auto t1_semiring = builder.getStringAttr(semiringName);
   // for t1_rhs
   std::vector<std::vector<int>> t1_rhsop_perms_str = {t1_perms_int_0};
@@ -602,7 +589,7 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   mlir::Value t1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_lhs, t1_lhsop_perms, t1_lhsop_formats);
 
   // for t1
-  mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, t1_optype, opt_type, t1_semiring);
+  mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, comp_worksp_opt, t1_semiring);
 
   std::vector<int> t2_perms_int_0 = opPerms[0];
   std::vector<int> t2_perms_int_1 = opPerms[1];
@@ -619,7 +606,6 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   std::vector<mlir::Value> t2_rhs = {t2_tensors[0], t2_tensors[1]};
   mlir::Value t2_lhs = w;
 
-  auto t2_optype = builder.getStringAttr(optype);
   auto t2_semiring = builder.getStringAttr(semiringName);
 
   // for t2_rhsop
@@ -637,7 +623,7 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   mlir::Value t2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_lhs, t2_lhsop_perms, t2_lhsop_formats);
 
   // for t2
-  mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, t2_optype, opt_type, t2_semiring);
+  mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, comp_worksp_opt, t2_semiring);
 
   //  --------t3
   std::vector<int> t3_perms_int_0 = {sparseDimOutput};
@@ -653,8 +639,6 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   //ArrayAttr t3_formats = convert2DVectorToArrayAttrStr(t3_formats_str, builder);
   std::vector<mlir::Value> t3_rhs = {w};
   mlir::Value t3_lhs = t3_tensors[1];
-  // auto t3_optype = builder.getIntegerAttr(builder.getIntegerType(64), 0);
-  auto t3_optype = builder.getStringAttr(eq_str);
   auto t3_semiring = builder.getStringAttr(semiringName);
 
   // for t3_rhs
@@ -672,7 +656,7 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
   mlir::Value t3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_lhs, t3_lhsop_perms, t3_lhsop_formats);
 
   // for t3
-  mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, t3_optype, opt_type, t3_semiring);
+  mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, comp_worksp_opt, t3_semiring);
 
   std::vector<mlir::Value> newComputeOps = {t1, t2, t3};
   sparseIndicesOp.getDefiningOp()->setOperands(newComputeOps);
@@ -747,13 +731,13 @@ std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree:
 std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
                                              indexTree::IndexTreeComputeOp itComputeOp,
                                              std::vector<std::vector<std::string>> opFormats,
-                                             std::vector<std::vector<int>> opPerms, std::string optype,
+                                             std::vector<std::vector<int>> opPerms, 
                                              std::map<int, mlir::Value> indexValueMap,
                                              OpBuilder &builder, indexTree::IndexTreeOp op)
 {
   Location loc = op.getLoc();
 
-  auto opt_type = builder.getBoolAttr(compressedworkspace);
+  auto comp_worksp_opt = builder.getBoolAttr(compressedworkspace);
 
   int sparseDimOutput = -1;
   int sparseDimOrderInOutput = -1;
@@ -866,7 +850,6 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
   std::vector<mlir::Value> t0_rhs = {const_index_0};
   mlir::Value t0_lhs = {w_index_list_size};
-  auto t0_optype = builder.getStringAttr("=");
   std::string semiringName(itComputeOp.semiring().data());
   auto t0_semiring = builder.getStringAttr(semiringName);
 
@@ -885,7 +868,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   mlir::Value t0_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t0_lhs, t0_lhsop_perms, t0_lhsop_formats);
 
   // for t1
-  mlir::Value t0 = builder.create<indexTree::IndexTreeComputeOp>(loc, builder.getI64Type(), t0_rhsop, t0_lhsop, t0_optype, opt_type, t0_semiring);
+  mlir::Value t0 = builder.create<indexTree::IndexTreeComputeOp>(loc, builder.getI64Type(), t0_rhsop, t0_lhsop, comp_worksp_opt, t0_semiring);
 
   // insert t0 to sparseDimsParent
   sparseDimsPerent.getDefiningOp()->insertOperands(0, t0);
@@ -910,7 +893,6 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   std::vector<mlir::Value> t1_rhs = {t1_tensors[0]};
   // mlir::Value t1_lhs = {t1_tensors[1]};
   std::vector<mlir::Value> t1_lhs = workspaceTensors;
-  auto t1_optype = builder.getStringAttr(eq_str);
   auto t1_semiring = builder.getStringAttr(semiringName);
 
   // for t1_rhs
@@ -928,7 +910,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   mlir::Value t1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_lhs, t1_lhsop_perms, t1_lhsop_formats);
 
   // for t1
-  mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, t1_optype, opt_type, t1_semiring);
+  mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, comp_worksp_opt, t1_semiring);
 
   std::vector<int> t2_perms_int_0 = opPerms[0];
   std::vector<int> t2_perms_int_1 = opPerms[1];
@@ -946,7 +928,6 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   // mlir::Value t2_lhs = w;
   std::vector<mlir::Value> t2_lhs = workspaceTensors;
 
-  auto t2_optype = builder.getStringAttr(optype);
   auto t2_semiring = builder.getStringAttr(semiringName);
 
   // for t2_rhsop
@@ -964,7 +945,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   mlir::Value t2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_lhs, t2_lhsop_perms, t2_lhsop_formats);
 
   // for t2
-  mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, t2_optype, opt_type, t2_semiring);
+  mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, comp_worksp_opt, t2_semiring);
 
   //  --------t3
   std::vector<int> t3_perms_int_0 = {sparseDimOutput};
@@ -981,7 +962,6 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   // std::vector<mlir::Value> t3_rhs = {w};
   std::vector<mlir::Value> t3_rhs = workspaceTensors;
   mlir::Value t3_lhs = t3_tensors[1];
-  auto t3_optype = builder.getStringAttr(eq_str);
   auto t3_semiring = builder.getStringAttr(semiringName);
 
   // for t3_rhs
@@ -999,7 +979,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   mlir::Value t3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_lhs, t3_lhsop_perms, t3_lhsop_formats);
 
   // for t3
-  mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, t3_optype, opt_type, t3_semiring);
+  mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, comp_worksp_opt, t3_semiring);
   std::vector<mlir::Value> newComputeOps = {t1, t2, t3};
   sparseIndicesOp.getDefiningOp()->setOperands(newComputeOps);
 
@@ -1072,7 +1052,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
 void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location loc)
 {
-  auto opt_type = builder.getBoolAttr(workspace);
+  auto comp_worksp_opt = builder.getBoolAttr(workspace);
   for (auto computeOp : computeOps)
   {
 
@@ -1095,8 +1075,6 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
     std::vector<Value> tensors;
     getTensorsOfComputeOp(computeOp, tensors);
     indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-    // int optype = itComputeOp.op_type();
-    std::string optype(itComputeOp.op_type().data());
     std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
     std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
     comet_errs() << " sparseDimsInput.size(): " << sparseDimsInput.size() << "\n";
@@ -1144,7 +1122,6 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
       Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
       std::vector<mlir::Value> t1_rhs = {const_f64_0};
       mlir::Value t1_lhs = {v};
-      auto t1_optype = builder.getStringAttr(eq_str);
       std::string semiringName(itComputeOp.semiring().data());
       auto t1_semiring = builder.getStringAttr(semiringName);
 
@@ -1163,7 +1140,7 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
       mlir::Value t1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_lhs, t1_lhsop_perms, t1_lhsop_formats);
 
       // for t1
-      mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, t1_optype, opt_type, t1_semiring);
+      mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, comp_worksp_opt, t1_semiring);
 
       // Vj = Aij
       std::vector<int> t2_perms_int_0 = opPerms[sparseDimsInput[0].tensorId];
@@ -1179,7 +1156,6 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
       std::vector<mlir::Value> t2_rhs = {tensors[sparseDimsInput[0].tensorId]};
 
       mlir::Value t2_lhs = {v};
-      auto t2_optype = builder.getStringAttr(eq_str);
       auto t2_semiring = builder.getStringAttr(semiringName);
 
       // for t2_rhs
@@ -1197,7 +1173,7 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
       mlir::Value t2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_lhs, t2_lhsop_perms, t2_lhsop_formats);
 
       // for t2
-      mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, t2_optype, opt_type, t2_semiring);
+      mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, comp_worksp_opt, t2_semiring);
 
       // Wj=Vj*Bij
       std::vector<int> t3_perms_int_0 = {sparseDimsInput[0].dim};
@@ -1217,7 +1193,6 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
 
       mlir::Value t3_lhs = {tensors[tensors.size() - 1]};
 
-      auto t3_optype = builder.getStringAttr(optype);
       auto t3_semiring = builder.getStringAttr(semiringName);
 
       // for t3_rhs
@@ -1235,7 +1210,7 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
       mlir::Value t3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_lhs, t3_lhsop_perms, t3_lhsop_formats);
 
       // for t3
-      mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, t3_optype, opt_type, t3_semiring);
+      mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, comp_worksp_opt, t3_semiring);
 
       std::vector<mlir::Value> newComputeOps = {t1, t2, t3};
 
@@ -1255,7 +1230,7 @@ void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location 
 
 void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location loc)
 {
-  auto opt_type = builder.getBoolAttr(workspace);
+  auto comp_worksp_opt = builder.getBoolAttr(workspace);
   for (auto computeOp : computeOps)
   {
 
@@ -1286,8 +1261,6 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
     comet_errs() << " tensors_lhs.size(): " << tensors_lhs.size() << "\n";
 
     indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-    // int optype = itComputeOp.op_type();
-    std::string optype(itComputeOp.op_type().data());
     std::string semiringName(itComputeOp.semiring().data());
 
     std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
@@ -1337,7 +1310,6 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
       std::vector<mlir::Value> t1_rhs = {const_f64_0};
       mlir::Value t1_lhs = {v};
-      auto t1_optype = builder.getStringAttr(eq_str);
       std::string semiringName(itComputeOp.semiring().data());
       auto t1_semiring = builder.getStringAttr(semiringName);
 
@@ -1356,7 +1328,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       mlir::Value t1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_lhs, t1_lhsop_perms, t1_lhsop_formats);
 
       // for t1
-      mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, t1_optype, opt_type, t1_semiring);
+      mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, comp_worksp_opt, t1_semiring);
 
       // Vj = Aij
       std::vector<int> t2_perms_int_0 = opPerms[sparseDimsInput[0].tensorId];
@@ -1372,7 +1344,6 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       std::vector<mlir::Value> t2_rhs = {tensors_rhs[sparseDimsInput[0].tensorId]};
 
       mlir::Value t2_lhs = {v};
-      auto t2_optype = builder.getStringAttr(eq_str);
       auto t2_semiring = builder.getStringAttr(semiringName);
       // for t2_rhs
       std::vector<std::vector<int>> t2_rhsop_perms_str = {t2_perms_int_0};
@@ -1389,7 +1360,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       mlir::Value t2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_lhs, t2_lhsop_perms, t2_lhsop_formats);
 
       // for t2
-      mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, t2_optype, opt_type, t2_semiring);
+      mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, comp_worksp_opt, t2_semiring);
 
       // Wj=Vj*Bij
       std::vector<int> t3_perms_int_0 = {sparseDimsInput[0].dim};
@@ -1410,7 +1381,6 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       comet_errs() << " tensors.size(): " << tensors.size() << "\n";
       std::vector<mlir::Value> t3_lhs = tensors_lhs;
 
-      auto t3_optype = builder.getStringAttr(optype);
       auto t3_semiring = builder.getStringAttr(semiringName);
 
       // for t3_rhs
@@ -1428,7 +1398,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       mlir::Value t3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_lhs, t3_lhsop_perms, t3_lhsop_formats);
 
       // for t3
-      mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, t3_optype, opt_type, t3_semiring);
+      mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, comp_worksp_opt, t3_semiring);
 
       /// old version for new children ops
       std::vector<mlir::Value> newComputeOps = {t1, t2, t3};
@@ -1502,8 +1472,6 @@ void WorkspaceTransformsPass::WorkspaceTransforms(mlir::FuncOp funcop)
     std::vector<std::vector<bool> > inputOutputMapping;
     getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
     indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-    // int optype = itComputeOp.op_type();
-    std::string optype(itComputeOp.op_type().data());
     
 
     // Check the input tensors, and the output tensor, to see if it contains sparse dimensions
@@ -1526,8 +1494,7 @@ void WorkspaceTransformsPass::WorkspaceTransforms(mlir::FuncOp funcop)
     // create three IndexTreeComputeOp op
     // sparse dim in output tensor   
     if(sparseDimsOutput.size() == 1){
-      // newComputeOps = workspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, optype, indexValueMap, builder, loc);
-      newComputeOps = workspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, optype, indexValueMap, builder, op);
+      newComputeOps = workspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, indexValueMap, builder, op);
     }
     // initially here workspaceOutput content 
 
@@ -1609,7 +1576,6 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
     #endif
     
     indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-    std::string optype(itComputeOp.op_type().data());
     
     //Check the input tensors, and the output tensor, to see if it contains sparse dimensions
     //get the dim ids
@@ -1636,9 +1602,8 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
     std::vector<Value> newComputeOps;
     // create three IndexTreeComputeOp op
     // sparse dim in output tensor   
-    if(sparseDimsOutput.size() == 1){
-      
-      newComputeOps = CompressedWorkspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, optype, indexValueMap, builder, op);
+    if(sparseDimsOutput.size() == 1){      
+      newComputeOps = CompressedWorkspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, indexValueMap, builder, op);
     }
     // initially here workspaceOutput content 
 
