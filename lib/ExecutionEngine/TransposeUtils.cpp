@@ -42,17 +42,36 @@ using namespace std;
 
 enum SortingOption
 {
-  NO_SORT,
-  SEQ_QSORT,
-  PAR_QSORT,
-  RADIX_BUCKET,
-  PAR_RADIX,
-  PARTIAL_BUCKET_COUNT,
-  COUNT_RADIX,
-  COUNT_QUICK
+  NO_SORT = 1, // re-traverse instead of sorting
+  SEQ_QSORT = 2,
+  PAR_QSORT = 3,
+  RADIX_BUCKET = 4,
+  COUNT_RADIX = 5,
+  COUNT_QUICK = 6
 };
 
-int selected_sort_type = SEQ_QSORT;
+void getSortType(int &selected_sort_type) {
+  selected_sort_type = -1; // default
+  if (getenv("SORT_TYPE")) {
+    char *sort_type = getenv("SORT_TYPE");
+    if (strcmp(sort_type, "NO_SORT") == 0) 
+      selected_sort_type = NO_SORT;
+    else if (strcmp(sort_type, "SEQ_QSORT") == 0) 
+      selected_sort_type = SEQ_QSORT;
+    else if (strcmp(sort_type, "PAR_QSORT") == 0) 
+      selected_sort_type = PAR_QSORT;
+    else if (strcmp(sort_type, "RADIX_BUCKET") == 0)
+      selected_sort_type = RADIX_BUCKET;
+    else if (strcmp(sort_type, "COUNT_RADIX") == 0)
+      selected_sort_type = COUNT_RADIX;
+    else if (strcmp(sort_type, "COUNT_QUICK") == 0)
+      selected_sort_type = COUNT_QUICK;
+    else 
+      assert(selected_sort_type != -1 && "Error: SORT_TYPE environmental variable for sparse transpose is not recognized!\n");
+  } else {
+    assert(false && "Error: SORT_TYPE environmental variable for sparse transpose is not set\n");
+  }
+}
 
 struct coo_t
 {
@@ -112,16 +131,19 @@ int qsort_compare_coords(const void *p, const void *q)
 
 bool sort_compare_coord_2(struct coo_t p, struct coo_t q)
 {
+  // sort with k dimension as the key in (i, j, k)
   return (p.coords[2] < q.coords[2]);
 }
 
 bool sort_compare_coord_1(struct coo_t p, struct coo_t q)
 {
+  // sort with j dimension as the key in (i, j, k)
   return (p.coords[1] < q.coords[1]);
 }
 
 bool sort_compare_coord_0(struct coo_t p, struct coo_t q)
 {
+  // sort with i dimension as the key in (i, j, k)
   return (p.coords[0] < q.coords[0]);
 }
 
@@ -177,22 +199,6 @@ void quick_sort(vector<struct coo_t> &ary, int low, int high, int mod)
   }
 }
 
-void parallel_radix(vector<struct coo_t> &ary, int num_dims)
-{
-  if (num_dims == 3)
-  {
-    //__gnu_parallel::
-    // sort(ary.begin(), ary.end(), sort_compare_coord_2);
-    quick_sort(ary, 0, ary.size() - 1, 3 - 1);
-  }
-
-  //__gnu_parallel::
-  quick_sort(ary, 0, ary.size() - 1, 2 - 1);
-
-  //__gnu_parallel::
-  quick_sort(ary, 0, ary.size() - 1, 1 - 1);
-}
-
 void count_sort(vector<struct coo_t> &ary, int n, int mode)
 {
   // count sort for mode m
@@ -205,8 +211,8 @@ void count_sort(vector<struct coo_t> &ary, int n, int mode)
   }
   // Create a count array to store count of individual
   // characters and initialize count array as 0
-  int count[maxx + 1];
-  memset(count, 0, sizeof(count));
+  vector<int> count(maxx + 1);
+  fill(count.begin(), count.end(), 0);
 
   // Store count of each number
   for (i = 0; i < n; ++i)
@@ -229,118 +235,6 @@ void count_sort(vector<struct coo_t> &ary, int n, int mode)
   // Copy the sorted array to arr
   for (i = 0; i < n; ++i)
     ary[i] = sorted_ary[i];
-}
-
-// count sort with buckets output
-void count_sort_output_bucket(vector<struct coo_t> &ary, int n, int mode, vector<bucket> &buckets)
-{
-  // count sort for mode m
-  vector<coo_t> sorted_ary(n);
-  int maxx = 0, i;
-  for (i = 0; i < n; i++)
-  {
-    if (maxx < ary[i].coords[mode])
-      maxx = ary[i].coords[mode];
-  }
-  // Create a count array to store count of individual
-  // characters and initialize count array as 0
-  int count[maxx + 1], count2[maxx + 1];
-  memset(count, 0, sizeof(count));
-
-  // Store count of each number
-  for (i = 0; i < n; ++i)
-    ++count[ary[i].coords[mode]];
-
-  // Change count[i] so that count[i] now contains actual
-  // position of this character in output array
-  for (i = 0; i <= maxx; ++i)
-  {
-    if (i == 0)
-    {
-      count2[i] = 0;
-      continue;
-    }
-    count[i] += count[i - 1];
-    count2[i] = count[i];
-  }
-
-  // Build the output character array
-  for (i = 0; i < n; ++i)
-  {
-    sorted_ary[count[ary[i].coords[mode]] - 1] = ary[i];
-    --count[ary[i].coords[mode]];
-  }
-
-  // Copy the sorted array to arr
-  for (i = 0; i < n; ++i)
-    ary[i] = sorted_ary[i];
-
-  // build buckets for the following sorting within buckets
-  for (i = 1; i <= maxx; ++i)
-  {
-    if (count2[i - 1] < count2[i])
-    {
-      struct bucket abucket
-      {
-        count2[i - 1], count2[i]
-      };
-      buckets.push_back(abucket);
-    }
-  }
-}
-
-void partial_bucket_count(vector<struct coo_t> &ary, int n)
-{
-  // count sort for second digit
-  vector<coo_t> sorted_ary(n);
-  int maxx = 0, i;
-  for (i = 0; i < n; i++)
-  {
-    if (maxx < ary[i].coords[1])
-      maxx = ary[i].coords[1];
-  }
-  // Create a count array to store count of individual
-  // characters and initialize count array as 0
-  int count[maxx + 1];
-  memset(count, 0, sizeof(count));
-
-  // Store count of each character
-  for (i = 0; i < n; ++i)
-    ++count[ary[i].coords[1]];
-
-  // Change count[i] so that count[i] now contains actual
-  // position of this character in output array
-  for (i = 1; i <= maxx; ++i)
-    count[i] += count[i - 1];
-
-  // Build the output character array
-  for (i = 0; i < n; ++i)
-  {
-    sorted_ary[count[ary[i].coords[1]] - 1] = ary[i];
-    --count[ary[i].coords[1]];
-  }
-
-  // assign the sorted array into buckets by bucket sorting
-  vector<coo_t> buckets[n + 1];
-  for (i = 0; i < n; ++i)
-  {
-    buckets[sorted_ary[i].coords[0]].push_back(sorted_ary[i]);
-  }
-
-  // dump buckets in sequence back to ary
-  unsigned long j = 0;
-  unsigned long k = 0;
-  for (i = 0; i < n + 1; ++i)
-  {
-    if (!buckets[i].empty())
-    {
-      for (j = 0; j < buckets[i].size(); ++j)
-      {
-        ary[k] = buckets[i][j];
-        k++;
-      }
-    }
-  }
 }
 
 void radix_bucket(vector<struct coo_t> &ary, int n)
@@ -476,32 +370,18 @@ void count_quick(vector<struct coo_t> &ary, int n, int num_dims)
 
 void count_radix(vector<struct coo_t> &ary, int n, int num_dims)
 {
-  //  the beginning of the file
-  char *sd = getenv("SORT_DIMS");
-  if (sd == NULL)
-    assert(false && "set SORT_DIMS to be 1, 2, or 3 \n");
-
-  int sort_dims = atoi(sd);
-
+  
   if (num_dims == 2)
   {
-    if (sort_dims == 1)
-    {
-      count_sort(ary, n, 0);
-    }
-    else if (sort_dims == 0)
-    {
-      ;
-      // llvm::nulls();
-    }
-    else
-    {
-      assert(false && "ERROR: wrong dimensions for matrixes \n");
-    }
+    // it only reqires to sort the first dimension
+    count_sort(ary, n, 0);
   }
 
   if (num_dims == 3)
   {
+    // for best performance, we want something to decide how many dimensions to sort
+    // all dimensions or partial dimensions? 
+    int sort_dims = 3;
     switch (sort_dims)
     {
     case 0:
@@ -528,7 +408,16 @@ void count_radix(vector<struct coo_t> &ary, int n, int num_dims)
 
 //===----------------------------------------------------------------------===//
 //===----------------------------------------------------------------------===//
-
+/**
+ * @brief Differet sorting algorithm for sparse transpse taking COO coordinates as input
+ * 
+ * @param sort_type specify the sort algorithm to use
+ * @param coo_ts the COO coordinates: for 2D, for example, (i, j, val)
+ * @param sz number of coordinates within coo_ts
+ * @param num_dims number of dimensions: 2D or 3D
+ * @param output_permutation the output permutation to transpose, 
+ *      such as i, j, k (input perm) to j, k, i (output perm)
+ */
 void transpose_sort(int sort_type, vector<coo_t> &coo_ts, int sz,
                     int num_dims, int output_permutation)
 {
@@ -544,21 +433,6 @@ void transpose_sort(int sort_type, vector<coo_t> &coo_ts, int sz,
   case RADIX_BUCKET:
     radix_bucket(coo_ts, sz);
     break;
-
-  case PARTIAL_BUCKET_COUNT:
-    // only works for 021
-    if (num_dims == 3 && output_permutation == 21)
-    {
-      partial_bucket_count(coo_ts, sz);
-    }
-    else
-    {
-      assert(false && "Error: PARTIAL_BUCKET_COUNT only works for > 3D tensors and permutation occurring after the first digits\n");
-    }
-    break;
-  case PAR_RADIX:
-    parallel_radix(coo_ts, num_dims);
-    break;
   case COUNT_RADIX:
     count_radix(coo_ts, sz, num_dims);
     break;
@@ -570,6 +444,37 @@ void transpose_sort(int sort_type, vector<coo_t> &coo_ts, int sz,
   }
 }
 
+/**
+ * @brief transpose a sparse matrix
+ * 
+ * @tparam T type of matrix values
+ * @param A1format sparse storage format of A1 dimension, which could be CN, CU, S, or D
+ * @param A2format sparse storage format of A2 dimension, which could be CN, CU, S, or D
+ * @param A1pos_rank ?
+ * @param A1pos_ptr A1 pos array
+ * @param A1crd_rank ?
+ * @param A1crd_ptr A1 crd array
+ * @param A2pos_rank ?
+ * @param A2pos_ptr A2 pos array
+ * @param A2crd_rank ?
+ * @param A2crd_ptr A2 crd array
+ * @param Aval_rank ?
+ * @param Aval_ptr A val array
+ * @param B1format sparse storage format of B1 dimension, which could be CN, CU, S, or D
+ * @param B2format sparse storage format of B2 dimension, which could be CN, CU, S, or D
+ * @param B1pos_rank ?
+ * @param B1pos_ptr B1 pos array
+ * @param B1crd_rank ?
+ * @param B1crd_ptr B1 crd array
+ * @param B2pos_rank ?
+ * @param B2pos_ptr B2 pos array
+ * @param B2crd_rank ?
+ * @param B2crd_ptr B2 crd array
+ * @param Bval_rank ?
+ * @param Bval_ptr B val array
+ * @param sizes_rank ?
+ * @param sizes_ptr array of length of those arrays
+ */
 template <typename T>
 void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1pos_ptr,
                   int A1crd_rank, void *A1crd_ptr, int A2pos_rank, void *A2pos_ptr,
@@ -580,6 +485,10 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
                   int Bval_rank, void *Bval_ptr,
                   int sizes_rank, void *sizes_ptr)
 {
+  // Get sort type
+  int selected_sort_type = 0;
+  getSortType(selected_sort_type);
+
   // int i = 0;
   int num_dims = 2;
   std::string Aspformat;
@@ -599,7 +508,7 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
 
   auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
 
-  //int rowSize = desc_sizes->data[5];
+  int rowSize = desc_sizes->data[5];
   int colSize = desc_sizes->data[6];
 
   if ((A1format == Compressed_nonunique && A2format == singleton) || (A1format == singleton && A2format == Compressed_nonunique))
@@ -635,21 +544,39 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
     // vector of coordinates
     vector<coo_t> coo_ts(sz);
 
-    // dimension, so we need to use indexing map for transpose
-    //===----------------------------------------------------------------------===//
-    // marshalling data for each sorting algorithms
-    //===----------------------------------------------------------------------===//
-    for (int i = 0; i < sz; ++i)
-    {
-      coo_ts[i].coords.push_back(desc_A2crd->data[i]);
-      coo_ts[i].coords.push_back(desc_A1crd->data[i]);
-      coo_ts[i].val = desc_Aval->data[i];
-    }
+    int m=0;
+    if (selected_sort_type == NO_SORT) { // coordinates are not sorted
+      for (int i=0; i < colSize+1; ++i) {
+	      for (int j=0; j < rowSize+1; ++j) {
+	        for (int k=0; k < sz; ++k) {
+	          if (desc_A1crd->data[k] == j && desc_A2crd->data[k] == i) {
+	            coo_ts[m].coords.push_back(desc_A2crd->data[k]); 
+	            coo_ts[m].coords.push_back(desc_A1crd->data[k]); 
+      	      coo_ts[m].val = desc_Aval->data[k];
+	            ++m;
+	          }
+	        }
+	      }
+      }
+    } else {
 
-    //===----------------------------------------------------------------------===//
-    // Different sorting algorithm
-    //===----------------------------------------------------------------------===//
-    transpose_sort(selected_sort_type, coo_ts, sz, num_dims, 0);
+      // dimension, so we need to use indexing map for transpose
+      //===----------------------------------------------------------------------===//
+      // marshalling data for each sorting algorithms
+      //===----------------------------------------------------------------------===//
+      for (int i = 0; i < sz; ++i)
+      {
+        coo_ts[i].coords.push_back(desc_A2crd->data[i]);
+        coo_ts[i].coords.push_back(desc_A1crd->data[i]);
+        coo_ts[i].val = desc_Aval->data[i];
+      }
+
+      //===----------------------------------------------------------------------===//
+      // Different sorting algorithm
+      //===----------------------------------------------------------------------===//
+      transpose_sort(selected_sort_type, coo_ts, sz, num_dims, 0);
+    }
+    
     //===----------------------------------------------------------------------===//
     // push transposed coords to output tensors
     //===----------------------------------------------------------------------===//
@@ -659,22 +586,24 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
       desc_B2crd->data[i] = coo_ts[i].coords[1];
       desc_Bval->data[i] = coo_ts[i].val;
     }
+    
+    // B2 pos should have two values: data[0]: 0 and data[1]: sz 
+    desc_B1pos->sizes[0] = 2;
+    desc_B1pos->data[1] = sz;
+
+    // to be consistent, desc_B2pos is set to -1
+    desc_B2pos->sizes[0] = desc_A2pos->sizes[0];
+    desc_B2pos->data[0] = desc_A2pos->data[0];
+
+    // switch row and col size
+    desc_sizes->data[5] = colSize;
+    desc_sizes->data[6] = rowSize;
   }
 
   if (Aspformat.compare("CSR") == 0 && Bspformat.compare("CSR") == 0)
   {
-    // SORT OR NO SORT?
-    // currently you are setting COUNT_RADIX manually, it needs to be changed
-    char *sOrNot = getenv("CSR_SORT_OR_NOT"); // 0 or 1
-    int sort_not = 1;                         // default
-    if (!(sOrNot == NULL))
+    if (selected_sort_type == NO_SORT) // coordinates are not sorted
     {
-      sort_not = atoi(sOrNot); // read from env var.
-    }
-
-    if (sort_not == 0)
-    {
-      // It may be due to BRowSize and BColSize being not correct.
       // 1) not by sorting: only works for CSR/matrices
       // Atomic-based Transposition: retraverse the matrix from the transposed direction
       // B's row size == input's col size
@@ -702,10 +631,15 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
         }
         desc_B2pos->data[k + 1] = count;
       }
-    }
 
-    if (sort_not == 1)
-    {
+      // push sorted data back to B1
+      desc_B1pos->data[0] = BRowSize;
+      desc_B1crd->data[0] = -1;
+
+      // switch row and col size
+      desc_sizes->data[5] = colSize;
+      desc_sizes->data[6] = rowSize;
+    } else {
       // 2) by sorting: work for both CSR/matrices and CSF/tensors
       // CSR -> COO -> Transpose -> Sort -> COO -> CSR
       //===----------------------------------------------------------------------===//
@@ -736,7 +670,6 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
       // Different sorting algorithm
       //===----------------------------------------------------------------------===//
       //
-      setenv("SORT_DIMS", "1", 1);
       transpose_sort(selected_sort_type, coo_ts, BNnz, num_dims, 0);
 
       // push sorted data back to B
@@ -755,6 +688,15 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
           desc_B2pos->data[j] = counter;
           j++;
         }
+        // for cases having a gap larger than 1, e.g., 0 0 1 1 (gap > 1) 3 4 4
+        if (coo_ts[i].coords[0] - coo_ts[i-1].coords[0] > 1) {
+          int gap = coo_ts[i].coords[0] - coo_ts[i-1].coords[0] - 1;
+          while (gap > 0) {
+            desc_B2pos->data[j] = counter;
+            j++;
+            gap--;
+          }
+        }
         counter++;
       }
       desc_B2pos->data[j] = counter;
@@ -764,93 +706,22 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
         desc_B2crd->data[i] = coo_ts[i].coords[1];
         desc_Bval->data[i] = coo_ts[i].val;
       }
+
+      // switch row and col size
+      desc_sizes->data[5] = colSize;
+      desc_sizes->data[6] = rowSize;
+
     }
   }
 
   if (Aspformat.compare("CSR") == 0 && Bspformat.compare("COO") == 0)
   {
-    // CSR -> COO -> Transpose -> Sort -> COO
-    int i, j;
-    int BNnz = desc_Aval->sizes[0];
-    vector<coo_t> coo_ts(BNnz);
-    int pos = 0;
-    int counter = 0;
-    for (i = 0; i < BNnz; ++i)
-    {
-      coo_ts[i].coords.push_back(desc_A2crd->data[i]);
-      coo_ts[i].val = desc_Aval->data[i];
-      counter++;
-      for (j = 0; j < desc_A2pos->sizes[0] - 1; j++)
-      {
-        if (counter > desc_A2pos->data[j] && counter <= desc_A2pos->data[j + 1])
-        {
-          pos = j;
-        }
-      }
-      coo_ts[i].coords.push_back(pos);
-    }
-    // sort the first dim
-    //===----------------------------------------------------------------------===//
-    // Different sorting algorithm
-    //===----------------------------------------------------------------------===//
-    //
-    setenv("SORT_DIMS", "1", 1);
-    transpose_sort(selected_sort_type, coo_ts, BNnz, num_dims, 0);
-    //===----------------------------------------------------------------------===//
-    // push transposed coords to output tensors
-    //===----------------------------------------------------------------------===//
-    for (i = 0; i < BNnz; ++i)
-    {
-      desc_B1crd->data[i] = coo_ts[i].coords[0];
-      desc_B2crd->data[i] = coo_ts[i].coords[1];
-      desc_Bval->data[i] = coo_ts[i].val;
-    }
+    assert(false && "ERROR: 'CSR->COO' is not supported for sparse tensor transpose.\n");
   }
 
   if (Aspformat.compare("COO") == 0 && Bspformat.compare("CSR") == 0)
   {
-    int sz = desc_Aval->sizes[0];
-    // vector of coordinates
-    vector<coo_t> coo_ts(sz);
-
-    // dimension, so we need to use indexing map for transpose
-    //===----------------------------------------------------------------------===//
-    // marshalling data for each sorting algorithms
-    //===----------------------------------------------------------------------===//
-    for (int i = 0; i < sz; ++i)
-    {
-      coo_ts[i].coords.push_back(desc_A2crd->data[i]);
-      coo_ts[i].coords.push_back(desc_A1crd->data[i]);
-      coo_ts[i].val = desc_Aval->data[i];
-    }
-
-    //===----------------------------------------------------------------------===//
-    // Different sorting algorithm
-    //===----------------------------------------------------------------------===//
-    transpose_sort(selected_sort_type, coo_ts, sz, num_dims, 0);
-
-    // COO --> CSR
-    int BRowSize = colSize;
-    desc_B2pos->sizes[0] = BRowSize + 1; // resize
-    // push pos to B
-    int counter = 1;
-    int j = 1;
-    for (int i = 1; i < sz; i++)
-    {
-      if (coo_ts[i - 1].coords[0] != coo_ts[i].coords[0])
-      {
-        desc_B2pos->data[j] = counter;
-        j++;
-      }
-      counter++;
-    }
-    desc_B2pos->data[j] = counter;
-    // push crd to B
-    for (int i = 0; i < sz; i++)
-    {
-      desc_B2crd->data[i] = coo_ts[i].coords[1];
-      desc_Bval->data[i] = coo_ts[i].val;
-    }
+    assert(false && "ERROR: 'COO->CSR' is not supported for sparse tensor transpose.\n");
   }
 }
 
@@ -867,8 +738,10 @@ void transpose_3D(int32_t input_permutation, int32_t output_permutation,
                   int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
                   int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr)
 {
+  // Get sort type
+  int selected_sort_type = 0;
+  getSortType(selected_sort_type);
 
-  int i = 0;
   int num_dims = 3;
 
   std::string Aspformat;
@@ -923,6 +796,15 @@ void transpose_3D(int32_t input_permutation, int32_t output_permutation,
   auto *desc_B3crd = static_cast<StridedMemRefType<int64_t, 1> *>(B3crd_ptr);
   auto *desc_Bval = static_cast<StridedMemRefType<T, 1> *>(Bval_ptr);
 
+  auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
+
+  int mode_sz0 = desc_sizes->data[7];
+  int mode_sz1 = desc_sizes->data[8];
+  int mode_sz2 = desc_sizes->data[9];
+
+  int dim_sizes[3] = {mode_sz0, mode_sz1, mode_sz2};
+  int trans_dim_sizes[3] = {mode_sz0, mode_sz1, mode_sz2}; // sizes of dimensions after transposition of dimensions
+
   if (Aspformat.compare("COO") == 0 && Bspformat.compare("COO") == 0)
   {
     int sz = desc_Aval->sizes[0];
@@ -933,49 +815,101 @@ void transpose_3D(int32_t input_permutation, int32_t output_permutation,
     //===----------------------------------------------------------------------===//
     // marshalling data for permutation for transpose
     //===----------------------------------------------------------------------===//
-    // There are 5 cases: 021, 102, 120, 201, 210
-    for (int i = 0; i < sz; ++i)
+    // There are 5 input cases: 012, 021, 102, 120, 201, 210
+    // There are 5 output cases: 012, 021, 102, 120, 201, 210
+    int idigists[3], odigists[3], i = 0;
+    for (int j = num_dims - 1; j >= 0; j--)
     {
-      for (int j = num_dims - 1; j >= 0; j--)
-      {
-        int tmp = pow(10, j);
-        int digist = (output_permutation / tmp) % 10;
-        switch (digist)
-        {
-        case 0:
-          coo_ts[i].coords.push_back(desc_A1crd->data[i]);
-          break;
+      int tmp = pow(10, j);
+      idigists[i] = (input_permutation / tmp) % 10;
+      odigists[i] = (output_permutation / tmp) % 10;
+      ++i;
+    }
+    
+    // the order depends on both input and output permutations
+    // for example, if the input is 201 and output is 102, the order 
+    // should be (k, j, i)
+    for (int i = 0; i < num_dims; ++i) {
+      for (int j = 0; j < num_dims; ++j) {
+        if (odigists[i] == idigists[j]) {
+          trans_dim_sizes[i] = dim_sizes[j];
+          for (int k = 0; k < sz; ++k) {
+            switch (j)
+            {
+              case 0:
+                coo_ts[k].coords.push_back(desc_A1crd->data[k]);
+                break;
 
-        case 1:
-          coo_ts[i].coords.push_back(desc_A2crd->data[i]);
-          break;
+              case 1:
+                coo_ts[k].coords.push_back(desc_A2crd->data[k]);
+                break;
 
-        case 2:
-          coo_ts[i].coords.push_back(desc_A3crd->data[i]);
-          break;
+              case 2:
+                coo_ts[k].coords.push_back(desc_A3crd->data[k]);
+                break;
 
-        default:;
-          assert(false && "ERROR: incorrect output permutation\n");
+              default:;
+                assert(false && "ERROR: incorrect output permutation\n");
+            }
+            coo_ts[k].val = desc_Aval->data[k];
+          }
         }
       }
-      coo_ts[i].val = desc_Aval->data[i];
     }
 
-    //===----------------------------------------------------------------------===//
-    // Different sorting algorithm
-    //===----------------------------------------------------------------------===//
-    transpose_sort(selected_sort_type, coo_ts, sz, num_dims, output_permutation);
+    if (selected_sort_type == NO_SORT) {
+      vector<coo_t> perm_coo_ts(sz);
 
-    //===----------------------------------------------------------------------===//
-    // push transposed coords to output tensors
-    //===----------------------------------------------------------------------===//
-    for (i = 0; i < sz; ++i)
-    {
-      desc_B1crd->data[i] = coo_ts[i].coords[0];
-      desc_B2crd->data[i] = coo_ts[i].coords[1];
-      desc_B3crd->data[i] = coo_ts[i].coords[2];
-      desc_Bval->data[i] = coo_ts[i].val;
+      // re-traverse from the target dimension
+      int m = 0;
+      for (int i=0; i < trans_dim_sizes[0]+1; ++i) {
+        for (int j=0; j < trans_dim_sizes[1]+1; ++j) {
+          for (int k=0; k < trans_dim_sizes[2]+1; ++k) {
+            for (int l=0; l < sz; ++l) {
+              if (i == coo_ts[l].coords[0] && j == coo_ts[l].coords[1] && k == coo_ts[l].coords[2]){
+                perm_coo_ts[m].coords.push_back(coo_ts[l].coords[0]);
+                perm_coo_ts[m].coords.push_back(coo_ts[l].coords[1]);
+                perm_coo_ts[m].coords.push_back(coo_ts[l].coords[2]);
+                perm_coo_ts[m].val = coo_ts[l].val;
+                ++m;
+              }
+            }
+          }
+        }
+      }
+
+      //===----------------------------------------------------------------------===//
+      // push transposed coords to output tensors
+      //===----------------------------------------------------------------------===//
+      for (i = 0; i < sz; ++i)
+      {
+        desc_B1crd->data[i] = perm_coo_ts[i].coords[0];
+        desc_B2crd->data[i] = perm_coo_ts[i].coords[1];
+        desc_B3crd->data[i] = perm_coo_ts[i].coords[2];
+        desc_Bval->data[i] = perm_coo_ts[i].val;
+      }
+
+      
+    } else {
+      //===----------------------------------------------------------------------===//
+      // Different sorting algorithm
+      //===----------------------------------------------------------------------===//
+      transpose_sort(selected_sort_type, coo_ts, sz, num_dims, output_permutation);
+
+      //===----------------------------------------------------------------------===//
+      // push transposed coords to output tensors
+      //===----------------------------------------------------------------------===//
+      for (i = 0; i < sz; ++i) {
+        desc_B1crd->data[i] = coo_ts[i].coords[0];
+        desc_B2crd->data[i] = coo_ts[i].coords[1];
+        desc_B3crd->data[i] = coo_ts[i].coords[2];
+        desc_Bval->data[i] = coo_ts[i].val;
+      }
     }
+    
+    // B2 pos should have two values: data[0]: 0 and data[1]: sz 
+    desc_B1pos->sizes[0] = 2;
+    desc_B1pos->data[1] = sz;
   }
 
   if (Aspformat.compare("CSF") == 0 && Bspformat.compare("CSF") == 0)
@@ -1014,121 +948,251 @@ void transpose_3D(int32_t input_permutation, int32_t output_permutation,
       }
     }
 
-    // permutate coords
-    // There are 5 cases: 021, 102, 120, 201, 210
     vector<coo_t> perm_coo_ts(sz);
-    for (int i = 0; i < sz; ++i)
+    //===----------------------------------------------------------------------===//
+    // marshalling data for permutation for transpose
+    //===----------------------------------------------------------------------===//
+    // There are 5 input cases: 012, 021, 102, 120, 201, 210
+    // There are 5 output cases: 012, 021, 102, 120, 201, 210
+    int idigists[3], odigists[3];
+    i = 0;
+    for (int j = num_dims - 1; j >= 0; j--)
     {
-      for (int j = num_dims - 1; j >= 0; j--)
-      {
-        int tmp = pow(10, j);
-        int digist = (output_permutation / tmp) % 10;
-        switch (digist)
-        {
-        case 0:
-          perm_coo_ts[i].coords.push_back(coo_ts[i].coords[0]);
-          break;
+      int tmp = pow(10, j);
+      idigists[i] = (input_permutation / tmp) % 10;
+      odigists[i] = (output_permutation / tmp) % 10;
+      ++i;
+    }
 
-        case 1:
-          perm_coo_ts[i].coords.push_back(coo_ts[i].coords[1]);
-          break;
+    // the order depends on both input and output permutations
+    // for example, if the input is 201 and output is 102, the order 
+    // should be (k, j, i)
+    for (int i = 0; i < num_dims; ++i) {
+      for (int j = 0; j < num_dims; ++j) {
+        if (odigists[i] == idigists[j]) {
+          trans_dim_sizes[i] = dim_sizes[j];
+          for (int k = 0; k < sz; ++k) {
+            switch (j)
+            {
+              case 0:
+                perm_coo_ts[k].coords.push_back(coo_ts[k].coords[0]);
+                break;
 
-        case 2:
-          perm_coo_ts[i].coords.push_back(coo_ts[i].coords[2]);
-          break;
+              case 1:
+                perm_coo_ts[k].coords.push_back(coo_ts[k].coords[1]);
+                break;
 
-        default:
-          std::cout << "ERROR: incorrect output permutation" << std::endl;
+              case 2:
+                perm_coo_ts[k].coords.push_back(coo_ts[k].coords[2]);
+                break;
+
+              default:;
+                assert(false && "ERROR: incorrect output permutation\n");
+            }
+            perm_coo_ts[k].val = coo_ts[k].val;
+          }
         }
       }
-      perm_coo_ts[i].val = coo_ts[i].val;
     }
 
-    //===----------------------------------------------------------------------===//
-    // Different sorting algorithm
-    //===----------------------------------------------------------------------===//
-    transpose_sort(selected_sort_type, perm_coo_ts, sz, num_dims, output_permutation);
+    if (selected_sort_type == NO_SORT) {
 
-    //===----------------------------------------------------------------------===//
-    // Convert COO back to CSF
-    //===----------------------------------------------------------------------===//
-    // calculate B1crd, B2crd, B3crd
-    int counter = 0;
-    for (i = 0; i < sz - 1; i++)
-    {
+      // re-traverse from the target dimension
+      int m = 0, l = 0;
+      for (i=0; i < trans_dim_sizes[0]+1; ++i) {
+        for (j=0; j < trans_dim_sizes[1]+1; ++j) {
+          for (k=0; k < trans_dim_sizes[2]+1; ++k) {
+            for (l=0; l < sz; ++l) {
+              if (i == perm_coo_ts[l].coords[0] && j == perm_coo_ts[l].coords[1] && k == perm_coo_ts[l].coords[2]){
+                coo_ts[m].coords[0] = perm_coo_ts[l].coords[0];
+                coo_ts[m].coords[1] = perm_coo_ts[l].coords[1];
+                coo_ts[m].coords[2] = perm_coo_ts[l].coords[2];
+                coo_ts[m].val = perm_coo_ts[l].val;
+                ++m;
+              }
+            }
+          }
+        }
+      }
+
+      //===----------------------------------------------------------------------===//
+      // Convert COO back to CSF
+      //===----------------------------------------------------------------------===//
+      // calculate B1crd, B2crd, B3crd
+      int counter = 0;
+      for (i = 0; i < sz - 1; i++)
+      {
+        desc_B1crd->data[counter] = coo_ts[i].coords[0];
+        if (coo_ts[i].coords[0] != coo_ts[i + 1].coords[0])
+        {
+          counter++;
+        }
+      }
+      desc_B1crd->data[counter] = coo_ts[i].coords[0];
+      desc_B1crd->sizes[0] = counter + 1;
+
+      counter = 0;
+      for (i = 0; i < sz - 1; i++)
+      {
+        desc_B2crd->data[counter] = coo_ts[i].coords[1];
+        if (coo_ts[i].coords[1] != coo_ts[i + 1].coords[1])
+        {
+          counter++;
+        }
+      }
+      desc_B2crd->data[counter] = coo_ts[i].coords[1];
+      desc_B2crd->sizes[0] = counter + 1;
+
+      for (i = 0; i < sz; i++)
+      {
+        desc_B3crd->data[i] = coo_ts[i].coords[2];
+        desc_Bval->data[i] = coo_ts[i].val;
+      }
+      desc_B3crd->sizes[0] = sz;
+      desc_Bval->sizes[0] = sz;
+
+      // calculate B1pos, B2pos, B3pos
+      desc_B1pos->data[0] = 0;
+      desc_B1pos->data[1] = desc_B1crd->sizes[0];
+      desc_B1pos->sizes[0] = 2;
+
+      desc_B2pos->data[0] = 0;
+      counter = 1;
+      j = 1;
+      for (i = 0; i < sz - 1; ++i)
+      {
+        if (coo_ts[i].coords[0] != coo_ts[i + 1].coords[0])
+        {
+          desc_B2pos->data[j] = counter;
+          j++;
+        }
+        if (coo_ts[i].coords[1] != coo_ts[i + 1].coords[1] ||
+            coo_ts[i].coords[0] != coo_ts[i + 1].coords[0])
+        {
+          counter++;
+        }
+      }
+      desc_B2pos->data[j] = counter;
+      desc_B2pos->sizes[0] = j + 1;
+
+      desc_B3pos->data[0] = 0;
+      counter = 1;
+      j = 1;
+      for (i = 0; i < sz - 1; ++i)
+      {
+        if (coo_ts[i].coords[1] != coo_ts[i + 1].coords[1] ||
+            coo_ts[i].coords[0] != coo_ts[i + 1].coords[0])
+        {
+          desc_B3pos->data[j] = counter;
+          j++;
+        }
+        if (coo_ts[i].coords[2] != coo_ts[i + 1].coords[2] ||
+            coo_ts[i].coords[1] != coo_ts[i + 1].coords[1] ||
+            coo_ts[i].coords[0] != coo_ts[i + 1].coords[0])
+        {
+          counter++;
+        }
+      }
+      desc_B3pos->data[j] = counter;
+      desc_B3pos->sizes[0] = j + 1;
+
+    } else { // end of NO_SORT  
+      //===----------------------------------------------------------------------===//
+      // Different sorting algorithm
+      //===----------------------------------------------------------------------===//
+      transpose_sort(selected_sort_type, perm_coo_ts, sz, num_dims, output_permutation);
+
+      //===----------------------------------------------------------------------===//
+      // Convert COO back to CSF
+      //===----------------------------------------------------------------------===//
+      // calculate B1crd, B2crd, B3crd
+      int counter = 0;
+      for (i = 0; i < sz - 1; i++)
+      {
+        desc_B1crd->data[counter] = perm_coo_ts[i].coords[0];
+        if (perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
+        {
+          counter++;
+        }
+      }
       desc_B1crd->data[counter] = perm_coo_ts[i].coords[0];
-      if (perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
-      {
-        counter++;
-      }
-    }
-    desc_B1crd->data[counter] = perm_coo_ts[i].coords[0];
-    desc_B1crd->sizes[0] = counter + 1;
+      desc_B1crd->sizes[0] = counter + 1;
 
-    counter = 0;
-    for (i = 0; i < sz - 1; i++)
-    {
+      counter = 0;
+      for (i = 0; i < sz - 1; i++)
+      {
+        desc_B2crd->data[counter] = perm_coo_ts[i].coords[1];
+        if (perm_coo_ts[i].coords[1] != perm_coo_ts[i + 1].coords[1])
+        {
+          counter++;
+        }
+      }
       desc_B2crd->data[counter] = perm_coo_ts[i].coords[1];
-      if (perm_coo_ts[i].coords[1] != perm_coo_ts[i + 1].coords[1])
-      {
-        counter++;
-      }
-    }
-    desc_B2crd->data[counter] = perm_coo_ts[i].coords[1];
-    desc_B2crd->sizes[0] = counter + 1;
+      desc_B2crd->sizes[0] = counter + 1;
 
-    for (i = 0; i < sz; i++)
-    {
-      desc_B3crd->data[i] = perm_coo_ts[i].coords[2];
-      desc_Bval->data[i] = perm_coo_ts[i].val;
-    }
-    desc_B3crd->sizes[0] = sz;
-    desc_Bval->sizes[0] = sz;
+      for (i = 0; i < sz; i++)
+      {
+        desc_B3crd->data[i] = perm_coo_ts[i].coords[2];
+        desc_Bval->data[i] = perm_coo_ts[i].val;
+      }
+      desc_B3crd->sizes[0] = sz;
+      desc_Bval->sizes[0] = sz;
 
-    // calculate B1pos, B2pos, B3pos
-    desc_B1pos->data[0] = 0;
-    desc_B1pos->data[1] = desc_B1crd->sizes[0];
-    desc_B1pos->sizes[0] = 2;
+      // calculate B1pos, B2pos, B3pos
+      desc_B1pos->data[0] = 0;
+      desc_B1pos->data[1] = desc_B1crd->sizes[0];
+      desc_B1pos->sizes[0] = 2;
 
-    desc_B2pos->data[0] = 0;
-    counter = 1;
-    j = 1;
-    for (i = 0; i < sz - 1; ++i)
-    {
-      if (perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
+      desc_B2pos->data[0] = 0;
+      counter = 1;
+      j = 1;
+      for (i = 0; i < sz - 1; ++i)
       {
-        desc_B2pos->data[j] = counter;
-        j++;
+        if (perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
+        {
+          desc_B2pos->data[j] = counter;
+          j++;
+        }
+        if (perm_coo_ts[i].coords[1] != perm_coo_ts[i + 1].coords[1] ||
+            perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
+        {
+          counter++;
+        }
       }
-      if (perm_coo_ts[i].coords[1] != perm_coo_ts[i + 1].coords[1] ||
-          perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
-      {
-        counter++;
-      }
-    }
-    desc_B2pos->data[j] = counter;
-    desc_B2pos->sizes[0] = j + 1;
+      desc_B2pos->data[j] = counter;
+      desc_B2pos->sizes[0] = j + 1;
 
-    desc_B3pos->data[0] = 0;
-    counter = 1;
-    j = 1;
-    for (i = 0; i < sz - 1; ++i)
-    {
-      if (perm_coo_ts[i].coords[1] != perm_coo_ts[i + 1].coords[1] ||
-          perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
+      desc_B3pos->data[0] = 0;
+      counter = 1;
+      j = 1;
+      for (i = 0; i < sz - 1; ++i)
       {
-        desc_B3pos->data[j] = counter;
-        j++;
+        if (perm_coo_ts[i].coords[1] != perm_coo_ts[i + 1].coords[1] ||
+            perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
+        {
+          desc_B3pos->data[j] = counter;
+          j++;
+        }
+        if (perm_coo_ts[i].coords[2] != perm_coo_ts[i + 1].coords[2] ||
+            perm_coo_ts[i].coords[1] != perm_coo_ts[i + 1].coords[1] ||
+            perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
+        {
+          counter++;
+        }
       }
-      if (perm_coo_ts[i].coords[2] != perm_coo_ts[i + 1].coords[2] ||
-          perm_coo_ts[i].coords[1] != perm_coo_ts[i + 1].coords[1] ||
-          perm_coo_ts[i].coords[0] != perm_coo_ts[i + 1].coords[0])
-      {
-        counter++;
-      }
-    }
-    desc_B3pos->data[j] = counter;
-    desc_B3pos->sizes[0] = j + 1;
+      desc_B3pos->data[j] = counter;
+      desc_B3pos->sizes[0] = j + 1;
+    } // end of sorting  
+  }
+
+  if (Aspformat.compare("CSF") == 0 && Bspformat.compare("COO") == 0)
+  {
+    assert(false && "ERROR: 'CSF->COO' is not supported for sparse tensor transpose.\n");
+  }
+
+  if (Aspformat.compare("COO") == 0 && Bspformat.compare("CSF") == 0)
+  {
+    assert(false && "ERROR: 'COO->CSF' is not supported for sparse tensor transpose.\n");
   }
 }
 
