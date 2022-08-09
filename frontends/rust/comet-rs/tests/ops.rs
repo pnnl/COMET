@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use std::env;
 
 const EX_DIR: &str = "./target/debug/examples/";
 
@@ -627,16 +628,17 @@ fn sum_dense_tensor() {
 
 #[test]
 fn transpose_coo_matrix() {
+    env::set_var("SORT_TYPE", "SEQ_QSORT");
     let output = Command::new(EX_DIR.to_owned() + "transpose_coo_matrix").unwrap();
     compare_strings(
         &String::from_utf8_lossy(&output.stdout),
         "
     data = 
-    0,0,
+    0,9,
     data = 
     0,0,1,1,2,3,3,4,4,
     data = 
-    0,
+    -1,
     data = 
     0,3,1,4,2,0,3,1,4,
     data = 
@@ -646,7 +648,58 @@ fn transpose_coo_matrix() {
 }
 
 #[test]
+fn transpose_coo_tensor() {
+    env::set_var("SORT_TYPE", "SEQ_QSORT");
+    let output = Command::new(EX_DIR.to_owned() + "transpose_coo_tensor").unwrap();
+    compare_strings(
+        &String::from_utf8_lossy(&output.stdout),
+        "
+    data = 
+    0,3,
+    data = 
+    1,3,6,
+    data = 
+    0,
+    data = 
+    2,1,3,
+    data = 
+    0,
+    data =
+    3,2,5,
+    data =
+    2.11,1.3,3,
+    ",
+    );
+}
+
+#[test]
+fn transpose_csf_tensor() {
+    env::set_var("SORT_TYPE", "SEQ_QSORT");
+    let output = Command::new(EX_DIR.to_owned() + "transpose_csf_tensor").unwrap();
+    compare_strings(
+        &String::from_utf8_lossy(&output.stdout),
+        "
+    data = 
+    0,3,
+    data = 
+    2,3,5,
+    data = 
+    0,1,2,3,
+    data = 
+    1,2,3,
+    data = 
+    0,1,2,3,
+    data =
+    3,1,6,
+    data =
+    1.3,2.11,3,
+    ",
+    );
+}
+
+#[test]
 fn transpose_csr_matrix() {
+    env::set_var("SORT_TYPE", "SEQ_QSORT");
     let output = Command::new(EX_DIR.to_owned() + "transpose_csr_matrix").unwrap();
     compare_strings(
         &String::from_utf8_lossy(&output.stdout),

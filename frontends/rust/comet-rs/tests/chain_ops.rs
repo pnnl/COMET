@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use std::env;
 
 const EX_DIR: &str = "./target/debug/examples/";
 
@@ -37,17 +38,20 @@ fn dtranspose_mult_dense_dense() {
 
 #[test]
 fn sp_transpose_csr_spmm_csr_dense() {
+    env::set_var("SORT_TYPE", "SEQ_QSORT");
     let output = Command::new(EX_DIR.to_owned() + "sp_transpose_csr_spmm_csr_dense").unwrap();
     compare_strings(
         &String::from_utf8_lossy(&output.stdout),
         "
     data = 
-    5.1,5.1,5.1,5.1,5.1,7.2,7.2,7.2,7.2,7.2,3,3,3,3,3,5.4,5.4,5.4,5.4,5.4,7.5,7.5,7.5,7.5,7.5,",
+    5.1,5.1,5.1,5.1,5.1,7.2,7.2,7.2,7.2,7.2,3,3,3,3,3,5.4,5.4,5.4,5.4,5.4,7.5,7.5,7.5,7.5,7.5,
+    ",
     );
 }
 
 #[test]
 fn sp_transpose_csr_eltwise_csr_dense() {
+    env::set_var("SORT_TYPE", "SEQ_QSORT");
     let output = Command::new(EX_DIR.to_owned() + "sp_transpose_csr_eltwise_csr_dense").unwrap();
     compare_strings(
         &String::from_utf8_lossy(&output.stdout),

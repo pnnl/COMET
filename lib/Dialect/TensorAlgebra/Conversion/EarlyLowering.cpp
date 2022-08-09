@@ -1120,8 +1120,8 @@ namespace
             Value cst_index_2 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(2));
 
             /// For COO format, 2D and 3D are the same
-            // if dst format is in COO format,
-            if (dst_format.compare("COO") == 0 && src_format.compare("COO") == 0)
+            // if src format is in COO format,
+            if (src_format.compare("COO") == 0)
             {
               for (unsigned int i = 0; i < dst_rank; i++)
               {
@@ -1153,7 +1153,7 @@ namespace
             // For 2D, consider CSR
             else if (dst_rank == 2)
             {
-              if (dst_format.compare("CSR") == 0 && src_format.compare("CSR") == 0)
+              if (src_format.compare("CSR") == 0)
               {
                 comet_errs() << " 2D CSR transpose to 2D CSR\n";
                 array_sizes_vec.push_back(cst_index_1);
@@ -1168,11 +1168,11 @@ namespace
             // For 3D, consider CSF
             else if (dst_rank == 3)
             {
-              if (dst_format.compare("CSF") == 0 && src_format.compare("CSF") == 0)
+              if (src_format.compare("CSF") == 0)
               {
                 comet_errs() << " 3D CSF transpose to 3D CSF\n";
                 array_sizes_vec.push_back(cst_index_2);
-                mlir::Value src_nnz = src_input.getDefiningOp()->getOperand(6);
+                mlir::Value src_nnz = src_input.getDefiningOp()->getOperand(13);
                 mlir::Value src_nnz_add1 = rewriter.create<mlir::AddIOp>(loc, src_nnz, cst_index_1);
                 array_sizes_vec.push_back(src_nnz);
                 array_sizes_vec.push_back(src_nnz_add1);

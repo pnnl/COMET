@@ -231,6 +231,14 @@ name="transpose_coo_matrix"
 path="tests/ops/transpose_coo_matrix.rs"
 
 [[example]]
+name="transpose_coo_tensor"
+path="tests/ops/transpose_coo_tensor.rs"
+
+[[example]]
+name="transpose_csf_tensor"
+path="tests/ops/transpose_csf_tensor.rs"
+
+[[example]]
 name="transpose_csr_matrix"
 path="tests/ops/transpose_csr_matrix.rs"
 

@@ -189,7 +189,8 @@ namespace
         }
 
         ArrayAttr opFormatsArrayAttr = op.formats();
-        std::string formats_str(opFormatsArrayAttr[0].cast<mlir::StringAttr>().getValue());
+        std::string formats_strIn(opFormatsArrayAttr[0].cast<mlir::StringAttr>().getValue());
+        std::string formats_strOut(opFormatsArrayAttr[1].cast<mlir::StringAttr>().getValue());
         IntegerType i32Type = IntegerType::get(ctx, 32);
         IndexType indexType = IndexType::get(ctx);
         FloatType f64Type = FloatType::getF64(ctx);
@@ -266,8 +267,13 @@ namespace
         comet_vdump(sparse_tensor_desc);
 
         auto rank_size = (tensors[0].getDefiningOp()->getNumOperands() - 2) / 5;
+        // dim format of input tensor
         std::vector<Value>
-            dim_format = mlir::tensorAlgebra::getFormatsValueInt(formats_str, rank_size, rewriter, loc, i32Type);
+            dim_formatIn = mlir::tensorAlgebra::getFormatsValueInt(formats_strIn, rank_size, rewriter, loc, i32Type);
+
+        // dim format of output tensor
+        std::vector<Value>
+            dim_formatOut = mlir::tensorAlgebra::getFormatsValueInt(formats_strOut, rank_size, rewriter, loc, i32Type);
 
         if (rank_size == 2)
         { // 2D
@@ -284,10 +290,10 @@ namespace
           }
 
           rewriter.create<mlir::CallOp>(loc, print_transpose_2D_f64Str, SmallVector<Type, 2>{},
-                                        ValueRange{dim_format[0], dim_format[1], alloc_sizes_cast_vecs[0][0],
+                                        ValueRange{dim_formatIn[0], dim_formatIn[1], alloc_sizes_cast_vecs[0][0],
                                                    alloc_sizes_cast_vecs[0][1], alloc_sizes_cast_vecs[0][2],
                                                    alloc_sizes_cast_vecs[0][3], alloc_sizes_cast_vecs[0][4],
-                                                   dim_format[0], dim_format[1], alloc_sizes_cast_vecs[1][0],
+                                                   dim_formatOut[0], dim_formatOut[1], alloc_sizes_cast_vecs[1][0],
                                                    alloc_sizes_cast_vecs[1][1], alloc_sizes_cast_vecs[1][2],
                                                    alloc_sizes_cast_vecs[1][3], alloc_sizes_cast_vecs[1][4],
                                                    sparse_tensor_desc});
@@ -306,12 +312,12 @@ namespace
           }
 
           rewriter.create<mlir::CallOp>(loc, print_transpose_3D_f64Str, SmallVector<Type, 2>{},
-                                        ValueRange{input_perm_num, output_perm_num, dim_format[0], dim_format[1], dim_format[2],
+                                        ValueRange{input_perm_num, output_perm_num, dim_formatIn[0], dim_formatIn[1], dim_formatIn[2],
                                                    alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
                                                    alloc_sizes_cast_vecs[0][2], alloc_sizes_cast_vecs[0][3],
                                                    alloc_sizes_cast_vecs[0][4], alloc_sizes_cast_vecs[0][5],
-                                                   alloc_sizes_cast_vecs[0][6], dim_format[0], dim_format[1],
-                                                   dim_format[2], alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
+                                                   alloc_sizes_cast_vecs[0][6], dim_formatOut[0], dim_formatOut[1],
+                                                   dim_formatOut[2], alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
                                                    alloc_sizes_cast_vecs[1][2], alloc_sizes_cast_vecs[1][3],
                                                    alloc_sizes_cast_vecs[1][4], alloc_sizes_cast_vecs[1][5], alloc_sizes_cast_vecs[1][6],
                                                    sparse_tensor_desc});
