@@ -13,10 +13,22 @@ Next, tiling is employed to improve locality.
 
 In case of sparse tensors, COMET provides the option to use sorting and re-traversal of the input from transposed direction.
 When using the sorting option, multiple sorting algorithms such as quick sort, count sort, bucket sort, radix sort, mixed count-bucket sort, and mixed count-radix-bucket sort are available.
+User can select the sorting algorithm to use at runtime dictated by the environment variable ``SORT_TYPE`` (see table below). 
 In this case, the input tensor is converted to the coordinate (COO) format, the order of dimensions is then swapped to match the transposed order,
 and sorting is performed on each dimension in ascending order.
 The final step is the conversion to the target sparse format as desired by the user.
 
+.. csv-table:: Sorting options for the sparse transpose operation (selectable at runtime using ``SORT_TYPE``)
+   :header: "Value", "Description"
+   :widths: 6, 20
+
+   "NO_SORT", "re-traversal of the input tensor following the target permutation without sorting"
+   "SEQ_QSORT", "sequential version of quick sort with all dimensions sorted together"
+   "PAR_QSORT", "parallel version of quick sort with all dimensions sorted together"
+   "RADIX_BUCKET", "radix sort with each dimension sorted by bucket sort"
+   "COUNT_RADIX", "count sort with each dimension sorted by count sort"
+   "COUNT_QUICK", "count sort on the first dimension and quick sort on the remaining dimensions"
+   
 .. autosummary::
    :toctree: generated
 

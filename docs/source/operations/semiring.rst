@@ -70,6 +70,7 @@ The following is an example of monoid operation in COMET DSL:
    }
 
 The following is an example of semiring operation in Rust eDSL:
+
 .. highlight:: rust
 
 ::
