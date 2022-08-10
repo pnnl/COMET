@@ -26,7 +26,7 @@ The final step is the conversion to the target sparse format as desired by the u
    "SEQ_QSORT", "sequential version of quick sort with all dimensions sorted together"
    "PAR_QSORT", "parallel version of quick sort with all dimensions sorted together"
    "RADIX_BUCKET", "radix sort with each dimension sorted by bucket sort"
-   "COUNT_RADIX", "count sort with each dimension sorted by count sort"
+   "COUNT_RADIX", "radix sort with each dimension sorted by count sort"
    "COUNT_QUICK", "count sort on the first dimension and quick sort on the remaining dimensions"
    
 .. autosummary::
