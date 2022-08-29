@@ -165,7 +165,7 @@ namespace
     }
   }
 
-  void pureSparseMultSparseTensorOutputLowering(tensorAlgebra::OutputTensorDeclOp op,
+  void pureSparseMultSparseTensorOutputLowering(tensorAlgebra::SparseOutputTensorDeclOp op,
                                                 Location loc,
                                                 std::string sparseOutputFormat,
                                                 std::vector<Value> &dimSizes,
@@ -313,19 +313,47 @@ namespace
         }
       }
 
-      auto alloc_sizes1 = rewriter.create<memref::AllocOp>(loc, resultMemTy, ValueRange(cur_indices));
-      comet_errs() << " ";
-      comet_vdump(alloc_sizes1);
+      // auto alloc_sizes1 = rewriter.create<memref::AllocOp>(loc, resultMemTy, ValueRange(cur_indices));
+      // comet_errs() << " ";
+      // comet_vdump(alloc_sizes1);
 
-      alloc_sizes1.getOperation()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
+      // alloc_sizes1.getOperation()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
 
-      Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes1);
-      comet_errs() << " ";
+      // Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes1);
+      // comet_errs() << " ";
+      // comet_vdump(tensorLoad);
+
+      // op.replaceAllUsesWith(tensorLoad);
+      // rewriter.replaceOp(op, tensorLoad);
+
+      //Check if this tensor is explicitly initialized with ta.fill operation
+      bool is_filled = false;
+      for (auto u : op->getUsers())
+      {
+        if (isa<tensorAlgebra::TensorFillOp>(u) || isa<tensorAlgebra::TensorSetOp>(u))
+          is_filled = true;
+      }
+
+      comet_errs() << " AllocOp for initialization";
+      Value init_alloc;
+      if (is_filled)
+      {
+        //if is_filled is true, only allocate memory and let ta.fill initializes tensors
+        init_alloc = rewriter.create<memref::AllocOp>(loc, resultMemTy, ValueRange(cur_indices));
+      }
+      else
+      {
+        //if is_filled is false, allocate memory and initialize it
+        init_alloc = insertAllocAndInitialize(loc, resultMemTy, ValueRange(cur_indices), rewriter);
+      }
+      init_alloc.getDefiningOp()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
+
+      Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, init_alloc);
+      comet_errs() << " TensorLoad:";
       comet_vdump(tensorLoad);
 
       op.replaceAllUsesWith(tensorLoad);
       rewriter.replaceOp(op, tensorLoad);
-
       comet_errs() << "--------------DenseTensorDeclarationLowering in format end\n";
       return success();
     }
@@ -917,10 +945,10 @@ namespace
         // Is sparse output ,lower to ta.output_tensor_decl
         auto tensor_decl_value = cast<tensorAlgebra::SparseTensorDeclOp>(op);
         auto labels = tensor_decl_value.labels();
-        auto tensor_format = tensor_decl_value.format(); // ruiqin
+        auto tensor_format = tensor_decl_value.format(); 
         auto tensor_type = tensor_decl_value.getType();
 
-        mlir::Value outputtensordecl = rewriter.create<OutputTensorDeclOp>(loc,
+        mlir::Value outputtensordecl = rewriter.create<SparseOutputTensorDeclOp>(loc,
                                                                            tensor_type, labels, tensor_format);
         op.replaceAllUsesWith(outputtensordecl);
         rewriter.replaceOp(op, outputtensordecl);
@@ -937,20 +965,20 @@ namespace
     }
   };
 
-  struct SparseOutputTensorDeclOpLowering : public OpRewritePattern<tensorAlgebra::OutputTensorDeclOp>
+  struct SparseOutputTensorDeclOpLowering : public OpRewritePattern<tensorAlgebra::SparseOutputTensorDeclOp>
   {
-    using OpRewritePattern<tensorAlgebra::OutputTensorDeclOp>::OpRewritePattern;
+    using OpRewritePattern<tensorAlgebra::SparseOutputTensorDeclOp>::OpRewritePattern;
     /**
      * @brief :
      * Step 1: Get format and dims
      * Step 2: Emit alloc() instructions and ta.sptensor_construct operation.
-     * Step 3: Remove the OutputTensorDeclOp
+     * Step 3: Remove the SparseOutputTensorDeclOp
      */
-    LogicalResult matchAndRewrite(tensorAlgebra::OutputTensorDeclOp op,
+    LogicalResult matchAndRewrite(tensorAlgebra::SparseOutputTensorDeclOp op,
                                   PatternRewriter &rewriter) const final
     {
       // Sparse output tensor declaration happens after lowering to index tree dialect
-      assert(isa<tensorAlgebra::OutputTensorDeclOp>(op));
+      assert(isa<tensorAlgebra::SparseOutputTensorDeclOp>(op));
       comet_errs() << "SparseOutputTensorDeclOpLowering in format begin\n";
       comet_vdump(op);
 
@@ -1380,7 +1408,7 @@ namespace
       else
       { // format == "Dense"
 
-        auto tensor_decl_value = cast<tensorAlgebra::OutputTensorDeclOp>(op);
+        auto tensor_decl_value = cast<tensorAlgebra::SparseOutputTensorDeclOp>(op);
 
         // <?x32xf64>
         auto resultTensorType = op.getResult().getType();
@@ -1489,23 +1517,27 @@ void DenseTensorDeclLoweringPass::runOnFunction()
   auto function = getFunction();
 
   ConversionTarget target(getContext());
-  target.addLegalDialect<LinalgDialect, StandardOpsDialect, memref::MemRefDialect>();
+  target.addLegalDialect<LinalgDialect, scf::SCFDialect, 
+                        StandardOpsDialect, memref::MemRefDialect,
+                        ITDialect>();
+
+  target.addIllegalDialect<tensorAlgebra::TADialect>();
 
   target.addLegalOp<tensorAlgebra::TensorMultOp,
                     tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
-                    tensorAlgebra::DenseConstantOp,
+                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::TransposeOp,
+                    tensorAlgebra::TensorFillOp,
+                    tensorAlgebra::GetTimeOp,
+                    tensorAlgebra::PrintElapsedTimeOp,
                     tensorAlgebra::TensorSetOp,
                     tensorAlgebra::TensorElewsMultOp>();
-  target.addLegalOp<tensorAlgebra::OutputTensorDeclOp>();
 
-  target.addLegalOp<tensorAlgebra::IndexLabelDynamicOp, tensorAlgebra::TensorFillFromFileOp>();
-  target.addLegalOp<tensorAlgebra::IndexLabelOp, tensorAlgebra::LabeledTensorOp>();
-  target.addLegalOp<tensorAlgebra::SparseTensorConstructOp>();
-  target.addLegalOp<tensorAlgebra::SparseTensorDeclOp>();
-  target.addLegalOp<indexTree::IndexTreeOp>();
-  target.addLegalOp<indexTree::IndexTreeIndicesOp>();
-  target.addLegalOp<indexTree::IndexTreeComputeOp>();
+  target.addLegalOp<tensorAlgebra::SparseOutputTensorDeclOp,
+                    tensorAlgebra::IndexLabelDynamicOp,
+                    tensorAlgebra::IndexLabelOp,
+                    tensorAlgebra::SparseTensorConstructOp>();
 
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<DenseTensorDeclOpLowering>(&getContext());
@@ -1530,7 +1562,9 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
 {
   ConversionTarget target(getContext());
 
-  target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, mlir::memref::MemRefDialect>();
+  target.addLegalDialect<LinalgDialect, StandardOpsDialect, 
+                        scf::SCFDialect, AffineDialect, 
+                        mlir::memref::MemRefDialect>();
 
   target.addLegalOp<tensorAlgebra::SparseTensorConstructOp>();
   target.addLegalOp<tensorAlgebra::IndexLabelOp>();
@@ -1538,7 +1572,7 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
   target.addLegalOp<tensorAlgebra::TensorMultOp,
                     tensorAlgebra::TensorSetOp,
                     tensorAlgebra::TensorElewsMultOp>();
-  target.addLegalOp<tensorAlgebra::OutputTensorDeclOp>();
+  target.addLegalOp<tensorAlgebra::SparseOutputTensorDeclOp>();
   target.addLegalOp<tensorAlgebra::DenseTensorDeclOp>();
   target.addLegalOp<tensorAlgebra::IndexLabelDynamicOp>();
   target.addLegalOp<tensorAlgebra::TensorFillOp>();

@@ -100,12 +100,13 @@ namespace mlir
       return false;
     }
 
+    //TODO(gkestor): review the use of this code
     /// Insert an allocation and deallocation for the given MemRefType.
     Value insertAllocAndDealloc(MemRefType memtype, Location loc,
                                 PatternRewriter &rewriter)
     {
-      // AllocOp is defined in Standard Dialect
-      auto alloc = rewriter.create<memref::AllocOp>(loc, memtype, rewriter.getI64IntegerAttr(32)); // Ruiqin
+      // AllocOp is defined in memref Dialect
+      auto alloc = rewriter.create<memref::AllocOp>(loc, memtype, rewriter.getI64IntegerAttr(32));
 
       // Make sure to allocate at the beginning of the block.
       auto *parentBlock = alloc.getOperation()->getBlock();
@@ -121,24 +122,34 @@ namespace mlir
     {
       // Memory allocation and initialization
       Value alloc_op = rewriter.create<memref::AllocOp>(loc, memtype, allocValueRange);
+      comet_errs() << "Alloc Op for initialization: ";
+      comet_vdump(alloc_op);
       auto elementType = memtype.getElementType();
 
       Value cst_init;
       if (elementType.isF64())
       {
+        comet_errs() << "Element type F64\n";
         cst_init = rewriter.create<ConstantOp>(loc, rewriter.getF64FloatAttr(0.0));
       }
       else if (elementType.isF32())
       {
+        comet_errs() << "Element type F32\n";
         cst_init = rewriter.create<ConstantOp>(loc, rewriter.getF32FloatAttr(0.0));
       }
       else if (elementType.isIndex())
       {
+        comet_errs() << "Element type Index\n";
         cst_init = rewriter.create<ConstantIndexOp>(loc, 0);
+      }
+        else if (elementType.isInteger(1))
+      {
+        comet_errs() << "Element type I1 - boolean\n";
+        cst_init = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
       }
       else
       {
-        llvm::errs() << "Not supported memory reference type. It should be either F64 or Index \n";
+        llvm::errs() << __FILE__ << " " << __LINE__ << "Not supported memory reference type. Supported element Types are F32, F64, Index \n";
       }
 
       auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
@@ -161,6 +172,7 @@ namespace mlir
       return alloc_op;
     }
 
+    // TODO(gkestor): review this code
     void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter)
     {
       auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
