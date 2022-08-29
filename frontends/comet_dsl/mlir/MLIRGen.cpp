@@ -1528,7 +1528,7 @@ namespace
       auto tensor_type = getTensorType(vartype);
       auto name = tensordecl.getName();
 
-      mlir::Value value = builder.create<OutputTensorDeclOp>(loc(tensordecl.loc()),
+      mlir::Value value = builder.create<SparseOutputTensorDeclOp>(loc(tensordecl.loc()),
                                                              tensor_type, labels, tensor_format);
       comet_vdump(value);
 

@@ -146,7 +146,6 @@ def TensorDeclOp : TA_Op<"tensor_decl", [NoSideEffect]> {
   }];
 
   // The constant operation takes an attribute as the only input.
-  // let arguments = (ins Variadic<Range>:$labels);
   let arguments = (ins Variadic<Range>:$labels, StrAttr:$format);
 
   // The constant operation returns a single value of TensorType.
@@ -156,7 +155,7 @@ def TensorDeclOp : TA_Op<"tensor_decl", [NoSideEffect]> {
   let verifier = ?;
 }
 
-def OutputTensorDeclOp : TA_Op<"sparse_output_tensor_decl", [NoSideEffect]> {
+def SparseOutputTensorDeclOp : TA_Op<"sparse_output_tensor_decl", [NoSideEffect]> {
   // Provide a summary and description for this operation. This can be used to
   // auto-generate documenatation of the operations within our dialect.
   let summary = "Create an output tensor declaration";

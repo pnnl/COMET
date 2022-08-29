@@ -92,7 +92,7 @@ Type mlir::tensorAlgebra::TADialect::parseType(DialectAsmParser &parser) const
         return nullptr;
 
       // Check that the type is either a TensorType or another StructType.
-      if (!elementType.isa<mlir::TensorType>() && !elementType.isa<SparseTensorType>())
+      if (!elementType.isa<mlir::TensorType, SparseTensorType, IndexType>())
       {
         parser.emitError(typeLoc, "element type for a struct must either "
                                   "be a TensorType or a StructType, got: ")

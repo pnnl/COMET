@@ -1619,7 +1619,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         comet_errs() << " tensors_lhs_Allocs.size(): " << tensors_lhs_Allocs.size() << "\n";
         if (allValueAccessIdx[lhs_loc].size() > 0)
         {
-          comet_errs() << " ";
+          //TODO(gkestor): review this code
+          //llvm::errs() << "This part shouldn't be here\n";          comet_errs() << " ";
           // initialization here of w_already_set, w, and w_index_list.
           rewriter.create<memref::StoreOp>(loc, const_f64_0, tensors_lhs_Allocs[0][0], allValueAccessIdx[lhs_loc]);
           comet_errs() << " ";
