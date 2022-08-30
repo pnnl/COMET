@@ -73,11 +73,15 @@ using StringSet = std::set<std::string>;
 // #endif
 
 #ifdef DEBUG_MODE_MLIRGEN
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -135,7 +139,7 @@ namespace
     default:
       llvm::errs() << "[ERR] Semiring operator number not defined \n";
     }
-    comet_errs() << " Semiring op name: " << opName << "\n";
+    comet_debug() << " Semiring op name: " << opName << "\n";
     return opName;
   };
 
@@ -300,7 +304,7 @@ namespace
     mlir::Value mlirGen(BinaryExprAST &binop,
                         const std::set<std::string> &out_lbls = {})
     {
-      comet_errs() << "\n"
+      comet_debug() << "\n"
                    << __LINE__ << " mlirGen for  BinaryExprAST \n";
       // First emit the operations for each side of the operation before emitting
       // the operation itself. For example if the expression is `a + foo(a)`
@@ -320,7 +324,7 @@ namespace
 
       if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor)
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " lhsAST is Expr_LabeledTensor \n";
         auto lblsVec = cast<LabeledTensorExprAST>(lhsAST)->getLabelNames();
         for (const auto &lbl : lblsVec)
@@ -330,10 +334,10 @@ namespace
       }
       else if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_BinOp)
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " lhsAST is Expr_BinOp \n";
         auto lblsSet = cast<BinaryExprAST>(lhsAST)->getLabels();
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " lhsAST.getOp(): " << cast<BinaryExprAST>(lhsAST)->getOp() << "\n";
 
         for (const auto &lbl : lblsSet)
@@ -343,18 +347,18 @@ namespace
       }
       else if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_Call)
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " lhsAST is Expr_Call  \n";
       }
       else
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " lhsAST is not Expr_BinOp/Expr_LabeledTensor/CallExprAST  \n";
       }
 
       if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor)
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " rhsAST is Expr_LabeledTensor \n";
         auto lblsVec = cast<LabeledTensorExprAST>(rhsAST)->getLabelNames();
         for (const auto &lbl : lblsVec)
@@ -364,10 +368,10 @@ namespace
       }
       else if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_BinOp)
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " rhsAST is Expr_BinOp \n";
         auto lblsSet = cast<BinaryExprAST>(rhsAST)->getLabels();
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " rhsAST.getOp(): " << cast<BinaryExprAST>(rhsAST)->getOp() << "\n";
 
         for (const auto &lbl : lblsSet)
@@ -377,12 +381,12 @@ namespace
       }
       else if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Transpose)
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " rhsAST is Expr_Transpose  \n";
       }
       else
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " rhsAST is not Expr_BinOp/Expr_LabeledTensor/CallExprAST/TransposeExprAST  \n";
       }
 
@@ -396,13 +400,13 @@ namespace
 
       comet_vdump(lhs);
       comet_vdump(rhs);
-      comet_errs() << " " << lhsAST->getKind() << " " << rhsAST->getKind();
+      comet_debug() << " " << lhsAST->getKind() << " " << rhsAST->getKind();
 
       int op = 0;
       if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var &&
           rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var)
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " rhsAST and lhsAST are all Expr_Var\n";
 
         switch (binop.getOp())
@@ -420,14 +424,14 @@ namespace
           op = '/';
           break;
         default:
-          comet_errs() << "ERROR: unsupported operator type: ASCII Code(" << binop.getOp() << ")\n";
+          comet_debug() << "ERROR: unsupported operator type: ASCII Code(" << binop.getOp() << ")\n";
         }
         mlir::IntegerAttr opAttr = builder.getI32IntegerAttr(op);
         return builder.create<ScalarOp>(location, builder.getF64Type(), rhs, lhs, opAttr);
       }
       else if (isa<DenseConstantOp>(lhs.getDefiningOp()))
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " lhs is DenseConstantOp\n";
         switch (binop.getOp())
         {
@@ -443,7 +447,7 @@ namespace
       }
       else if (isa<DenseConstantOp>(rhs.getDefiningOp()))
       {
-        comet_errs() << "\n"
+        comet_debug() << "\n"
                      << __LINE__ << " rhs is DenseConstantOp\n";
         switch (binop.getOp())
         {
@@ -459,13 +463,13 @@ namespace
       }
       else
       {
-        comet_errs() << " lhs or rhs are binaryop\n";
+        comet_debug() << " lhs or rhs are binaryop\n";
         // lhs && rhs are binaryop
         std::set<mlir::Operation *> summed_labels;
 
         if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_BinOp)
         {
-          comet_errs() << " lhs is binaryop\n";
+          comet_debug() << " lhs is binaryop\n";
           auto lhsOp = lhs.getDefiningOp();
 
           comet_pdump(lhsOp);
@@ -484,12 +488,12 @@ namespace
         }
         else
         {
-          comet_errs() << " lhs is not binaryop\n";
+          comet_debug() << " lhs is not binaryop\n";
         }
 
         if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_BinOp)
         {
-          comet_errs() << " rhs is binaryop\n";
+          comet_debug() << " rhs is binaryop\n";
           auto rhsOp = rhs.getDefiningOp();
 
           comet_pdump(rhsOp);
@@ -507,32 +511,32 @@ namespace
           }
           else if (isa<TransposeOp>(rhsOp))
           { // * transpose(A[i,j])
-            comet_errs() << " "
+            comet_debug() << " "
                          << "\n";
           }
         }
         else
         {
-          comet_errs() << " rhs is not binaryop\n";
+          comet_debug() << " rhs is not binaryop\n";
         }
 
         auto in_labels = binop.getLabels();
-        comet_errs() << __LINE__ << " in_labels: ";
+        comet_debug() << __LINE__ << " in_labels: ";
         for (auto n : in_labels)
         {
-          comet_errs() << n << " ";
+          comet_debug() << n << " ";
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
 
         std::vector<std::string> sum_labels;
         std::set_difference(in_labels.begin(), in_labels.end(), out_lbls.begin(),
                             out_lbls.end(), std::back_inserter(sum_labels));
-        comet_errs() << __LINE__ << " sum_labels: ";
+        comet_debug() << __LINE__ << " sum_labels: ";
         for (auto n : sum_labels)
         {
-          comet_errs() << n << " ";
+          comet_debug() << n << " ";
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
 
         std::vector<mlir::Value> lbls;
         for (const auto &lbl_str : sum_labels)
@@ -573,12 +577,12 @@ namespace
         std::set_difference(in_labels.begin(), in_labels.end(),
                             sum_lbls_set.begin(), sum_lbls_set.end(),
                             std::back_inserter(result_lbls));
-        comet_errs() << __LINE__ << " result_lbls: ";
+        comet_debug() << __LINE__ << " result_lbls: ";
         for (auto n : result_lbls)
         {
-          comet_errs() << n << " ";
+          comet_debug() << n << " ";
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
 
         auto lhs_tensor = lhs.getDefiningOp()->getOpResult(0).getType();
         assert(lhs_tensor.isa<mlir::TensorType>());
@@ -599,10 +603,10 @@ namespace
         comet_vdump(rhs_labeledtensor);
         auto rhs_el_type = rhs_tensor.cast<mlir::TensorType>().getElementType();
         auto result_type = getBinOpResultType(lhs_el_type, rhs_el_type);
-        comet_errs() << __LINE__ << " ";
+        comet_debug() << __LINE__ << " ";
         comet_vdump(result_type);
 
-        comet_errs() << __LINE__ << " binop.getOp(): " << binop.getOp() << "\n";
+        comet_debug() << __LINE__ << " binop.getOp(): " << binop.getOp() << "\n";
 
         std::map<int, mlir::Value> lblsValue_map;
         std::vector<mlir::Value> lhs_lbls_value;
@@ -710,7 +714,7 @@ namespace
             all_lbls_value.push_back(m);
           }
         }
-        comet_errs() << " " << all_lbls_value.size() << "\n";
+        comet_debug() << " " << all_lbls_value.size() << "\n";
 
         std::vector<int> lhs_lbls;
         std::vector<int> rhs_lbls;
@@ -729,18 +733,18 @@ namespace
           }
         }
 
-        comet_errs() << " print lhs_lbls\n";
+        comet_debug() << " print lhs_lbls\n";
         for (auto n : lhs_lbls)
         {
-          comet_errs() << n << " ";
+          comet_debug() << n << " ";
         }
-        comet_errs() << "\n";
-        comet_errs() << " print rhs_lbls\n";
+        comet_debug() << "\n";
+        comet_debug() << " print rhs_lbls\n";
         for (auto n : rhs_lbls)
         {
-          comet_errs() << n << " ";
+          comet_debug() << n << " ";
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
 
         std::vector<int> sum_lbls;
         std::set_intersection(lhs_lbls.begin(), lhs_lbls.end(), rhs_lbls.begin(), rhs_lbls.end(), std::back_inserter(sum_lbls));
@@ -755,12 +759,12 @@ namespace
         {
           std::copy(lhs_lbls.begin(), lhs_lbls.end(), std::back_inserter(ret_lbls));
         }
-        comet_errs() << " print ret_lbls\n";
+        comet_debug() << " print ret_lbls\n";
         for (auto n : ret_lbls)
         {
-          comet_errs() << n << " ";
+          comet_debug() << n << " ";
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
 
         std::map<int, mlir::AffineExpr> expr_map;
         unsigned dim = 0;
@@ -812,129 +816,129 @@ namespace
         {
           if (isa<DenseTensorDeclOp>(e.getDefiningOp()))
           {
-            comet_errs() << " is TensorDeclOp\n";
+            comet_debug() << " is TensorDeclOp\n";
             // infer the format
             auto lhs_format = dyn_cast<DenseTensorDeclOp>(e.getDefiningOp()).format();
-            comet_errs() << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
 
             tensors.push_back(dyn_cast<DenseTensorDeclOp>(e.getDefiningOp()));
           }
           else if (isa<SparseTensorDeclOp>(e.getDefiningOp()))
           {
-            comet_errs() << " is TensorDeclOp\n";
+            comet_debug() << " is TensorDeclOp\n";
             // infer the format
             auto lhs_format = dyn_cast<SparseTensorDeclOp>(e.getDefiningOp()).format();
-            comet_errs() << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
 
             tensors.push_back(dyn_cast<SparseTensorDeclOp>(e.getDefiningOp()));
           }
           else if (isa<LabeledTensorOp>(e.getDefiningOp()))
           {
-            comet_errs() << " is LabeledTensorOp\n";
+            comet_debug() << " is LabeledTensorOp\n";
             mlir::Value tensordecl = e.getDefiningOp()->getOperand(0);
             if (isa<DenseTensorDeclOp>(tensordecl.getDefiningOp()))
             {
-              comet_errs() << " is TensorDeclOp\n";
+              comet_debug() << " is TensorDeclOp\n";
               // infer the format
               auto lhs_format = dyn_cast<DenseTensorDeclOp>(tensordecl.getDefiningOp()).format();
-              comet_errs() << " lhs_format: " << lhs_format << "\n";
+              comet_debug() << " lhs_format: " << lhs_format << "\n";
               formats.push_back(lhs_format);
 
               tensors.push_back(dyn_cast<DenseTensorDeclOp>(tensordecl.getDefiningOp()));
             }
             else if (isa<SparseTensorDeclOp>(tensordecl.getDefiningOp()))
             {
-              comet_errs() << " is TensorDeclOp\n";
+              comet_debug() << " is TensorDeclOp\n";
               // infer the format
               auto lhs_format = dyn_cast<SparseTensorDeclOp>(tensordecl.getDefiningOp()).format();
-              comet_errs() << " lhs_format: " << lhs_format << "\n";
+              comet_debug() << " lhs_format: " << lhs_format << "\n";
               formats.push_back(lhs_format);
 
               tensors.push_back(dyn_cast<SparseTensorDeclOp>(tensordecl.getDefiningOp()));
             }
             else if (isa<TensorMultOp>(tensordecl.getDefiningOp()))
             {
-              comet_errs() << " is TensorMultOp\n";
+              comet_debug() << " is TensorMultOp\n";
               // infer the format
               mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorMultOp>(tensordecl.getDefiningOp()).formats();
               unsigned int i = opFormatsArrayAttr.size() - 1;
               std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-              comet_errs() << __LINE__ << " lhs_format: " << lhs_format << "\n";
+              comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
-              comet_errs() << " lhs_format: " << lhs_format << "\n";
+              comet_debug() << " lhs_format: " << lhs_format << "\n";
               formats.push_back(lhs_format);
 
               tensors.push_back(dyn_cast<TensorMultOp>(tensordecl.getDefiningOp()).getOperation()->getResult(0));
             }
             else if (isa<TensorElewsMultOp>(e.getDefiningOp()))
             {
-              comet_errs() << " is TensorMultOp\n";
+              comet_debug() << " is TensorMultOp\n";
 
               // infer the format
               mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).formats();
               unsigned int i = opFormatsArrayAttr.size() - 1;
               std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-              comet_errs() << __LINE__ << " lhs_format: " << lhs_format << "\n";
+              comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
-              comet_errs() << " lhs_format: " << lhs_format << "\n";
+              comet_debug() << " lhs_format: " << lhs_format << "\n";
               formats.push_back(lhs_format);
               tensors.push_back(dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getOperation()->getResult(0));
             }
             else
             {
-              comet_errs() << " not DenseTensorDecl op, not SparseTensorDecl op, not TensorMultOp, not TensorElewsMultOp\n";
+              comet_debug() << " not DenseTensorDecl op, not SparseTensorDecl op, not TensorMultOp, not TensorElewsMultOp\n";
             }
           }
           else if (isa<TensorMultOp>(e.getDefiningOp()))
           {
-            comet_errs() << " is TensorMultOp\n";
+            comet_debug() << " is TensorMultOp\n";
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorMultOp>(e.getDefiningOp()).formats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
             std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-            comet_errs() << __LINE__ << " lhs_format: " << lhs_format << "\n";
-            comet_errs() << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
 
             tensors.push_back(dyn_cast<TensorMultOp>(e.getDefiningOp()).getOperation()->getResult(0));
           }
           else if (isa<TensorElewsMultOp>(e.getDefiningOp()))
           {
-            comet_errs() << " is TensorMultOp\n";
+            comet_debug() << " is TensorMultOp\n";
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).formats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
             std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-            comet_errs() << __LINE__ << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
-            comet_errs() << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
 
             tensors.push_back(dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getOperation()->getResult(0));
           }
           else if (isa<TransposeOp>(e.getDefiningOp()))
           {
-            comet_errs() << " is TensorMultOp\n";
+            comet_debug() << " is TensorMultOp\n";
 
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TransposeOp>(e.getDefiningOp()).formats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
             std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-            comet_errs() << __LINE__ << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
-            comet_errs() << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
 
             tensors.push_back(dyn_cast<TransposeOp>(e.getDefiningOp()).getOperation()->getResult(0));
           }
           else
           {
-            comet_errs() << " not DenseTensorDecl op, not SparseTensorDecl op, not LabeledTensorOp, not TensorMultOp, not TensorElewsMultOp\n";
+            comet_debug() << " not DenseTensorDecl op, not SparseTensorDecl op, not LabeledTensorOp, not TensorMultOp, not TensorElewsMultOp\n";
           }
         }
-        comet_errs() << __LINE__ << " formats.size(): " << formats.size() << "\n";
+        comet_debug() << __LINE__ << " formats.size(): " << formats.size() << "\n";
         assert(formats.size() == 2 && " less than 2 input tensors\n");
         if (formats[0].compare("CSR") == 0 && formats[1].compare("CSR") == 0)
         {
@@ -944,7 +948,7 @@ namespace
         {
           formats.push_back("Dense");
         }
-        comet_errs() << " formats.size(): " << formats.size() << "\n";
+        comet_debug() << " formats.size(): " << formats.size() << "\n";
         auto strAttr = builder.getStrArrayAttr(formats);
 
         assert(tensors.size() == 2 && " less than 2 input tensors for ta.tc or ta.elews_mul\n");
@@ -966,10 +970,10 @@ namespace
           }
 
           comet_vdump(lhs_tensor);
-          comet_errs() << "\n";
+          comet_debug() << "\n";
 
           comet_vdump(rhs_tensor);
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto SemiringAttr = builder.getStringAttr("plus_times"); // this is for standard matrix multiplication
           mlir::Value tcop = builder.create<TensorMultOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                                           labels, affineMapArrayAttr, strAttr, SemiringAttr);
@@ -989,10 +993,10 @@ namespace
             labels.push_back(all_lbls_value[i]);
           }
           comet_vdump(lhs_tensor);
-          comet_errs() << "\n";
+          comet_debug() << "\n";
 
           comet_vdump(rhs_tensor);
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto SemiringAttr = builder.getStringAttr("noop_times"); // this is for standard element-wise multiplication
           mlir::Value tcop = builder.create<TensorElewsMultOp>(location, ret_tensor_type, tensors[0], tensors[1], labels,
                                                                affineMapArrayAttr, strAttr, SemiringAttr);
@@ -1040,7 +1044,7 @@ namespace
 
     mlir::Value mlirGen(LiteralExprAST &lit)
     {
-      comet_errs() << __FILE__ << " " << __LINE__ << " mlirGen for LiteralExprAST.\n";
+      comet_debug() << __FILE__ << " " << __LINE__ << " mlirGen for LiteralExprAST.\n";
 
       auto type = getType(lit.getDims());
 
@@ -1105,19 +1109,19 @@ namespace
           auto *rhsLT = llvm::cast<LabeledTensorExprAST>(expr);
           auto name = rhsLT->getTensorName();
           mlir::Value tensorValue = symbolTable.lookup(name);
-          comet_errs() << " generate ta.sum op\n";
+          comet_debug() << " generate ta.sum op\n";
           sumVal = builder.create<SUMOp>(location, builder.getF64Type(), tensorValue);
         }
 
         // Case 2: SUM(A[i,j]*B[j,k])
         if (llvm::isa<BinaryExprAST>(expr))
         {
-          comet_errs() << " SUM parameter is a BinaryExprAST, Generate ta.SUM() \n";
+          comet_debug() << " SUM parameter is a BinaryExprAST, Generate ta.SUM() \n";
           // Generate ta.SUM
           // parse binary
           std::set<std::string> out_lbls = {};
           mlir::Value tensorValue = mlirGen(*expr, out_lbls);
-          comet_errs() << " generate ta.sum op\n";
+          comet_debug() << " generate ta.sum op\n";
           sumVal = builder.create<SUMOp>(location, builder.getF64Type(), tensorValue);
         }
       }
@@ -1151,35 +1155,35 @@ namespace
     /// D[a, d] = ....
     mlir::Value mlirGen(TensorOpExprAST &tensor_op)
     {
-      comet_errs() << " mlirGen TensorOpExprAST\n";
+      comet_debug() << " mlirGen TensorOpExprAST\n";
       auto lhs = mlirGen(*tensor_op.getLHS());
       if (!lhs)
         return nullptr;
-      comet_errs() << " get lhs\n";
+      comet_debug() << " get lhs\n";
 
       if (!isa<LabeledTensorOp>(lhs.getDefiningOp()))
       {
         emitError(loc(tensor_op.loc()),
                   "error: labeled tensor expression required '");
       }
-      comet_errs() << " lhs is LabeledTensorOp \n";
+      comet_debug() << " lhs is LabeledTensorOp \n";
 
       auto out_lbls_vec =
           cast<tensorAlgebra::LabeledTensorExprAST>(*tensor_op.getLHS())
               .getLabelNames();
       std::set<std::string> out_labels(out_lbls_vec.begin(), out_lbls_vec.end());
 
-      comet_errs() << " out_labels: ";
+      comet_debug() << " out_labels: ";
       for (auto n : out_labels)
       {
-        comet_errs() << n << " ";
+        comet_debug() << n << " ";
       }
-      comet_errs() << "\n";
+      comet_debug() << "\n";
 
       auto rhs = mlirGen(*tensor_op.getRHS(), out_labels);
       if (!rhs)
         return nullptr;
-      comet_errs() << " get rhs\n";
+      comet_debug() << " get rhs\n";
 
       auto tens_beta = tensor_op.getBeta();
 
@@ -1192,7 +1196,7 @@ namespace
     /// Emit a tensor expression
     mlir::Value mlirGen(LabeledTensorExprAST &lbl_tensor)
     {
-      comet_errs() << " mlirGen LabeledTensorExprAST \n";
+      comet_debug() << " mlirGen LabeledTensorExprAST \n";
       auto tensor_name = lbl_tensor.getTensorName();
       auto label_names = lbl_tensor.getLabelNames();
 
@@ -1262,7 +1266,7 @@ namespace
     mlir::Value mlirGen(ExprAST &expr,
                         const std::set<std::string> out_lbls = {})
     {
-      comet_errs() << " mlirGen ExprAST " << expr.getKind() << " \n";
+      comet_debug() << " mlirGen ExprAST " << expr.getKind() << " \n";
       switch (expr.getKind())
       {
       case tensorAlgebra::ExprAST::Expr_BinOp:
@@ -1278,10 +1282,10 @@ namespace
       case tensorAlgebra::ExprAST::Expr_Num:
         return mlirGen(cast<NumberExprAST>(expr));
       case tensorAlgebra::ExprAST::Expr_LabeledTensor:
-        comet_errs() << " Is Expr_LabeledTensor\n";
+        comet_debug() << " Is Expr_LabeledTensor\n";
         return mlirGen(cast<LabeledTensorExprAST>(expr));
       case tensorAlgebra::ExprAST::Expr_Tensor:
-        comet_errs() << " Is Expr_Tensor\n";
+        comet_debug() << " Is Expr_Tensor\n";
         return mlirGen(cast<TensorOpExprAST>(expr));
       case tensorAlgebra::ExprAST::Expr_GetTime:
         return mlirGen(cast<GetTimeExprAST>(expr));
@@ -1470,7 +1474,7 @@ namespace
     /// Handle tensor declaration
     mlir::Value mlirGen(OutputTensorDeclExprAST &tensordecl)
     {
-      comet_errs() << "OutputTensorDeclExprAST \n";
+      comet_debug() << "OutputTensorDeclExprAST \n";
 
       auto dim_lbls = tensordecl.getDims();
       std::vector<int64_t> dims_sizes;
@@ -1540,7 +1544,7 @@ namespace
     // Handle B[j, i] = tranpose(A[i,j], {j, i}) in DSL
     mlir::Value mlirGen(TransposeExprAST &transpose, LabeledTensorExprAST &lhsLT)
     {
-      comet_errs() << "TransposeExprAST \n";
+      comet_debug() << "TransposeExprAST \n";
 
       mlir::Value rhs_tensor = symbolTable.lookup(transpose.getName());
 
@@ -1585,23 +1589,23 @@ namespace
       // Firstly, Look at the rhs
       if (isa<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()))
       {
-        comet_errs() << " is TensorDeclOp\n";
+        comet_debug() << " is TensorDeclOp\n";
         // infer the format
         auto rhs_format = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
-        comet_errs() << " rhs_format: " << rhs_format << "\n";
+        comet_debug() << " rhs_format: " << rhs_format << "\n";
         formats.push_back(rhs_format);
       }
       else if (isa<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()))
       {
-        comet_errs() << " is TensorDeclOp\n";
+        comet_debug() << " is TensorDeclOp\n";
         // infer the format
         auto rhs_format = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
-        comet_errs() << " rhs_format: " << rhs_format << "\n";
+        comet_debug() << " rhs_format: " << rhs_format << "\n";
         formats.push_back(rhs_format);
       }
       else
       {
-        comet_errs() << " not TensorDeclOp\n";
+        comet_debug() << " not TensorDeclOp\n";
       }
 
       // Secondly, Look at the lhs
@@ -1616,10 +1620,10 @@ namespace
           // comet_pdump(lhsLT_op.getDefiningOp());
           if (isa<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()))
           {
-            comet_errs() << " is TensorDeclOp\n";
+            comet_debug() << " is TensorDeclOp\n";
             // infer the format
             auto lhs_format = dyn_cast<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()).format();
-            comet_errs() << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
 
             for (unsigned int i = 0; i < lhsLT_op.getDefiningOp()->getNumOperands(); i++)
@@ -1629,10 +1633,10 @@ namespace
           }
           else if (isa<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()))
           {
-            comet_errs() << " is TensorDeclOp\n";
+            comet_debug() << " is TensorDeclOp\n";
             // infer the format
             auto lhs_format = dyn_cast<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()).format();
-            comet_errs() << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
             for (unsigned int i = 0; i < lhsLT_op.getDefiningOp()->getNumOperands(); i++)
             {
@@ -1641,17 +1645,17 @@ namespace
           }
           else
           {
-            comet_errs() << " not TensorDeclOp\n";
+            comet_debug() << " not TensorDeclOp\n";
           }
         }
       }
-      comet_errs() << " formats.size(): " << formats.size() << "\n";
+      comet_debug() << " formats.size(): " << formats.size() << "\n";
       auto strAttr = builder.getStrArrayAttr(formats);
 
       // auto rhs_tensor = symbolTable.lookup(rhsLT->getTensorName());
       auto lhs_tensor = symbolTable.lookup(lhsLT.getTensorName());
 
-      comet_errs() << " create TransposeOp\n";
+      comet_debug() << " create TransposeOp\n";
       mlir::Value t = builder.create<TransposeOp>(loc(transpose.loc()), lhs_tensor.getType(),
                                                   rhs_tensor, lhs_lbls_value, affineMapArrayAttr, strAttr);
       builder.create<TensorSetOp>(loc(transpose.loc()), t.getDefiningOp()->getResult(0), lhs_tensor);
@@ -1727,14 +1731,14 @@ namespace
 
         if (auto *tensor_op = dyn_cast<TensorOpExprAST>(expr.get()))
         {
-          comet_errs() << " generate ops for TensorOpExprAST\n";
-          comet_errs() << " Right hand side " << tensor_op->getRHS()->getKind() << "\n";
-          comet_errs() << " Left hand side " << tensor_op->getLHS()->getKind() << "\n";
+          comet_debug() << " generate ops for TensorOpExprAST\n";
+          comet_debug() << " Right hand side " << tensor_op->getRHS()->getKind() << "\n";
+          comet_debug() << " Left hand side " << tensor_op->getLHS()->getKind() << "\n";
           /// A[i,j] = ...
           if (tensor_op->getLHS()->getKind() ==
               ExprAST::ExprASTKind::Expr_LabeledTensor)
           {
-            comet_errs() << " in TensorOpExprAST, lhs is labeledTensor\n";
+            comet_debug() << " in TensorOpExprAST, lhs is labeledTensor\n";
 
             /// A[i,j] = B[i,k] * C[k,j]
             if (tensor_op->getRHS()->getKind() ==
@@ -1746,7 +1750,7 @@ namespace
                         ->getRHS()
                         ->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor)
             {
-              comet_errs() << __LINE__ << "  in TensorOpExprAST, rhs is BinaryExprAST and its lhs and rhs are Expr_LabeledTensor\n";
+              comet_debug() << __LINE__ << "  in TensorOpExprAST, rhs is BinaryExprAST and its lhs and rhs are Expr_LabeledTensor\n";
 
               if (mlir::failed(mlirGenTensorContraction(*tensor_op)))
                 return mlir::success();
@@ -1756,7 +1760,7 @@ namespace
             else if (tensor_op->getRHS()->getKind() ==
                      ExprAST::ExprASTKind::Expr_Num)
             {
-              comet_errs() << __LINE__ << "  in TensorOpExprAST, rhs is Expr_Num\n";
+              comet_debug() << __LINE__ << "  in TensorOpExprAST, rhs is Expr_Num\n";
 
               auto tensor_name =
                   llvm::cast<LabeledTensorExprAST>(tensor_op->getLHS())
@@ -1772,7 +1776,7 @@ namespace
             /// A[i,j] = read_from_file()
             else if (tensor_op->getRHS()->getKind() == ExprAST::ExprASTKind::Expr_Call)
             {
-              comet_errs() << __LINE__ << "  in TensorOpExprAST, rhs is Expr_Call\n";
+              comet_debug() << __LINE__ << "  in TensorOpExprAST, rhs is Expr_Call\n";
               auto tensor_name =
                   llvm::cast<LabeledTensorExprAST>(tensor_op->getLHS())
                       ->getTensorName();
@@ -1783,47 +1787,47 @@ namespace
               // straightforward emission.
               if (callee == "read_from_file")
               {
-                comet_errs() << " call read_from_file \n";
+                comet_debug() << " call read_from_file \n";
 
                 ExprAST *filenames = call->getArgs();
-                comet_errs() << "\n";
+                comet_debug() << "\n";
                 std::string filenamestring;
                 llvm::StringRef filenamestr;
                 if (filenames == nullptr)
                 {
-                  comet_errs() << __LINE__ << " Empty filename\n";
+                  comet_debug() << __LINE__ << " Empty filename\n";
                   filenamestring = "SPARSE_FILE_NAME";
                   filenamestr = filenamestring;
                 }
                 else
                 { // Not empty filename
-                  comet_errs() << __LINE__ << " An argument was provided in read_from_file().\n";
+                  comet_debug() << __LINE__ << " An argument was provided in read_from_file().\n";
 
                   // User will provide num arg in read_from_file()
                   // that will be used to read file based on unique env vars.
                   // e.g., read_from_file(0) --> SPARSE_FILE_NAME0
                   if (filenames->getKind() == NumberExprAST::Expr_Num)
                   {
-                    comet_errs() << __LINE__ << "\n";
+                    comet_debug() << __LINE__ << "\n";
                     auto *filenameast = llvm::cast<NumberExprAST>(filenames);
-                    comet_errs() << __LINE__ << "\n";
+                    comet_debug() << __LINE__ << "\n";
 
                     // get arg val
                     int val = (int)cast<NumberExprAST>(filenameast)->getValue();
                     filenamestring = "SPARSE_FILE_NAME" + std::to_string(val);
                     filenamestr = filenamestring;
 
-                    comet_errs() << " " << filenamestr << "\n";
+                    comet_debug() << " " << filenamestr << "\n";
                   }
 
                   if (filenames->getKind() == ExprAST::ExprASTKind::Expr_Var)
                   {
-                    comet_errs() << __LINE__ << "\n";
+                    comet_debug() << __LINE__ << "\n";
                     auto *filenameast = llvm::cast<VariableExprAST>(filenames);
-                    comet_errs() << __LINE__ << "\n";
+                    comet_debug() << __LINE__ << "\n";
 
                     filenamestr = filenameast->getName();
-                    comet_errs() << " " << filenamestr << "\n";
+                    comet_debug() << " " << filenamestr << "\n";
                   }
                 }
 
@@ -1832,7 +1836,7 @@ namespace
               }
               if (callee == "random")
               {
-                comet_errs() << " call random \n";
+                comet_debug() << " call random \n";
 
                 std::random_device os_seed;
                 srand(static_cast<unsigned>(os_seed())); // seed the random-num generator
@@ -1846,7 +1850,7 @@ namespace
             /// A[i,j] = transpose(B[j,i], {i,j})
             else if (tensor_op->getRHS()->getKind() == ExprAST::ExprASTKind::Expr_Transpose)
             {
-              comet_errs() << __LINE__ << "  in TensorOpExprAST, rhs is Expr_Transpose\n";
+              comet_debug() << __LINE__ << "  in TensorOpExprAST, rhs is Expr_Transpose\n";
               // create transpose op
               LabeledTensorExprAST *lhsLabeledTensorExprAST = llvm::cast<LabeledTensorExprAST>(tensor_op->getLHS());
 
@@ -1868,9 +1872,9 @@ namespace
               if (tensor_op->getRHS()->getKind() ==
                   ExprAST::ExprASTKind::Expr_BinOp)
               {
-                comet_errs() << "LHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getLHS()->getKind()
+                comet_debug() << "LHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getLHS()->getKind()
                              << "\n";
-                comet_errs() << "RHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getRHS()->getKind()
+                comet_debug() << "RHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getRHS()->getKind()
                              << "\n";
               }
 
@@ -1879,12 +1883,12 @@ namespace
           }
           else
           {
-            comet_errs() << " in TensorOpExprAST, lhs is NOT labeledTensor\n";
+            comet_debug() << " in TensorOpExprAST, lhs is NOT labeledTensor\n";
           }
         }
 
         // Generic expression dispatch codegen.
-        comet_errs() << " expr->getKind(): " << expr->getKind() << "\n";
+        comet_debug() << " expr->getKind(): " << expr->getKind() << "\n";
         if (!mlirGen(*expr))
           return mlir::failure();
       }
@@ -1972,7 +1976,7 @@ namespace
         auto lbl = symbolTable.lookup(lbl_str);
         if (isa<IndexLabelOp>(lbl.getDefiningOp()))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto range = cast<IndexLabelOp>(lbl.getDefiningOp());
           auto min_idx = cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
           auto max_idx = cast<mlir::ConstantIndexOp>(range.max().getDefiningOp());
@@ -1990,7 +1994,7 @@ namespace
           {
             dims_sizes.push_back((max - min) / step);
           }
-          comet_errs() << "\n";
+          comet_debug() << "\n";
         }
         else if (isa<IndexLabelDynamicOp>(lbl.getDefiningOp()))
         {
@@ -2077,7 +2081,7 @@ namespace
           }
           else
           {
-            comet_errs() << " not TensorDeclOp\n";
+            comet_debug() << " not TensorDeclOp\n";
           }
         }
       }
@@ -2125,15 +2129,15 @@ namespace
       LabeledTensorExprAST *rhs2LT =
           llvm::cast<LabeledTensorExprAST>(rhsBinOp->getRHS());
       auto binop = rhsBinOp->getOp();
-      comet_errs() << __FILE__ << " " << __LINE__ << " binop: " << binop << "\n";
+      comet_debug() << __FILE__ << " " << __LINE__ << " binop: " << binop << "\n";
 
       int SemiringOp1st = int(rhsBinOp->getSemiringOp1());
       int SemiringOp2nd = int(rhsBinOp->getSemiringOp2());
-      comet_errs() << __FILE__ << " " << __LINE__ << " semirop: 1) " << SemiringOp1st << " 2) " << SemiringOp2nd << "\n";
+      comet_debug() << __FILE__ << " " << __LINE__ << " semirop: 1) " << SemiringOp1st << " 2) " << SemiringOp2nd << "\n";
       std::string SemiringOp1str = getSemiringOpName(SemiringOp1st);
-      comet_errs() << __FILE__ << " " << __LINE__ << " SemiringOp1str " << SemiringOp1str << "\n";
+      comet_debug() << __FILE__ << " " << __LINE__ << " SemiringOp1str " << SemiringOp1str << "\n";
       std::string SemiringOp2str = getSemiringOpName(SemiringOp2nd);
-      comet_errs() << __FILE__ << " " << __LINE__ << " SemiringOp2str " << SemiringOp2str << "\n";
+      comet_debug() << __FILE__ << " " << __LINE__ << " SemiringOp2str " << SemiringOp2str << "\n";
       std::string SemiringOperators = SemiringOp1str + "_" + SemiringOp2str;
       auto SemiringAttr = builder.getStringAttr(SemiringOperators);
 
@@ -2192,33 +2196,33 @@ namespace
         {
           if (isa<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()))
           {
-            comet_errs() << " is TensorDeclOp\n";
+            comet_debug() << " is TensorDeclOp\n";
 
             // infer the format
             auto lhs_format = dyn_cast<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()).format();
-            comet_errs() << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
 
             tensors.push_back(dyn_cast<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()));
           }
           else if (isa<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()))
           {
-            comet_errs() << " is TensorDeclOp\n";
+            comet_debug() << " is TensorDeclOp\n";
 
             // infer the format
             auto lhs_format = dyn_cast<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()).format();
-            comet_errs() << " lhs_format: " << lhs_format << "\n";
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
 
             tensors.push_back(dyn_cast<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()));
           }
           else
           {
-            comet_errs() << " not TensorDeclOp\n";
+            comet_debug() << " not TensorDeclOp\n";
           }
         }
       }
-      comet_errs() << " formats.size(): " << formats.size() << "\n";
+      comet_debug() << " formats.size(): " << formats.size() << "\n";
       auto strAttr = builder.getStrArrayAttr(formats);
 
       assert(tensors.size() == 3 && "Not 3 tensors for ta.tc or ta.elews_mul\n");
@@ -2296,11 +2300,11 @@ namespace
     mlir::LogicalResult mlirGenTensorFillRandom(mlir::Location loc,
                                                 StringRef tensor_name)
     {
-      comet_errs() << __FILE__ << " " << __LINE__ << " in mlirGenTensorFillRandom\n";
+      comet_debug() << __FILE__ << " " << __LINE__ << " in mlirGenTensorFillRandom\n";
 
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
       auto lhs_labeledtensor = tensorValue.getDefiningOp()->getOpResult(0);
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       comet_vdump(lhs_labeledtensor);
 
       std::vector<mlir::Value> lhs_lbls_value;
@@ -2308,7 +2312,7 @@ namespace
       {
         for (unsigned int i = 0; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
         {
-          comet_errs() << " a densor tensor decl.\n";
+          comet_debug() << " a densor tensor decl.\n";
           comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
           lhs_lbls_value.push_back(lhs_labeledtensor.getDefiningOp()->getOperand(i));
         }
@@ -2317,7 +2321,7 @@ namespace
       {
         for (unsigned i = 1; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
         {
-          comet_errs() << " a labeled tensor op: it's lowering is currently not supported.\n";
+          comet_debug() << " a labeled tensor op: it's lowering is currently not supported.\n";
           comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
           lhs_lbls_value.push_back(lhs_labeledtensor.getDefiningOp()->getOperand(i));
         }
@@ -2331,7 +2335,7 @@ namespace
       }
 
       std::vector<int64_t> result_dims = getDimSizes(lhs_lbls_value);
-      comet_errs() << __FILE__ << " " << __LINE__ << " dims size: " << result_dims.size() << "\n";
+      comet_debug() << __FILE__ << " " << __LINE__ << " dims size: " << result_dims.size() << "\n";
 
       auto type = getType(result_dims);
 

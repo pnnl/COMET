@@ -73,11 +73,15 @@ using namespace mlir::tensorAlgebra;
 // #endif
 
 #ifdef DEBUG_MODE_SUMLowerToSCFPass
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -101,7 +105,7 @@ namespace
     {
 
       assert(isa<tensorAlgebra::SUMOp>(op));
-      comet_errs() << "Lowering SUM operation to SCF\n";
+      comet_debug() << "Lowering SUM operation to SCF\n";
 
       Location loc = op.getLoc();
       auto f64Type = rewriter.getF64Type();
@@ -120,7 +124,7 @@ namespace
 
       if (inputType.isa<TensorType>())
       { // tensor is dense
-        comet_errs() << "Input Tensor is dense\n";
+        comet_debug() << "Input Tensor is dense\n";
         std::vector<Value> indices;
         auto alloc_op = op->getOperand(0).getDefiningOp()->getOperand(0);
 
@@ -132,12 +136,12 @@ namespace
           Value upperBound;
           if (dimSize == ShapedType::kDynamicSize)
           {
-            comet_errs() << " This dimension is a dynamic size\n";
+            comet_debug() << " This dimension is a dynamic size\n";
 
             comet_vdump(alloc_op);
             auto memRefType = alloc_op.getType().dyn_cast<MemRefType>();
             unsigned dynamicDimPos = memRefType.getDynamicDimIndex(rank);
-            comet_errs() << " dynamicDimPos: " << dynamicDimPos << "\n";
+            comet_debug() << " dynamicDimPos: " << dynamicDimPos << "\n";
             upperBound = alloc_op.getDefiningOp()->getOperand(dynamicDimPos);
           }
           else
@@ -161,10 +165,10 @@ namespace
       else
       { // sparse tensor type
         assert(inputType.isa<SparseTensorType>());
-        comet_errs() << __FILE__ << __LINE__ << "Input Tensor is sparse";
+        comet_debug() << __FILE__ << __LINE__ << "Input Tensor is sparse";
 
         int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
-        comet_errs() << " tensorRank: " << tensorRanks << " \n";
+        comet_debug() << " tensorRank: " << tensorRanks << " \n";
 
         // create the lowerBound, upperbound and step for loop
         int indexValueSize = (tensorRanks * 4) + 1; // 4 corresponding to pos, crd, crd_size, pos_size
@@ -182,7 +186,7 @@ namespace
         // Build loop body
         int indexValuePtr = (tensorRanks * 2); // 2 corresponding to pos, crd
         auto alloc_op = op->getOperand(0).getDefiningOp()->getOperand(indexValuePtr).getDefiningOp()->getOperand(0);
-        comet_errs() << " ValueAllocOp";
+        comet_debug() << " ValueAllocOp";
         comet_vdump(alloc_op);
         std::vector<Value> indices = {loop.getInductionVar()};
         auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_op, indices);

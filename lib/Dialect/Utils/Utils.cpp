@@ -50,11 +50,15 @@
 // #endif
 
 #ifdef DEBUG_MODE_UTILS
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -122,29 +126,29 @@ namespace mlir
     {
       // Memory allocation and initialization
       Value alloc_op = rewriter.create<memref::AllocOp>(loc, memtype, allocValueRange);
-      comet_errs() << "Alloc Op for initialization: ";
+      comet_debug() << "Alloc Op for initialization: ";
       comet_vdump(alloc_op);
       auto elementType = memtype.getElementType();
 
       Value cst_init;
       if (elementType.isF64())
       {
-        comet_errs() << "Element type F64\n";
+        comet_debug() << "Element type F64\n";
         cst_init = rewriter.create<ConstantOp>(loc, rewriter.getF64FloatAttr(0.0));
       }
       else if (elementType.isF32())
       {
-        comet_errs() << "Element type F32\n";
+        comet_debug() << "Element type F32\n";
         cst_init = rewriter.create<ConstantOp>(loc, rewriter.getF32FloatAttr(0.0));
       }
       else if (elementType.isIndex())
       {
-        comet_errs() << "Element type Index\n";
+        comet_debug() << "Element type Index\n";
         cst_init = rewriter.create<ConstantIndexOp>(loc, 0);
       }
         else if (elementType.isInteger(1))
       {
-        comet_errs() << "Element type I1 - boolean\n";
+        comet_debug() << "Element type I1 - boolean\n";
         cst_init = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
       }
       else
@@ -165,7 +169,7 @@ namespace mlir
 
       // need to restore the insertion point to the previous point
       rewriter.restoreInsertionPoint(insertPt);
-      comet_errs() << " insertAllocAndInitialize loop "
+      comet_debug() << " insertAllocAndInitialize loop "
                    << "\n";
       comet_vdump(loop);
 
@@ -208,7 +212,7 @@ namespace mlir
 
         // need to restore the insertion point to the previous point
         rewriter.restoreInsertionPoint(insertPt);
-        comet_errs() << " insertAllocAndInitialize loop "
+        comet_debug() << " insertAllocAndInitialize loop "
                      << "\n";
         comet_vdump(loop);
       }
@@ -219,9 +223,9 @@ namespace mlir
     {
       for (auto n : vec)
       {
-        comet_errs() << n << " ";
+        comet_debug() << n << " ";
       }
-      comet_errs() << "\n";
+      comet_debug() << "\n";
     }
 
     template <>
@@ -230,9 +234,9 @@ namespace mlir
       // Special code for Array<bool>
       for (auto n : vec)
       {
-        comet_errs() << n << " ";
+        comet_debug() << n << " ";
       }
-      comet_errs() << "\n";
+      comet_debug() << "\n";
     }
 
     void print_vector_value(std::vector<Value> vec)
@@ -270,11 +274,11 @@ namespace mlir
       if (it != vec.end())
       {
         ret = std::distance(vec.begin(), it);
-        comet_errs() << " Element Found and its index location: " << ret << " \n";
+        comet_debug() << " Element Found and its index location: " << ret << " \n";
       }
       else
       {
-        comet_errs() << " Element Not Found\n";
+        comet_debug() << " Element Not Found\n";
         ret = vec.size();
       }
       return ret;
@@ -311,7 +315,7 @@ namespace mlir
     {
       for (auto n : module.getOps<FuncOp>())
       {
-        comet_errs() << "current function: " << n.getName() << "\n";
+        comet_debug() << "current function: " << n.getName() << "\n";
         if (n.getName().compare(funcname) == 0)
         {
           return true;
@@ -366,33 +370,33 @@ namespace mlir
 
     std::vector<std::vector<int64_t>> getAllPermsWorkspace(ArrayAttr indexMaps)
     {
-      comet_errs() << " " << indexMaps.size() << " ";
+      comet_debug() << " " << indexMaps.size() << " ";
 
       std::vector<std::vector<int64_t>> allPerms;
       // Find summation indices
       for (auto map : indexMaps)
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(map.getType());
-        comet_errs() << " ";
-        // comet_errs() <<  " map.size(): " << map.size() << " ";
+        comet_debug() << " ";
+        // comet_debug() <<  " map.size(): " << map.size() << " ";
         comet_vdump(map);
 
         std::vector<int64_t> perm;
 
         if (auto arrayattr = map.dyn_cast<ArrayAttr>())
         {
-          comet_errs() << " ";
+          comet_debug() << " ";
           for (auto n : arrayattr)
           {
-            comet_errs() << " ";
+            comet_debug() << " ";
             if (IntegerAttr i = n.dyn_cast<IntegerAttr>())
             {
-              comet_errs() << " " << i.getInt() << "\n";
+              comet_debug() << " " << i.getInt() << "\n";
               perm.push_back(i.getInt());
             }
           }
-          comet_errs() << " ";
+          comet_debug() << " ";
         }
         else
         {
@@ -400,7 +404,7 @@ namespace mlir
           map.getType().dump();
         }
         allPerms.push_back(perm);
-        comet_errs() << " ";
+        comet_debug() << " ";
       }
       return allPerms;
     }
@@ -436,7 +440,7 @@ namespace mlir
     /// Assumption: The freeIndices and SumIndices are continuous in the tensor
     std::vector<unsigned int> getIndexIterateOrder(std::vector<unsigned int> rhs1_perm, std::vector<unsigned int> rhs2_perm)
     {
-      comet_errs() << "print rhs1, rhs2: \n";
+      comet_debug() << "print rhs1, rhs2: \n";
       print_vector<unsigned int>(rhs1_perm);
       print_vector<unsigned int>(rhs2_perm);
       // sparse * dense
@@ -452,11 +456,11 @@ namespace mlir
         if (pos < rhs2_perm.size())
         { // found
           rhs1_samePos.push_back(i);
-          comet_errs() << __LINE__ << " pos: " << i << "\n";
+          comet_debug() << __LINE__ << " pos: " << i << "\n";
         }
         else
         {
-          comet_errs() << __LINE__ << " not in"
+          comet_debug() << __LINE__ << " not in"
                        << "\n";
         }
       }
@@ -468,16 +472,16 @@ namespace mlir
         if (pos < rhs1_perm.size())
         { // found
           rhs2_samePos.push_back(i);
-          comet_errs() << __LINE__ << " pos: " << i << "\n";
+          comet_debug() << __LINE__ << " pos: " << i << "\n";
         }
         else
         {
-          comet_errs() << __LINE__ << " not in"
+          comet_debug() << __LINE__ << " not in"
                        << "\n";
         }
       }
 
-      comet_errs() << __LINE__ << "samePos size: " << rhs1_samePos.size() << ", " << rhs2_samePos.size() << "\n";
+      comet_debug() << __LINE__ << "samePos size: " << rhs1_samePos.size() << ", " << rhs2_samePos.size() << "\n";
 
       assert(rhs1_samePos.size() == rhs2_samePos.size());
 
@@ -529,19 +533,19 @@ namespace mlir
     // for string delimiter
     std::vector<std::string> stringSplit(std::string s, std::string delimiter)
     {
-      // comet_errs() << "split formats string: " << s << ", deli: "<< delimiter << ".\n";
+      // comet_debug() << "split formats string: " << s << ", deli: "<< delimiter << ".\n";
 
       std::vector<std::string> res;
 
       std::string format = "";
       for (unsigned int i = 0; i < s.length(); i++)
       {
-        comet_errs() << "s[" << i << "]: " << s[i] << "\n";
+        comet_debug() << "s[" << i << "]: " << s[i] << "\n";
         if (s[i] != delimiter[0] && s[i] != delimiter[1])
         {
           // format.append(s[i]+"");
           format = format + s[i];
-          comet_errs() << "format: " << format << "\n";
+          comet_debug() << "format: " << format << "\n";
         }
         else if (s[i] == delimiter[0])
         {
@@ -549,10 +553,10 @@ namespace mlir
           format = "";
         }
       }
-      comet_errs() << "format: " << format << "\n";
+      comet_debug() << "format: " << format << "\n";
       res.push_back(format);
 
-      comet_errs() << "The final format: ";
+      comet_debug() << "The final format: ";
       print_vector<std::string>(res);
       return res;
     }
@@ -567,7 +571,7 @@ namespace mlir
         std::string formats_str(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
         unsigned int tensorDims = allPerms[i].size();
 
-        comet_errs() << "format_str: " << formats_str << ", tensorDims: " << tensorDims << "\n";
+        comet_debug() << "format_str: " << formats_str << ", tensorDims: " << tensorDims << "\n";
 
         if (formats_str.compare("CSR") == 0)
         {
@@ -599,12 +603,12 @@ namespace mlir
             if (d == 0)
             {
               allFormats[i].push_back("CN");
-              comet_errs() << "CN\n";
+              comet_debug() << "CN\n";
             }
             else
             {
               allFormats[i].push_back("S");
-              comet_errs() << "S\n";
+              comet_debug() << "S\n";
             }
           }
         }
@@ -624,10 +628,10 @@ namespace mlir
           llvm::errs() << "Unsupported formats: " << formats_str << " (tensor dimes: " << tensorDims << ") \n";
         }
 
-        comet_errs() << "allFormats[" << i << "].size(): " << allFormats[i].size() << "\n";
+        comet_debug() << "allFormats[" << i << "].size(): " << allFormats[i].size() << "\n";
         for (auto n : allFormats[i])
         {
-          comet_errs() << "format: " << n << "\n";
+          comet_debug() << "format: " << n << "\n";
           LLVM_DEBUG(llvm::dbgs() << "format: " << n << "\n");
         }
       }
@@ -641,21 +645,21 @@ namespace mlir
       // format with each input matrix: ["CSR", "D", "D"] SpMM
       for (unsigned int i = 0; i < opFormatsArrayAttr.size(); i++)
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         // std::string formats_str;
         if (opFormatsArrayAttr[i].dyn_cast<mlir::StringAttr>())
         {
-          comet_errs() << " yes ";
+          comet_debug() << " yes ";
         }
         else if (mlir::ArrayAttr formatArrayAttr = opFormatsArrayAttr[i].dyn_cast<mlir::ArrayAttr>())
         {
-          comet_errs() << " yes " << formatArrayAttr.size() << " ";
+          comet_debug() << " yes " << formatArrayAttr.size() << " ";
           for (unsigned long j = 0; j < formatArrayAttr.size(); j++)
           {
             if (mlir::StringAttr format = formatArrayAttr[j].dyn_cast<mlir::StringAttr>())
             {
               std::string formats_str(format.getValue());
-              comet_errs() << " " << formats_str << " ";
+              comet_debug() << " " << formats_str << " ";
               allFormats[i].push_back(formats_str);
             }
           }
@@ -665,10 +669,10 @@ namespace mlir
           allFormats[i].push_back("");
         }
 
-        comet_errs() << "allFormats[" << i << "].size(): " << allFormats[i].size() << "\n";
+        comet_debug() << "allFormats[" << i << "].size(): " << allFormats[i].size() << "\n";
         for (auto n : allFormats[i])
         {
-          comet_errs() << "format: " << n << "\n";
+          comet_debug() << "format: " << n << "\n";
           LLVM_DEBUG(llvm::dbgs() << "format: " << n << "\n");
         }
       }
@@ -738,7 +742,7 @@ namespace mlir
           formats[i] = "";
         }
       }
-      comet_errs() << "formats[0], formats[1]: " << formats[0] << ", " << formats[1] << "\n";
+      comet_debug() << "formats[0], formats[1]: " << formats[0] << ", " << formats[1] << "\n";
       // Currently only support mix sparse dense tensor contraction
       std::string format;
       // The index in both tensors are dense
@@ -791,10 +795,10 @@ namespace mlir
     bool checkIsDense(std::vector<std::string> format)
     {
       bool isDense = true;
-      comet_errs() << "checkIsDense size: " << format.size() << "\n";
+      comet_debug() << "checkIsDense size: " << format.size() << "\n";
       for (unsigned long i = 0; i < format.size(); i++)
       {
-        comet_errs() << "checkIsDense Format: " << format[i] << "\n";
+        comet_debug() << "checkIsDense Format: " << format[i] << "\n";
         if (format[i].compare("D"))
         {
           isDense = false;
@@ -811,7 +815,7 @@ namespace mlir
         bool isFirstDense = checkIsDense(formats[0]);
         bool isSecondDense = checkIsDense(formats[1]);
 
-        comet_errs() << "isFirstDense:" << isFirstDense << " isSecondDense: " << isSecondDense << "\n";
+        comet_debug() << "isFirstDense:" << isFirstDense << " isSecondDense: " << isSecondDense << "\n";
         if ((isFirstDense && !isSecondDense) || (!isFirstDense && isSecondDense))
         {
           return true;
@@ -830,12 +834,12 @@ namespace mlir
       Value format_compressednonunique = rewriter.create<mlir::ConstantOp>(loc, indexType, rewriter.getIndexAttr(2));
       Value format_singleton = rewriter.create<mlir::ConstantOp>(loc, indexType, rewriter.getIndexAttr(3));
       // read_input_sizes_2D_f64 or read_input_sizes_3D_f64
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       std::vector<Value> dim_format;
 
       if (rank_size == 2)
       { // 2D
-        comet_errs() << " 2D\n";
+        comet_debug() << " 2D\n";
         // Value dim0_format, dim1_format;
         if (formats_str.compare(0, 3, "CSR") == 0)
         {
@@ -882,7 +886,7 @@ namespace mlir
       }
       else if (rank_size == 3)
       { // 3D
-        comet_errs() << " 3D\n";
+        comet_debug() << " 3D\n";
         // Value dim0_format, dim1_format, dim2_format;
         if (formats_str.compare(0, 3, "CSF") == 0)
         {
@@ -905,11 +909,11 @@ namespace mlir
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
           std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
-          comet_errs() << " format_vec.size(): " << format_vec.size() << " \n";
+          comet_debug() << " format_vec.size(): " << format_vec.size() << " \n";
 
           for (auto n : format_vec)
           {
-            comet_errs() << "Current format attribute: " << n << "---\n";
+            comet_debug() << "Current format attribute: " << n << "---\n";
             if (n.compare(0, 1, "D") == 0)
             {
               dim_format.push_back(format_dense);
@@ -930,9 +934,9 @@ namespace mlir
             {
               llvm::errs() << "Uncorrect format attribute: " << n << "---\n";
             }
-            comet_errs() << " dim_format.size(): " << dim_format.size() << " \n";
+            comet_debug() << " dim_format.size(): " << dim_format.size() << " \n";
           }
-          comet_errs() << " formats_str: " << formats_str << ", dim_format.size(): " << dim_format.size() << " \n";
+          comet_debug() << " formats_str: " << formats_str << ", dim_format.size(): " << dim_format.size() << " \n";
         }
       }
       else
@@ -940,12 +944,12 @@ namespace mlir
         llvm::errs() << "Unsupported formats: " << formats_str << " (tensor dimes: " << rank_size << ") \n";
       }
 
-      comet_errs() << " print dim_format: ";
+      comet_debug() << " print dim_format: ";
       for (auto n : dim_format)
       {
-        comet_errs() << n << " ";
+        comet_debug() << n << " ";
       }
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       return dim_format;
     }
 
@@ -956,12 +960,12 @@ namespace mlir
       Value format_compressednonunique = rewriter.create<mlir::ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 2));
       Value format_singleton = rewriter.create<mlir::ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 3));
       // read_input_sizes_2D_f64 or read_input_sizes_3D_f64
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       std::vector<Value> dim_format;
 
       if (rank_size == 2)
       { // 2D
-        comet_errs() << " 2D\n";
+        comet_debug() << " 2D\n";
         // Value dim0_format, dim1_format;
         if (formats_str.compare(0, 3, "CSR") == 0)
         {
@@ -1008,7 +1012,7 @@ namespace mlir
       }
       else if (rank_size == 3)
       { // 3D
-        comet_errs() << " 3D\n";
+        comet_debug() << " 3D\n";
         // Value dim0_format, dim1_format, dim2_format;
         if (formats_str.compare(0, 3, "CSF") == 0)
         {
@@ -1031,11 +1035,11 @@ namespace mlir
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
           std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
-          comet_errs() << " format_vec.size(): " << format_vec.size() << " \n";
+          comet_debug() << " format_vec.size(): " << format_vec.size() << " \n";
           // print_vector<std::string>(format_vec);
           for (auto n : format_vec)
           {
-            comet_errs() << "Current format attribute: " << n << "---\n";
+            comet_debug() << "Current format attribute: " << n << "---\n";
             if (n.compare(0, 1, "D") == 0)
             {
               dim_format.push_back(format_dense);
@@ -1056,9 +1060,9 @@ namespace mlir
             {
               llvm::errs() << "Uncorrect format attribute: " << n << "---\n";
             }
-            comet_errs() << " dim_format.size(): " << dim_format.size() << " \n";
+            comet_debug() << " dim_format.size(): " << dim_format.size() << " \n";
           }
-          comet_errs() << " formats_str: " << formats_str << ", dim_format.size(): " << dim_format.size() << " \n";
+          comet_debug() << " formats_str: " << formats_str << ", dim_format.size(): " << dim_format.size() << " \n";
         }
       }
       else
@@ -1066,12 +1070,12 @@ namespace mlir
         llvm::errs() << "Unsupported formats: " << formats_str << " (tensor dimes: " << rank_size << ") \n";
       }
 
-      comet_errs() << " print dim_format: ";
+      comet_debug() << " print dim_format: ";
       for (auto n : dim_format)
       {
-        comet_errs() << n << " ";
+        comet_debug() << n << " ";
       }
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       return dim_format;
     }
 
@@ -1102,7 +1106,7 @@ namespace mlir
       {
         isrealroot = true;
       }
-      comet_errs() << " isrealroot = " << isrealroot << " ";
+      comet_debug() << " isrealroot = " << isrealroot << " ";
       comet_pdump(op);
       return isrealroot;
     }
@@ -1115,14 +1119,14 @@ namespace mlir
       {
         IndexTreeIndicesOp workspaceop = dyn_cast<indexTree::IndexTreeIndicesOp>(tcRootOp.getDefiningOp());
 
-        comet_errs() << " dfsRootOpTree\n";
+        comet_debug() << " dfsRootOpTree\n";
         comet_vdump(workspaceop);
 
         unsigned int sz = workspaceop.children().size();
 
-        comet_errs() << " " << sz << " ";
+        comet_debug() << " " << sz << " ";
         ret.push_back(workspaceop);
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(workspaceop);
 
         for (unsigned int i = 0; i < sz; i++)
@@ -1134,7 +1138,7 @@ namespace mlir
       else if (isa<indexTree::IndexTreeComputeOp>(tcRootOp.getDefiningOp()))
       {
         indexTree::IndexTreeComputeOp leafop = dyn_cast<indexTree::IndexTreeComputeOp>(tcRootOp.getDefiningOp());
-        // comet_errs() <<  " dfsRootOpTree\n";
+        // comet_debug() <<  " dfsRootOpTree\n";
         comet_vdump(leafop);
         ret.push_back(leafop);
       }
@@ -1142,17 +1146,17 @@ namespace mlir
 
     void getAncestorsWp(Value op, std::vector<Value> &ret, std::vector<Value> dfsOps)
     {
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(op);
       bool hasParent = true;
       while ((isa<indexTree::IndexTreeIndicesOp>(op.getDefiningOp()) || isa<indexTree::IndexTreeComputeOp>(op.getDefiningOp())) && hasParent)
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(op);
         // Should only one user in the index tree
         for (auto n : op.getDefiningOp()->getUsers())
         {
-          // comet_errs() <<  " "; comet_pdump(n); comet_vdump(n->getResult(0));
+          // comet_debug() <<  " "; comet_pdump(n); comet_vdump(n->getResult(0));
 
           bool isInTree = false;
           if (findIndexInVector_Value(dfsOps, n->getResult(0)) < dfsOps.size())
@@ -1160,18 +1164,18 @@ namespace mlir
             isInTree = true;
           }
 
-          comet_errs() << " isInTree: " << isInTree << " \n";
+          comet_debug() << " isInTree: " << isInTree << " \n";
           if (isInTree)
           {
             ret.push_back(n->getResult(0));
             op = n->getResult(0);
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_pdump(n);
             hasParent = true;
           }
           else
           {
-            comet_errs() << " the user op does not belong to the index tree\n";
+            comet_debug() << " the user op does not belong to the index tree\n";
             hasParent = false;
           }
         }
@@ -1180,7 +1184,7 @@ namespace mlir
 
     std::vector<int> getUnionOf2Dvector(std::vector<std::vector<int>> perms_int)
     {
-      comet_errs() << " perms_int.size(): " << perms_int.size() << "\n";
+      comet_debug() << " perms_int.size(): " << perms_int.size() << "\n";
       std::vector<int> perms;
       if (perms_int.size() == 0)
         return perms;
@@ -1193,7 +1197,7 @@ namespace mlir
 
       // perms_int >= 2
       perms = perms_int[0];
-      comet_errs() << " perms.size(): " << perms.size() << "\n";
+      comet_debug() << " perms.size(): " << perms.size() << "\n";
       for (unsigned int i = 1; i < perms_int.size(); i++)
       {
         for (unsigned int j = 0; j < perms_int[i].size(); j++)
@@ -1204,12 +1208,12 @@ namespace mlir
           }
         }
       }
-      comet_errs() << " perms.size(): " << perms.size() << ", elements: ";
+      comet_debug() << " perms.size(): " << perms.size() << ", elements: ";
       for (auto n : perms)
       {
-        comet_errs() << n << " ";
+        comet_debug() << n << " ";
       }
-      comet_errs() << "\n";
+      comet_debug() << "\n";
 
       return perms;
     }
@@ -1224,7 +1228,7 @@ namespace mlir
         for (unsigned int n = 0; n < aa.size(); n++)
         {
           p.push_back(value);
-          comet_errs() << " createInputOutputMapping m:" << m << " n:" << n << " value:" << value << "\n";
+          comet_debug() << " createInputOutputMapping m:" << m << " n:" << n << " value:" << value << "\n";
         }
         mapping.push_back(p);
       }
@@ -1241,7 +1245,7 @@ namespace mlir
         for (unsigned int n = 0; n < aa.size(); n++)
         {
           p.push_back(aa[n].cast<mlir::IntegerAttr>().getInt());
-          comet_errs() << " convertArrayAttrIntTo2DVector:" << aa[n].cast<mlir::IntegerAttr>().getInt() << "\n";
+          comet_debug() << " convertArrayAttrIntTo2DVector:" << aa[n].cast<mlir::IntegerAttr>().getInt() << "\n";
         }
         perms_int.push_back(p);
       }
@@ -1291,7 +1295,7 @@ namespace mlir
         {
           std::string format_str(aa[n].cast<mlir::StringAttr>().getValue());
           p.push_back(format_str);
-          comet_errs() << " convertArrayAttrStrTo2DVector:" << format_str << "\n";
+          comet_debug() << " convertArrayAttrStrTo2DVector:" << format_str << "\n";
         }
         formats_str.push_back(p);
       }
@@ -1314,15 +1318,15 @@ namespace mlir
 
       // Get output format, vector of vector
       // Convert ArrayAttr into
-      comet_errs() << "Start printing opFormats_rhs\n";
+      comet_debug() << "Start printing opFormats_rhs\n";
       std::vector<std::vector<std::string>> opFormats_rhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_rhs);
-      comet_errs() << "End printing opFormats_rhs\n";
+      comet_debug() << "End printing opFormats_rhs\n";
       std::vector<std::vector<int>> opPerms_rhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_rhs);
       std::vector<std::vector<bool>> inputMapping = createInputOutputMapping(opPermsArrayAttr_rhs, true);
 
-      comet_errs() << "Start printing opFormats_lhs\n";
+      comet_debug() << "Start printing opFormats_lhs\n";
       std::vector<std::vector<std::string>> opFormats_lhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_lhs);
-      comet_errs() << "End printing opFormats_lhs\n";
+      comet_debug() << "End printing opFormats_lhs\n";
       std::vector<std::vector<int>> opPerms_lhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_lhs);
       std::vector<std::vector<bool>> outputMapping = createInputOutputMapping(opPermsArrayAttr_lhs, false);
 
@@ -1378,11 +1382,11 @@ namespace mlir
     {
       // indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(itComputeOp_rhs);
       for (unsigned int i = 0; i < itComputeOp_rhs.getOperation()->getNumOperands(); i++)
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(itComputeOp_rhs.getOperation()->getOperand(i));
         inputTensors.push_back(itComputeOp_rhs.getOperation()->getOperand(i));
       }
@@ -1408,12 +1412,12 @@ namespace mlir
       // For each indices, find in each leaf, which tensor, the corresponding format
       // If in all tensors, the formats of the index are D, then D
       //                    If only one Sparse, then sparse
-      comet_errs() << " getFormatsInfo:Start Current op\n";
+      comet_debug() << " getFormatsInfo:Start Current op\n";
       comet_vdump(cur_op);
-      comet_errs() << " getFormatsInfo:indices.size(): " << indices.size() << "\n";
+      comet_debug() << " getFormatsInfo:indices.size(): " << indices.size() << "\n";
       for (unsigned long i = 0; i < indices.size(); i++)
       {
-        comet_errs() << " getFormatsInfo:indices[" << i << "]: " << indices[i] << "\n";
+        comet_debug() << " getFormatsInfo:indices[" << i << "]: " << indices[i] << "\n";
         // Info for each index
         std::string format;
         Value tensor;
@@ -1427,7 +1431,7 @@ namespace mlir
         for (unsigned long j = 0; j < leafs.size(); j++)
         {
           // Info for each index in leaf[j]
-          comet_errs() << " getFormatsInfo:LeafOp: ";
+          comet_debug() << " getFormatsInfo:LeafOp: ";
           comet_vdump(leafs[j]);
           std::string format_in_leaf;
           Value tensor_in_leaf;
@@ -1437,7 +1441,7 @@ namespace mlir
           // get All perms and formats info
           if (indexTree::IndexTreeComputeOp leafop = dyn_cast<mlir::indexTree::IndexTreeComputeOp>(leafs[j].getDefiningOp()))
           {
-            comet_errs() << " getFormatsInfo:leafs[" << j << "] is computeOp\n";
+            comet_debug() << " getFormatsInfo:leafs[" << j << "] is computeOp\n";
             // std::vector<std::vector<int64_t>> allPerms(leafop.allPerms().size());
             // std::vector<std::vector<std::string>> allFormats(leafop.allFormats().size());
             std::vector<std::vector<std::string>> allFormats;
@@ -1446,32 +1450,32 @@ namespace mlir
             OpBuilder builder(leafop);
             getFormatsPermsOfComputeOp(leafop, allFormats, allPerms, inputOutputMapping);
 
-            comet_errs() << " getFormatsInfo:Allformats allFormats.size(): " << allFormats.size() << "\n";
+            comet_debug() << " getFormatsInfo:Allformats allFormats.size(): " << allFormats.size() << "\n";
             for (auto m : allFormats)
             {
-              comet_errs() << " ";
+              comet_debug() << " ";
               for (auto n : m)
               {
-                comet_errs() << n << " ";
+                comet_debug() << n << " ";
               }
-              comet_errs() << "\n";
+              comet_debug() << "\n";
             }
 
             std::vector<Value> leafop_inputTensors;
             getInputTensorsOfComputeOp(leafop, leafop_inputTensors);
-            comet_errs() << " getFormatsInfo:leafop_inputTensors.size(): " << leafop_inputTensors.size() << "\n";
+            comet_debug() << " getFormatsInfo:leafop_inputTensors.size(): " << leafop_inputTensors.size() << "\n";
 
             std::vector<Value> leafop_outputTensors;
             getOutputTensorsOfComputeOp(leafop, leafop_outputTensors);
-            comet_errs() << " getFormatsInfo:leafop_outputTensors.size(): " << leafop_outputTensors.size() << "\n";
+            comet_debug() << " getFormatsInfo:leafop_outputTensors.size(): " << leafop_outputTensors.size() << "\n";
 
             std::vector<Value> leafop_tensors = leafop_inputTensors;
             leafop_tensors.insert(leafop_tensors.end(), leafop_outputTensors.begin(), leafop_outputTensors.end());
             #ifdef DEBUG_MODE_UTILS
-            comet_errs() << " getFormatsInfo:leafop_tensors.size(): " << leafop_tensors.size() << "\n";
+            comet_debug() << " getFormatsInfo:leafop_tensors.size(): " << leafop_tensors.size() << "\n";
             for (auto n : leafop_tensors)
             {
-              comet_errs() << " ";
+              comet_debug() << " ";
               comet_vdump(n);
             }
             #endif
@@ -1482,17 +1486,17 @@ namespace mlir
             std::vector<unsigned int> ids_local;
             std::vector<bool> rhs_vs_lhs;
             // This leafOp contain multiple tensors.
-            comet_errs() << " getFormatsInfo:allPerms.size()" << allPerms.size() << "\n";
+            comet_debug() << " getFormatsInfo:allPerms.size()" << allPerms.size() << "\n";
             for (unsigned long k = 0; k < allPerms.size(); k++)
             {
-              comet_errs() << " getFormatsInfo:allPerms[" << k << "].size(): " << allPerms[k].size() << ", print allPerms[" << k << "]: ";
+              comet_debug() << " getFormatsInfo:allPerms[" << k << "].size(): " << allPerms[k].size() << ", print allPerms[" << k << "]: ";
               print_vector<int>(allPerms[k]);
-              comet_errs() << " getFormatsInfo:indices[" << i << "]: " << indices[i] << "\n";
+              comet_debug() << " getFormatsInfo:indices[" << i << "]: " << indices[i] << "\n";
               unsigned int idx = findIndexInVector(allPerms[k], indices[i]);
-              comet_errs() << " getFormatsInfo:idx: " << idx << ", allPerms[" << k << "].size(): " << allPerms[k].size() << "\n";
+              comet_debug() << " getFormatsInfo:idx: " << idx << ", allPerms[" << k << "].size(): " << allPerms[k].size() << "\n";
               if (idx < allPerms[k].size())
               { // In tensor k
-                comet_errs() << " getFormatsInfo:AddingLocalFormat[" << k << "][" << idx << "]: " << allFormats[k][idx] << " ";
+                comet_debug() << " getFormatsInfo:AddingLocalFormat[" << k << "][" << idx << "]: " << allFormats[k][idx] << " ";
                 comet_vdump(leafop_tensors[k]);
                 formats_local.push_back(allFormats[k][idx]);
                 tensors_local.push_back(leafop_tensors[k]);
@@ -1501,10 +1505,10 @@ namespace mlir
               }
             }
 
-            comet_errs() << " getFormatsInfo:formats_local.size(): " << formats_local.size() << " \n";
+            comet_debug() << " getFormatsInfo:formats_local.size(): " << formats_local.size() << " \n";
             for (unsigned long k = 0; k < formats_local.size(); k++)
             {
-              comet_errs() << " getFormatsInfo:formats_local[k]:" << formats_local[k] << " " << ids_local[k] << " ";
+              comet_debug() << " getFormatsInfo:formats_local[k]:" << formats_local[k] << " " << ids_local[k] << " ";
               comet_vdump(tensors_local[k]);
             }
 
@@ -1542,7 +1546,7 @@ namespace mlir
 
           if (isSetInLeaf)
           {
-            comet_errs() << " getFormatsInfo:isSetInLeaf: " << isSetInLeaf << ", format_in_leaf: " << format_in_leaf << ", id_in_leaf: " << id_in_leaf << ", tensor: ";
+            comet_debug() << " getFormatsInfo:isSetInLeaf: " << isSetInLeaf << ", format_in_leaf: " << format_in_leaf << ", id_in_leaf: " << id_in_leaf << ", tensor: ";
             comet_vdump(tensor_in_leaf);
             formats_leafs.push_back(format_in_leaf);
             tensors_leafs.push_back(tensor_in_leaf);
@@ -1555,10 +1559,10 @@ namespace mlir
 
         } // for(auto j = 0; j < leafs.size(); j++){
 
-        comet_errs() << " getFormatsInfo:formats_leafs.size(): " << formats_leafs.size() << "\n";
+        comet_debug() << " getFormatsInfo:formats_leafs.size(): " << formats_leafs.size() << "\n";
         for (unsigned long k = 0; k < formats_leafs.size(); k++)
         {
-          comet_errs() << " getFormatsInfo:formats_leafs[k]:" << formats_leafs[k] << "\n";
+          comet_debug() << " getFormatsInfo:formats_leafs[k]:" << formats_leafs[k] << "\n";
         }
 
         // analyze the _leafs info to get the current index format, tensor, id information
@@ -1590,7 +1594,7 @@ namespace mlir
 
         if (isSet)
         {
-          comet_errs() << " getFormatsInfo:EndFormat: " << format << ", id: " << id << ", tensor: ";
+          comet_debug() << " getFormatsInfo:EndFormat: " << format << ", id: " << id << ", tensor: ";
           comet_vdump(tensor);
 
           formats.push_back(format);
@@ -1613,7 +1617,7 @@ namespace mlir
         if (IndexTreeComputeOp cur_op = dyn_cast<IndexTreeComputeOp>(dfsOps[i].getDefiningOp()))
         {
           getAncestorsWp(dfsOps[i], allAncestors[i], dfsOps);
-          comet_errs() << " print allAncestors[" << i << "]: ";
+          comet_debug() << " print allAncestors[" << i << "]: ";
           print_vector_value(allAncestors[i]);
         }
       }
@@ -1622,7 +1626,7 @@ namespace mlir
       // if(tcRootOp.getType().isa<indexTree::IndexTreeIndicesOp>()){
       if (IndexTreeIndicesOp cur_op = dyn_cast<IndexTreeIndicesOp>(tcRootOp.getDefiningOp()))
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(tcRootOp);
         for (unsigned int j = 0; j < dfsOps.size(); j++)
         {
@@ -1632,7 +1636,7 @@ namespace mlir
             if (indexTree::IndexTreeComputeOp cur_op = dyn_cast<IndexTreeComputeOp>(dfsOps[j].getDefiningOp()))
             {
               ret.push_back(dfsOps[j]);
-              comet_errs() << " ";
+              comet_debug() << " ";
               comet_vdump(dfsOps[j]);
             }
           }
@@ -1645,19 +1649,19 @@ namespace mlir
     void replaceOperands(Operation *itComputeOp, std::vector<Value> newComputeOps)
     {
       Operation *parentIndicesOp = *(itComputeOp->getResult(0).getUsers().begin());
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_pdump(parentIndicesOp);
       std::vector<Value> parentOldChildren;
       for (unsigned int m = 0; m < parentIndicesOp->getNumOperands(); m++)
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(parentIndicesOp->getOperand(m));
         parentOldChildren.push_back(parentIndicesOp->getOperand(m));
       }
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(itComputeOp->getResult(0));
       unsigned int whichOperand = findIndexInVector_Value(parentOldChildren, itComputeOp->getResult(0));
-      comet_errs() << " which operand: " << whichOperand << "\n";
+      comet_debug() << " which operand: " << whichOperand << "\n";
       std::vector<Value> newChildren;
       if (whichOperand < parentIndicesOp->getNumOperands())
       {
@@ -1681,11 +1685,11 @@ namespace mlir
     void getTensorsOfComputeOp(Value computeOp, std::vector<Value> &tensors)
     {
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(itComputeOp_rhs);
       for (unsigned int i = 0; i < itComputeOp_rhs.getOperation()->getNumOperands(); i++)
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(itComputeOp_rhs.getOperation()->getOperand(i));
         tensors.push_back(itComputeOp_rhs.getOperation()->getOperand(i));
       }
@@ -1930,40 +1934,40 @@ namespace mlir
           mlir::AffineMap::get(idx, 0, lhsExprs, context)};
 
       auto affineMapArrayAttr = rewriter.getAffineMapArrayAttr(affineMaps);
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       // ruiqin:
       SmallVector<mlir::StringRef, 8> formats;
       std::vector<mlir::Operation *> defops{rhs1Tensor.getDefiningOp(), rhs2Tensor.getDefiningOp(), lhsTensor.getDefiningOp()};
       for (auto defop : defops)
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_pdump(defop);
         if (isa<DenseTensorDeclOp>(defop))
         {
-          comet_errs() << " is TensorDeclOp\n";
+          comet_debug() << " is TensorDeclOp\n";
 
           // infer the format
           auto lhs_format = dyn_cast<DenseTensorDeclOp>(defop).format();
-          comet_errs() << " lhs_format: " << lhs_format << "\n";
+          comet_debug() << " lhs_format: " << lhs_format << "\n";
           formats.push_back(lhs_format);
         }
         else if (isa<SparseTensorDeclOp>(defop))
         {
-          comet_errs() << " is TensorDeclOp\n";
+          comet_debug() << " is TensorDeclOp\n";
 
           // infer the format
           auto lhs_format = dyn_cast<SparseTensorDeclOp>(defop).format();
-          comet_errs() << " lhs_format: " << lhs_format << "\n";
+          comet_debug() << " lhs_format: " << lhs_format << "\n";
           formats.push_back(lhs_format);
         }
         else
         {
-          comet_errs() << " not TensorDeclOp\n";
+          comet_debug() << " not TensorDeclOp\n";
         }
       }
 
       auto formatAttr = rewriter.getStrArrayAttr(formats);
-      comet_errs() << " formatAttr: " << formatAttr << "\n";
+      comet_debug() << " formatAttr: " << formatAttr << "\n";
 
       auto SemiringAttr = rewriter.getStringAttr("none");
       auto tc = rewriter.create<tensorAlgebra::TensorMultOp>(loc, lhsTensor.getType(),
@@ -1972,7 +1976,7 @@ namespace mlir
                                                              formatAttr, SemiringAttr);
       tc.getOperation()->setAttr("__alpha__", rewriter.getF64FloatAttr(alpha));
       tc.getOperation()->setAttr("__beta__", rewriter.getF64FloatAttr(beta));
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(tc);
     }
 
@@ -1995,7 +1999,7 @@ namespace mlir
       comet_pdump(op);
       assert(isa<tensorAlgebra::MulOp>(op));
 
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       auto mulOp = cast<tensorAlgebra::MulOp>(op);
 
       auto *lhsOp = mulOp.lhs().getDefiningOp();
@@ -2005,7 +2009,7 @@ namespace mlir
       bool is_lhs_constant = false;
       bool is_rhs_constant = false;
 
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       std::set<Operation *> sumLabelsSet;
       for (auto lbl : sumLabels)
       {
@@ -2017,7 +2021,7 @@ namespace mlir
 
       if (isa<tensorAlgebra::LabeledTensorOp>(lhsOp))
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(lhsOp);
         rhs1Tensor = ltOp.tensor();
         rhs1Tensor.getDefiningOp()->setAttr("__alpha__",
@@ -2027,15 +2031,15 @@ namespace mlir
         {
           rhs1Labels.push_back(lbl);
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
       }
       else if (isa<tensorAlgebra::MulOp>(lhsOp))
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         rhs1Tensor = replaceBinop(lhsOp, loc, rewriter);
         if (isa<tensorAlgebra::DenseTensorDeclOp>(rhs1Tensor.getDefiningOp()))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto tensorDeclOp =
               cast<tensorAlgebra::DenseTensorDeclOp>(rhs1Tensor.getDefiningOp());
           auto labels = tensorDeclOp.labels();
@@ -2048,7 +2052,7 @@ namespace mlir
         }
         else if (isa<tensorAlgebra::SparseTensorDeclOp>(rhs1Tensor.getDefiningOp()))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto tensorDeclOp =
               cast<tensorAlgebra::SparseTensorDeclOp>(rhs1Tensor.getDefiningOp());
           auto labels = tensorDeclOp.labels();
@@ -2062,7 +2066,7 @@ namespace mlir
         else if (isa<tensorAlgebra::LabeledTensorOp>(
                      rhs1Tensor.getDefiningOp()))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto ltOp =
               cast<tensorAlgebra::LabeledTensorOp>(rhs1Tensor.getDefiningOp());
           auto labels = ltOp.labels();
@@ -2074,7 +2078,7 @@ namespace mlir
 
           auto rhs1AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
           rhs1Tensor.getDefiningOp()->setAttr("__alpha__", rhs1AlphaAttr);
-          comet_errs() << "\n";
+          comet_debug() << "\n";
         }
       }
       else if (isa<tensorAlgebra::DenseConstantOp>(lhsOp))
@@ -2093,7 +2097,7 @@ namespace mlir
 
       if (isa<tensorAlgebra::LabeledTensorOp>(rhsOp))
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(rhsOp);
         rhs2Tensor = ltOp.tensor();
         rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
@@ -2103,15 +2107,15 @@ namespace mlir
         {
           rhs2Labels.push_back(lbl);
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
       }
       else if (isa<tensorAlgebra::MulOp>(rhsOp))
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         rhs2Tensor = replaceBinop(rhsOp, loc, rewriter);
         if (isa<tensorAlgebra::DenseTensorDeclOp>(rhs2Tensor.getDefiningOp()))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto tensorDeclOp =
               cast<tensorAlgebra::DenseTensorDeclOp>(rhs2Tensor.getDefiningOp());
           auto labels = tensorDeclOp.labels();
@@ -2121,11 +2125,11 @@ namespace mlir
           }
           rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
                                               rewriter.getF64FloatAttr(1.0));
-          comet_errs() << "\n";
+          comet_debug() << "\n";
         }
         else if (isa<tensorAlgebra::SparseTensorDeclOp>(rhs2Tensor.getDefiningOp()))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto tensorDeclOp =
               cast<tensorAlgebra::SparseTensorDeclOp>(rhs2Tensor.getDefiningOp());
           auto labels = tensorDeclOp.labels();
@@ -2135,12 +2139,12 @@ namespace mlir
           }
           rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
                                               rewriter.getF64FloatAttr(1.0));
-          comet_errs() << "\n";
+          comet_debug() << "\n";
         }
         else if (isa<tensorAlgebra::LabeledTensorOp>(
                      rhs2Tensor.getDefiningOp()))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto ltOp =
               cast<tensorAlgebra::LabeledTensorOp>(rhs2Tensor.getDefiningOp());
           auto labels = ltOp.labels();
@@ -2151,7 +2155,7 @@ namespace mlir
           rhs2Tensor = ltOp.tensor();
           auto rhs2AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
           rhs2Tensor.getDefiningOp()->setAttr("__alpha__", rhs2AlphaAttr);
-          comet_errs() << "\n";
+          comet_debug() << "\n";
         }
       }
       else if (isa<tensorAlgebra::DenseConstantOp>(rhsOp))
@@ -2169,10 +2173,10 @@ namespace mlir
         assert(false && "Implement for AddOp support");
       }
 
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       if (!is_lhs_constant && !is_rhs_constant)
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         auto resultType = mulOp.getResult().getType();
 
         for (auto lbl : rhs1Labels)
@@ -2190,19 +2194,19 @@ namespace mlir
             lhsLabels.push_back(lbl);
           }
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
 
         lhsTensor = rewriter.create<tensorAlgebra::DenseTensorDeclOp>(loc, resultType,
                                                                       lhsLabels, "Dense");
         comet_vdump(lhsTensor);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         auto valueAttr = rewriter.getF64FloatAttr(0);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         rewriter.create<tensorAlgebra::TensorFillOp>(loc, lhsTensor, valueAttr);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         createTensorContraction(loc, rhs1Tensor, rhs1Labels, rhs2Tensor,
                                 rhs2Labels, lhsTensor, lhsLabels, rewriter, 0 /*beta*/);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
       }
       else if (is_lhs_constant && is_rhs_constant)
       {
@@ -2223,10 +2227,10 @@ namespace mlir
         rewriter.eraseOp(rhsOp);
       }
 
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       lhsTensor.getDefiningOp()->setAttr("__alpha__",
                                          rewriter.getF64FloatAttr(alpha));
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       return lhsTensor;
     }
 
@@ -2235,7 +2239,7 @@ namespace mlir
                       ArrayRef<Value> lhsLabels, Location loc,
                       ConversionPatternRewriter &rewriter, double beta)
     {
-      comet_errs() << " replaceSetOp begin\n";
+      comet_debug() << " replaceSetOp begin\n";
       comet_pdump(op);
       if (isa<tensorAlgebra::MulOp>(op))
       {
@@ -2259,7 +2263,7 @@ namespace mlir
 
         if (isa<tensorAlgebra::LabeledTensorOp>(lhsOp))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(lhsOp);
           rhs1Tensor = ltOp.tensor();
           rhs1Tensor.getDefiningOp()->setAttr("__alpha__",
@@ -2270,11 +2274,11 @@ namespace mlir
           {
             rhs1Labels.push_back(lbl);
           }
-          comet_errs() << "\n";
+          comet_debug() << "\n";
         }
         else if (isa<tensorAlgebra::MulOp>(lhsOp))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           rhs1Tensor = replaceBinop(lhsOp, loc, rewriter);
           if (isa<tensorAlgebra::DenseTensorDeclOp>(rhs1Tensor.getDefiningOp()))
           {
@@ -2287,7 +2291,7 @@ namespace mlir
             }
             rhs1Tensor.getDefiningOp()->setAttr("__alpha__",
                                                 rewriter.getF64FloatAttr(1.0));
-            comet_errs() << "\n";
+            comet_debug() << "\n";
           }
           else if (isa<tensorAlgebra::SparseTensorDeclOp>(rhs1Tensor.getDefiningOp()))
           {
@@ -2300,12 +2304,12 @@ namespace mlir
             }
             rhs1Tensor.getDefiningOp()->setAttr("__alpha__",
                                                 rewriter.getF64FloatAttr(1.0));
-            comet_errs() << "\n";
+            comet_debug() << "\n";
           }
           else if (isa<tensorAlgebra::LabeledTensorOp>(
                        rhs1Tensor.getDefiningOp()))
           {
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             auto ltOp =
                 cast<tensorAlgebra::LabeledTensorOp>(rhs1Tensor.getDefiningOp());
             auto labels = ltOp.labels();
@@ -2317,12 +2321,12 @@ namespace mlir
 
             auto rhs1AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
             rhs1Tensor.getDefiningOp()->setAttr("__alpha__", rhs1AlphaAttr);
-            comet_errs() << "\n";
+            comet_debug() << "\n";
           }
         }
         else if (isa<tensorAlgebra::DenseConstantOp>(lhsOp))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto constOp = cast<tensorAlgebra::DenseConstantOp>(lhsOp);
           DenseElementsAttr denseAttr = constOp.value();
           auto attr = *(denseAttr.getAttributeValues().begin());
@@ -2337,7 +2341,7 @@ namespace mlir
 
         if (isa<tensorAlgebra::LabeledTensorOp>(rhsOp))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(rhsOp);
           rhs2Tensor = ltOp.tensor();
           rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
@@ -2348,16 +2352,16 @@ namespace mlir
           {
             rhs2Labels.push_back(lbl);
           }
-          comet_errs() << "\n";
+          comet_debug() << "\n";
         }
         else if (isa<tensorAlgebra::MulOp>(rhsOp))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           rhs2Tensor = replaceBinop(rhsOp, loc, rewriter);
 
           if (isa<tensorAlgebra::DenseTensorDeclOp>(rhs2Tensor.getDefiningOp()))
           {
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             auto tensorDeclOp =
                 cast<tensorAlgebra::DenseTensorDeclOp>(rhs2Tensor.getDefiningOp());
             auto labels = tensorDeclOp.labels();
@@ -2367,11 +2371,11 @@ namespace mlir
             }
             rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
                                                 rewriter.getF64FloatAttr(1.0));
-            comet_errs() << "\n";
+            comet_debug() << "\n";
           }
           else if (isa<tensorAlgebra::SparseTensorDeclOp>(rhs2Tensor.getDefiningOp()))
           {
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             auto tensorDeclOp =
                 cast<tensorAlgebra::SparseTensorDeclOp>(rhs2Tensor.getDefiningOp());
             auto labels = tensorDeclOp.labels();
@@ -2381,12 +2385,12 @@ namespace mlir
             }
             rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
                                                 rewriter.getF64FloatAttr(1.0));
-            comet_errs() << "\n";
+            comet_debug() << "\n";
           }
           else if (isa<tensorAlgebra::LabeledTensorOp>(
                        rhs2Tensor.getDefiningOp()))
           {
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             auto ltOp =
                 cast<tensorAlgebra::LabeledTensorOp>(rhs2Tensor.getDefiningOp());
             auto labels = ltOp.labels();
@@ -2398,19 +2402,19 @@ namespace mlir
             // auto rhs2AlphaAttr = ltOp.getAttr("__alpha__");
             auto rhs2AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
             rhs2Tensor.getDefiningOp()->setAttr("__alpha__", rhs2AlphaAttr);
-            comet_errs() << "\n";
+            comet_debug() << "\n";
           }
         }
         else if (isa<tensorAlgebra::DenseConstantOp>(rhsOp))
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto constOp = cast<tensorAlgebra::DenseConstantOp>(rhsOp);
           DenseElementsAttr denseAttr = constOp.value();
           auto attr = *(denseAttr.getAttributeValues().begin());
           auto f64Attr = attr.cast<FloatAttr>();
           alpha *= f64Attr.getValueAsDouble();
           is_rhs_constant = true;
-          comet_errs() << "\n";
+          comet_debug() << "\n";
         }
         else if (isa<tensorAlgebra::AddOp>(rhsOp))
         {
@@ -2420,14 +2424,14 @@ namespace mlir
 
         if (is_rhs_constant && is_lhs_constant)
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           rewriter.create<tensorAlgebra::TensorFillOp>(loc, lhsTensor, rewriter.getF64FloatAttr(alpha));
           rewriter.eraseOp(lhsOp);
           rewriter.eraseOp(rhsOp);
         }
         else if (is_rhs_constant || is_lhs_constant)
         {
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           auto ctx = rewriter.getContext();
           auto rhsTensor = is_rhs_constant ? rhs1Tensor : rhs2Tensor;
           auto rhsLabels = is_rhs_constant ? rhs1Labels : rhs2Labels;
@@ -2464,10 +2468,10 @@ namespace mlir
           }
           return;
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         createTensorContraction(loc, rhs1Tensor, rhs1Labels, rhs2Tensor,
                                 rhs2Labels, lhsTensor, lhsLabels, rewriter, beta);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
       }
       else if (isa<tensorAlgebra::AddOp>(op))
       {
@@ -2487,7 +2491,7 @@ namespace mlir
       for (unsigned int i = 0; i < inputPerm.size(); i++)
       {
         perm_loc = findIndexInVector(indexIterateOrder, inputPerm[i]);
-        comet_errs() << "indexIterateOrder:" << indexIterateOrder[i] << " perm_loc:" << perm_loc << "\n";
+        comet_debug() << "indexIterateOrder:" << indexIterateOrder[i] << " perm_loc:" << perm_loc << "\n";
         inputInductionVars.push_back(forloops[perm_loc].getInductionVar());
       }
       return inputInductionVars;
@@ -2503,7 +2507,7 @@ namespace mlir
       for (unsigned int i = 0; i < inputPerm[0].size(); i++)
       {
         perm_loc = findIndexInVector(indexIterateOrder, inputPerm[0][i]);
-        comet_errs() << "indexIterateOrder:" << indexIterateOrder[i] << " perm_loc:" << perm_loc << "\n";
+        comet_debug() << "indexIterateOrder:" << indexIterateOrder[i] << " perm_loc:" << perm_loc << "\n";
         inputInductionVars.push_back(affineloops[perm_loc].getInductionVar());
       }
       return inputInductionVars;

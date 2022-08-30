@@ -41,11 +41,15 @@
 // #endif
 
 #ifdef DEBUG_MODE_LEXER
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -140,9 +144,9 @@ namespace tensorAlgebra
     void consume(Token tok)
     {
       assert(tok == curTok && "consume Token mismatch expectation");
-      comet_errs() << " consume one token: " << tok << " \n";
+      comet_debug() << " consume one token: " << tok << " \n";
       Token nextTok = getNextToken();
-      comet_errs() << " next token: " << nextTok << " \n";
+      comet_debug() << " next token: " << nextTok << " \n";
     }
 
     /// Return the current identifier (prereq: getCurToken() == tok_identifier)
@@ -200,7 +204,7 @@ namespace tensorAlgebra
         ++curLineNum;
         curCol = 0;
       }
-      comet_errs() << " next char: " << nextchar << "\n";
+      comet_debug() << "next char: " << nextchar << "\n";
       return nextchar;
     }
 
@@ -212,7 +216,7 @@ namespace tensorAlgebra
         return EOF;
       // ++curCol;
       auto nextchar = curLineBuffer.front();
-      comet_errs() << " next char: " << nextchar << "\n";
+      comet_debug() << "next char: " << nextchar << "\n";
       return nextchar;
     }
 
@@ -296,20 +300,20 @@ namespace tensorAlgebra
     ///  Return the next token from standard input.
     Token getTok()
     {
-      comet_errs() << " go to next token\n";
+      comet_debug() << "go to next token\n";
       // Skip any whitespace.
       while (isspace(LastChar))
         LastChar = Token(getNextChar());
-      comet_errs() << " LastChar: " << LastChar << "\n";
+      comet_debug() << "LastChar: " << LastChar << "\n";
 
       // Save the current location before reading the token characters.
       lastLocation.line = curLineNum;
       lastLocation.col = curCol;
-      comet_errs() << " lastLocation: " << lastLocation.line << " " << lastLocation.col << "\n";
+      comet_debug() << "lastLocation: " << lastLocation.line << " " << lastLocation.col << "\n";
 
       if (isalpha(LastChar))
       { // identifier: [a-zA-Z][a-zA-Z0-9_]*
-        comet_errs() << " LastChar (" << LastChar << ") isalpha\n";
+        comet_debug() << "LastChar (" << LastChar << ") isalpha\n";
         IdentifierStr = (char)LastChar;
         while (isalnum((LastChar = Token(getNextChar()))) || LastChar == '_')
           IdentifierStr += (char)LastChar;
@@ -337,13 +341,13 @@ namespace tensorAlgebra
         if (IdentifierStr == "transpose")
           return tok_transpose;
 
-        comet_errs() << IdentifierStr << "\n";
+        comet_debug() << "Identifier:" << IdentifierStr << "\n";
         return tok_identifier;
       }
 
       if (LastChar == '/')
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         if (curLineBuffer.front() == ' ')
         {
           Token curChar = Token(LastChar);
@@ -357,12 +361,12 @@ namespace tensorAlgebra
           while (isalnum((LastChar = Token(getNextChar()))) || LastChar == '_' || LastChar == '/' || LastChar == '.')
           {
             if (LastChar == '/')
-              comet_errs() << '/' << "\n";
-            comet_errs() << IdentifierStr << "\n";
+              comet_debug() << '/' << "\n";
+            comet_debug() << IdentifierStr << "\n";
             IdentifierStr += (char)LastChar;
           }
 
-          comet_errs() << IdentifierStr << "\n";
+          comet_debug() << IdentifierStr << "\n";
           return tok_identifier;
         }
       }
@@ -370,16 +374,16 @@ namespace tensorAlgebra
       // for "/home/a.mtx"
       if (LastChar == tok_quotation)
       {
-        comet_errs() << " the token is \" \n";
+        comet_debug() << " the token is \" \n";
 
         IdentifierStr = "";
         LastChar = Token(getNextChar());
         while (LastChar != tok_quotation)
         {
-          comet_errs() << IdentifierStr << "\n";
+          comet_debug() << IdentifierStr << "\n";
           if (LastChar == tok_semicolon || LastChar == tok_parenthese_open || LastChar == tok_parenthese_close || LastChar == tok_bracket_open || LastChar == tok_bracket_close || LastChar == tok_sbracket_open || LastChar == tok_sbracket_close)
           {
-            comet_errs() << " not allow special tokens in strings\n";
+            comet_debug() << " not allow special tokens in strings\n";
             llvm::errs() << "Special tokens in strings are not allowed, source location (" << curLineNum << ", " << curCol << ")\n";
             exit(0);
           }
@@ -387,20 +391,20 @@ namespace tensorAlgebra
           LastChar = Token(getNextChar());
         }
 
-        comet_errs() << " " << IdentifierStr << "\n";
+        comet_debug() << " " << IdentifierStr << "\n";
         LastChar = Token(getNextChar()); // consume the other " symbol
         return tok_identifier;
       }
 
       if (LastChar == '.' && checkNextChar() == '*')
       {
-        comet_errs() << " \n";
+        comet_debug() << " \n";
         std::string elewsStr;
         elewsStr += LastChar;
         LastChar = Token(getNextChar());
         elewsStr += LastChar;
-        comet_errs() << " the elewsStr: " << elewsStr << "\n";
-        comet_errs() << " .* for elews\n";
+        comet_debug() << " the elewsStr: " << elewsStr << "\n";
+        comet_debug() << " .* for elews\n";
         LastChar = Token(getNextChar());
         Op1st = semiring_noop;  // default for element-wise mult op
         Op2nd = semiring_times; // default for element-wise mult op
@@ -415,7 +419,7 @@ namespace tensorAlgebra
       //               semiring or monoid ops.
       if (LastChar == '@' && checkNextChar() == '(')
       {
-        comet_errs() << " semiring operations \n";
+        comet_debug() << " semiring operations \n";
         std::string semiringStr[2] = {"", ""};
         LastChar = Token(getNextChar());
         semiringStr[0] = getSemiringStr();

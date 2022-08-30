@@ -59,11 +59,15 @@ using namespace mlir::tensorAlgebra;
 // #endif
 
 #ifdef DEBUG_MODE_TALateLoweringPass
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif

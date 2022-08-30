@@ -51,11 +51,15 @@ using namespace mlir::tensorAlgebra;
 // #endif
 
 #ifdef DEBUG_MODE_LINALGTRANSFORMS
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -258,9 +262,9 @@ struct OptDenseTranspose : public ConversionPattern
   matchAndRewrite(Operation *input_op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final
   {
-    comet_errs() << " OptDenseTranspose : public ConversionPattern\n";
+    comet_debug() << " OptDenseTranspose : public ConversionPattern\n";
     auto op = dyn_cast<linalg::CopyOp>(input_op);
-    comet_errs() << " Lowering dense transpose\n";
+    comet_debug() << " Lowering dense transpose\n";
     assert(isa<linalg::CopyOp>(op) &&
            "this operation is not CopyOp");
 
@@ -272,7 +276,7 @@ struct OptDenseTranspose : public ConversionPattern
     comet_vdump(op);
 
     auto inputType = op->getOperand(0).getType();
-    comet_errs() << " Input Type\n";
+    comet_debug() << " Input Type\n";
     comet_vdump(inputType);
     auto inputMemref = op->getOperand(0);
     auto outputMemref = op->getOperand(1);
@@ -324,7 +328,7 @@ struct OptDenseTranspose : public ConversionPattern
       {
         AffineDimExpr *b = (AffineDimExpr *)&a; // down_casting
         sourceOrder.push_back(b->getPosition());
-        comet_errs() << "Source order: " << b->getPosition() << "\n";
+        comet_debug() << "Source order: " << b->getPosition() << "\n";
       }
     }
 
@@ -338,7 +342,7 @@ struct OptDenseTranspose : public ConversionPattern
       {
         AffineDimExpr *b = (AffineDimExpr *)&a; // down_casting
         destOrder.push_back(b->getPosition());
-        comet_errs() << "destination order: " << b->getPosition() << "\n";
+        comet_debug() << "destination order: " << b->getPosition() << "\n";
       }
     }
 
@@ -362,7 +366,7 @@ struct OptDenseTranspose : public ConversionPattern
 
       for (unsigned i = 0; i < optimalOrder.size(); i++)
       {
-        comet_errs() << "currentOrder[i]: " << currentOrder[i] << " optimalOrder[i]: " << optimalOrder[i] << "\n";
+        comet_debug() << "currentOrder[i]: " << currentOrder[i] << " optimalOrder[i]: " << optimalOrder[i] << "\n";
         // This loop index is the correct loop index, no loop interchange
         if (optimalOrder[i] == currentOrder[i])
         {
@@ -440,7 +444,7 @@ namespace
     OptDenseTransposePass(uint64_t tile_size, bool seperate_tiles) : tile_size(tile_size), seperate_tiles(seperate_tiles){};
     void runOnFunction() final
     {
-      comet_errs() << "OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, FunctionPass>\n";
+      comet_debug() << "OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, FunctionPass>\n";
       ConversionTarget target(getContext());
       target.addLegalDialect<StandardOpsDialect, AffineDialect, memref::MemRefDialect>();
       OwningRewritePatternList patterns(&getContext());
@@ -451,7 +455,7 @@ namespace
         llvm::errs() << "Failed to Lower dense transpose operation\n";
         signalPassFailure();
       }
-      comet_errs() << "OptDenseTransposePass done\n";
+      comet_debug() << "OptDenseTransposePass done\n";
     }
 
   private:
@@ -497,7 +501,7 @@ std::unique_ptr<mlir::Pass> mlir::tensorAlgebra::createLinAlgMatmulMicroKernelPa
 std::unique_ptr<mlir::Pass> mlir::tensorAlgebra::createOptDenseTransposePass(uint64_t tile_size,
                                                                              bool seperate_tiles)
 {
-  comet_errs() << "LinAlgTransforms createOptDenseTransposePass\n";
+  comet_debug() << "LinAlgTransforms createOptDenseTransposePass\n";
   return std::make_unique<OptDenseTransposePass>(tile_size, seperate_tiles);
 }
 

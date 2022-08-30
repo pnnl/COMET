@@ -67,11 +67,15 @@ using namespace mlir::indexTree;
 // #endif
 
 #ifdef DEBUG_MODE_EarlyLoweringPass
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -96,7 +100,7 @@ namespace
     auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
     auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
 
-    comet_errs() << "mixModeEltWiseMultSparseTensorOutputLowering computeOp\n";
+    comet_debug() << "mixModeEltWiseMultSparseTensorOutputLowering computeOp\n";
     comet_vdump(computeOp);
 
     //  elementwise mul op in mix sparse dense case
@@ -104,21 +108,21 @@ namespace
     int sparse_inputtensor_id = 0;
 
     auto rhsComputeOp = computeOp.getDefiningOp()->getOperand(0).getDefiningOp();
-    comet_errs() << " SparseTensorConstructOp: ";
+    comet_debug() << " SparseTensorConstructOp: ";
     comet_pdump(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
     auto sptensor_construct_op = cast<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
 
     for (unsigned int i = 0; i < 2 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
     {
-      comet_errs() << " in for loop\n";
+      comet_debug() << " in for loop\n";
       Value intput_tensorload_op = cast<memref::TensorLoadOp>(sptensor_construct_op.getOperand(i).getDefiningOp());
       Value input_alloc_op = cast<memref::AllocOp>(intput_tensorload_op.getDefiningOp()->getOperand(0).getDefiningOp());
-      comet_errs() << " AllocOp: ";
+      comet_debug() << " AllocOp: ";
       comet_vdump(input_alloc_op);
 
-      comet_errs() << " ";
+      comet_debug() << " ";
       Value input_alloc_op_param = input_alloc_op.getDefiningOp()->getOperand(0);
-      comet_errs() << " ";
+      comet_debug() << " ";
 
       Value output_alloc_op;
       if (i < 2 * (rshPerms[sparse_inputtensor_id].size()))
@@ -130,24 +134,24 @@ namespace
       {
         // Memory allocation for value array in sparse tensor contractions
         output_alloc_op = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{input_alloc_op_param}, rewriter); // Cval array
-        comet_errs() << " AllocOp: ";
+        comet_debug() << " AllocOp: ";
         comet_vdump(output_alloc_op);
       }
 
       Value output_tensorload_op = rewriter.create<memref::TensorLoadOp>(loc, output_alloc_op);
       tensorload_sizes_vec.push_back(output_tensorload_op);
     }
-    comet_errs() << " ";
+    comet_debug() << " ";
 
     // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
     for (unsigned int i = 0; i < 2 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
     {
       int sizes_i = i + 2 * (rshPerms[sparse_inputtensor_id].size()) + 1;
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_pdump(sptensor_construct_op.getOperand(sizes_i).getDefiningOp());
 
       Value input_load_op = sptensor_construct_op.getOperand(sizes_i);
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(input_load_op);
       array_sizes_vec.push_back(input_load_op);
     }
@@ -155,11 +159,11 @@ namespace
     for (unsigned int i = 0; i < rshPerms[sparse_inputtensor_id].size(); i++)
     {
       int sizes_i = i + 2 * (2 * (rshPerms[sparse_inputtensor_id].size()) + 1);
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_pdump(sptensor_construct_op.getOperand(sizes_i).getDefiningOp());
 
       Value input_load_op = sptensor_construct_op.getOperand(sizes_i);
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(input_load_op);
       dimSizes.push_back(input_load_op);
     }
@@ -173,8 +177,8 @@ namespace
                                                 std::vector<Value> &array_sizes_vec,
                                                 PatternRewriter &rewriter)
   {
-    comet_errs() << " sparse output is used in itComputeOp op\n";
-    comet_errs() << " sparseOutputFormat: " << sparseOutputFormat << "\n";
+    comet_debug() << " sparse output is used in itComputeOp op\n";
+    comet_debug() << " sparseOutputFormat: " << sparseOutputFormat << "\n";
 
     IndexType indexType = IndexType::get(op.getContext());
     FloatType f64Type = FloatType::getF64(op.getContext());
@@ -192,7 +196,7 @@ namespace
 
     if (sparseOutputFormat.compare("CSR") == 0)
     { // CSR format
-      comet_errs() << " 2D CSR format in sparse output decl op\n";
+      comet_debug() << " 2D CSR format in sparse output decl op\n";
       // AllocOp, storeOp, LoadOp
       initial_array_sizes.push_back(cst_index_1);
       initial_array_sizes.push_back(cst_index_1);
@@ -211,14 +215,14 @@ namespace
       }
       // The dim size is the second parameter of the
       Value dim2_posSize = rewriter.create<mlir::AddIOp>(loc, dimSizes[0], cst_index_1);
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(dim2_posSize);
       initial_array_sizes.push_back(dim2_posSize);
 
       Value dim2_crdSize = rewriter.create<mlir::MulIOp>(loc, dimSizes[0], dimSizes[1]);
       initial_array_sizes.push_back(dim2_crdSize);
       initial_array_sizes.push_back(dim2_crdSize);
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(dim2_crdSize);
     }
     else
@@ -227,23 +231,23 @@ namespace
     }
 
     // same with transpose case
-    comet_errs() << " array_sizes_vec.size(): " << array_sizes_vec.size() << "\n";
-    comet_errs() << " tensor_rank: " << tensor_rank << "\n";
+    comet_debug() << " array_sizes_vec.size(): " << array_sizes_vec.size() << "\n";
+    comet_debug() << " tensor_rank: " << tensor_rank << "\n";
     std::vector<Value> array_alloc_vec;
     for (unsigned int i = 0; i < 2 * tensor_rank + 1; i++)
     {
       Value alloc_sizes;
       if (i < 2 * tensor_rank)
       {
-        comet_errs() << " Inserting AllocOp: ";
+        comet_debug() << " Inserting AllocOp: ";
         alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{initial_array_sizes[i]}, rewriter);
-        comet_errs() << " AllocOp: ";
+        comet_debug() << " AllocOp: ";
         comet_vdump(alloc_sizes);
       }
       else
       {
         alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{initial_array_sizes[i]}, rewriter);
-        comet_errs() << " AllocOp: ";
+        comet_debug() << " AllocOp: ";
         comet_vdump(alloc_sizes);
       }
       Value tensorload_sizes = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes);
@@ -285,7 +289,7 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
 
-      comet_errs() << "--------------DenseTensorDeclarationLowering in format begin\n";
+      comet_debug() << "--------------DenseTensorDeclarationLowering in format begin\n";
       comet_vdump(op);
       auto loc = op.getLoc();
 
@@ -314,13 +318,13 @@ namespace
       }
 
       // auto alloc_sizes1 = rewriter.create<memref::AllocOp>(loc, resultMemTy, ValueRange(cur_indices));
-      // comet_errs() << " ";
+      // comet_debug() << " ";
       // comet_vdump(alloc_sizes1);
 
       // alloc_sizes1.getOperation()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
 
       // Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes1);
-      // comet_errs() << " ";
+      // comet_debug() << " ";
       // comet_vdump(tensorLoad);
 
       // op.replaceAllUsesWith(tensorLoad);
@@ -334,7 +338,7 @@ namespace
           is_filled = true;
       }
 
-      comet_errs() << " AllocOp for initialization";
+      comet_debug() << " AllocOp for initialization";
       Value init_alloc;
       if (is_filled)
       {
@@ -349,19 +353,19 @@ namespace
       init_alloc.getDefiningOp()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
 
       Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, init_alloc);
-      comet_errs() << " TensorLoad:";
+      comet_debug() << " TensorLoad:";
       comet_vdump(tensorLoad);
 
       op.replaceAllUsesWith(tensorLoad);
       rewriter.replaceOp(op, tensorLoad);
-      comet_errs() << "--------------DenseTensorDeclarationLowering in format end\n";
+      comet_debug() << "--------------DenseTensorDeclarationLowering in format end\n";
       return success();
     }
   };
 
   void insertReadFileLibCall(int rank_size, MLIRContext *ctx, ModuleOp &module, FuncOp function)
   {
-    comet_errs() << "Inserting insertReadFileLibCall\n";
+    comet_debug() << "Inserting insertReadFileLibCall\n";
     FloatType f32Type, f64Type;
     if (VALUETYPE.compare("f32") == 0)
     {
@@ -381,7 +385,7 @@ namespace
 
     if (rank_size == 2)
     {
-      comet_errs() << " Rank Size is 2\n";
+      comet_debug() << " Rank Size is 2\n";
       auto readInput2DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f32}, {});
       auto readInput2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f64}, {});
 
@@ -399,7 +403,7 @@ namespace
       {
         if (isFuncInMod("read_input_2D_f64", module) == false)
         {
-          comet_errs() << " Inserting read_input_2D_f64\n";
+          comet_debug() << " Inserting read_input_2D_f64\n";
           FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_2D_f64",
                                         readInput2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
@@ -423,7 +427,7 @@ namespace
       {
         if (isFuncInMod("read_input_sizes_2D_f64", module) == false)
         {
-          comet_errs() << " Inserting read_input_sizes_2D_f64\n";
+          comet_debug() << " Inserting read_input_sizes_2D_f64\n";
           FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_sizes_2D_f64",
                                         readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
@@ -453,12 +457,12 @@ namespace
       {
         if (isFuncInMod("read_input_3D_f64", module) == false)
         {
-          comet_errs() << " Insert read_input_sizes_3D_f64 decl\n";
+          comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
           FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_3D_f64",
                                         readInput3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
-          comet_errs() << " Insert read_input_sizes_3D_f64 decl\n";
+          comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
         }
       }
 
@@ -478,12 +482,12 @@ namespace
       {
         if (isFuncInMod("read_input_sizes_3D_f64", module) == false)
         {
-          comet_errs() << " Insert read_input_sizes_3D_f64 decl\n";
+          comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
           FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_sizes_3D_f64",
                                         readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
-          comet_errs() << " Insert read_input_sizes_3D_f64 decl finish\n";
+          comet_debug() << " Insert read_input_sizes_3D_f64 decl finish\n";
         }
       }
     }
@@ -506,7 +510,7 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
       assert(isa<tensorAlgebra::SparseTensorDeclOp>(op));
-      comet_errs() << " SparseInputTensorDeclOpLowering in format begin\n";
+      comet_debug() << " SparseInputTensorDeclOpLowering in format begin\n";
       comet_vdump(op);
       mlir::MLIRContext *ctx = rewriter.getContext();
       auto function = cast<FuncOp>(op->getParentOp());
@@ -520,11 +524,11 @@ namespace
 
       for (auto u1 : op.getOperation()->getUsers())
       {
-        comet_errs() << "\nCheck the tensor is input or output\n";
+        comet_debug() << "\nCheck the tensor is input or output\n";
         comet_pdump(u1);
         if (isa<tensorAlgebra::TensorMultOp>(u1))
         {
-          comet_errs() << " used in ta.tc op\n";
+          comet_debug() << " used in ta.tc op\n";
           auto p = cast<tensorAlgebra::TensorMultOp>(u1).getOperation();
           for (unsigned int i = 0; i < p->getNumOperands(); i++)
           {
@@ -532,7 +536,7 @@ namespace
             std::string n_str = dump2str(p->getOperand(i));
             if (n_str.compare(0, op_str.size(), op_str) == 0)
             {
-              comet_errs() << " FIND IT: " << i << "\n";
+              comet_debug() << " FIND IT: " << i << "\n";
               if (i == 2)
               {
                 isOutputTensor = true;
@@ -542,16 +546,16 @@ namespace
         }
         else if (isa<tensorAlgebra::TensorSetOp>(u1))
         {
-          comet_errs() << " used in ta.set op\n";
+          comet_debug() << " used in ta.set op\n";
           auto p = cast<tensorAlgebra::TensorSetOp>(u1).getOperation();
           for (unsigned int i = 0; i < p->getNumOperands(); i++)
           {
             // comet_vdump(n);
-            comet_errs() << " the " << i << "th operand\n";
+            comet_debug() << " the " << i << "th operand\n";
             std::string n_str = dump2str(p->getOperand(i));
             if (n_str.compare(0, op_str.size(), op_str) == 0)
             {
-              comet_errs() << " FIND IT: " << i << "\n";
+              comet_debug() << " FIND IT: " << i << "\n";
               if (i == 1)
               {
                 // The source tensor of the set op
@@ -563,14 +567,14 @@ namespace
 
         else if (isa<tensorAlgebra::TransposeOp>(u1))
         {
-          comet_errs() << " used in transpose op\n";
+          comet_debug() << " used in transpose op\n";
           auto p = cast<tensorAlgebra::TransposeOp>(u1).getOperation();
           for (unsigned int i = 0; i < p->getNumOperands(); i++)
           {
             std::string n_str = dump2str(p->getOperand(i));
             if (n_str.compare(0, op_str.size(), op_str) == 0)
             {
-              comet_errs() << " FIND IT: " << i << "\n";
+              comet_debug() << " FIND IT: " << i << "\n";
               if (i == 1)
               {
                 // (ruiqin): output of ta.elews_mul
@@ -581,30 +585,30 @@ namespace
         }
         else if (isa<indexTree::IndexTreeComputeRHSOp>(u1))
         {
-          comet_errs() << " used in ta.itComputeRHS op\n";
+          comet_debug() << " used in ta.itComputeRHS op\n";
           isOutputTensor = false;
         }
         else if (isa<indexTree::IndexTreeComputeLHSOp>(u1))
         {
-          comet_errs() << " used in ta.itComputeLHS op\n";
+          comet_debug() << " used in ta.itComputeLHS op\n";
           isOutputTensor = true;
         }
         else if (isa<tensorAlgebra::TensorFillFromFileOp>(u1))
         {
           // do nothing
-          comet_errs() << " the tensor is in fill_from_file op\n";
+          comet_debug() << " the tensor is in fill_from_file op\n";
         }
         else if (isa<tensorAlgebra::PrintOp>(u1))
         {
-          comet_errs() << " the tensor is in PrintOp\n";
+          comet_debug() << " the tensor is in PrintOp\n";
         }
         else if (isa<tensorAlgebra::SUMOp>(u1))
         {
-          comet_errs() << " the tensor is in SumOp\n";
+          comet_debug() << " the tensor is in SumOp\n";
         }
         else if (isa<tensorAlgebra::TensorElewsMultOp>(u1))
         {
-          comet_errs() << " the tensor is in Elementwise multiplication\n";
+          comet_debug() << " the tensor is in Elementwise multiplication\n";
         }
         else
         {
@@ -613,14 +617,14 @@ namespace
         }
       }
 
-      comet_errs() << " isOutputTensor: " << isOutputTensor << "\n";
+      comet_debug() << " isOutputTensor: " << isOutputTensor << "\n";
 
       auto loc = op.getLoc();
       StringRef formatsAttr = op.format();
       std::string formats_str(formatsAttr.data());
-      comet_errs() << " --- " << formats_str << "\n";
+      comet_debug() << " --- " << formats_str << "\n";
 
-      comet_errs() << " " << op.getNumOperands() << "\n";
+      comet_debug() << " " << op.getNumOperands() << "\n";
       auto rank_size = op.getNumOperands();
 
       IndexType indexType = IndexType::get(op.getContext());
@@ -635,11 +639,11 @@ namespace
       Type unrankedMemTy_index = UnrankedMemRefType::get(indexType, 0);
       Type unrankedMemTy_f64 = UnrankedMemRefType::get(f64Type, 0);
 
-      comet_errs() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
+      comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
       if (isDense(formats_str, ", ") == false && isOutputTensor == false)
       {
-        comet_errs() << " Sparse input tensor \n";
+        comet_debug() << " Sparse input tensor \n";
         // search read_from_file function call to get the input file name
         // Currently, has no filename
         std::string input_filename;
@@ -648,15 +652,15 @@ namespace
           // Used in LabeledTensorOp and then the LabeledTensorOp is used in TensorChainSetOp
           if (isa<tensorAlgebra::LabeledTensorOp>(u))
           {
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             // comet_pdump(u);
             auto labeledtensorop = cast<tensorAlgebra::LabeledTensorOp>(u);
-            LLVM_DEBUG(comet_errs() << " labeled_tensor op\n");
+            LLVM_DEBUG(comet_debug() << " labeled_tensor op\n");
             for (auto u1 : u->getUsers())
             {
               if (isa<tensorAlgebra::TensorChainSetOp>(u1))
               {
-                LLVM_DEBUG(comet_errs() << " tensor set_op\n");
+                LLVM_DEBUG(comet_debug() << " tensor set_op\n");
 
                 auto setop = cast<tensorAlgebra::TensorChainSetOp>(u1);
 
@@ -666,14 +670,14 @@ namespace
                 {
                   auto genericcallop = cast<tensorAlgebra::GenericCallOp>(read_from_file_operand);
                   // comet_vdump(genericcallop);
-                  LLVM_DEBUG(comet_errs() << " read_from_file op\n");
+                  LLVM_DEBUG(comet_debug() << " read_from_file op\n");
                   std::string read_ref(genericcallop.callee().getLeafReference());
-                  LLVM_DEBUG(comet_errs() << " read_ref: " << read_ref << "\n");
+                  LLVM_DEBUG(comet_debug() << " read_ref: " << read_ref << "\n");
                   if (read_ref.compare(0, 14, "read_from_file") == 0)
                   {
-                    LLVM_DEBUG(comet_errs() << " yes, read_from_file op\n");
+                    LLVM_DEBUG(comet_debug() << " yes, read_from_file op\n");
                     // get filename through operand
-                    comet_errs() << " genericcallop.getNumOperands(): " << genericcallop.getOperation()->getNumOperands() << "\n";
+                    comet_debug() << " genericcallop.getNumOperands(): " << genericcallop.getOperation()->getNumOperands() << "\n";
 
                     // Erase the useless ops
                     rewriter.eraseOp(setop);
@@ -688,17 +692,17 @@ namespace
           else if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
           {
             // comet_pdump(u);
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
             // Can get filename, from "filename" attribute of fillfromfileop
 
             StringAttr filename = fillfromfileop.filename().cast<StringAttr>();
 
-            comet_errs() << " filename: " << filename.getValue() << "\n";
+            comet_debug() << " filename: " << filename.getValue() << "\n";
 
             std::string filename_str(filename.getValue());
             input_filename = filename_str;
-            comet_errs() << " " << input_filename << "\n";
+            comet_debug() << " " << input_filename << "\n";
 
             rewriter.eraseOp(fillfromfileop);
           }
@@ -706,13 +710,13 @@ namespace
 
         MemRefType memTy_alloc_sizes = MemRefType::get({3 * rank_size + 1}, indexType);
         Value alloc_sizes = rewriter.create<memref::AllocOp>(loc, memTy_alloc_sizes);
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(alloc_sizes);
 
         Value alloc_sizes_cast = rewriter.create<memref::CastOp>(loc, alloc_sizes, unrankedMemTy_index);
 
         std::vector<Value> dim_format = mlir::tensorAlgebra::getFormatsValue(formats_str, rank_size, rewriter, loc, indexType);
-        comet_errs() << " Get the dim_format\n";
+        comet_debug() << " Get the dim_format\n";
 
         // inform the runtime of what env var to use for parsing input file
         IntegerType i32Type = IntegerType::get(op.getContext(), 32);
@@ -731,7 +735,7 @@ namespace
         }
         else
         { // SPARSE_FILE_NAME{int}
-          comet_errs() << " Parsed fileID: " << fileID << "\n";
+          comet_debug() << " Parsed fileID: " << fileID << "\n";
           int intFileID = std::stoi(fileID);
           sparseFileID = rewriter.create<mlir::ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, intFileID));
         }
@@ -739,7 +743,7 @@ namespace
         // Now, setup the runtime calls
         if (rank_size == 2)
         { // 2D
-          comet_errs() << " 2D\n";
+          comet_debug() << " 2D\n";
           insertReadFileLibCall(rank_size, ctx, module, function);
 
           if (VALUETYPE.compare(0, 3, "f32") == 0)
@@ -755,38 +759,38 @@ namespace
             auto read_input_sizes_f64Call = rewriter.create<mlir::CallOp>(
                 loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], alloc_sizes_cast});
             read_input_sizes_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
-            comet_errs() << " \n";
+            comet_debug() << " \n";
             comet_vdump(read_input_sizes_f64Call);
           }
-          comet_errs() << " 2D\n";
+          comet_debug() << " 2D\n";
         }
         else if (rank_size == 3)
         { // 3D
 
-          comet_errs() << " 3D\n";
+          comet_debug() << " 3D\n";
           insertReadFileLibCall(rank_size, ctx, module, function);
 
           if (VALUETYPE.compare(0, 3, "f32") == 0)
           {
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             std::string read_input_sizes_str = "read_input_sizes_3D_f32";
             auto read_input_sizes_f64Call = rewriter.create<mlir::CallOp>(
                 loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], dim_format[2], alloc_sizes_cast});
             read_input_sizes_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
-            comet_errs() << "\n";
+            comet_debug() << "\n";
           }
           else
           { // default f64
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             std::string read_input_sizes_str = "read_input_sizes_3D_f64";
-            comet_errs() << " "
+            comet_debug() << " "
                          << "dim_format.size(): " << dim_format.size() << " \n";
             auto read_input_sizes_f64Call = rewriter.create<mlir::CallOp>(
                 loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], dim_format[2], alloc_sizes_cast});
             read_input_sizes_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
-            comet_errs() << "\n";
+            comet_debug() << "\n";
           }
-          comet_errs() << "\n";
+          comet_debug() << "\n";
         }
         else
         {
@@ -799,7 +803,7 @@ namespace
           Value idx = rewriter.create<ConstantIndexOp>(loc, i);
           // sizes_idxes.push_back(idx);
           Value cor = rewriter.create<memref::LoadOp>(loc, alloc_sizes, idx);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(cor);
           array_sizes.push_back(cor);
         }
@@ -812,7 +816,7 @@ namespace
           idxes.push_back(array_sizes[i]);
           comet_vdump(array_sizes[i]);
           Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{idxes}, rewriter);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(alloc_size);
 
           alloc_sizes_vec.push_back(alloc_size);
@@ -825,7 +829,7 @@ namespace
           std::vector<Value> idxes;
           idxes.push_back(array_sizes[i]);
           Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{idxes}, rewriter);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(alloc_size);
           alloc_sizes_vec.push_back(alloc_size);
           Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, alloc_size, unrankedMemTy_f64);
@@ -867,7 +871,7 @@ namespace
           llvm::errs() << __LINE__ << " more than 3D, not supported\n";
         }
 
-        comet_errs() << " Generate read_input_2D or read_input_3D functions\n";
+        comet_debug() << " Generate read_input_2D or read_input_3D functions\n";
         std::vector<Value> alloc_tensor_vec;
         for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
         {
@@ -907,14 +911,14 @@ namespace
           llvm::errs() << __LINE__ << " more than 3D, not supported\n";
         }
 
-        comet_errs() << " sptensor: ";
+        comet_debug() << " sptensor: ";
         comet_vdump(sptensor);
 
         // create ta.index_label operation.
         comet_vdump(op);
 
         auto tensor_decl_value = cast<tensorAlgebra::SparseTensorDeclOp>(op);
-        LLVM_DEBUG(comet_errs() << " " << tensor_decl_value.labels().size() << "\n");
+        LLVM_DEBUG(comet_debug() << " " << tensor_decl_value.labels().size() << "\n");
         for (unsigned int i = 0; i < tensor_decl_value.labels().size(); i++)
         {
           comet_vdump(tensor_decl_value.labels()[i]);
@@ -932,7 +936,7 @@ namespace
           }
           else if (isa<tensorAlgebra::IndexLabelOp>(tensor_decl_value.labels()[i].getDefiningOp()))
           {
-            comet_errs() << " isa<tensorAlgebra::IndexLabelOp\n";
+            comet_debug() << " isa<tensorAlgebra::IndexLabelOp\n";
           }
         }
 
@@ -956,10 +960,10 @@ namespace
       /**** The tensor is dense *****/
       else
       { // format == "Dense"
-        comet_errs() << " it is dense tensor\n";
+        comet_debug() << " it is dense tensor\n";
       }
 
-      comet_errs() << " SparseInputTensorDeclOpLowering in format end\n";
+      comet_debug() << " SparseInputTensorDeclOpLowering in format end\n";
       // module->dump();
       return success();
     }
@@ -979,15 +983,15 @@ namespace
     {
       // Sparse output tensor declaration happens after lowering to index tree dialect
       assert(isa<tensorAlgebra::SparseOutputTensorDeclOp>(op));
-      comet_errs() << "SparseOutputTensorDeclOpLowering in format begin\n";
+      comet_debug() << "SparseOutputTensorDeclOpLowering in format begin\n";
       comet_vdump(op);
 
       auto loc = op.getLoc();
       StringRef formatsAttr = op.format();
       std::string formats_str(formatsAttr.data());
-      comet_errs() << " --- " << formats_str << "\n";
+      comet_debug() << " --- " << formats_str << "\n";
 
-      comet_errs() << " " << op.getNumOperands() << "\n";
+      comet_debug() << " " << op.getNumOperands() << "\n";
       auto rank_size = op.getNumOperands();
 
       IndexType indexType = IndexType::get(op.getContext());
@@ -999,7 +1003,7 @@ namespace
       auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
       auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
 
-      comet_errs() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
+      comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
       // sparse output
       if (isDense(formats_str, ", ") == false)
@@ -1020,32 +1024,32 @@ namespace
 
         for (auto u : op.getOperation()->getUsers())
         {
-          comet_errs() << " Get users before ";
+          comet_debug() << " Get users before ";
           comet_pdump(u);
           if (isa<tensorAlgebra::LabeledTensorOp>(u))
           {
             comet_pdump(u);
             auto labeledtensorop = cast<tensorAlgebra::LabeledTensorOp>(u);
-            comet_errs() << " labeled_tensor op\n";
+            comet_debug() << " labeled_tensor op\n";
             for (auto u1 : u->getUsers())
             {
               if (isa<tensorAlgebra::TensorChainSetOp>(u1))
               {
-                comet_errs() << " tensor set_op\n";
+                comet_debug() << " tensor set_op\n";
                 auto setop = cast<tensorAlgebra::TensorChainSetOp>(u1);
                 auto read_from_file_operand = setop.getOperand(1).getDefiningOp(); // funccall
                 if (isa<tensorAlgebra::GenericCallOp>(read_from_file_operand))
                 {
                   auto genericcallop = cast<tensorAlgebra::GenericCallOp>(read_from_file_operand);
                   // comet_vdump(genericcallop);
-                  comet_errs() << " read_from_file op\n";
+                  comet_debug() << " read_from_file op\n";
                   std::string read_ref(genericcallop.callee().getLeafReference());
-                  comet_errs() << " read_ref: " << read_ref << "\n";
+                  comet_debug() << " read_ref: " << read_ref << "\n";
                   if (read_ref.compare(0, 14, "read_from_file") == 0)
                   {
-                    comet_errs() << " yes, read_from_file op\n";
+                    comet_debug() << " yes, read_from_file op\n";
                     // get filename through operand
-                    comet_errs() << " genericcallop.getNumOperands(): " << genericcallop.getOperation()->getNumOperands() << "\n";
+                    comet_debug() << " genericcallop.getNumOperands(): " << genericcallop.getOperation()->getNumOperands() << "\n";
 
                     // Erase the useless ops
                     rewriter.eraseOp(setop);
@@ -1059,7 +1063,7 @@ namespace
 
           else if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
           {
-            comet_errs() << " Sparse output is used in TensorFillFromFileOp\n";
+            comet_debug() << " Sparse output is used in TensorFillFromFileOp\n";
             auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
             // Can get filename, from "filename" attribute of fillfromfileop
             rewriter.eraseOp(fillfromfileop);
@@ -1069,7 +1073,7 @@ namespace
                    (isa<tensorAlgebra::TensorSetOp>(u) &&
                     isa<tensorAlgebra::TransposeOp>(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp())))
           {
-            comet_errs() << " sparse output is used in transpose op\n";
+            comet_debug() << " sparse output is used in transpose op\n";
             // Get the freeIndices of the sparse input tensor
             // Check the dimension size, if it is integer, format is dense and get dim_size
             // If it is ?, get the sparse input and get the definition, and the freeindex,
@@ -1085,19 +1089,19 @@ namespace
             }
 
             ArrayAttr indexMaps = transpose_op.indexing_maps();
-            comet_errs() << " we get the indexMaps\n";
+            comet_debug() << " we get the indexMaps\n";
             allPerms = getAllPerms(indexMaps);
-            comet_errs() << " we get the permutations\n";
+            comet_debug() << " we get the permutations\n";
 
             // mlir::Value src_input = getOperand(0);
             // mlir::Value dst_input = transpose_op.getOperand(0);
             mlir::Value src_input = transpose_op.rhs();
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_vdump(src_input);
             mlir::Value dst_input;
             for (auto u : op.getOperation()->getResult(0).getUsers())
             {
-              comet_errs() << " ";
+              comet_debug() << " ";
               comet_pdump(u);
               if (isa<tensorAlgebra::TensorSetOp>(u))
               {
@@ -1133,9 +1137,9 @@ namespace
             // for ith index in B: pos is 2*i, crd is 2*i + 1
             //                     pos_size is (2*rank+1) + 2*i, crd_size is (2*rank+1) + 2*i+1
             // unsigned int dst_rank = (dst_input.getDefiningOp()->getNumOperands() -2)/5;
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_vdump(dst_input);
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_pdump(dst_input.getDefiningOp());
             unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
             for (unsigned int i = 0; i < dst_rank; i++)
@@ -1183,7 +1187,7 @@ namespace
             {
               if (src_format.compare("CSR") == 0)
               {
-                comet_errs() << " 2D CSR transpose to 2D CSR\n";
+                comet_debug() << " 2D CSR transpose to 2D CSR\n";
                 array_sizes_vec.push_back(cst_index_1);
                 array_sizes_vec.push_back(cst_index_1);
                 mlir::Value crd_size = rewriter.create<mlir::AddIOp>(loc, dimSizes[0], cst_index_1);
@@ -1198,7 +1202,7 @@ namespace
             {
               if (src_format.compare("CSF") == 0)
               {
-                comet_errs() << " 3D CSF transpose to 3D CSF\n";
+                comet_debug() << " 3D CSF transpose to 3D CSF\n";
                 array_sizes_vec.push_back(cst_index_2);
                 mlir::Value src_nnz = src_input.getDefiningOp()->getOperand(13);
                 mlir::Value src_nnz_add1 = rewriter.create<mlir::AddIOp>(loc, src_nnz, cst_index_1);
@@ -1211,21 +1215,21 @@ namespace
               }
             }
 
-            comet_errs() << " array_sizes_vec.size(): " << array_sizes_vec.size() << "\n";
-            comet_errs() << " dst_rank: " << dst_rank << "\n";
+            comet_debug() << " array_sizes_vec.size(): " << array_sizes_vec.size() << "\n";
+            comet_debug() << " dst_rank: " << dst_rank << "\n";
             for (unsigned int i = 0; i < 2 * dst_rank + 1; i++)
             {
               Value alloc_sizes;
               if (i < 2 * dst_rank)
               {
                 alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{array_sizes_vec[i]}, rewriter);
-                comet_errs() << " AllocOp: ";
+                comet_debug() << " AllocOp: ";
                 comet_vdump(alloc_sizes);
               }
               else
               {
                 alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{array_sizes_vec[i]}, rewriter);
-                comet_errs() << " AllocOp: ";
+                comet_debug() << " AllocOp: ";
                 comet_vdump(alloc_sizes);
               }
               Value tensorload_sizes = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes);
@@ -1235,11 +1239,11 @@ namespace
 
           else if (isa<indexTree::IndexTreeComputeLHSOp>(u))
           {
-            comet_errs() << " sparse output is used in itComputeOp op\n";
-            comet_errs() << " formats_str: " << formats_str << "\n";
+            comet_debug() << " sparse output is used in itComputeOp op\n";
+            comet_debug() << " formats_str: " << formats_str << "\n";
 
             indexTree::IndexTreeComputeLHSOp lhsOp = cast<indexTree::IndexTreeComputeLHSOp>(u);
-            comet_errs() << " current Op: ";
+            comet_debug() << " current Op: ";
             comet_vdump(lhsOp);
 
             bool completed = false;
@@ -1249,7 +1253,7 @@ namespace
               {
                 completed = true;
                 auto computeOp = cast<indexTree::IndexTreeComputeOp>(uLHS);
-                comet_errs() << " Get RHS op: ";
+                comet_debug() << " Get RHS op: ";
                 comet_vdump(computeOp);
 
                 std::vector<std::vector<int>> rhsPerms;
@@ -1258,38 +1262,38 @@ namespace
                 std::vector<std::vector<std::string>> rhsFormats;
                 getRHSFormatsOfComputeOp(computeOp, rhsFormats);
 
-                comet_errs() << " rhsPerms: \n";
+                comet_debug() << " rhsPerms: \n";
                 for (auto m : rhsPerms)
                 {
-                  comet_errs() << " ";
+                  comet_debug() << " ";
                   for (auto n : m)
                   {
-                    comet_errs() << n << " ";
+                    comet_debug() << n << " ";
                   }
-                  comet_errs() << "\n";
+                  comet_debug() << "\n";
                 }
 
-                comet_errs() << " rhsFormats: \n";
+                comet_debug() << " rhsFormats: \n";
                 for (auto m : rhsFormats)
                 {
-                  comet_errs() << " ";
+                  comet_debug() << " ";
                   for (auto n : m)
                   {
-                    comet_errs() << n << " ";
+                    comet_debug() << n << " ";
                   }
-                  comet_errs() << "\n";
+                  comet_debug() << "\n";
                 }
 
                 bool isElementwise = checkIsElementwise(rhsPerms);
                 bool isMixedMode = checkIsMixedMode(rhsFormats);
 
-                comet_errs() << "IsElementWise: " << isElementwise << " isMixedMode: " << isMixedMode << "\n";
+                comet_debug() << "IsElementWise: " << isElementwise << " isMixedMode: " << isMixedMode << "\n";
                 if (isElementwise && isMixedMode)
                 {
-                  comet_errs() << "It is an elementwise multiplication in mixed Mode sparse = sparse * dense\n";
+                  comet_debug() << "It is an elementwise multiplication in mixed Mode sparse = sparse * dense\n";
                   if (isMixedMode)
                   {
-                    comet_errs() << "It is an mix-mode elementwise multiplication in Mix Mode\n";
+                    comet_debug() << "It is an mix-mode elementwise multiplication in Mix Mode\n";
                     mixModeEltWiseMultSparseTensorOutputLowering(computeOp,
                                                                  loc,
                                                                  rhsPerms,
@@ -1299,7 +1303,7 @@ namespace
                   }
                   else
                   {
-                    comet_errs() << "It is an pure-sparse elementwise multiplication\n";
+                    comet_debug() << "It is an pure-sparse elementwise multiplication\n";
                     pureSparseMultSparseTensorOutputLowering(op,
                                                              loc,
                                                              formats_str,
@@ -1313,7 +1317,7 @@ namespace
                 {
                   if (!isMixedMode)
                   {
-                    comet_errs() << "It is an pure-sparse multiplication or assigment from dense to sparse (produced after workspace transformations)\n";
+                    comet_debug() << "It is an pure-sparse multiplication or assigment from dense to sparse (produced after workspace transformations)\n";
                     pureSparseMultSparseTensorOutputLowering(op,
                                                              loc,
                                                              formats_str,
@@ -1335,12 +1339,12 @@ namespace
           }
           else if (isa<indexTree::IndexTreeComputeRHSOp>(u))
           {
-            comet_errs() << " the tensor is in IndexTreeComputeRHSOp\n";
+            comet_debug() << " the tensor is in IndexTreeComputeRHSOp\n";
             continue;
           }
           else if (isa<tensorAlgebra::PrintOp>(u))
           {
-            comet_errs() << " the tensor is in print op\n";
+            comet_debug() << " the tensor is in print op\n";
             continue;
           }
           else
@@ -1349,35 +1353,35 @@ namespace
             comet_pdump(u);
           }
 
-          comet_errs() << " Get users after ";
+          comet_debug() << " Get users after ";
           // create sparse tensor construct after lowering each sparse tensor output users
-          comet_errs() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
+          comet_debug() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
           // create sptensor_construct
           SmallVector<mlir::Type, 1> elementTypes;
           for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
           {
             assert(tensorload_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
-            comet_errs() << " " << i << " ";
+            comet_debug() << " " << i << " ";
             comet_vdump(tensorload_sizes_vec[i]);
             elementTypes.push_back(tensorload_sizes_vec[i].getType());
           }
-          comet_errs() << "\n ";
+          comet_debug() << "\n ";
           // [0 ... 2*rank_size, 2*rank_size+1 ... 4*rank_size+1, 4*rank_size+2 ... 5*rank_size + 1]
           // 2d+1 + 2d+1 + d => 5d+2
           for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
           {
             assert(array_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
-            comet_errs() << " " << i << " ";
+            comet_debug() << " " << i << " ";
             comet_vdump(array_sizes_vec[i]);
             elementTypes.push_back(array_sizes_vec[i].getType());
           }
-          comet_errs() << "\n ";
+          comet_debug() << "\n ";
           for (unsigned int i = 0; i < rank_size; i++)
           {
             assert(dimSizes.size() > 0 && "ERROR: Please report this error to the developers!");
             elementTypes.push_back(dimSizes[i].getType());
           }
-          comet_errs() << "\n ";
+          comet_debug() << "\n ";
 
           auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
 
@@ -1395,7 +1399,7 @@ namespace
             assert(false && "Not supported format (Tensors of dimensions greater than 3 are currently not supported).\n");
           }
 
-          comet_errs() << "sptensor: ";
+          comet_debug() << "sptensor: ";
           comet_vdump(sptensor);
 
           // create ta.index_label operation.
@@ -1435,7 +1439,7 @@ namespace
 
         MemRefType memrefType2 = MemRefType::get(cur_memref_arrayref, f64Type);
         Value alloc_sizes1 = insertAllocAndInitialize(loc, memrefType2, ValueRange(cur_indices), rewriter);
-        comet_errs() << " AllocOp: ";
+        comet_debug() << " AllocOp: ";
         comet_vdump(alloc_sizes1);
 
         Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes1);
@@ -1444,7 +1448,7 @@ namespace
         op.replaceAllUsesWith(tensorLoad);
         rewriter.replaceOp(op, tensorLoad);
       }
-      comet_errs() << "--------------SparseOutputTensorDeclOpLowering in format end\n";
+      comet_debug() << "--------------SparseOutputTensorDeclOpLowering in format end\n";
       return success();
     }
   };
@@ -1513,7 +1517,7 @@ namespace
 /// Dense tensor declaration lowering
 void DenseTensorDeclLoweringPass::runOnFunction()
 {
-  comet_errs() << "DenseTensorDeclLoweringPass begin\n";
+  comet_debug() << "DenseTensorDeclLoweringPass begin\n";
   auto function = getFunction();
 
   ConversionTarget target(getContext());
@@ -1548,7 +1552,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
     signalPassFailure();
   }
 
-  comet_errs() << "Early lowering finished\n";
+  comet_debug() << "Early lowering finished\n";
 }
 
 /**********************************************************************/
@@ -1596,7 +1600,7 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
 /*******************************************************************/
 void SparseOutputTensorDeclLoweringPass::runOnFunction()
 {
-  comet_errs() << "start SparseOutputTensorDeclLoweringPass\n";
+  comet_debug() << "start SparseOutputTensorDeclLoweringPass\n";
   ConversionTarget target(getContext());
 
   target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
@@ -1613,7 +1617,7 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
   target.addLegalOp<indexTree::IndexTreeIndicesOp>();
   target.addLegalOp<indexTree::IndexTreeComputeOp>();
 
-  comet_errs() << " ";
+  comet_debug() << " ";
 
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<SparseOutputTensorDeclOpLowering>(&getContext());
@@ -1627,7 +1631,7 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
 
 void TensorFillLoweringPass::runOnFunction()
 {
-  comet_errs() << "start TensorFillLoweringPass\n";
+  comet_debug() << "start TensorFillLoweringPass\n";
 
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();

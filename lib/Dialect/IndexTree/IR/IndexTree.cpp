@@ -35,11 +35,15 @@ using namespace std;
 // #endif
 
 #ifdef DEBUG_MODE_IndexTree
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -61,17 +65,17 @@ void TreeNode::print(int depth)
 {
   for (int i = 0; i < depth; i++)
   {
-    comet_errs() << "  ";
+    comet_debug() << "  ";
   }
   if (isRealIndexNode())
   {
     if (outputDomain != nullptr)
     {
-      comet_errs() << "for " << getName() << " in input " << inputDomain->str() << ", output " << outputDomain->str() << '\n';
+      comet_debug() << "for " << getName() << " in input " << inputDomain->str() << ", output " << outputDomain->str() << '\n';
     }
     else
     {
-      comet_errs() << "for " << getName() << " in input " << inputDomain->str() << '\n';
+      comet_debug() << "for " << getName() << " in input " << inputDomain->str() << '\n';
     }
     for (auto &child : children)
     {
@@ -88,7 +92,7 @@ void TreeNode::print(int depth)
   else
   {
     assert(expr != nullptr);
-    comet_errs() << expr->str() << '\n';
+    comet_debug() << expr->str() << '\n';
   }
 }
 
@@ -104,7 +108,7 @@ void TreeNode::setId(int Id)
 
 void Index_Tree::print(string msg)
 {
-  comet_errs() << msg << "\n";
+  comet_debug() << msg << "\n";
   getRoot()->print(0);
 }
 
