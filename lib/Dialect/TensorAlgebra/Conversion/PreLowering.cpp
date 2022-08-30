@@ -65,11 +65,15 @@ using namespace mlir::tensorAlgebra;
 // #endif
 
 #ifdef DEBUG_MODE_PreLoweringPass
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -93,24 +97,24 @@ bool isNeedTensorDecl(t op)
   bool isUsedInSetSource = true;
   std::string op_str = dump2str(op);
   mlir::Value result = op.getOperation()->getResult(0);
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_vdump(result);
   for (auto u1 : result.getUsers())
   {
-    comet_errs() << " ";
+    comet_debug() << " ";
     comet_pdump(u1);
     // If not used as source tensor of set_op, it is tmp result
     if (isa<tensorAlgebra::TensorSetOp>(u1))
     {
-      comet_errs() << " used in ta.set_new op\n";
+      comet_debug() << " used in ta.set_new op\n";
       auto p = cast<tensorAlgebra::TensorSetOp>(u1).getOperation();
       for (unsigned int i = 0; i < p->getNumOperands(); i++)
       {
-        comet_errs() << " the " << i << "th operand\n";
+        comet_debug() << " the " << i << "th operand\n";
         std::string n_str = dump2str(p->getOperand(i));
         if (n_str.compare(0, op_str.size(), op_str) == 0)
         {
-          comet_errs() << " FIND IT: " << i << "\n";
+          comet_debug() << " FIND IT: " << i << "\n";
           if (i == 0)
           { // DONE(ruiqin): used as source tensor
             isUsedInSetSource = false;
@@ -132,7 +136,7 @@ void addTensorDecl(t op)
   {
     for (unsigned int i = 1; i < op.getOperation()->getNumOperands(); i++)
     {
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(op.getOperation()->getOperand(i));
       lbls_value.push_back(op.getOperation()->getOperand(i));
     }
@@ -147,7 +151,7 @@ void addTensorDecl(t op)
   {
     for (unsigned int i = 2; i < op.getOperation()->getNumOperands(); i++)
     {
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(op.getOperation()->getOperand(i));
       lbls_value.push_back(op.getOperation()->getOperand(i));
     }
@@ -162,7 +166,7 @@ void addTensorDecl(t op)
   {
     for (unsigned int i = 2; i < op.getOperation()->getNumOperands(); i++)
     {
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(op.getOperation()->getOperand(i));
       lbls_value.push_back(op.getOperation()->getOperand(i));
     }
@@ -182,17 +186,17 @@ void addTensorDecl(t op)
     itensor = builder.create<DenseTensorDeclOp>(location, ret_value.getType(), lbls_value, ret_format);
   else
     itensor = builder.create<SparseTensorDeclOp>(location, ret_value.getType(), lbls_value, ret_format);
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_vdump(itensor);
   op.replaceAllUsesWith(itensor);
 
   builder.setInsertionPointAfter(op);
   #ifdef DEBUG_MODE_PreLoweringPass
   auto setop = builder.create<TensorSetOp>(location, ret_value, itensor);
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_vdump(setop);
 
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_vdump(ret_value);
   #else
   builder.create<TensorSetOp>(location, ret_value, itensor);
@@ -208,7 +212,7 @@ void PreLoweringPass::runOnFunction()
   // the front of a deque.
   f.walk([&](mlir::Operation *cur_op)
          {
-           comet_errs() <<  " find a transpose op\n";
+           comet_debug() <<  " find a transpose op\n";
            // if the output is not used as a source tensor of a set op
            // Need to store use a sparse/dense tensor decl op to store the result
            if (isa<tensorAlgebra::TransposeOp>(cur_op))

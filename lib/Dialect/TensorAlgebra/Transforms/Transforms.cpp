@@ -70,11 +70,15 @@ using namespace mlir::indexTree;
 // #endif
 
 #ifdef DEBUG_MODE_TRANSFORMS
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -109,7 +113,6 @@ namespace
     matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                     ConversionPatternRewriter &rewriter) const final
     {
-      // comet_errs() << "MulOpFactorization begin\n";
       comet_pdump(op);
       auto loc = op->getLoc();
       auto lhsOp = operands[0].getDefiningOp();
@@ -208,7 +211,7 @@ namespace
 
         auto resultType = op->getResultTypes()[0];
         rewriter.replaceOpWithNewOp<tensorAlgebra::TensorChainSetOp>(op, resultType, operands[0], newRhs1);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
       }
       else
       {
@@ -355,7 +358,7 @@ namespace
     {
       assert(isa<tensorAlgebra::TensorChainSetOp>(op));
 
-      comet_errs() << "SetOpLowering begin\n";
+      comet_debug() << "SetOpLowering begin\n";
       comet_pdump(op);
       auto ctx = rewriter.getContext();
       auto loc = op->getLoc();
@@ -369,17 +372,17 @@ namespace
       Operation *rhsOp;
       if (isa<tensorAlgebra::MulOp>(rhs))
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         rhsOp = cast<tensorAlgebra::MulOp>(rhs);
       }
       else if (isa<tensorAlgebra::AddOp>(rhs))
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         rhsOp = cast<tensorAlgebra::AddOp>(rhs);
       }
       else if (isa<tensorAlgebra::LabeledTensorOp>(rhs))
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         auto rhsLT = cast<tensorAlgebra::LabeledTensorOp>(rhs);
 
         auto lhsLabels = lhsLT.labels();
@@ -400,7 +403,7 @@ namespace
         auto outPermAttr = AffineMapAttr::get(AffineMap::getPermutationMap(outPerm, ctx));
 
         auto new_op = rewriter.create<tensorAlgebra::TensorCopyOp>(loc, lhsLT.tensor(), rhsLT.tensor(), inPermAttr, outPermAttr);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         comet_vdump(new_op);
 
         double alpha = 1.0;
@@ -415,25 +418,25 @@ namespace
       }
       else
       {
-        comet_errs() << "Neither MulOp, AddOp, nor LabeledTensorOp, it is: ";
+        comet_debug() << "Neither MulOp, AddOp, nor LabeledTensorOp, it is: ";
         comet_pdump(rhs);
         // return failure();
-        comet_errs() << "SetOpLowering end\n";
+        comet_debug() << "SetOpLowering end\n";
         return success();
       }
 
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       auto lhsTensor = lhsLT.tensor();
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       auto labels = lhsLT.labels();
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       std::vector<Value> lhsLabels(labels.begin(), labels.end());
 
       comet_pdump(rhsOp);
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       replaceSetOp(rhsOp, lhsTensor, lhsLabels, loc, rewriter);
       rewriter.eraseOp(op);
-      comet_errs() << "SetOpLowering end\n";
+      comet_debug() << "SetOpLowering end\n";
       return success();
     }
   };
@@ -489,8 +492,8 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
       assert(isa<tensorAlgebra::TensorMultOp>(op));
-      comet_errs() << " erase TensorMultOp \n";
-      comet_errs() << "--------------TensorContractionLowering in format\n";
+      comet_debug() << " erase TensorMultOp \n";
+      comet_debug() << "--------------TensorContractionLowering in format\n";
       // Here, should check the operands, at least one operand should be sparse;
       // Otherwise, if all dense operands, just return.
       return success();
@@ -507,7 +510,7 @@ namespace
     matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                     ConversionPatternRewriter &rewriter) const final
     {
-      comet_errs() << " erase op \n";
+      comet_debug() << " erase op \n";
       rewriter.eraseOp(op);
 
       return success();

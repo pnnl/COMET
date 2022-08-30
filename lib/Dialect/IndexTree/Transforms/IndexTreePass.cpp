@@ -40,11 +40,15 @@ using namespace mlir::tensorAlgebra;
 // #endif
 
 #ifdef DEBUG_MODE_IndexTreePass
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -94,7 +98,6 @@ void buildDefUseInfo(UnitExpression *e)
 
 void doTensorMultOp(TensorMultOp op)
 {
-  // getFunction()->dump();
   Value rhs1 = op.rhs1();
   Value rhs2 = op.rhs2();
   Value lhs = getRealLhs(op);
@@ -374,6 +377,7 @@ void treeToDialect(Index_Tree *tree)
   }
 }
 
+//TODO(gkestor): review the following code
 //Index_Tree *IndexTreePass::getTree()
 //{
 //  return tree.get();
@@ -387,7 +391,7 @@ void IndexTreePass::runOnFunction()
   auto func = getFunction();
   bool formITDialect = false;
 
-  comet_errs() << " IndexTree pass running on Function\n";
+  comet_debug() << "IndexTree pass running on Function\n";
   for (Block &B : func.body())
   {
     for (Operation &op : B)
@@ -407,7 +411,7 @@ void IndexTreePass::runOnFunction()
 
   if (formITDialect)
   {
-    comet_errs() << " Dumping Index tree IR\n";
+    comet_debug() << " Dumping Index tree IR\n";
     // only do this for TensorMultOp or TensorElewsMultOp
     treeToDialect(tree.get());
   }
@@ -417,6 +421,6 @@ void IndexTreePass::runOnFunction()
 //
 std::unique_ptr<Pass> mlir::IndexTree::createIndexTreePass()
 {
-  comet_errs() << " Calling createIndexTreePass\n";
+  comet_debug() << " Calling createIndexTreePass\n";
   return std::make_unique<IndexTreePass>();
 }

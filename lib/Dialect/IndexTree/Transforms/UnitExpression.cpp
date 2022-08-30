@@ -33,11 +33,15 @@ using std::vector;
 //#endif
 
 #ifdef DEBUG_MODE_UnitExpression
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -84,7 +88,7 @@ map<int, IterDomain *> UnitExpression::computeInputIterDomains()
 
   if (traceDomainCompute)
   {
-    comet_errs() << lhs->str() << "\n";
+    comet_debug() << lhs->str() << "\n";
   }
 
   // Build the map from index to its domains
@@ -118,7 +122,7 @@ map<int, IterDomain *> UnitExpression::computeInputIterDomains()
 
   if (traceDomainCompute)
   {
-    comet_errs() << "index and their domains\n";
+    comet_debug() << "index and their domains\n";
   }
 
   for (auto &it : indexToDomains)
@@ -128,10 +132,10 @@ map<int, IterDomain *> UnitExpression::computeInputIterDomains()
 
     if (traceDomainCompute)
     {
-      comet_errs() << "index: " << index << "\n";
+      comet_debug() << "index: " << index << "\n";
       for (auto d : domains)
       {
-        comet_errs() << "  " << d->str() << "\n";
+        comet_debug() << "  " << d->str() << "\n";
       }
     }
 
@@ -140,7 +144,7 @@ map<int, IterDomain *> UnitExpression::computeInputIterDomains()
       indexDomains[index] = IterDomain::conjunct(domains);
       if (traceDomainCompute)
       {
-        comet_errs() << "  after conjunction: " << indexDomains[index]->str() << "\n";
+        comet_debug() << "  after conjunction: " << indexDomains[index]->str() << "\n";
       }
     }
     else if (opType == "+")

@@ -80,11 +80,15 @@ using namespace tensorAlgebra;
 //#endif
 
 #ifdef DEBUG_MODE_PASSES
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -179,7 +183,7 @@ void LowerTAMulChainPass::runOnFunction()
 
 void STCRemoveDeadOpsPass::runOnFunction()
 {
-  comet_errs() << " start STCRemoveDeadOpsPass \n";
+  comet_debug() << " start STCRemoveDeadOpsPass \n";
   ConversionTarget target(getContext());
 
   target.addLegalDialect<mlir::linalg::LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();

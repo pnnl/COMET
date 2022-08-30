@@ -39,6 +39,7 @@ namespace mlir
   {
     std::unique_ptr<mlir::Pass> createIndexTreePass();
 
+    //TODO(gkestor): this pass is not an optimized version of Workspace Transformation
     /// Create a pass for applying workspace transformation into IndexTreeIR
     std::unique_ptr<Pass> createWorkspaceTransformsPass();
 

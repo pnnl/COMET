@@ -80,11 +80,15 @@ using llvm::StringRef;
 // #endif
 
 #ifdef DEBUG_MODE_WorkspaceTransformsPass
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -148,7 +152,7 @@ std::vector<int> getSparseDimsOutput(std::vector<std::vector<std::string>> opFor
     if (outputFormat[i].compare("D") != 0)
     { // sparse dim
       sparseDimsOutput.push_back(outputPerm[i]);
-      comet_errs() << " sparse dim in output: " << outputPerm[i] << "  with format: " << outputFormat[i] << "\n";
+      comet_debug() << "sparse dim in output: " << outputPerm[i] << "  with format: " << outputFormat[i] << "\n";
     }
   }
   return sparseDimsOutput;
@@ -165,18 +169,18 @@ std::vector<struct dimInTensor> getSparseDimsInput(std::vector<std::vector<std::
 
   // Get all dims in input tensors
   std::vector<int> allPermsInput = getUnionOf2Dvector(inputPerms);
-  comet_errs() << " allPermsInput.size(): " << allPermsInput.size() << "\n";
-  comet_errs() << "allPermsInput: ";
+  comet_debug() << " allPermsInput.size(): " << allPermsInput.size() << "\n";
+  comet_debug() << "allPermsInput: ";
   for (auto n : allPermsInput)
   {
-    comet_errs() << n << " ";
+    comet_debug() << n << " ";
   }
-  comet_errs() << "\n";
+  comet_debug() << "\n";
 
   for (unsigned int i = 0; i < allPermsInput.size(); i++)
   {
     int cur_index = allPermsInput[i];
-    comet_errs() << " cur_index: " << cur_index << "\n";
+    comet_debug() << " cur_index: " << cur_index << "\n";
     // Get the format of cur_index from each input tensor
     std::vector<std::string> cur_formats;
     std::vector<int> tensor_ids;
@@ -192,13 +196,13 @@ std::vector<struct dimInTensor> getSparseDimsInput(std::vector<std::vector<std::
         dim_orders.push_back(whichFormat);
       }
     }
-    comet_errs() << " cur_formats.size(): " << cur_formats.size() << "\n";
-    comet_errs() << "cur_formats: ";
+    comet_debug() << " cur_formats.size(): " << cur_formats.size() << "\n";
+    comet_debug() << "cur_formats: ";
     for (auto n : cur_formats)
     {
-      comet_errs() << n << " ";
+      comet_debug() << n << " ";
     }
-    comet_errs() << "\n";
+    comet_debug() << "\n";
 
     // check if there is sparse format in cur_formats vector
     std::vector<std::string> cur_sparse_formats;
@@ -206,13 +210,13 @@ std::vector<struct dimInTensor> getSparseDimsInput(std::vector<std::vector<std::
     std::vector<int> sparse_dim_orders;
     for (unsigned int j = 0; j < cur_formats.size(); j++)
     {
-      comet_errs() << " cur_formats[" << j << "]: " << cur_formats[j] << "\n";
+      comet_debug() << " cur_formats[" << j << "]: " << cur_formats[j] << "\n";
       if (cur_formats[j].compare("D") != 0)
       { // sparse format
         cur_sparse_formats.push_back(cur_formats[j]);
         sparse_tensor_ids.push_back(tensor_ids[j]);
         sparse_dim_orders.push_back(dim_orders[j]);
-        comet_errs() << " sparse dim in format: " << cur_index << " with format: " << cur_formats[j] << "\n";
+        comet_debug() << " sparse dim in format: " << cur_index << " with format: " << cur_formats[j] << "\n";
       }
     }
 
@@ -228,18 +232,18 @@ std::vector<struct dimInTensor> getSparseDimsInput(std::vector<std::vector<std::
     }
   }
 
-  comet_errs() << "sparseDimsInput: ";
+  comet_debug() << "sparseDimsInput: ";
   for (auto n : sparseDimsInput)
   {
-    // comet_errs() << n << " ";
-    comet_errs() << "(" << n.dim << ", " << n.tensorId << ", " << n.dimOrder << ") ";
+    // comet_debug() << n << " ";
+    comet_debug() << "(" << n.dim << ", " << n.tensorId << ", " << n.dimOrder << ") ";
   }
-  comet_errs() << "\n";
+  comet_debug() << "\n";
   return sparseDimsInput;
 }
 
 /// Split one indicesOp into several one, i.e. each computeOp has its own parent op
-// i -> j -> V=0;V=A;W=V*B ===> i -> j -> V=0;
+//  i -> j -> V=0;V=A;W=V*B ===> i -> j -> V=0;
 //                                -> j -> V=A;
 //                                -> j -> W=V*B
 void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &builder, Location loc)
@@ -257,13 +261,13 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
     comet_pdump(indicesOpFirstUsers);
 
     builder.setInsertionPoint(indicesOpFirstUsers);
-    comet_errs() << "\n";
+    comet_debug() << "\n";
 
     if (needSplitNode != denseIndicesOp.getDefiningOp())
     {
       ArrayAttr indices = indicesOp.indices();
 
-      comet_errs() << " indicesOp.getOperation()->getNumOperands(): " << indicesOp.getOperation()->getNumOperands() << "\n";
+      comet_debug() << " indicesOp.getOperation()->getNumOperands(): " << indicesOp.getOperation()->getNumOperands() << "\n";
       std::vector<mlir::Value> operands;
       std::vector<mlir::Value> newIndicesOp;
       for (unsigned int i = 0; i < indicesOp.getOperation()->getNumOperands(); i++)
@@ -271,7 +275,6 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
         operands.push_back(indicesOp.getOperation()->getOperand(i));
 
         comet_vdump(indicesOp.getOperation()->getOperand(i));
-
         comet_vdump(operands[i]);
         auto i64Type = builder.getI64Type();
         Value t1 = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, operands[i], indices);
@@ -281,17 +284,17 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
       }
 
       // put it here
-      comet_errs() << " finished calling replacereplaceOperands \n";
+      comet_debug() << " finished calling replacereplaceOperands \n";
       // This parentIndicesOp is the operation that need to be splitted next time
 
-      #ifdef DEBUG_MODE_WorkspaceTransformsPass
+#ifdef DEBUG_MODE_WorkspaceTransformsPass
       comet_vdump(indicesOp.getOperation()->getResult(0));
       for (auto ppp : indicesOp.getOperation()->getResult(0).getUsers())
       {
 
         comet_pdump(ppp);
       }
-      #endif
+#endif
 
       Operation *parentIndicesOp = *(indicesOp.getOperation()->getResult(0).getUsers().begin());
 
@@ -300,21 +303,19 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
       replaceOperands(needSplitNode, newIndicesOp);
       needSplitNode = parentIndicesOp;
 
-      comet_errs() << " plan to erase ";
+      comet_debug() << " plan to erase the following Op\n";
       comet_vdump(indicesOp);
-
       comet_pdump(needSplitNode);
-
       comet_pdump(indicesOpFirstUsers);
       indicesOp.erase();
     }
     else
     {
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       break;
     }
   }
-  comet_errs() << "\n";
+  comet_debug() << "\n";
 }
 
 void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir::Value> indexValueMap, int denseDimInOutput, OpBuilder &builder, Location loc)
@@ -341,7 +342,7 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
   // iterate until the
   // call splitIndicesOp function to split indicesOp until latest "root"
   splitIndicesOp(needSplitNode, denseIndicesOp, builder, loc);
-  comet_errs() << "\n";
+  comet_debug() << "\n";
 
   // Remove the indices for each tensor
   // iterate over all itComputeOps, get the indices for each tensor
@@ -351,18 +352,18 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
     // iterater up until reach the root noe, if the index of indicesOp is not in the vector
     //      remove this one: set the operand of the parent of the indicesOp into current op
 
-    comet_errs() << " current computeOp: ";
+    comet_debug() << " current computeOp: \n";
     comet_vdump(n);
     ArrayAttr allperms_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(n.getDefiningOp()->getOperand(0).getDefiningOp()).allPerms();
-    std::vector<std::vector<int>> allpermsInt_rhs = convertArrayAttrIntTo2DVector(allperms_rhs); 
-    std::vector<int> permsInt = getUnionOf2Dvector(allpermsInt_rhs);                            
-    comet_errs() << " print permsInt: ";
+    std::vector<std::vector<int>> allpermsInt_rhs = convertArrayAttrIntTo2DVector(allperms_rhs);
+    std::vector<int> permsInt = getUnionOf2Dvector(allpermsInt_rhs);
+    comet_debug() << " print permsInt: ";
     for (auto p : permsInt)
     {
-      comet_errs() << p << " ";
+      comet_debug() << p << " ";
     }
-    comet_errs() << "\n";
- 
+    comet_debug() << "\n";
+
     mlir::Value computeOp = n;
 
     // iterate over the IndexTreeIndicesOp;
@@ -382,32 +383,31 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
       comet_vdump(computeOpParent);
       if (isa<indexTree::IndexTreeComputeOp>(computeOpParent.getDefiningOp()))
       {
-        comet_errs() << " indicesOp's parent can not be computeOp\n";
+        comet_debug() << " indicesOp's parent can not be computeOp\n";
       }
       else if (isa<indexTree::IndexTreeOp>(computeOpParent.getDefiningOp()))
       {
-        comet_errs() << " indicesOp's parent is IndexTreeOp\n";
+        comet_debug() << " indicesOp's parent is IndexTreeOp\n";
       }
       else if (isa<indexTree::IndexTreeIndicesOp>(computeOpParent.getDefiningOp()))
       {
-
         // get the indices integer, to see if it is in permsInt
         // if yes, don't remove
         // if no, remove:
         indexTree::IndexTreeIndicesOp curIndicesOp = dyn_cast<indexTree::IndexTreeIndicesOp>(computeOpParent.getDefiningOp());
-        comet_errs() << " \n";
+        comet_debug() << " \n";
         ArrayAttr idsArrayAttr = curIndicesOp.indices(); // should be 1D vector
         std::vector<int> idsVec;
         for (auto n : idsArrayAttr)
         {
           idsVec.push_back(n.cast<mlir::IntegerAttr>().getInt());
         }
-        comet_errs() << " print idsVec: ";
+        comet_debug() << " print idsVec: ";
         for (auto p : idsVec)
         {
-          comet_errs() << p << " ";
+          comet_debug() << p << " ";
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
 
         assert(idsVec.size() == 1 && " indicesOp contain more than 1 index\n");
         bool isNeedRemove = false;
@@ -430,7 +430,7 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
         {
           isNeedRemove = false;
         }
-        comet_errs() << " isNeedRemove = " << isNeedRemove << "\n";
+        comet_debug() << " isNeedRemove = " << isNeedRemove << "\n";
 
         if (isNeedRemove)
         {
@@ -447,7 +447,7 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
         }
         else
         {
-          #ifdef DEBUG_MODE_WorkspaceTransformsPass
+#ifdef DEBUG_MODE_WorkspaceTransformsPass
           comet_vdump(curIndicesOp);
           int count = 0;
           for (auto p : curIndicesOp.getOperation()->getResult(0).getUsers())
@@ -455,8 +455,8 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
             comet_pdump(p);
             count++;
           }
-          comet_errs() << " count: " << count << "\n";
-          #endif
+          comet_debug() << " count: " << count << "\n";
+#endif
           assert(curIndicesOp.getOperation()->getResult(0).hasOneUse() && " indicesOp has more than one user\n");
           Operation *curIndicesOpParent = *(curIndicesOp.getOperation()->getResult(0).getUsers().begin());
 
@@ -471,240 +471,21 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
   } // end for n
 }
 
-std::vector<Value> workspaceOutput(std::vector<int> sparseDimsOutput, indexTree::IndexTreeComputeOp itComputeOp, std::vector<std::vector<std::string>> opFormats, std::vector<std::vector<int>> opPerms, std::map<int, mlir::Value> indexValueMap, OpBuilder &builder, indexTree::IndexTreeOp op)
-{
-  Location loc = op.getLoc();
-
-  auto comp_worksp_opt = builder.getBoolAttr(workspace);
-
-  int sparseDimOutput = -1;
-  int sparseDimOrderInOutput = -1;
-  int denseDimInOutput = -1;
-  for (unsigned int j = 0; j < opFormats[opFormats.size() - 1].size(); j++)
-  {
-    // sparse dimension
-    if (opFormats[opFormats.size() - 1][j].compare("D") != 0)
-    {
-      sparseDimOutput = opPerms[opPerms.size() - 1][j];
-      sparseDimOrderInOutput = j;
-    }
-    else // dense dimension
-      denseDimInOutput = opPerms[opPerms.size() - 1][j];
-  }
-  comet_errs() << " " << sparseDimOutput << "\n";
-
-  // 3. Find the ta.itIndices op which represents sparseDimOutput
-  // Find its parent ...
-  Value sparseIndicesOp = indexValueMap[sparseDimOutput];
-
-  comet_vdump(sparseIndicesOp);
-
-  // Cij = Aik * Bkj ==> Wj = 0; Wj += Aik * Bkj; Cij = Wj
-  std::vector<mlir::Value> tensors;
-  getTensorsOfComputeOp(itComputeOp.getOperation()->getResult(0), tensors); 
-
-  // 4. create W, j dim size of
-  // Value outputItComputeOp = itComputeOp.getOperation()->getOperand(itComputeOp.getOperation()->getNumOperands() - 1).getDefiningOp()->getOperand(0);
-  /// new version
-  Value outputItComputeOp = tensors[tensors.size() - 1];
-
-  comet_vdump(outputItComputeOp);
-
-  std::vector<mlir::Value> w_lbls_value = {outputItComputeOp.getDefiningOp()->getOperand(sparseDimOrderInOutput)};
-
-  comet_vdump(outputItComputeOp.getDefiningOp()->getOperand(sparseDimOrderInOutput));
-  std::string semiringName(itComputeOp.semiring().data());
-
-  std::string w_format = "Dense"; // tensor<?xf64>
-  auto w_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getF64Type());
-
-  Operation *itComputeOpFirstUsers = *(itComputeOp.getOperation()->getUsers().begin());
-  builder.setInsertionPoint(itComputeOpFirstUsers); // Insert before itree Op
-
-  mlir::Value w = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_type, w_lbls_value, w_format);
-
-  tensors.push_back(w); // {A, B, C, W}
-
-  std::vector<std::vector<std::string>> formats = {opFormats[0], opFormats[1], opFormats[2], {"D"}};
-  std::vector<std::vector<int>> perms = {opPerms[0], opPerms[1], opPerms[2], {sparseDimOutput}};
-
-  Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
-  std::vector<mlir::Value> t1_tensors = {const_f64_0, w};
-  std::vector<mlir::Value> t2_tensors = {tensors[0], tensors[1], w};
-  std::vector<mlir::Value> t3_tensors = {w, tensors[2]};
-
-  std::vector<int> t1_perms_int_0;
-  std::vector<int> t1_perms_int_1 = {sparseDimOutput};
-  std::vector<std::vector<int>> t1_perms_int = {t1_perms_int_0, t1_perms_int_1};
-
-  std::vector<std::string> t1_formats_str_0;
-  std::vector<std::string> t1_formats_str_1 = {"D"};
-  std::vector<std::vector<std::string>> t1_formats_str = {t1_formats_str_0, t1_formats_str_1};
-
-  auto i64Type = builder.getI64Type();
-  std::vector<mlir::Value> t1_rhs = {t1_tensors[0]};
-  mlir::Value t1_lhs = {t1_tensors[1]};
-  auto t1_semiring = builder.getStringAttr(semiringName);
-  // for t1_rhs
-  std::vector<std::vector<int>> t1_rhsop_perms_str = {t1_perms_int_0};
-  ArrayAttr t1_rhsop_perms = convert2DVectorToArrayAttrInt(t1_rhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t1_rhsop_formats_str = {t1_formats_str_0};
-  ArrayAttr t1_rhsop_formats = convert2DVectorToArrayAttrStr(t1_rhsop_formats_str, builder);
-  mlir::Value t1_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_rhs, t1_rhsop_perms, t1_rhsop_formats);
-
-  // for t1_lhs
-  std::vector<std::vector<int>> t1_lhsop_perms_str = {t1_perms_int_1};
-  ArrayAttr t1_lhsop_perms = convert2DVectorToArrayAttrInt(t1_lhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t1_lhsop_formats_str = {t1_formats_str_1};
-  ArrayAttr t1_lhsop_formats = convert2DVectorToArrayAttrStr(t1_lhsop_formats_str, builder);
-  mlir::Value t1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_lhs, t1_lhsop_perms, t1_lhsop_formats);
-
-  // for t1
-  mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, comp_worksp_opt, t1_semiring);
-
-  std::vector<int> t2_perms_int_0 = opPerms[0];
-  std::vector<int> t2_perms_int_1 = opPerms[1];
-  std::vector<int> t2_perms_int_2 = {sparseDimOutput};
-  std::vector<std::vector<int>> t2_perms_int = {t2_perms_int_0, t2_perms_int_1, t2_perms_int_2};
-
-  // Convert formats string array into StrAttr
-  std::vector<std::string> t2_formats_str_0 = opFormats[0];
-  std::vector<std::string> t2_formats_str_1 = opFormats[1];
-  std::vector<std::string> t2_formats_str_2 = {"D"};
-  std::vector<std::vector<std::string>> t2_formats_str = {t2_formats_str_0, t2_formats_str_1, t2_formats_str_2};
-
-  std::vector<mlir::Value> t2_rhs = {t2_tensors[0], t2_tensors[1]};
-  mlir::Value t2_lhs = w;
-
-  auto t2_semiring = builder.getStringAttr(semiringName);
-
-  // for t2_rhsop
-  std::vector<std::vector<int>> t2_rhsop_perms_str = {t2_perms_int_0, t2_perms_int_1};
-  ArrayAttr t2_rhsop_perms = convert2DVectorToArrayAttrInt(t2_rhsop_perms_str, builder); 
-  std::vector<std::vector<std::string>> t2_rhsop_formats_str = {t2_formats_str_0, t2_formats_str_1};
-  ArrayAttr t2_rhsop_formats = convert2DVectorToArrayAttrStr(t2_rhsop_formats_str, builder);
-  mlir::Value t2_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_rhs, t2_rhsop_perms, t2_rhsop_formats);
-
-  // for t2_lhsop
-  std::vector<std::vector<int>> t2_lhsop_perms_str = {t2_perms_int_2};
-  ArrayAttr t2_lhsop_perms = convert2DVectorToArrayAttrInt(t2_lhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t2_lhsop_formats_str = {t2_formats_str_2};
-  ArrayAttr t2_lhsop_formats = convert2DVectorToArrayAttrStr(t2_lhsop_formats_str, builder);
-  mlir::Value t2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_lhs, t2_lhsop_perms, t2_lhsop_formats);
-
-  // for t2
-  mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, comp_worksp_opt, t2_semiring);
-
-  //  --------t3
-  std::vector<int> t3_perms_int_0 = {sparseDimOutput};
-  std::vector<int> t3_perms_int_1 = opPerms[2];
-  std::vector<std::vector<int>> t3_perms_int = {t3_perms_int_0, t3_perms_int_1};
-
-  // Convert formats string array into StrAttr
-  std::vector<std::string> t3_formats_str_0 = {"D"};
-  std::vector<std::string> t3_formats_str_1 = opFormats[2];
-  std::vector<std::vector<std::string>> t3_formats_str = {t3_formats_str_0, t3_formats_str_1};
-
-  std::vector<mlir::Value> t3_rhs = {w};
-  mlir::Value t3_lhs = t3_tensors[1];
-  auto t3_semiring = builder.getStringAttr(semiringName);
-
-  // for t3_rhs
-  std::vector<std::vector<int>> t3_rhsop_perms_str = {t3_perms_int_0};
-  ArrayAttr t3_rhsop_perms = convert2DVectorToArrayAttrInt(t3_rhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t3_rhsop_formats_str = {t3_formats_str_0};
-  ArrayAttr t3_rhsop_formats = convert2DVectorToArrayAttrStr(t3_rhsop_formats_str, builder);
-  mlir::Value t3_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_rhs, t3_rhsop_perms, t3_rhsop_formats);
-
-  // for t3_lhs
-  std::vector<std::vector<int>> t3_lhsop_perms_str = {t3_perms_int_1};
-  ArrayAttr t3_lhsop_perms = convert2DVectorToArrayAttrInt(t3_lhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t3_lhsop_formats_str = {t3_formats_str_1};
-  ArrayAttr t3_lhsop_formats = convert2DVectorToArrayAttrStr(t3_lhsop_formats_str, builder);
-  mlir::Value t3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_lhs, t3_lhsop_perms, t3_lhsop_formats);
-
-  // for t3
-  mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, comp_worksp_opt, t3_semiring);
-
-  std::vector<mlir::Value> newComputeOps = {t1, t2, t3};
-  sparseIndicesOp.getDefiningOp()->setOperands(newComputeOps);
-
-  itComputeOp.erase();
-
-  // remove redundant indices by calling a function
-  // if elementwise: not remove
-  // if spgemm: remove
-  // check if there is redundant index
-  bool existRedundantIndex = false;
-  for (auto n : newComputeOps)
-  {
-    std::vector<std::vector<int>> perms;
-    getPermsOfComputeOp(n, perms);
-    std::vector<int> allperms = getUnionOf2Dvector(perms);
-    comet_errs() << " print allperms \n";
-    print_vector<int>(allperms);
-
-    std::vector<Value> ancestors;
-    std::vector<mlir::Value> dfsOps;
-    dfsRootOpTree(op.children(), dfsOps);
-    getAncestorsWp(n, ancestors, dfsOps);
-    comet_errs() << " print ancestors \n";
-    print_vector_value(ancestors);
-
-    // Iterate over every indicesOp
-    for (auto ancestor : ancestors)
-    {
-      // If indicesOp's index is in allperms, no redundant
-      //    the indicesOp is real root, no redundant
-      // Otherwise, redundant
-      if (isa<indexTree::IndexTreeIndicesOp>(ancestor.getDefiningOp()))
-      {
-        indexTree::IndexTreeIndicesOp indicesOp = dyn_cast<indexTree::IndexTreeIndicesOp>(ancestor.getDefiningOp());
-
-        ArrayAttr idsArrayAttr = indicesOp.indices(); // should be 1D vector
-        // actually only one index for the indicesOp in our implementation
-        for (auto m : idsArrayAttr)
-        {
-          int perm = m.cast<mlir::IntegerAttr>().getInt();
-          comet_errs() << " perm: " << perm << "\n";
-
-          if (findIndexInVector(allperms, perm) == allperms.size())
-          { // not exit
-            comet_errs() << " perm not exist in allperms\n";
-            if (!isRealRoot(indicesOp.getOperation()))
-            {
-              existRedundantIndex = true;
-              comet_errs() << " existRedundantIndex: " << existRedundantIndex << "\n";
-            }
-          }
-        }
-      }
-    }
-  }
-  comet_errs() << " existRedundantIndex: " << existRedundantIndex << "\n";
-
-  if (existRedundantIndex)
-  {
-    removeRedundantIndices(newComputeOps, indexValueMap, denseDimInOutput, builder, loc);
-  }
-
-  return newComputeOps;
-} // end workspaceOutput()
-
 std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
                                              indexTree::IndexTreeComputeOp itComputeOp,
                                              std::vector<std::vector<std::string>> opFormats,
-                                             std::vector<std::vector<int>> opPerms, 
+                                             std::vector<std::vector<int>> opPerms,
                                              std::map<int, mlir::Value> indexValueMap,
                                              OpBuilder &builder, indexTree::IndexTreeOp op)
 {
   Location loc = op.getLoc();
 
   auto comp_worksp_opt = builder.getBoolAttr(compressedworkspace);
-
   int sparseDimOutput = -1;
   int sparseDimOrderInOutput = -1;
   int denseDimInOutput = -1;
+  auto i64Type = builder.getI64Type();
+
   for (unsigned int j = 0; j < opFormats[opFormats.size() - 1].size(); j++)
   {
     // sparse dimension
@@ -716,19 +497,22 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
     else // dense dimension
       denseDimInOutput = opPerms[opPerms.size() - 1][j];
   }
-  comet_errs() << " " << sparseDimOutput << "\n";
+  comet_debug() << " " << sparseDimOutput << "\n";
 
   // 3. Find the ta.itIndices op which represents sparseDimOutput
   // Find its parent ...
   Value sparseIndicesOp = indexValueMap[sparseDimOutput];
 
   comet_vdump(sparseIndicesOp);
-  comet_errs() << " sparseDimOrderInOutput: " << sparseDimOrderInOutput << "\n";
+  comet_debug() << " sparseDimOrderInOutput: " << sparseDimOrderInOutput << "\n";
   Value sparseDimsPerent = indexValueMap[sparseDimOrderInOutput - 1];
-  comet_errs() << " sparseDimsPerent: ";
+  comet_debug() << " sparseDimsPerent: \n";
   comet_vdump(sparseDimsPerent);
 
-  // Cij = Aik * Bkj ==> Wj = 0; Wj += Aik * Bkj; Cij = Wj
+  // Cij = Aik * Bkj ==>
+  //    ComputeNode(c1): Wj = 0;
+  //    ComputeNode(c2): Wj += Aik * Bkj;
+  //    ComputeNode(c3): Cij = Wj
   std::vector<mlir::Value> tensors;
   getTensorsOfComputeOp(itComputeOp.getOperation()->getResult(0), tensors);
 
@@ -736,7 +520,6 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   // Value outputItComputeOp = itComputeOp.getOperation()->getOperand(itComputeOp.getOperation()->getNumOperands() - 1).getDefiningOp()->getOperand(0);
   /// new version
   Value outputItComputeOp = tensors[tensors.size() - 1];
-
   comet_vdump(outputItComputeOp);
 
   std::vector<mlir::Value> w_lbls_value = {outputItComputeOp.getDefiningOp()->getOperand(sparseDimOrderInOutput)};
@@ -759,145 +542,130 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   Value w_index_list_size = builder.create<memref::TensorLoadOp>(loc, w_index_list_size_alloc);
 
   std::vector<Value> workspaceTensors = {w, w_already_set, w_index_list, w_index_list_size};
-
   tensors.push_back(w); // {A, B, C, W}
 
   std::vector<std::vector<std::string>> formats = {opFormats[0], opFormats[1], opFormats[2], {"D"}};
   std::vector<std::vector<int>> perms = {opPerms[0], opPerms[1], opPerms[2], {sparseDimOutput}};
 
-  std::vector<int> t0_perms_int_0;
-  std::vector<int> t0_perms_int_1;
-  std::vector<std::vector<int>> t0_perms_int = {t0_perms_int_0, t0_perms_int_1};
+  // Start building an IndexTreeCompute Operation to represent Wj = 0;
+  std::vector<int> c1_perms_int_0;
+  std::vector<int> c1_perms_int_1;
+  std::vector<std::vector<int>> c1_perms_int = {c1_perms_int_0, c1_perms_int_1};
+  std::vector<std::string> c1_formats_str_0;
+  std::vector<std::string> c1_formats_str_1;
+  std::vector<std::vector<std::string>> c1_formats_str = {c1_formats_str_0, c1_formats_str_1};
 
-  std::vector<std::string> t0_formats_str_0;
-  std::vector<std::string> t0_formats_str_1; // = {"D"};
-  std::vector<std::vector<std::string>> t0_formats_str = {t0_formats_str_0, t0_formats_str_1};
-
-  // auto i64Type = builder.getI64Type();
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
-  std::vector<mlir::Value> t0_rhs = {const_index_0};
-  mlir::Value t0_lhs = {w_index_list_size};
+  std::vector<mlir::Value> c1_rhs = {const_index_0};
+  mlir::Value c1_lhs = {w_index_list_size};
   std::string semiringName(itComputeOp.semiring().data());
-  auto t0_semiring = builder.getStringAttr(semiringName);
+  auto c1_semiring = builder.getStringAttr(semiringName);
 
-  // for t0_rhs
-  std::vector<std::vector<int>> t0_rhsop_perms_str = {t0_perms_int_0};
-  ArrayAttr t0_rhsop_perms = convert2DVectorToArrayAttrInt(t0_rhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t0_rhsop_formats_str = {t0_formats_str_0};
-  ArrayAttr t0_rhsop_formats = convert2DVectorToArrayAttrStr(t0_rhsop_formats_str, builder);
-  mlir::Value t0_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getIndexType()), t0_rhs, t0_rhsop_perms, t0_rhsop_formats);
+  // for c1_rhs
+  std::vector<std::vector<int>> c1_rhsop_perms_str = {c1_perms_int_0};
+  ArrayAttr c1_rhsop_perms = convert2DVectorToArrayAttrInt(c1_rhsop_perms_str, builder);
+  std::vector<std::vector<std::string>> c1_rhsop_formats_str = {c1_formats_str_0};
+  ArrayAttr c1_rhsop_formats = convert2DVectorToArrayAttrStr(c1_rhsop_formats_str, builder);
+  mlir::Value c1_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getIndexType()), c1_rhs, c1_rhsop_perms, c1_rhsop_formats);
+  comet_debug() << "IndexTreeComputeRHS Operation in Output (c1_rhs):\n";
+  comet_vdump(c1_rhsop);
 
-  // for t0_lhs
-  std::vector<std::vector<int>> t0_lhsop_perms_str = {t0_perms_int_1};
-  ArrayAttr t0_lhsop_perms = convert2DVectorToArrayAttrInt(t0_lhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t0_lhsop_formats_str = {t0_formats_str_1};
-  ArrayAttr t0_lhsop_formats = convert2DVectorToArrayAttrStr(t0_lhsop_formats_str, builder);
-  mlir::Value t0_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t0_lhs, t0_lhsop_perms, t0_lhsop_formats);
+  // for c1_lhs
+  std::vector<std::vector<int>> c1_lhsop_perms_str = {c1_perms_int_1};
+  ArrayAttr c1_lhsop_perms = convert2DVectorToArrayAttrInt(c1_lhsop_perms_str, builder);
+  std::vector<std::vector<std::string>> c1_lhsop_formats_str = {c1_formats_str_1};
+  ArrayAttr c1_lhsop_formats = convert2DVectorToArrayAttrStr(c1_lhsop_formats_str, builder);
+  mlir::Value c1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c1_lhs, c1_lhsop_perms, c1_lhsop_formats);
+  comet_debug() << "IndexTreeComputeLHS Operation in Output (c1_lhs):\n";
+  comet_vdump(c1_lhsop);
 
-  // for t1
-  mlir::Value t0 = builder.create<indexTree::IndexTreeComputeOp>(loc, builder.getI64Type(), t0_rhsop, t0_lhsop, comp_worksp_opt, t0_semiring);
+  // for c1 ==> Wj = 0;
+  mlir::Value c1 = builder.create<indexTree::IndexTreeComputeOp>(loc, builder.getI64Type(), c1_rhsop, c1_lhsop, comp_worksp_opt, c1_semiring);
+  comet_debug() << "IndexTreeCompute Operation in Output (c1):\n";
+  comet_vdump(c1);
 
-  // insert t0 to sparseDimsParent
-  sparseDimsPerent.getDefiningOp()->insertOperands(0, t0);
+  // insert c1 to sparseDimsParent
+  sparseDimsPerent.getDefiningOp()->insertOperands(0, c1);
 
-  Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
-  std::vector<mlir::Value> t1_tensors = {const_f64_0, w};
-  std::vector<mlir::Value> t2_tensors = {tensors[0], tensors[1], w};
-  std::vector<mlir::Value> t3_tensors = {w, tensors[2]};
-
-  std::vector<int> t1_perms_int_0;
-  std::vector<int> t1_perms_int_1 = {sparseDimOutput};
-  std::vector<std::vector<int>> t1_perms_int = {t1_perms_int_0, t1_perms_int_1};
-
-  std::vector<std::string> t1_formats_str_0;
-  std::vector<std::string> t1_formats_str_1 = {"D"};
-  std::vector<std::vector<std::string>> t1_formats_str = {t1_formats_str_0, t1_formats_str_1};
-
-  auto i64Type = builder.getI64Type();
-  std::vector<mlir::Value> t1_rhs = {t1_tensors[0]};
-  std::vector<mlir::Value> t1_lhs = workspaceTensors;
-  auto t1_semiring = builder.getStringAttr(semiringName);
-
-  // for t1_rhs
-  std::vector<std::vector<int>> t1_rhsop_perms_str = {t1_perms_int_0};
-  ArrayAttr t1_rhsop_perms = convert2DVectorToArrayAttrInt(t1_rhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t1_rhsop_formats_str = {t1_formats_str_0};
-  ArrayAttr t1_rhsop_formats = convert2DVectorToArrayAttrStr(t1_rhsop_formats_str, builder);
-  mlir::Value t1_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_rhs, t1_rhsop_perms, t1_rhsop_formats);
-
-  // for t1_lhs
-  std::vector<std::vector<int>> t1_lhsop_perms_str = {t1_perms_int_1};
-  ArrayAttr t1_lhsop_perms = convert2DVectorToArrayAttrInt(t1_lhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t1_lhsop_formats_str = {t1_formats_str_1};
-  ArrayAttr t1_lhsop_formats = convert2DVectorToArrayAttrStr(t1_lhsop_formats_str, builder);
-  mlir::Value t1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_lhs, t1_lhsop_perms, t1_lhsop_formats);
-
-  // for t1
-  mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, comp_worksp_opt, t1_semiring);
-
-  std::vector<int> t2_perms_int_0 = opPerms[0];
-  std::vector<int> t2_perms_int_1 = opPerms[1];
-  std::vector<int> t2_perms_int_2 = {sparseDimOutput};
-  std::vector<std::vector<int>> t2_perms_int = {t2_perms_int_0, t2_perms_int_1, t2_perms_int_2};
+  // Start building an IndexTreeCompute Operation to represent Wj += Aik * Bkj;
+  std::vector<mlir::Value> c2_tensors = {tensors[0], tensors[1], w};
+  std::vector<int> c2_perms_int_0 = opPerms[0];
+  std::vector<int> c2_perms_int_1 = opPerms[1];
+  std::vector<int> c2_perms_int_2 = {sparseDimOutput};
+  std::vector<std::vector<int>> c2_perms_int = {c2_perms_int_0, c2_perms_int_1, c2_perms_int_2};
 
   // Convert formats string array into StrAttr
-  std::vector<std::string> t2_formats_str_0 = opFormats[0];
-  std::vector<std::string> t2_formats_str_1 = opFormats[1];
-  std::vector<std::string> t2_formats_str_2 = {"D"};
-  std::vector<std::vector<std::string>> t2_formats_str = {t2_formats_str_0, t2_formats_str_1, t2_formats_str_2};
-  std::vector<mlir::Value> t2_rhs = {t2_tensors[0], t2_tensors[1]};
-  std::vector<mlir::Value> t2_lhs = workspaceTensors;
+  std::vector<std::string> c2_formats_str_0 = opFormats[0];
+  std::vector<std::string> c2_formats_str_1 = opFormats[1];
+  std::vector<std::string> c2_formats_str_2 = {"D"};
+  std::vector<std::vector<std::string>> c2_formats_str = {c2_formats_str_0, c2_formats_str_1, c2_formats_str_2};
+  std::vector<mlir::Value> c2_rhs = {c2_tensors[0], c2_tensors[1]};
+  std::vector<mlir::Value> c2_lhs = workspaceTensors;
 
-  auto t2_semiring = builder.getStringAttr(semiringName);
+  auto c2_semiring = builder.getStringAttr(semiringName);
 
-  // for t2_rhsop
-  std::vector<std::vector<int>> t2_rhsop_perms_str = {t2_perms_int_0, t2_perms_int_1};
-  ArrayAttr t2_rhsop_perms = convert2DVectorToArrayAttrInt(t2_rhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t2_rhsop_formats_str = {t2_formats_str_0, t2_formats_str_1};
-  ArrayAttr t2_rhsop_formats = convert2DVectorToArrayAttrStr(t2_rhsop_formats_str, builder);
-  mlir::Value t2_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_rhs, t2_rhsop_perms, t2_rhsop_formats);
+  // for c2_rhsop
+  std::vector<std::vector<int>> c2_rhsop_perms_str = {c2_perms_int_0, c2_perms_int_1};
+  ArrayAttr c2_rhsop_perms = convert2DVectorToArrayAttrInt(c2_rhsop_perms_str, builder);
+  std::vector<std::vector<std::string>> c2_rhsop_formats_str = {c2_formats_str_0, c2_formats_str_1};
+  ArrayAttr c2_rhsop_formats = convert2DVectorToArrayAttrStr(c2_rhsop_formats_str, builder);
+  mlir::Value c2_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c2_rhs, c2_rhsop_perms, c2_rhsop_formats);
+  comet_debug() << "IndexTreeComputeRHS Operation in Output (c2_rhs):\n";
+  comet_vdump(c2_rhsop);
 
-  // for t2_lhsop
-  std::vector<std::vector<int>> t2_lhsop_perms_str = {t2_perms_int_2};
-  ArrayAttr t2_lhsop_perms = convert2DVectorToArrayAttrInt(t2_lhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t2_lhsop_formats_str = {t2_formats_str_2};
-  ArrayAttr t2_lhsop_formats = convert2DVectorToArrayAttrStr(t2_lhsop_formats_str, builder);
-  mlir::Value t2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_lhs, t2_lhsop_perms, t2_lhsop_formats);
+  // for c2_lhsop
+  std::vector<std::vector<int>> c2_lhsop_perms_str = {c2_perms_int_2};
+  ArrayAttr c2_lhsop_perms = convert2DVectorToArrayAttrInt(c2_lhsop_perms_str, builder);
+  std::vector<std::vector<std::string>> c2_lhsop_formats_str = {c2_formats_str_2};
+  ArrayAttr c2_lhsop_formats = convert2DVectorToArrayAttrStr(c2_lhsop_formats_str, builder);
+  mlir::Value c2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c2_lhs, c2_lhsop_perms, c2_lhsop_formats);
+  comet_debug() << "IndexTreeComputeLHS Operation in Output (c2_lhs):\n";
+  comet_vdump(c2_lhsop);
 
-  // for t2
-  mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, comp_worksp_opt, t2_semiring);
+  // for c2
+  mlir::Value c2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c2_rhsop, c2_lhsop, comp_worksp_opt, c2_semiring);
+  comet_debug() << "IndexTreeCompute Operation in Output (c2):\n";
+  comet_vdump(c2);
 
-  //  --------t3
-  std::vector<int> t3_perms_int_0 = {sparseDimOutput};
-  std::vector<int> t3_perms_int_1 = opPerms[2];
-  std::vector<std::vector<int>> t3_perms_int = {t3_perms_int_0, t3_perms_int_1};
+  // Start building an IndexTreeCompute Operation to represent Cij = Wj;
+  std::vector<mlir::Value> c3_tensors = {tensors[2]};
+  std::vector<int> c3_perms_int_0 = {sparseDimOutput};
+  std::vector<int> c3_perms_int_1 = opPerms[2];
+  std::vector<std::vector<int>> c3_perms_int = {c3_perms_int_0, c3_perms_int_1};
 
   // Convert formats string array into StrAttr
-  std::vector<std::string> t3_formats_str_0 = {"D"};
-  std::vector<std::string> t3_formats_str_1 = opFormats[2];
-  std::vector<std::vector<std::string>> t3_formats_str = {t3_formats_str_0, t3_formats_str_1};
+  std::vector<std::string> c3_formats_str_0 = {"D"};
+  std::vector<std::string> c3_formats_str_1 = opFormats[2];
+  std::vector<std::vector<std::string>> c3_formats_str = {c3_formats_str_0, c3_formats_str_1};
 
-  std::vector<mlir::Value> t3_rhs = workspaceTensors;
-  mlir::Value t3_lhs = t3_tensors[1];
-  auto t3_semiring = builder.getStringAttr(semiringName);
+  std::vector<mlir::Value> c3_rhs = workspaceTensors;
+  mlir::Value c3_lhs = c3_tensors[0];
+  auto c3_semiring = builder.getStringAttr(semiringName);
 
-  // for t3_rhs
-  std::vector<std::vector<int>> t3_rhsop_perms_str = {t3_perms_int_0};
-  ArrayAttr t3_rhsop_perms = convert2DVectorToArrayAttrInt(t3_rhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t3_rhsop_formats_str = {t3_formats_str_0};
-  ArrayAttr t3_rhsop_formats = convert2DVectorToArrayAttrStr(t3_rhsop_formats_str, builder);
-  mlir::Value t3_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_rhs, t3_rhsop_perms, t3_rhsop_formats);
+  // for c3_rhs
+  std::vector<std::vector<int>> c3_rhsop_perms_str = {c3_perms_int_0};
+  ArrayAttr c3_rhsop_perms = convert2DVectorToArrayAttrInt(c3_rhsop_perms_str, builder);
+  std::vector<std::vector<std::string>> c3_rhsop_formats_str = {c3_formats_str_0};
+  ArrayAttr c3_rhsop_formats = convert2DVectorToArrayAttrStr(c3_rhsop_formats_str, builder);
+  mlir::Value c3_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c3_rhs, c3_rhsop_perms, c3_rhsop_formats);
+  comet_debug() << "IndexTreeComputeRHS Operation in Output (c3_rhs):\n";
+  comet_vdump(c3_rhsop);
 
-  // for t3_lhs
-  std::vector<std::vector<int>> t3_lhsop_perms_str = {t3_perms_int_1};
-  ArrayAttr t3_lhsop_perms = convert2DVectorToArrayAttrInt(t3_lhsop_perms_str, builder);
-  std::vector<std::vector<std::string>> t3_lhsop_formats_str = {t3_formats_str_1};
-  ArrayAttr t3_lhsop_formats = convert2DVectorToArrayAttrStr(t3_lhsop_formats_str, builder);
-  mlir::Value t3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_lhs, t3_lhsop_perms, t3_lhsop_formats);
+  // for c3_lhs
+  std::vector<std::vector<int>> c3_lhsop_perms_str = {c3_perms_int_1};
+  ArrayAttr c3_lhsop_perms = convert2DVectorToArrayAttrInt(c3_lhsop_perms_str, builder);
+  std::vector<std::vector<std::string>> c3_lhsop_formats_str = {c3_formats_str_1};
+  ArrayAttr c3_lhsop_formats = convert2DVectorToArrayAttrStr(c3_lhsop_formats_str, builder);
+  mlir::Value c3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c3_lhs, c3_lhsop_perms, c3_lhsop_formats);
+  comet_debug() << "IndexTreeComputeLHS Operation in Output (c3_lhs):\n";
+  comet_vdump(c3_lhsop);
 
-  // for t3
-  mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, comp_worksp_opt, t3_semiring);
-  std::vector<mlir::Value> newComputeOps = {t1, t2, t3};
+  // for c3 ==> Cij = Wj;
+  mlir::Value c3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c3_rhsop, c3_lhsop, comp_worksp_opt, c3_semiring);
+  comet_debug() << "IndexTreeCompute Operation in Output (c3):\n";
+  comet_vdump(c3);
+
+  std::vector<mlir::Value> newComputeOps = {c2, c3};
   sparseIndicesOp.getDefiningOp()->setOperands(newComputeOps);
   itComputeOp.erase();
 
@@ -911,14 +679,14 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
     std::vector<std::vector<int>> perms;
     getPermsOfComputeOp(n, perms);
     std::vector<int> allperms = getUnionOf2Dvector(perms);
-    comet_errs() << " print allperms \n";
+    comet_debug() << " print allperms \n";
     print_vector<int>(allperms);
 
     std::vector<Value> ancestors;
     std::vector<mlir::Value> dfsOps;
     dfsRootOpTree(op.children(), dfsOps);
     getAncestorsWp(n, ancestors, dfsOps);
-    comet_errs() << " print ancestors \n";
+    comet_debug() << " print ancestors \n";
     print_vector_value(ancestors);
 
     // Iterate over every indicesOp
@@ -936,22 +704,22 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
         for (auto m : idsArrayAttr)
         {
           int perm = m.cast<mlir::IntegerAttr>().getInt();
-          comet_errs() << " perm: " << perm << "\n";
+          comet_debug() << " perm: " << perm << "\n";
 
           if (findIndexInVector(allperms, perm) == allperms.size())
           { // not exit
-            comet_errs() << " perm not exist in allperms\n";
+            comet_debug() << " perm not exist in allperms\n";
             if (!isRealRoot(indicesOp.getOperation()))
             {
               existRedundantIndex = true;
-              comet_errs() << " existRedundantIndex: " << existRedundantIndex << "\n";
+              comet_debug() << " existRedundantIndex: " << existRedundantIndex << "\n";
             }
           }
         }
       }
     }
   }
-  comet_errs() << " existRedundantIndex: " << existRedundantIndex << "\n";
+  comet_debug() << " existRedundantIndex: " << existRedundantIndex << "\n";
 
   if (existRedundantIndex)
   {
@@ -960,170 +728,6 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
   return newComputeOps;
 } // end CompressedWorkspaceOutput()
-
-void workspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location loc)
-{
-  auto comp_worksp_opt = builder.getBoolAttr(workspace);
-  for (auto computeOp : computeOps)
-  {
-
-    /// 1. get the opFormats and opPerms of the computeOp
-    std::vector<std::vector<std::string>> opFormats;
-    std::vector<std::vector<int>> opPerms;
-    std::vector<std::vector<bool>> inputOutputMapping;
-    getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
-    comet_errs() << " \n";
-    for (auto n : opFormats)
-    {
-
-      print_vector<std::string>(n);
-    }
-    for (auto n : opPerms)
-    {
-
-      print_vector<int>(n);
-    }
-    std::vector<Value> tensors;
-    getTensorsOfComputeOp(computeOp, tensors);
-    indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-    std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
-    std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
-    comet_errs() << " sparseDimsInput.size(): " << sparseDimsInput.size() << "\n";
-
-    comet_vdump(computeOp);
-    if (sparseDimsInput.size() == 1)
-    { // solve only 1 sparseDimsInput
-      // No need to apply workspace transformation
-      // comet_errs() << " sparseDimsInput[0]: " << sparseDimsInput[0] << "\n";
-      comet_errs() << " sparseDimsInput[0]: " << sparseDimsInput[0].dim << ", " << sparseDimsInput[0].tensorId << ", " << sparseDimsInput[0].dimOrder << "\n";
-      // return;
-      // Wj=Aij*Bij => Vj=0; Vj=Aij; Wj=Vj*Bij
-      // Value sparseInput = itComputeOp.getOperation()->getOperand(sparseDimsInput[0].tensorId);
-      /// new version
-      Value sparseInput = tensors[sparseDimsInput[0].tensorId];
-
-      comet_vdump(sparseInput);
-
-      std::vector<mlir::Value> v_lbls_value = {sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder)};
-
-      comet_vdump(sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder));
-      std::string v_format = "Dense"; // tensor<?xf64>
-      auto v_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getF64Type());
-
-      builder.setInsertionPoint(computeOp.getDefiningOp());
-      mlir::Value v = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, v_type, v_lbls_value, v_format);
-
-      comet_vdump(v);
-
-      // Vj=0
-      std::vector<int> t1_perms_int_0;
-      std::vector<int> t1_perms_int_1 = {sparseDimsInput[0].dim};
-      std::vector<std::vector<int>> t1_perms_int = {t1_perms_int_0, t1_perms_int_1};
-
-      std::vector<std::string> t1_formats_str_0;
-      std::vector<std::string> t1_formats_str_1 = {"D"};
-      std::vector<std::vector<std::string>> t1_formats_str = {t1_formats_str_0, t1_formats_str_1};
- 
-      auto i64Type = builder.getI64Type();
-      Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
-      std::vector<mlir::Value> t1_rhs = {const_f64_0};
-      mlir::Value t1_lhs = {v};
-      std::string semiringName(itComputeOp.semiring().data());
-      auto t1_semiring = builder.getStringAttr(semiringName);
-
-      // for t1_rhs
-      std::vector<std::vector<int>> t1_rhsop_perms_str = {t1_perms_int_0};
-      ArrayAttr t1_rhsop_perms = convert2DVectorToArrayAttrInt(t1_rhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t1_rhsop_formats_str = {t1_formats_str_0};
-      ArrayAttr t1_rhsop_formats = convert2DVectorToArrayAttrStr(t1_rhsop_formats_str, builder);
-      mlir::Value t1_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_rhs, t1_rhsop_perms, t1_rhsop_formats);
-
-      // for t1_lhs
-      std::vector<std::vector<int>> t1_lhsop_perms_str = {t1_perms_int_1};
-      ArrayAttr t1_lhsop_perms = convert2DVectorToArrayAttrInt(t1_lhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t1_lhsop_formats_str = {t1_formats_str_1};
-      ArrayAttr t1_lhsop_formats = convert2DVectorToArrayAttrStr(t1_lhsop_formats_str, builder);
-      mlir::Value t1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_lhs, t1_lhsop_perms, t1_lhsop_formats);
-
-      // for t1
-      mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, comp_worksp_opt, t1_semiring);
-
-      // Vj = Aij
-      std::vector<int> t2_perms_int_0 = opPerms[sparseDimsInput[0].tensorId];
-      std::vector<int> t2_perms_int_1 = {sparseDimsInput[0].dim};
-      std::vector<std::vector<int>> t2_perms_int = {t2_perms_int_0, t2_perms_int_1};
-    
-      std::vector<std::string> t2_formats_str_0 = opFormats[sparseDimsInput[0].tensorId];
-      std::vector<std::string> t2_formats_str_1 = {"D"};
-      std::vector<std::vector<std::string>> t2_formats_str = {t2_formats_str_0, t2_formats_str_1};
-      std::vector<mlir::Value> t2_rhs = {tensors[sparseDimsInput[0].tensorId]};
-
-      mlir::Value t2_lhs = {v};
-      auto t2_semiring = builder.getStringAttr(semiringName);
-
-      // for t2_rhs
-      std::vector<std::vector<int>> t2_rhsop_perms_str = {t2_perms_int_0};
-      ArrayAttr t2_rhsop_perms = convert2DVectorToArrayAttrInt(t2_rhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t2_rhsop_formats_str = {t2_formats_str_0};
-      ArrayAttr t2_rhsop_formats = convert2DVectorToArrayAttrStr(t2_rhsop_formats_str, builder);
-      mlir::Value t2_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_rhs, t2_rhsop_perms, t2_rhsop_formats);
-
-      // for t2_lhs
-      std::vector<std::vector<int>> t2_lhsop_perms_str = {t2_perms_int_1};
-      ArrayAttr t2_lhsop_perms = convert2DVectorToArrayAttrInt(t2_lhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t2_lhsop_formats_str = {t2_formats_str_1};
-      ArrayAttr t2_lhsop_formats = convert2DVectorToArrayAttrStr(t2_lhsop_formats_str, builder);
-      mlir::Value t2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_lhs, t2_lhsop_perms, t2_lhsop_formats);
-
-      // for t2
-      mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, comp_worksp_opt, t2_semiring);
-
-      // Wj=Vj*Bij
-      std::vector<int> t3_perms_int_0 = {sparseDimsInput[0].dim};
-      std::vector<int> t3_perms_int_1 = opPerms[1]; 
-      std::vector<int> t3_perms_int_2 = opPerms[opPerms.size() - 1];
-      std::vector<std::vector<int>> t3_perms_int = {t3_perms_int_0, t3_perms_int_1, t3_perms_int_2};
-
-      // Convert formats string array into StrAttr
-      std::vector<std::string> t3_formats_str_0 = {"D"};
-      std::vector<std::string> t3_formats_str_1 = opFormats[1];
-      std::vector<std::string> t3_formats_str_2 = opFormats[opFormats.size() - 1];
-      ;
-      std::vector<std::vector<std::string>> t3_formats_str = {t3_formats_str_0, t3_formats_str_1, t3_formats_str_2};
-      std::vector<mlir::Value> t3_rhs = {v, tensors[1]};
-      mlir::Value t3_lhs = {tensors[tensors.size() - 1]};
-      auto t3_semiring = builder.getStringAttr(semiringName);
-
-      // for t3_rhs
-      std::vector<std::vector<int>> t3_rhsop_perms_str = {t3_perms_int_0, t3_perms_int_1};
-      ArrayAttr t3_rhsop_perms = convert2DVectorToArrayAttrInt(t3_rhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t3_rhsop_formats_str = {t3_formats_str_0, t3_formats_str_1};
-      ArrayAttr t3_rhsop_formats = convert2DVectorToArrayAttrStr(t3_rhsop_formats_str, builder);
-      mlir::Value t3_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_rhs, t3_rhsop_perms, t3_rhsop_formats);
-
-      // for t3_lhs
-      std::vector<std::vector<int>> t3_lhsop_perms_str = {t3_perms_int_2};
-      ArrayAttr t3_lhsop_perms = convert2DVectorToArrayAttrInt(t3_lhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t3_lhsop_formats_str = {t3_formats_str_2};
-      ArrayAttr t3_lhsop_formats = convert2DVectorToArrayAttrStr(t3_lhsop_formats_str, builder);
-      mlir::Value t3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_lhs, t3_lhsop_perms, t3_lhsop_formats);
-
-      // for t3
-      mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, comp_worksp_opt, t3_semiring);
-      std::vector<mlir::Value> newComputeOps = {t1, t2, t3};
-      replaceOperands(itComputeOp.getOperation(), newComputeOps); 
-
-      /// Step 2: split j into 3.
-      Operation *needSplitNode = *(newComputeOps[0].getDefiningOp()->getResult(0).getUsers().begin());
-      Operation *parentSplitNode = *(needSplitNode->getResult(0).getUsers().begin());
-      comet_errs() << " call splitIndicesOp for applying workspace in Input \n";
-      comet_pdump(needSplitNode);
-      splitIndicesOp(needSplitNode, parentSplitNode->getResult(0), builder, loc);
-      comet_errs() << "\n";
-
-    } // end if(sparseDimsInput.size() == 1)
-  }
-}
 
 void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location loc)
 {
@@ -1135,7 +739,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
     std::vector<std::vector<int>> opPerms;
     std::vector<std::vector<bool>> inputOutputMapping;
     getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
-    comet_errs() << " \n";
+    comet_debug() << " \n";
     for (auto n : opFormats)
     {
 
@@ -1148,253 +752,174 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
     }
     std::vector<Value> tensors;
     getTensorsOfComputeOp(computeOp, tensors);
-    comet_errs() << " tensors.size(): " << tensors.size() << "\n";
+    comet_debug() << " tensors.size(): " << tensors.size() << "\n";
     std::vector<Value> tensors_rhs;
     getInputTensorsOfComputeOp(computeOp, tensors_rhs);
-    comet_errs() << " tensors_rhs.size(): " << tensors_rhs.size() << "\n";
+    comet_debug() << " tensors_rhs.size(): " << tensors_rhs.size() << "\n";
     std::vector<Value> tensors_lhs;
     getOutputTensorsOfComputeOp(computeOp, tensors_lhs);
-    comet_errs() << " tensors_lhs.size(): " << tensors_lhs.size() << "\n";
+    comet_debug() << " tensors_lhs.size(): " << tensors_lhs.size() << "\n";
 
     indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
     std::string semiringName(itComputeOp.semiring().data());
 
     std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
     std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
-    comet_errs() << " sparseDimsInput.size(): " << sparseDimsInput.size() << "\n";
+    comet_debug() << " sparseDimsInput.size(): " << sparseDimsInput.size() << "\n";
 
     if (sparseDimsInput.size() == 1)
     { // solve only 1 sparseDimsInput
       // No need to apply workspace transformation
-      // comet_errs() << " sparseDimsInput[0]: " << sparseDimsInput[0] << "\n";
-      comet_errs() << " sparseDimsInput[0]: " << sparseDimsInput[0].dim << ", " << sparseDimsInput[0].tensorId << ", " << sparseDimsInput[0].dimOrder << "\n";
-      // return;
-      // Wj=Aij*Bij => Vj=0; Vj=Aij; Wj=Vj*Bij
-      // Value sparseInput = itComputeOp.getOperation()->getOperand(sparseDimsInput[0].tensorId);
-      /// new version
-      // Value sparseInput = tensors[sparseDimsInput[0].tensorId];
-      Value sparseInput = tensors_rhs[sparseDimsInput[0].tensorId];
+      comet_debug() << " sparseDimsInput[0]: " << sparseDimsInput[0].dim << ", " << sparseDimsInput[0].tensorId << ", " << sparseDimsInput[0].dimOrder << "\n";
 
+      // Wj=Aij*Bij ==>
+      //    ComputeNode(c1): Vj=0;
+      //    ComputeNode(c2): Vj=Aij;
+      //    ComputeNode(c3): Wj=Vj*Bij
+
+      Value sparseInput = tensors_rhs[sparseDimsInput[0].tensorId];
       comet_vdump(sparseInput);
 
       std::vector<mlir::Value> v_lbls_value = {sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder)};
-
       comet_vdump(sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder));
       std::string v_format = "Dense"; // tensor<?xf64>
       auto v_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getF64Type());
 
       builder.setInsertionPoint(computeOp.getDefiningOp());
       mlir::Value v = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, v_type, v_lbls_value, v_format);
-
       comet_vdump(v);
 
-      // Vj=0
-      std::vector<int> t1_perms_int_0;
-      std::vector<int> t1_perms_int_1 = {sparseDimsInput[0].dim};
-      std::vector<std::vector<int>> t1_perms_int = {t1_perms_int_0, t1_perms_int_1};
+      // Start building an IndexTreeCompute Operation to represent Vj=0
+      std::vector<int> c1_perms_int_0;
+      std::vector<int> c1_perms_int_1 = {sparseDimsInput[0].dim};
+      std::vector<std::vector<int>> c1_perms_int = {c1_perms_int_0, c1_perms_int_1};
 
-      std::vector<std::string> t1_formats_str_0;
-      std::vector<std::string> t1_formats_str_1 = {"D"};
-      std::vector<std::vector<std::string>> t1_formats_str = {t1_formats_str_0, t1_formats_str_1};
+      std::vector<std::string> c1_formats_str_0;
+      std::vector<std::string> c1_formats_str_1 = {"D"};
+      std::vector<std::vector<std::string>> c1_formats_str = {c1_formats_str_0, c1_formats_str_1};
 
       auto i64Type = builder.getI64Type();
       Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
-      std::vector<mlir::Value> t1_rhs = {const_f64_0};
-      mlir::Value t1_lhs = {v};
+      std::vector<mlir::Value> c1_rhs = {const_f64_0};
+      mlir::Value c1_lhs = {v};
       std::string semiringName(itComputeOp.semiring().data());
-      auto t1_semiring = builder.getStringAttr(semiringName);
+      auto c1_semiring = builder.getStringAttr(semiringName);
 
-      // for t1_rhs
-      std::vector<std::vector<int>> t1_rhsop_perms_str = {t1_perms_int_0};
-      ArrayAttr t1_rhsop_perms = convert2DVectorToArrayAttrInt(t1_rhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t1_rhsop_formats_str = {t1_formats_str_0};
-      ArrayAttr t1_rhsop_formats = convert2DVectorToArrayAttrStr(t1_rhsop_formats_str, builder);
-      mlir::Value t1_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_rhs, t1_rhsop_perms, t1_rhsop_formats);
+      // for c1_rhs
+      std::vector<std::vector<int>> c1_rhsop_perms_str = {c1_perms_int_0};
+      ArrayAttr c1_rhsop_perms = convert2DVectorToArrayAttrInt(c1_rhsop_perms_str, builder);
+      std::vector<std::vector<std::string>> c1_rhsop_formats_str = {c1_formats_str_0};
+      ArrayAttr c1_rhsop_formats = convert2DVectorToArrayAttrStr(c1_rhsop_formats_str, builder);
+      mlir::Value c1_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c1_rhs, c1_rhsop_perms, c1_rhsop_formats);
+      comet_debug() << "IndexTreeComputeRHS Operation in Input (c1_rhs):";
+      comet_vdump(c1_rhsop);
 
-      // for t1_lhs
-      std::vector<std::vector<int>> t1_lhsop_perms_str = {t1_perms_int_1};
-      ArrayAttr t1_lhsop_perms = convert2DVectorToArrayAttrInt(t1_lhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t1_lhsop_formats_str = {t1_formats_str_1};
-      ArrayAttr t1_lhsop_formats = convert2DVectorToArrayAttrStr(t1_lhsop_formats_str, builder);
-      mlir::Value t1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t1_lhs, t1_lhsop_perms, t1_lhsop_formats);
+      // for c1_lhs
+      std::vector<std::vector<int>> c1_lhsop_perms_str = {c1_perms_int_1};
+      ArrayAttr c1_lhsop_perms = convert2DVectorToArrayAttrInt(c1_lhsop_perms_str, builder);
+      std::vector<std::vector<std::string>> c1_lhsop_formats_str = {c1_formats_str_1};
+      ArrayAttr c1_lhsop_formats = convert2DVectorToArrayAttrStr(c1_lhsop_formats_str, builder);
+      mlir::Value c1_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c1_lhs, c1_lhsop_perms, c1_lhsop_formats);
+      comet_debug() << "IndexTreeComputeLHS Operation in Input (c1_lhs):";
+      comet_vdump(c1_lhsop);
 
-      // for t1
-      mlir::Value t1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t1_rhsop, t1_lhsop, comp_worksp_opt, t1_semiring);
+      // for c1
+      mlir::Value c1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c1_rhsop, c1_lhsop, comp_worksp_opt, c1_semiring);
+      comet_debug() << "IndexTreeCompute Operation in Input (c1): ";
+      comet_vdump(c1);
 
-      // Vj = Aij
-      std::vector<int> t2_perms_int_0 = opPerms[sparseDimsInput[0].tensorId];
-      std::vector<int> t2_perms_int_1 = {sparseDimsInput[0].dim};
-      std::vector<std::vector<int>> t2_perms_int = {t2_perms_int_0, t2_perms_int_1};
+      // Start building an IndexTreeCompute Operation to represent Vj = Aij
+      std::vector<int> c2_perms_int_0 = opPerms[sparseDimsInput[0].tensorId];
+      std::vector<int> c2_perms_int_1 = {sparseDimsInput[0].dim};
+      std::vector<std::vector<int>> c2_perms_int = {c2_perms_int_0, c2_perms_int_1};
 
-      std::vector<std::string> t2_formats_str_0 = opFormats[sparseDimsInput[0].tensorId];
-      std::vector<std::string> t2_formats_str_1 = {"D"};
-      std::vector<std::vector<std::string>> t2_formats_str = {t2_formats_str_0, t2_formats_str_1};
-  
-      std::vector<mlir::Value> t2_rhs = {tensors_rhs[sparseDimsInput[0].tensorId]};
+      std::vector<std::string> c2_formats_str_0 = opFormats[sparseDimsInput[0].tensorId];
+      std::vector<std::string> c2_formats_str_1 = {"D"};
+      std::vector<std::vector<std::string>> c2_formats_str = {c2_formats_str_0, c2_formats_str_1};
 
-      mlir::Value t2_lhs = {v};
-      auto t2_semiring = builder.getStringAttr(semiringName);
-      // for t2_rhs
-      std::vector<std::vector<int>> t2_rhsop_perms_str = {t2_perms_int_0};
-      ArrayAttr t2_rhsop_perms = convert2DVectorToArrayAttrInt(t2_rhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t2_rhsop_formats_str = {t2_formats_str_0};
-      ArrayAttr t2_rhsop_formats = convert2DVectorToArrayAttrStr(t2_rhsop_formats_str, builder);
-      mlir::Value t2_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_rhs, t2_rhsop_perms, t2_rhsop_formats);
+      std::vector<mlir::Value> c2_rhs = {tensors_rhs[sparseDimsInput[0].tensorId]};
 
-      // for t2_lhs
-      std::vector<std::vector<int>> t2_lhsop_perms_str = {t2_perms_int_1};
-      ArrayAttr t2_lhsop_perms = convert2DVectorToArrayAttrInt(t2_lhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t2_lhsop_formats_str = {t2_formats_str_1};
-      ArrayAttr t2_lhsop_formats = convert2DVectorToArrayAttrStr(t2_lhsop_formats_str, builder);
-      mlir::Value t2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t2_lhs, t2_lhsop_perms, t2_lhsop_formats);
+      mlir::Value c2_lhs = {v};
+      auto c2_semiring = builder.getStringAttr(semiringName);
+      // for c2_rhs
+      std::vector<std::vector<int>> c2_rhsop_perms_str = {c2_perms_int_0};
+      ArrayAttr c2_rhsop_perms = convert2DVectorToArrayAttrInt(c2_rhsop_perms_str, builder);
+      std::vector<std::vector<std::string>> c2_rhsop_formats_str = {c2_formats_str_0};
+      ArrayAttr c2_rhsop_formats = convert2DVectorToArrayAttrStr(c2_rhsop_formats_str, builder);
+      mlir::Value c2_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c2_rhs, c2_rhsop_perms, c2_rhsop_formats);
+      comet_debug() << "IndexTreeComputeRHS Operation in Input (c2_rhs):";
+      comet_vdump(c2_rhsop);
 
-      // for t2
-      mlir::Value t2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t2_rhsop, t2_lhsop, comp_worksp_opt, t2_semiring);
+      // for c2_lhs
+      std::vector<std::vector<int>> c2_lhsop_perms_str = {c2_perms_int_1};
+      ArrayAttr c2_lhsop_perms = convert2DVectorToArrayAttrInt(c2_lhsop_perms_str, builder);
+      std::vector<std::vector<std::string>> c2_lhsop_formats_str = {c2_formats_str_1};
+      ArrayAttr c2_lhsop_formats = convert2DVectorToArrayAttrStr(c2_lhsop_formats_str, builder);
+      mlir::Value c2_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c2_lhs, c2_lhsop_perms, c2_lhsop_formats);
+      comet_debug() << "IndexTreeComputeLHS Operation in Input (c2_lhs):";
+      comet_vdump(c2_lhsop);
 
-      // Wj=Vj*Bij
-      std::vector<int> t3_perms_int_0 = {sparseDimsInput[0].dim};
-      std::vector<int> t3_perms_int_1 = opPerms[1]; 
-      std::vector<int> t3_perms_int_2 = opPerms[opPerms.size() - 1];
-      std::vector<std::vector<int>> t3_perms_int = {t3_perms_int_0, t3_perms_int_1, t3_perms_int_2};
+      // for c2
+      mlir::Value c2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c2_rhsop, c2_lhsop, comp_worksp_opt, c2_semiring);
+      comet_debug() << "IndexTreeCompute Operation in Input (c2): ";
+      comet_vdump(c2);
+
+      // Start building an IndexTreeCompute Operation to represent Wj=Vj*Bij
+      std::vector<int> c3_perms_int_0 = {sparseDimsInput[0].dim};
+      std::vector<int> c3_perms_int_1 = opPerms[1];
+      std::vector<int> c3_perms_int_2 = opPerms[opPerms.size() - 1];
+      std::vector<std::vector<int>> c3_perms_int = {c3_perms_int_0, c3_perms_int_1, c3_perms_int_2};
 
       // Convert formats string array into StrAttr
-      std::vector<std::string> t3_formats_str_0 = {"D"};
-      std::vector<std::string> t3_formats_str_1 = opFormats[1];
-      std::vector<std::string> t3_formats_str_2 = opFormats[opFormats.size() - 1];
+      std::vector<std::string> c3_formats_str_0 = {"D"};
+      std::vector<std::string> c3_formats_str_1 = opFormats[1];
+      std::vector<std::string> c3_formats_str_2 = opFormats[opFormats.size() - 1];
 
-      std::vector<std::vector<std::string>> t3_formats_str = {t3_formats_str_0, t3_formats_str_1, t3_formats_str_2};
-      std::vector<mlir::Value> t3_rhs = {v, tensors[1]};
+      std::vector<std::vector<std::string>> c3_formats_str = {c3_formats_str_0, c3_formats_str_1, c3_formats_str_2};
+      std::vector<mlir::Value> c3_rhs = {v, tensors[1]};
 
-      comet_errs() << " tensors.size(): " << tensors.size() << "\n";
-      std::vector<mlir::Value> t3_lhs = tensors_lhs;
+      comet_debug() << " tensors.size(): " << tensors.size() << "\n";
+      std::vector<mlir::Value> c3_lhs = tensors_lhs;
 
-      auto t3_semiring = builder.getStringAttr(semiringName);
+      auto c3_semiring = builder.getStringAttr(semiringName);
 
-      // for t3_rhs
-      std::vector<std::vector<int>> t3_rhsop_perms_str = {t3_perms_int_0, t3_perms_int_1};
-      ArrayAttr t3_rhsop_perms = convert2DVectorToArrayAttrInt(t3_rhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t3_rhsop_formats_str = {t3_formats_str_0, t3_formats_str_1};
-      ArrayAttr t3_rhsop_formats = convert2DVectorToArrayAttrStr(t3_rhsop_formats_str, builder);
-      mlir::Value t3_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_rhs, t3_rhsop_perms, t3_rhsop_formats);
+      // for c3_rhs
+      std::vector<std::vector<int>> c3_rhsop_perms_str = {c3_perms_int_0, c3_perms_int_1};
+      ArrayAttr c3_rhsop_perms = convert2DVectorToArrayAttrInt(c3_rhsop_perms_str, builder);
+      std::vector<std::vector<std::string>> c3_rhsop_formats_str = {c3_formats_str_0, c3_formats_str_1};
+      ArrayAttr c3_rhsop_formats = convert2DVectorToArrayAttrStr(c3_rhsop_formats_str, builder);
+      mlir::Value c3_rhsop = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c3_rhs, c3_rhsop_perms, c3_rhsop_formats);
+      comet_debug() << "IndexTreeComputeRHS Operation in Input (c3_rhs):";
+      comet_vdump(c3_rhsop);
 
-      // for t3_lhs
-      std::vector<std::vector<int>> t3_lhsop_perms_str = {t3_perms_int_2};
-      ArrayAttr t3_lhsop_perms = convert2DVectorToArrayAttrInt(t3_lhsop_perms_str, builder);
-      std::vector<std::vector<std::string>> t3_lhsop_formats_str = {t3_formats_str_2};
-      ArrayAttr t3_lhsop_formats = convert2DVectorToArrayAttrStr(t3_lhsop_formats_str, builder);
-      mlir::Value t3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), t3_lhs, t3_lhsop_perms, t3_lhsop_formats);
+      // for c3_lhs
+      std::vector<std::vector<int>> c3_lhsop_perms_str = {c3_perms_int_2};
+      ArrayAttr c3_lhsop_perms = convert2DVectorToArrayAttrInt(c3_lhsop_perms_str, builder);
+      std::vector<std::vector<std::string>> c3_lhsop_formats_str = {c3_formats_str_2};
+      ArrayAttr c3_lhsop_formats = convert2DVectorToArrayAttrStr(c3_lhsop_formats_str, builder);
+      mlir::Value c3_lhsop = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()), c3_lhs, c3_lhsop_perms, c3_lhsop_formats);
+      comet_debug() << "IndexTreeComputeLHS Operation in Input (c3_lhs):";
+      comet_vdump(c3_lhsop);
 
-      // for t3
-      mlir::Value t3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, t3_rhsop, t3_lhsop, comp_worksp_opt, t3_semiring);
+      // for c3
+      mlir::Value c3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c3_rhsop, c3_lhsop, comp_worksp_opt, c3_semiring);
+      comet_debug() << "IndexTreeCompute Operation in Input (t3): ";
+      comet_vdump(c3);
 
       /// old version for new children ops
-      std::vector<mlir::Value> newComputeOps = {t1, t2, t3};
+      std::vector<mlir::Value> newComputeOps = {c1, c2, c3};
       replaceOperands(itComputeOp.getOperation(), newComputeOps);
 
       /// Step 2: split j into 3.
       Operation *needSplitNode = *(newComputeOps[0].getDefiningOp()->getResult(0).getUsers().begin());
       Operation *parentSplitNode = *(needSplitNode->getResult(0).getUsers().begin());
-      comet_errs() << " call splitIndicesOp for applying workspace in Input \n";
+      comet_debug() << " call splitIndicesOp for applying workspace in Input \n";
       comet_pdump(needSplitNode);
       splitIndicesOp(needSplitNode, parentSplitNode->getResult(0), builder, loc);
-      comet_errs() << "\n";
+      comet_debug() << "\n";
 
     } // end if(sparseDimsInput.size() == 1)
   }
-}
-
-void WorkspaceTransformsPass::WorkspaceTransforms(mlir::FuncOp funcop)
-{
-
-  comet_vdump(funcop);
-
-  funcop.walk([](indexTree::IndexTreeOp op)
-              {
-    OpBuilder builder(op);
-    comet_vdump(op);
-
-    Location loc = op.getLoc();
-
-    // 1. Find its child, until reach the ta.itCompute op
-    // Get first user
-    Value computeOp = op.getOperation()->getOperand(0);
-    comet_vdump(computeOp);
-    
-    // mlir::Value computeOp = op.getOperation()->getOperand(0).getUsers().begin(); 
-    // Only one child?
-    // Build a map, which index is in which IndexTreeIndicesOp
-    // ------ Notice: each index is only in one IndicesOp in original index tree here
-    // ------ TODO(ruiqin): handle more complicate cases: one index is in more than one IndicesOp
-    // For an indexTree, the indices ids are
-    std::map<int, mlir::Value> indexValueMap;
-    
-    while(!(isa<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp()))){
-      if(isa<indexTree::IndexTreeIndicesOp>(computeOp.getDefiningOp())){
-        auto indicesop = dyn_cast<indexTree::IndexTreeIndicesOp>(computeOp.getDefiningOp());
-        ArrayAttr idsArrayAttr = indicesop.indices();
-        for(auto n : idsArrayAttr){
-          int ids = n.cast<mlir::IntegerAttr>().getInt();
-          indexValueMap.emplace(ids, computeOp);
-        }      
-      }
-      computeOp = computeOp.getDefiningOp()->getOperand(0); // put here
-    }
-    comet_vdump(computeOp);
-
-    // 2. Check if there is sparse dim in the ta.itCompute op, 
-    std::vector<std::vector<std::string>> opFormats;
-    std::vector<std::vector<int>> opPerms;
-    std::vector<std::vector<bool> > inputOutputMapping;
-    getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
-    indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-    
-
-    // Check the input tensors, and the output tensor, to see if it contains sparse dimensions
-    // get the dim ids
-    std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
-    // std::vector<int> 
-    std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
-
-    if(sparseDimsOutput.size() == 0 && sparseDimsInput.size() == 0){
-      // No need to apply workspace transformation
-      comet_errs() <<  __FILE__ << __LINE__ << "No need to apply workspace transformation\n";
-      comet_errs() <<  __FILE__ << __LINE__ << "Size of sparseDimsOutput:" << sparseDimsOutput.size() << "\n";
-      comet_errs() <<  __FILE__ << __LINE__ << "Size of sparseDimsInput:" << sparseDimsInput.size() << "\n";
-      return;
-    }
-    
-    assert(sparseDimsOutput.size() == 1 && " More than one sparse index in the output, we are expecting to support it in the future\n"); 
-
-    std::vector<Value> newComputeOps;
-    // create three IndexTreeComputeOp op
-    // sparse dim in output tensor   
-    if(sparseDimsOutput.size() == 1){
-      newComputeOps = workspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, indexValueMap, builder, op);
-    }
-    // initially here workspaceOutput content 
-
-    #ifdef DEBUG_MODE_WorkspaceTransformsPass
-    // Should notice, the itree has been the new itree already after call workspaceOutput
-    for(auto n : newComputeOps){
-      comet_vdump(n);
-    }
-    #endif
-    
-    if(sparseDimsInput.size() == 1){
-      comet_vdump(op);
-      // Need the newComputeOps
-      workspaceInput(newComputeOps, builder, loc);
-    } }); // end function traverse
-}
-
-void WorkspaceTransformsPass::runOnFunction()
-{
-  LLVM_DEBUG(llvm::dbgs() << "start WorkspaceTransformsPass\n");
-  comet_errs() << __FILE__ << " " << __LINE__ << " start WorkspaceTransforms pass \n";
-  auto function = getFunction();
-
-  // Traverse the function, only handle ta.itree operation
-  WorkspaceTransforms(function);
 }
 
 void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::FuncOp funcop)
@@ -1410,8 +935,6 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
     // Get first user
     Value computeOp = op.getOperation()->getOperand(0);
     comet_vdump(computeOp);
-    // auto v = computeOp.getDefiningOp(); //->getOperand(0);
-    // comet_vdump(v);
     
     // Only one child??
     // Build a map, which index is in which IndexTreeIndicesOp
@@ -1439,34 +962,34 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
     std::vector<std::vector<bool> > inputOutputMapping;
     getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
 
-    #ifdef DEBUG_MODE_WorkspaceTransformsPass
-    comet_errs() << "Print opFormats:\n";
+#ifdef DEBUG_MODE_WorkspaceTransformsPass
+    comet_debug() << "Print opFormats:\n";
     for (auto n : opFormats)
     {
       
       print_vector<std::string>(n);
     }
-    #endif
+#endif
     
     indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
     
     //Check the input tensors, and the output tensor, to see if it contains sparse dimensions
     //get the dim ids
     std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
-    
-    #ifdef DEBUG_MODE_WorkspaceTransformsPass
-    comet_errs() << " Print sparseDimsOutput: ";
+
+#ifdef DEBUG_MODE_WorkspaceTransformsPass
+    comet_debug() << " Print sparseDimsOutput: ";
     for(auto p : sparseDimsOutput){
-      comet_errs() << p << " ";
+      comet_debug() << p << " ";
     }
-    comet_errs() << "\n";
-    #endif
+    comet_debug() << "\n";
+#endif
 
     std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
 
     if(sparseDimsOutput.size() == 0 && sparseDimsInput.size() == 0){
       // No need to apply workspace transformation
-      comet_errs() <<  __FILE__ << __LINE__ << " No need to apply workspace transformation\n";
+      comet_debug() <<  __FILE__ << __LINE__ << " No need to apply workspace transformation\n";
       return;
     }
     
@@ -1478,15 +1001,15 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
     if(sparseDimsOutput.size() == 1){      
       newComputeOps = CompressedWorkspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, indexValueMap, builder, op);
     }
-    // initially here workspaceOutput content 
+    // initially here workspaceOutput content
 
-    #ifdef DEBUG_MODE_WorkspaceTransformsPass
+#ifdef DEBUG_MODE_WorkspaceTransformsPass
     // Should notice, the itree has been the new itree already after call workspaceOutput
     for(auto n : newComputeOps){
       
       comet_vdump(n);
     }
-    #endif
+#endif
     if(sparseDimsInput.size() == 1){
       comet_vdump(op);
       // Need the newComputeOps
@@ -1496,18 +1019,11 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
 
 void CompressedWorkspaceTransformsPass::runOnFunction()
 {
-  LLVM_DEBUG(llvm::dbgs() << "start CompressedWorkspaceTransformsPass\n");
-  comet_errs() << __FILE__ << " " << __LINE__ << " start CompressedWorkspaceTransforms pass \n";
+  comet_debug() << __FILE__ << " " << __LINE__ << " starting CompressedWorkspaceTransforms pass \n";
   auto function = getFunction();
-  
+
   // Traverse the function, only handle ta.itree operation
   CompressedWorkspaceTransforms(function);
-}
-
-// Apply the initial workspace transformations on the index tree IR
-std::unique_ptr<Pass> mlir::IndexTree::createWorkspaceTransformsPass()
-{
-  return std::make_unique<WorkspaceTransformsPass>();
 }
 
 // Apply the compressed workspace transformations on the index tree IR

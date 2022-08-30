@@ -76,11 +76,15 @@ using namespace mlir::tensorAlgebra;
 // #endif
 
 #ifdef DEBUG_MODE_TransposeLoweringPass
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -128,7 +132,7 @@ namespace
       auto module = op->getParentOfType<ModuleOp>();
       // module->dump();
       Location loc = op.getLoc();
-      comet_errs() << " Transpose lowering\n";
+      comet_debug() << " Transpose lowering\n";
       comet_vdump(op);
       auto *ctx = op->getContext();
       auto inputType = op->getOperand(0).getType();
@@ -220,20 +224,20 @@ namespace
         for (unsigned int n = 0; n < tensors_num; n++)
         {
           unsigned int tensor_rank = (tensors[n].getDefiningOp()->getNumOperands() - 2) / 5;
-          comet_errs() << " tensor_rank: " << tensor_rank << "\n";
-          comet_errs() << " tensor[n]: "
+          comet_debug() << " tensor_rank: " << tensor_rank << "\n";
+          comet_debug() << " tensor[n]: "
                        << "\n";
           comet_pdump(tensors[n].getDefiningOp());
 
           for (unsigned int i = 0; i < 2 * tensor_rank + 1; i++)
           {
             auto tensorload_op = tensors[n].getDefiningOp()->getOperand(i);
-            comet_errs() << " tensorload_op "
+            comet_debug() << " tensorload_op "
                          << "\n";
             comet_vdump(tensorload_op);
 
             auto alloc_op = tensorload_op.getDefiningOp()->getOperand(0);
-            comet_errs() << " alloc_op "
+            comet_debug() << " alloc_op "
                          << "\n";
             comet_vdump(alloc_op);
 
@@ -253,17 +257,17 @@ namespace
 
           auto memrefload_op = tensors[n].getDefiningOp()->getOperand(tensors[n].getDefiningOp()->getNumOperands() - 1);
           allocs_for_sparse_tensors[n].push_back(memrefload_op);
-          comet_errs() << " memrefload_op "
+          comet_debug() << " memrefload_op "
                        << "\n";
           comet_vdump(memrefload_op);
         }
 
         Value last_dim_size_alloc = allocs_for_sparse_tensors[0][0].getDefiningOp()->getOperand(0);
-        comet_errs() << "Alloc for last dim size:\n";
+        comet_debug() << "Alloc for last dim size:\n";
         comet_vdump(last_dim_size_alloc);
 
         mlir::Value sparse_tensor_desc = rewriter.create<memref::CastOp>(loc, last_dim_size_alloc, unrankedMemrefType_index);
-        comet_errs() << "Sparse tensor descriptive to extract row/col values:\n";
+        comet_debug() << "Sparse tensor descriptive to extract row/col values:\n";
         comet_vdump(sparse_tensor_desc);
 
         auto rank_size = (tensors[0].getDefiningOp()->getNumOperands() - 2) / 5;

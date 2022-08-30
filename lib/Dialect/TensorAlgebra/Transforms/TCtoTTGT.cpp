@@ -63,11 +63,15 @@ using namespace mlir::tensorAlgebra;
 // #endif
 
 #ifdef DEBUG_MODE_TTGT
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -303,10 +307,10 @@ namespace
       }
 
       comet_pdump(op);
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       auto rhs1Tensor = cast<memref::TensorLoadOp>(operands[0].getDefiningOp());
       auto rhs2Tensor = cast<memref::TensorLoadOp>(operands[1].getDefiningOp());
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       Value lhsDef;
       tensorAlgebra::TensorSetOp setnewop;
       for (auto u : multop.getOperation()->getResult(0).getUsers())
@@ -332,7 +336,7 @@ namespace
       auto lhsTensor = cast<memref::TensorLoadOp>(lhsDef.getDefiningOp());
 
       comet_vdump(setnewop);
-      comet_errs() << "\n";
+      comet_debug() << "\n";
 
       Value rhs1Memref = rhs1Tensor.memref();
       Value rhs2Memref = rhs2Tensor.memref();
@@ -354,7 +358,7 @@ namespace
       IndexVector rhs1Perm, rhs2Perm, lhsPerm;
       std::tie(rhs1Perm, rhs2Perm, lhsPerm) = plan.computePermutations(isSelectBestPerm, whatPerm);
 
-      comet_errs() << "Best permutation : " << plan.bestPermStr_ << "\n";
+      comet_debug() << "Best permutation : " << plan.bestPermStr_ << "\n";
 
       std::set<unsigned> rhsIndices(allPerms[0].begin(), allPerms[0].end());
       rhsIndices.insert(allPerms[1].begin(), allPerms[1].end());
@@ -401,7 +405,7 @@ namespace
 
         #ifdef DEBUG_MODE_TTGT
         auto rhs1LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         comet_vdump(rhs1LinalgCopy);
         #else
         rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
@@ -422,7 +426,7 @@ namespace
             rewriter);
         #ifdef DEBUG_MODE_TTGT
         auto rhs2LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
-        comet_errs() << " rhs2LinalgCopy op: " << __LINE__ << "\n";
+        comet_debug() << " rhs2LinalgCopy op: " << __LINE__ << "\n";
         comet_vdump(rhs2LinalgCopy);
         #else
         rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
@@ -461,7 +465,7 @@ namespace
       bool isRHS1SumPermutation = arePermutations(allPerms[0], sumIndices);
       bool isRHS2SumPermutation = arePermutations(allPerms[1], sumIndices);
 
-      comet_errs() << __LINE__ << "mIdxSize, nIdxSize, kIdxSize: " << mIdxSize << ", " << nIdxSize << ", " << kIdxSize << " isRHS1SumPermutation, isRHS2SumPermutation: " << isRHS1SumPermutation << ", " << isRHS2SumPermutation << "\n";
+      comet_debug() << __LINE__ << "mIdxSize, nIdxSize, kIdxSize: " << mIdxSize << ", " << nIdxSize << ", " << kIdxSize << " isRHS1SumPermutation, isRHS2SumPermutation: " << isRHS1SumPermutation << ", " << isRHS2SumPermutation << "\n";
 
       // Do reshape if needed
       if (isRHS1SumPermutation)
@@ -477,7 +481,7 @@ namespace
             rhs1Alloc.getType().cast<MemRefType>(), rhs1IndexingMap);
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs1IndexingMap);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         rhs1Reshape = rewriter.create<linalg::ReshapeOp>(
             loc, collapsedMemrefType, rhs1Alloc, reassociationIndices);
         comet_vdump(rhs1Reshape);
@@ -512,19 +516,19 @@ namespace
             rhs1Alloc.getType().cast<MemRefType>(), rhs1IndexingMap);
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs1IndexingMap);
-        comet_errs() << " collapsedMemrefType:"
+        comet_debug() << " collapsedMemrefType:"
                      << "\n";
         comet_vdump(collapsedMemrefType);
-        comet_errs() << "\n";
-        comet_errs() << " rhs1Alloc: \n";
+        comet_debug() << "\n";
+        comet_debug() << " rhs1Alloc: \n";
         comet_vdump(rhs1Alloc);
         comet_vdump(rhs1MemrefType);
 
         rhs1Reshape = rewriter.create<linalg::ReshapeOp>(
             loc, collapsedMemrefType, rhs1Alloc, reassociationIndices);
-        comet_errs() << " Before rhs1Reshape: \n";
+        comet_debug() << " Before rhs1Reshape: \n";
         comet_vdump(rhs1Reshape);
-        comet_errs() << " After rhs1Reshape: \n";
+        comet_debug() << " After rhs1Reshape: \n";
       }
 
       // if (isRHS2SumPermutation) {
@@ -544,7 +548,7 @@ namespace
         rhs2Reshape = rewriter.create<linalg::ReshapeOp>(
             loc, collapsedMemrefType, rhs2Alloc, reassociationIndices);
 
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         comet_vdump(rhs2Reshape);
         // } else if (rhs2MemrefType.getShape().size() != 2) {
       }
@@ -582,15 +586,15 @@ namespace
             getReassociationIndices(rhs2IndexingMap);
         rhs2Reshape = rewriter.create<linalg::ReshapeOp>(
             loc, collapsedMemrefType, rhs2Alloc, reassociationIndices);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         comet_vdump(rhs2Reshape);
       }
 
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       // if (isRHS1SumPermutation || isRHS2SumPermutation) {
       if (isRHS1SumPermutation || (isRHS2SumPermutation && rhs2MemrefType.getShape().size() != 1))
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         auto resultShape = lhsMemrefType.getShape();
 
         auto lhsAffineMap = AffineMap::getPermutationMap(
@@ -604,12 +608,12 @@ namespace
             getReassociationIndices(lhsIndexingMap);
         lhsReshape = rewriter.create<linalg::ReshapeOp>(
             loc, collapsedMemrefType, lhsAlloc, reassociationIndices);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         comet_vdump(lhsReshape);
       }
       else if (lhsMemrefType.getShape().size() != 2 && lhsMemrefType.getShape().size() != 1)
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         auto resultShape = lhsMemrefType.getShape();
         // Construct combined shape of 2D memref
         std::vector<unsigned> lhs_0, lhs_1;
@@ -640,22 +644,22 @@ namespace
             getReassociationIndices(lhsIndexingMap);
         lhsReshape = rewriter.create<linalg::ReshapeOp>(
             loc, collapsedMemrefType, lhsAlloc, reassociationIndices);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         comet_vdump(lhsReshape);
       }
 
-      comet_errs() << "\n";
+      comet_debug() << "\n";
       // Create linalg matmul op
       linalg::MatmulOp matmulop;
       linalg::MatvecOp matvecop;
       Value res_value;
       if (isRHS1SumPermutation)
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         matvecop = rewriter.create<linalg::MatvecOp>(
             loc, ValueRange{rhs2Reshape, rhs1Reshape},
             ValueRange{lhsReshape});
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         comet_vdump(matvecop);
 
         matvecop.getOperation()->setAttr("__alpha__", alphaAttr);
@@ -667,11 +671,11 @@ namespace
       }
       else if (isRHS2SumPermutation)
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         matvecop = rewriter.create<linalg::MatvecOp>(
             loc, ValueRange{rhs1Reshape, rhs2Reshape},
             ValueRange{lhsReshape});
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         comet_vdump(rhs1Reshape);
         comet_vdump(rhs2Reshape);
         comet_vdump(lhsReshape);
@@ -686,14 +690,14 @@ namespace
       }
       else
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         if (plan.swapAB_)
         {
           // TODO-gokcen - there is error with the building process
           matmulop = rewriter.create<linalg::MatmulOp>(
               loc, ValueRange{rhs2Reshape, rhs1Reshape},
               ValueRange{lhsReshape});
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           comet_vdump(matmulop);
         }
         else
@@ -701,13 +705,13 @@ namespace
           matmulop = rewriter.create<linalg::MatmulOp>(
               loc, ValueRange{rhs1Reshape, rhs2Reshape},
               ValueRange{lhsReshape});
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           comet_vdump(rhs1Reshape);
           comet_vdump(rhs2Reshape);
           comet_vdump(lhsReshape);
           comet_vdump(matmulop);
         }
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         // Add attribute to the linalg.matmul operations
         matmulop.getOperation()->setAttr(LinalgTransforms::kLinalgTransformMarker,
                                          rewriter.getStringAttr(tensorAlgMarker));
@@ -721,7 +725,7 @@ namespace
         #ifdef DEBUG_MODE_TTGT
         auto lhsFinalCopy =
             rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         comet_vdump(lhsFinalCopy);
         #else
         rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
@@ -821,7 +825,7 @@ void TALoweringTTGTPass::runOnFunction()
     signalPassFailure();
   }
 
-  comet_errs() << "ttgt lowering finished\n";
+  comet_debug() << "ttgt lowering finished\n";
 }
 
 /// Create a pass for lowering operations in the `LinAlg` and `Std` dialects,

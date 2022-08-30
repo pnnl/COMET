@@ -82,11 +82,15 @@ using llvm::StringRef;
 // #endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-#define comet_errs() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
 #else
-#define comet_errs() llvm::nulls()
+#define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -140,9 +144,7 @@ public:
 
   void addChild(OpsTree *tree)
   { // const T& node
-    comet_errs() << " " << this->children.size() << "\n";
     this->children.push_back(tree);
-    comet_errs() << " " << this->children.size() << "\n";
   }
 
   std::vector<scf::ForOp> &getForOps()
@@ -194,7 +196,7 @@ struct indexInTensor
 
 Value findCorrespondingAlloc(Value iOp)
 {
-  comet_errs() << "findCorrespondingAlloc for loop upper bound\n";
+  comet_debug() << "findCorrespondingAlloc for loop upper bound\n";
   comet_vdump(iOp);
   auto init_alloc = iOp.getDefiningOp()->getOperand(0);
   comet_vdump(init_alloc);
@@ -215,7 +217,7 @@ Value findCorrespondingAlloc(Value iOp)
     else
     {
       // Alloc related to another sparse tensor construct such as coming from sparse transpose
-      comet_errs() << "Return alloc op - comes from sptensor_construct\n";
+      comet_debug() << "Return alloc op - comes from sptensor_construct\n";
       comet_vdump(init_alloc);
       return init_alloc;
     }
@@ -228,7 +230,7 @@ std::vector<Value> getAllocs(Value tensor)
   std::vector<Value> allocs;
   if (tensor.getType().isa<mlir::TensorType>())
   { // Dense tensor
-    comet_errs() << " getAllocs() -  it is dense\n";
+    comet_debug() << " getAllocs() -  it is dense\n";
     if (isa<memref::TensorLoadOp>(tensor.getDefiningOp()))
     {
       Operation *tensorload = cast<memref::TensorLoadOp>(tensor.getDefiningOp());
@@ -252,7 +254,7 @@ std::vector<Value> getAllocs(Value tensor)
   }
   else if (tensor.getType().isa<tensorAlgebra::SparseTensorType>())
   { // nSparse tensor
-    comet_errs() << " getAllocs() -  it is sparse\n";
+    comet_debug() << " getAllocs() -  it is sparse\n";
     auto defop = tensor.getDefiningOp<tensorAlgebra::SparseTensorConstructOp>();
 
     unsigned int ranks = (defop.indices().size() - 2) / 5;
@@ -303,36 +305,36 @@ void genForOps(std::vector<Value> tensors,
                PatternRewriter &rewriter,
                OpsTree *opstree, std::vector<Value> ancestors_wp)
 {
-  comet_errs() << " genForOps indexTreeOp\n";
+  comet_debug() << " genForOps indexTreeOp\n";
   comet_vdump(rootOp);
   Location loc = rootOp.getLoc();
   /// The insertion location should be "the end of the body of parent loop"
   std::vector<OpsTree *> ancestorsOps;
   getAncestorsOps(opstree, ancestorsOps);
-  comet_errs() << " genForOps ancestorsOps.size(): " << ancestorsOps.size() << "\n";
+  comet_debug() << " genForOps ancestorsOps.size(): " << ancestorsOps.size() << "\n";
   for (unsigned int i = 0; i < ancestorsOps.size(); i++)
   {
-    comet_errs() << " ancestorsOps[" << i << "]->forOps.size(): " << ancestorsOps[i]->forOps.size() << ", ancestorsOps->id: "
+    comet_debug() << " ancestorsOps[" << i << "]->forOps.size(): " << ancestorsOps[i]->forOps.size() << ", ancestorsOps->id: "
                  << ancestorsOps[i]->id << "\n";
   }
 
-  comet_errs() << "\n";
+  comet_debug() << "\n";
   /// If parent is for loop, insert into the body, How to get end of body?
   if (ancestorsOps.size() > 0)
   {
     // ancestorsOps[0] stores the closest parent
     scf::ForOp parent_forop = NULL;
-    comet_errs() << "\n";
+    comet_debug() << "\n";
     std::vector<scf::ForOp> parent_forops = ancestorsOps[0]->forOps;
-    comet_errs() << " parent_forops.size(): " << parent_forops.size() << " \n";
+    comet_debug() << " parent_forops.size(): " << parent_forops.size() << " \n";
 
     parent_forop = parent_forops[parent_forops.size() - 1];
 
-    comet_errs() << " reset the insertion point\n";
+    comet_debug() << " reset the insertion point\n";
     comet_vdump(parent_forop);
 
     unsigned int order = findIndexInVector_OpsTree(ancestorsOps[0]->getChildren(), opstree);
-    comet_errs() << " order: " << order << "\n";
+    comet_debug() << " order: " << order << "\n";
     if (order == ancestorsOps[0]->getChildren().size())
     {
       llvm::errs() << __LINE__ << "Not belong to parent's children\n";
@@ -340,46 +342,46 @@ void genForOps(std::vector<Value> tensors,
     else
     {
       // Get the children of the parent_forop
-      comet_errs() << " number of children: " << parent_forops.size() << "\n";
+      comet_debug() << " number of children: " << parent_forops.size() << "\n";
       if (order == 0)
       {
         // rewriter.setInsertionPointToStart(parent_forop.getBody());
-        comet_errs() << "Insertion point order == 0\n";
+        comet_debug() << "Insertion point order == 0\n";
         rewriter.setInsertionPoint(parent_forop.getBody()->getTerminator());
       }
       else
       {
-        comet_errs() << "\n";
+        comet_debug() << "\n";
         std::vector<scf::ForOp> brother_forops = ancestorsOps[0]->getChildren()[order - 1]->forOps;
         if (brother_forops.size() > 0)
         {
-          comet_errs() << " brother_forops.size(): " << brother_forops.size() << "\n";
+          comet_debug() << " brother_forops.size(): " << brother_forops.size() << "\n";
           if (opstree->forOps.size() == 0)
           {
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             comet_vdump(brother_forops[0]);
-            comet_errs() << "Insertion point (brother_forops.size() > 0 &&  opstree->forOps.size() == 0)\n";
+            comet_debug() << "Insertion point (brother_forops.size() > 0 &&  opstree->forOps.size() == 0)\n";
             rewriter.setInsertionPointAfter(brother_forops[0]);
           }
           else
           { // current opstree contains loops, insert in the body of the loops
-            comet_errs() << " -------- current opstree contain loops --- impossible\n";
-            comet_errs() << "Insertion point (brother_forops.size() > 0 &&  opstree->forOps.size() != 0)\n";
+            comet_debug() << " -------- current opstree contain loops --- impossible\n";
+            comet_debug() << "Insertion point (brother_forops.size() > 0 &&  opstree->forOps.size() != 0)\n";
             rewriter.setInsertionPoint(opstree->forOps[opstree->forOps.size() - 1].getBody()->getTerminator());
           }
         }
       }
     }
-    comet_errs() << " reset the insertion point\n";
+    comet_debug() << " reset the insertion point\n";
   }
-  comet_errs() << "\n";
+  comet_debug() << "\n";
 
   Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
 
-  comet_errs() << "Tensor size: " << tensors.size() << "\n";
+  comet_debug() << "Tensor size: " << tensors.size() << "\n";
   std::vector<std::vector<Value>> allAllocs = getAllAllocs(tensors);
 
-  comet_errs() << "Tensors:\n";
+  comet_debug() << "Tensors:\n";
   for (unsigned int i = 0; i < tensors.size(); i++)
   {
     comet_vdump(tensors[i]);
@@ -393,7 +395,7 @@ void genForOps(std::vector<Value> tensors,
     if (i > 0)
     {
       // insertion point: the body of the previous i's loop body
-      comet_errs() << " -------- current opstree contain loops\n";
+      comet_debug() << " -------- current opstree contain loops\n";
       rewriter.setInsertionPoint(opstree->forOps[opstree->forOps.size() - 1].getBody()->getTerminator());
     }
 
@@ -401,14 +403,14 @@ void genForOps(std::vector<Value> tensors,
     std::string format = formats[i];
     unsigned int id = ids[i];
 
-    comet_errs() << " current index format: " << format << "\n";
+    comet_debug() << " current index format: " << format << "\n";
     if (format.compare(0, 1, "D") == 0)
     {
       // Check which tensor is sparse, which is dense;
       // Since this function only handles mixed sparse/dense, then "D" only occurs in one tensor
       // Both the dense and sparse tensor contain the dim size; But they are different. Use one.
       int maxSize = 0;
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(tensor);
       if (tensor.getType().isa<mlir::RankedTensorType>())
       { // Dense tensor
@@ -421,7 +423,7 @@ void genForOps(std::vector<Value> tensors,
         if (maxSize == ShapedType::kDynamicSize)
         {
           // Find defOp allocOp, check the parameter
-          comet_errs() << " Dynamic size ";
+          comet_debug() << " Dynamic size ";
           comet_pdump(tensor.getDefiningOp());                // tensor_load
           comet_vdump(tensor.getDefiningOp()->getOperand(0)); // alloc <?x32xf64>
           // Check the order of the current dynamic size
@@ -448,7 +450,7 @@ void genForOps(std::vector<Value> tensors,
         auto step = rewriter.create<ConstantIndexOp>(loc, 1);
         auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
-        comet_errs() << " D Loop\n";
+        comet_debug() << " D Loop\n";
         comet_vdump(loop);
 
         opstree->forOps.push_back(loop);
@@ -456,16 +458,16 @@ void genForOps(std::vector<Value> tensors,
       }
       else if (tensor.getType().isa<mlir::UnrankedTensorType>())
       {
-        comet_errs() << " \n";
+        comet_debug() << " \n";
         comet_pdump(tensor.getDefiningOp());
         if (indexTree::IndexTreeComputeRHSOp rhsop = dyn_cast<indexTree::IndexTreeComputeRHSOp>(tensor.getDefiningOp()))
         {
-          comet_errs() << " \n";
+          comet_debug() << " \n";
         }
       }
       else if (tensor.getType().cast<tensorAlgebra::SparseTensorType>())
       {
-        comet_errs() << "cur_idx is in tensor " << i << "\n";
+        comet_debug() << "cur_idx is in tensor " << i << "\n";
 
         lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
         auto index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
@@ -475,7 +477,7 @@ void genForOps(std::vector<Value> tensors,
         auto step = rewriter.create<ConstantIndexOp>(loc, 1);
         auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
-        comet_errs() << " D Loop\n";
+        comet_debug() << " D Loop\n";
         comet_vdump(loop);
 
         opstree->forOps.push_back(loop);
@@ -493,54 +495,54 @@ void genForOps(std::vector<Value> tensors,
       // j = crd[i];
       // for (int m = pos[j]; m < pos[j+1]; m++)
 
-      comet_errs() << " format is CU id: " << id << "\n";
-      comet_errs() << " Tensor: \n";
+      comet_debug() << " format is CU id: " << id << "\n";
+      comet_debug() << " Tensor: \n";
       comet_vdump(tensor);
       Value index_lower;
       Value index_upper;
       if (tensor.getType().cast<tensorAlgebra::SparseTensorType>())
       {
-        comet_errs() << " Tensor type is sparse\n";
+        comet_debug() << " Tensor type is sparse\n";
         // cur_idx is in ith input tensor, which is sparse
         if (id == 0)
         { // The first index in the tensor
           index_lower = rewriter.create<ConstantIndexOp>(loc, 0);
-          comet_errs() << " index_lower is set here, id == 0 " << opstree->forOps.size() << "\n";
+          comet_debug() << " index_lower is set here, id == 0 " << opstree->forOps.size() << "\n";
           comet_vdump(index_lower);
         }
         else
         {
           if (opstree->parent != NULL)
           {
-            comet_errs() << " opstree->parent is not NULL\n";
+            comet_debug() << " opstree->parent is not NULL\n";
             // Parent loop is
             scf::ForOp parent_forop = opstree->parent->forOps[opstree->parent->forOps.size() - 1];
-            comet_errs() << " parent forop\n";
+            comet_debug() << " parent forop\n";
             comet_vdump(parent_forop);
             auto parent_UpperBound = parent_forop.upperBound();
-            comet_errs() << " parent upperBound:\n";
+            comet_debug() << " parent upperBound:\n";
             comet_vdump(parent_UpperBound);
 
             // module->dump();
             //  check if parent's and child's upper bounds come from the same sparse tensor
             auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
-            comet_errs() << " parent upperBound alloc\n";
+            comet_debug() << " parent upperBound alloc\n";
             comet_vdump(alloc_parent_bounds);
 
-            comet_errs() << " child upperBound:\n";
+            comet_debug() << " child upperBound:\n";
             comet_vdump(allAllocs[i][2 * id]);
             auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][2 * id]);
-            comet_errs() << " child upperBound alloc\n";
+            comet_debug() << " child upperBound alloc\n";
             comet_vdump(alloc_child_bounds);
 
             if (alloc_child_bounds == alloc_parent_bounds) // m is the nearest loop induction variable
             {
-              comet_errs() << " THESAME: Parent and Child has the same alloc\n";
+              comet_debug() << " THESAME: Parent and Child has the same alloc\n";
               index_lower = parent_forop.getInductionVar();
             }
             else
             { // m comes from the load
-              comet_errs() << " DIFFERENT:Parent and Child has the different alloc\n";
+              comet_debug() << " DIFFERENT:Parent and Child has the different alloc\n";
               comet_vdump(alloc_parent_bounds);
               comet_vdump(alloc_child_bounds);
               index_lower = opstree->parent->accessIdx[opstree->parent->forOps.size() - 1];
@@ -550,11 +552,11 @@ void genForOps(std::vector<Value> tensors,
             assert(false && "Unexpected condition\n");
         }
 
-        comet_errs() << " index_lower:";
+        comet_debug() << " index_lower:";
         comet_vdump(index_lower);
         comet_vdump(const_index_1);
         index_upper = rewriter.create<AddIOp>(loc, index_lower, const_index_1);
-        comet_errs() << " AddIOps-index_upper:";
+        comet_debug() << " AddIOps-index_upper:";
         comet_vdump(index_upper);
 
         std::vector<Value> lower_indices = {index_lower};
@@ -565,7 +567,7 @@ void genForOps(std::vector<Value> tensors,
         auto step = rewriter.create<ConstantIndexOp>(loc, 1);
         auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
-        comet_errs() << " CU Loop\n";
+        comet_debug() << " CU Loop\n";
         comet_vdump(loop);
 
         rewriter.setInsertionPoint(loop.getBody()->getTerminator());
@@ -573,7 +575,7 @@ void genForOps(std::vector<Value> tensors,
         std::vector<Value> crd_indices = {loop.getInductionVar()};
         auto get_index = rewriter.create<memref::LoadOp>(loc, allAllocs[i][2 * id + 1], crd_indices);
 
-        comet_errs() << "CU loop generated\n";
+        comet_debug() << "CU loop generated\n";
         comet_vdump(loop);
         opstree->forOps.push_back(loop);
         opstree->accessIdx.push_back(get_index);
@@ -594,7 +596,7 @@ void genForOps(std::vector<Value> tensors,
         auto step = rewriter.create<ConstantIndexOp>(loc, 1);
         auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
-        comet_errs() << " CN Loop\n";
+        comet_debug() << " CN Loop\n";
         comet_vdump(loop);
 
         rewriter.setInsertionPoint(loop.getBody()->getTerminator());
@@ -615,7 +617,7 @@ void genForOps(std::vector<Value> tensors,
 
       if (tensor.getType().cast<tensorAlgebra::SparseTensorType>())
       {
-        comet_errs() << "cur_idx is in tensor " << i << "\n";
+        comet_debug() << "cur_idx is in tensor " << i << "\n";
         // Accesing the last level loop info
         scf::ForOp last_forop;
         if (opstree->forOps.size() > 0)
@@ -638,7 +640,7 @@ void genForOps(std::vector<Value> tensors,
         upperBound = rewriter.create<ConstantIndexOp>(loc, 1);
         auto step = rewriter.create<ConstantIndexOp>(loc, 1);
         auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-        comet_errs() << " S Loop\n";
+        comet_debug() << " S Loop\n";
         comet_vdump(loop);
         opstree->forOps.push_back(loop);
 
@@ -654,10 +656,10 @@ void genForOps(std::vector<Value> tensors,
       llvm::errs() << "Not supported format: " << format << "\n";
     }
 
-    comet_errs() << " UpperBound: (i) " << i << " ";
+    comet_debug() << " UpperBound: (i) " << i << " ";
     comet_vdump(upperBound);
 
-    comet_errs() << "finish generate loops for current index format: " << format << "\n";
+    comet_debug() << "finish generate loops for current index format: " << format << "\n";
   }
 }
 
@@ -871,7 +873,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
   bool isMixedMode = checkIsMixedMode(rhsFormats);
   bool isElementwise = checkIsElementwise(rhsPerms);
-  comet_errs() << " isElementwise:" << isElementwise << " isMixedMode: " << isMixedMode << "\n";
+  comet_debug() << " isElementwise:" << isElementwise << " isMixedMode: " << isMixedMode << "\n";
   auto ctx = rewriter.getContext();
   IndexType indexType = IndexType::get(ctx);
 
@@ -898,17 +900,17 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
     compressedWorkspace = true;
 
     // Workspace tensors are on the lhs
-    comet_errs() << " lhs_loc: " << lhs_loc << "\n";
+    comet_debug() << " lhs_loc: " << lhs_loc << "\n";
     Value checkAlreadySet = rewriter.create<memref::LoadOp>(loc, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
-    comet_errs() << " ";
+    comet_debug() << " ";
     comet_vdump(checkAlreadySet);
-    comet_errs() << " ";
+    comet_debug() << " ";
     comet_vdump(checkAlreadySet.getType());
-    comet_errs() << " ";
+    comet_debug() << " ";
     comet_vdump(const_i1_0.getType());
 
     Value notAlreadySet = rewriter.create<mlir::CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, const_i1_0);
-    comet_errs() << " ";
+    comet_debug() << " ";
     comet_vdump(notAlreadySet);
     auto if_notAlreadySet = rewriter.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
 
@@ -928,16 +930,16 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       {
         Value s = rewriter.create<memref::LoadOp>(loc, main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
         allLoadsIf[m] = s;
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(s);
       }
-      comet_errs() << " allLoadsIf.size(): " << allLoadsIf.size() << "\n";
+      comet_debug() << " allLoadsIf.size(): " << allLoadsIf.size() << "\n";
 
-      comet_errs() << "calculate elementWise operation only\n";
+      comet_debug() << "calculate elementWise operation only\n";
       Value elementWiseResult = getSemiringSecondVal(rewriter, loc, semiringSecond, allLoadsIf[0], allLoadsIf[1], compressedWorkspace);
       #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
       auto store_sum = rewriter.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(elementWiseResult);
       comet_vdump(store_sum);
       #else
@@ -952,7 +954,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
       Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
       Value W_index_list_size_new = rewriter.create<mlir::AddIOp>(loc, W_index_list_size_old, const_index_1);
-      comet_errs() << " AddIOps";
+      comet_debug() << " AddIOps";
       comet_vdump(W_index_list_size_new);
 
       rewriter.create<memref::StoreOp>(loc, W_index_list_size_new, tensors_lhs_Allocs[3][0], ValueRange{const_index_0});
@@ -969,12 +971,12 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       {
         Value s = rewriter.create<memref::LoadOp>(loc, main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
         allLoadsElse[m] = s;
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(s);
       }
-      comet_errs() << " allLoadsElse.size(): " << allLoadsElse.size() << "\n";
+      comet_debug() << " allLoadsElse.size(): " << allLoadsElse.size() << "\n";
 
-      comet_errs() << "calculate elementWise operation and reduction\n";
+      comet_debug() << "calculate elementWise operation and reduction\n";
       Value elementWiseResult = getSemiringSecondVal(rewriter, loc, semiringSecond, allLoadsElse[0], allLoadsElse[1], compressedWorkspace);
       Value reduceResult = getSemiringFirstVal(rewriter, loc, semiringFirst, allLoadsElse[2], elementWiseResult, compressedWorkspace);
       rewriter.create<memref::StoreOp>(loc, reduceResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
@@ -987,10 +989,10 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
     {
       Value load_op = rewriter.create<memref::LoadOp>(loc, main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
       allLoads[m] = load_op;
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(load_op);
     }
-    comet_errs() << " allLoads.size(): " << allLoads.size() << "\n";
+    comet_debug() << " allLoads.size(): " << allLoads.size() << "\n";
 
     // if computeOp is elementwise mixed mode operation, the output is sparse
     if (isMixedMode && isElementwise && !checkIsDense(lhsFormats[0]))
@@ -1013,19 +1015,19 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
       /// Need to initialize some memory accesses outside the nested loop
       /// Reset the insertion point: the body of the innermost loop
-      comet_errs() << "LoopSize: " << forLoops.size() << " Loop:\n";
+      comet_debug() << "LoopSize: " << forLoops.size() << " Loop:\n";
       comet_vdump(forLoops[forLoops.size() - 1]);
       rewriter.setInsertionPoint(forLoops[forLoops.size() - 1]);
 
       Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
       MemRefType memTy_alloc_Cnnz = MemRefType::get({1}, indexType);
       Value alloc_Cnnz = rewriter.create<memref::AllocOp>(loc, memTy_alloc_Cnnz);
-      comet_errs() << __FILE__ << " " << __LINE__ << " AllocOp for Cnnz: ";
+      comet_debug() << __FILE__ << " " << __LINE__ << " AllocOp for Cnnz: ";
       comet_vdump(alloc_Cnnz);
       std::vector<Value> alloc_Cnnz_insert_loc = {const_index_0};
       #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
       auto store_Cnnz = rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz, alloc_Cnnz_insert_loc);
-      comet_errs() << __FILE__ << " " << __LINE__ << " StoreOp: ";
+      comet_debug() << __FILE__ << " " << __LINE__ << " StoreOp: ";
       comet_vdump(store_Cnnz);
       #else
       rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1039,7 +1041,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         alloc_Cnnz_row = rewriter.create<memref::AllocOp>(loc, memTy_alloc_Cnnz);
         #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
         auto store_Cnnz_row = rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
-        comet_errs() << __FILE__ << " " << __LINE__ << " StoreOp DCSR: ";
+        comet_debug() << __FILE__ << " " << __LINE__ << " StoreOp DCSR: ";
         comet_vdump(store_Cnnz_row);
         #else
         rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
@@ -1050,8 +1052,8 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
       rewriter.restoreInsertionPoint(last_insertionPoint);
 
-      comet_errs() << " dense_inputtensor_id: " << dense_inputtensor_id << "\n";
-      comet_errs() << " sparse_inputtensor_id: " << sparse_inputtensor_id << "\n";
+      comet_debug() << " dense_inputtensor_id: " << dense_inputtensor_id << "\n";
+      comet_debug() << " sparse_inputtensor_id: " << sparse_inputtensor_id << "\n";
       Value denseInput_is_nonzero = rewriter.create<mlir::CmpFOp>(loc, CmpFPredicate::ONE, allLoads[dense_inputtensor_id], const_f64_0);
       auto if_nonzero = rewriter.create<scf::IfOp>(loc, denseInput_is_nonzero, /*WithElseRegion*/ false);
       if (!if_nonzero.thenRegion().empty())
@@ -1059,7 +1061,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
         rewriter.setInsertionPointToStart(&if_nonzero.thenRegion().front());
 
-        comet_errs() << "calculate product and sum in \n";
+        comet_debug() << "calculate product and sum in \n";
         Value elementWiseResult = getSemiringSecondVal(rewriter, loc, semiringSecond, allLoads[0], allLoads[1], compressedWorkspace);
 
         // Get Cnnz
@@ -1067,19 +1069,19 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
         // Store product to Cval
         #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-        comet_errs() << "Store product to Cval\n";
+        comet_debug() << "Store product to Cval\n";
         auto store_Cval = rewriter.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], Cnnz_index);
-        comet_errs() << __FILE__ << " " << __LINE__ << " StoreOp: ";
+        comet_debug() << __FILE__ << " " << __LINE__ << " StoreOp: ";
         comet_vdump(store_Cval);
 
         // Update C1crd, C2crd
-        comet_errs() << "Getting A1crd\n";
-        comet_errs() << "allValueAccessIdx[" << sparse_inputtensor_id << "].size(): " << allAccessIdx[sparse_inputtensor_id].size() << "\n";
+        comet_debug() << "Getting A1crd\n";
+        comet_debug() << "allValueAccessIdx[" << sparse_inputtensor_id << "].size(): " << allAccessIdx[sparse_inputtensor_id].size() << "\n";
         comet_vdump(allAccessIdx[sparse_inputtensor_id][0]);
 
         for (unsigned int i = 0; i < allAccessIdx.size(); i++)
         {
-          comet_errs() << "allAccessIdx[" << i << "].size(): " << allAccessIdx[i].size() << "\n";
+          comet_debug() << "allAccessIdx[" << i << "].size(): " << allAccessIdx[i].size() << "\n";
           for (auto n : allAccessIdx[i])
           {
             comet_vdump(n);
@@ -1089,17 +1091,17 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         rewriter.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], Cnnz_index);
         #endif
 
-        comet_errs() << "Store C1crd\n";
+        comet_debug() << "Store C1crd\n";
         /// Branch out COO... CSR... DCSR...
         if (sparse_format.compare("COO") == 0)
         {
-          comet_errs() << "COO format for Elementwise MulOp, update all coordinates\n";
+          comet_debug() << "COO format for Elementwise MulOp, update all coordinates\n";
           for (unsigned d = 0; d < rhsPerms[sparse_inputtensor_id].size(); d++)
           {
             Value crd = allAccessIdx[sparse_inputtensor_id][d];
             #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
             auto store_coo_crd = rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
-            comet_errs() << __FILE__ << " " << __LINE__ << " COO StoreOp: ";
+            comet_debug() << __FILE__ << " " << __LINE__ << " COO StoreOp: ";
             comet_vdump(store_coo_crd);
             #else
             rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
@@ -1113,7 +1115,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
             Value crd = allAccessIdx[sparse_inputtensor_id][d];
             #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
             auto store_csr_crd = rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
-            comet_errs() << __FILE__ << " " << __LINE__ << " CSR or DCSR StoreOp: ";
+            comet_debug() << __FILE__ << " " << __LINE__ << " CSR or DCSR StoreOp: ";
             comet_vdump(store_csr_crd);
             #else
             rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
@@ -1122,14 +1124,14 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         }
 
         // Update Cnnz
-        comet_errs() << "Update Cnnz\n";
+        comet_debug() << "Update Cnnz\n";
         Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
         Value new_Cnnz_index = rewriter.create<mlir::AddIOp>(loc, Cnnz_index, const_index_1);
         #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-        comet_errs() << __FILE__ << " " << __LINE__ << " AddIOps: ";
+        comet_debug() << __FILE__ << " " << __LINE__ << " AddIOps: ";
         comet_vdump(new_Cnnz_index);
         auto store_updated_cnnz = rewriter.create<memref::StoreOp>(loc, new_Cnnz_index, alloc_Cnnz, alloc_Cnnz_insert_loc);
-        comet_errs() << __FILE__ << " " << __LINE__ << " StoreOp: ";
+        comet_debug() << __FILE__ << " " << __LINE__ << " StoreOp: ";
         comet_vdump(store_updated_cnnz);
         #else
         rewriter.create<memref::StoreOp>(loc, new_Cnnz_index, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1140,7 +1142,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       std::vector<Value> denseAllocs = tensors_rhs_Allocs[dense_inputtensor_id];
       assert(denseAllocs.size() == 1);
 
-      comet_errs() << __FILE__ << " " << __LINE__ << " DenseAllocs: ";
+      comet_debug() << __FILE__ << " " << __LINE__ << " DenseAllocs: ";
       auto inputType = denseAllocs[0].getType();
       std::vector<Value> denseDimsSize;
       for (unsigned rank = 0; rank < inputType.cast<mlir::MemRefType>().getRank(); rank++)
@@ -1149,15 +1151,15 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         Value upperBound;
         if (dimSize == ShapedType::kDynamicSize)
         {
-          comet_errs() << __FILE__ << " " << __LINE__ << " This dimension is a dynamic size:\n";
+          comet_debug() << __FILE__ << " " << __LINE__ << " This dimension is a dynamic size:\n";
           unsigned dynamicDimPos = inputType.dyn_cast<MemRefType>().getDynamicDimIndex(rank);
-          comet_errs() << __FILE__ << " " << __LINE__ << " DynamicDimPos: " << dynamicDimPos << "\n";
+          comet_debug() << __FILE__ << " " << __LINE__ << " DynamicDimPos: " << dynamicDimPos << "\n";
           upperBound = denseAllocs[0].getDefiningOp()->getOperand(dynamicDimPos);
           comet_vdump(upperBound);
         }
         else
         {
-          comet_errs() << __FILE__ << " " << __LINE__ << " This dimension is a static size\n";
+          comet_debug() << __FILE__ << " " << __LINE__ << " This dimension is a static size\n";
           upperBound = rewriter.create<ConstantIndexOp>(loc, dimSize);
           comet_vdump(upperBound);
         }
@@ -1170,7 +1172,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         rewriter.setInsertionPointAfter(forLoops[0]);
         Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
         Value arg0_next = rewriter.create<mlir::AddIOp>(loc, forLoops[1].getInductionVar(), const_index_1);
-        comet_errs() << __FILE__ << " " << __LINE__ << "AddIOp: ";
+        comet_debug() << __FILE__ << " " << __LINE__ << "AddIOp: ";
         comet_vdump(arg0_next);
 
         Value Cnnz_index_final = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1178,12 +1180,12 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
         rewriter.setInsertionPointAfter(forLoops[1]);
         // Update C2pos[0]
-        comet_errs() << "Update C2pos[0]\n";
+        comet_debug() << "Update C2pos[0]\n";
         std::vector<Value> insert_loc_0 = {const_index_0};
         rewriter.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][2], insert_loc_0);
 
         // Update C1pos[0]
-        comet_errs() << "Update C1pos[0]\n";
+        comet_debug() << "Update C1pos[0]\n";
         Value dim0_index = denseDimsSize[0];
         rewriter.create<memref::StoreOp>(loc, dim0_index, main_tensors_all_Allocs[2][0], insert_loc_0);
       }
@@ -1192,7 +1194,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         if (sparse_format.compare("DCSR") == 0)
         {
           // Update C2pos
-          comet_errs() << "Update DCSR C2pos\n";
+          comet_debug() << "Update DCSR C2pos\n";
           rewriter.setInsertionPointAfter(forLoops[0]);
           auto Cnnz_index_new = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
           auto has_nnz_row = rewriter.create<mlir::CmpIOp>(loc, CmpIPredicate::ne, Cnnz_index_new, Cnnz_index_old);
@@ -1204,7 +1206,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
             Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
             Value arg0_next = rewriter.create<mlir::AddIOp>(loc, forLoops[1].getInductionVar(), const_index_1);
-            comet_errs() << __FILE__ << " " << __LINE__ << "AddIOp operation: ";
+            comet_debug() << __FILE__ << " " << __LINE__ << "AddIOp operation: ";
             comet_vdump(arg0_next);
 
             Value Cnnz_index_final = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1213,7 +1215,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
             Value idx_i = allAccessIdx[sparse_inputtensor_id][0];
             rewriter.create<memref::StoreOp>(loc, /*i*/ idx_i, main_tensors_all_Allocs[2][1], Cnnz_row_index); // C1crd
             Value Cnnz_row_index_new = rewriter.create<mlir::AddIOp>(loc, Cnnz_row_index, const_index_1);
-            comet_errs() << __FILE__ << " " << __LINE__ << "AddIOp operation: ";
+            comet_debug() << __FILE__ << " " << __LINE__ << "AddIOp operation: ";
             comet_vdump(Cnnz_row_index_new);
             rewriter.create<memref::StoreOp>(loc, Cnnz_row_index_new, alloc_Cnnz_row, alloc_Cnnz_insert_loc); // Update Cnnz_row
           }
@@ -1236,7 +1238,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
           if (sparse_format.compare("COO") == 0)
           {
             // Finally, Update C1pos
-            comet_errs() << "Update C1pos\n";
+            comet_debug() << "Update C1pos\n";
             rewriter.setInsertionPointAfter(forLoops[0]);
             Value Cnnz_index_final = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
             Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
@@ -1252,7 +1254,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
     else
     {
       // calculate elementWise operation and reduction for general dense or mix mode computation (which has dense output)
-      comet_errs() << "calculate elementWise operation and reduction for general dense or mix mode computation (which has dense output)\n";
+      comet_debug() << "calculate elementWise operation and reduction for general dense or mix mode computation (which has dense output)\n";
       Value elementWiseResult = getSemiringSecondVal(rewriter, loc, semiringSecond, allLoads[0], allLoads[1], compressedWorkspace);
       Value reduceResult = getSemiringFirstVal(rewriter, loc, semiringFirst, allLoads[2], elementWiseResult, compressedWorkspace);
       rewriter.create<memref::StoreOp>(loc, reduceResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
@@ -1274,15 +1276,15 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
                 OpsTree *opstree,
                 std::vector<Value> ancestorsWps)
 {
-  comet_errs() << " calling genCmptOps\n";
+  comet_debug() << " calling genCmptOps\n";
   Location loc = rootOp.getLoc();
-  comet_errs() << " \n";
+  comet_debug() << " \n";
 
-  comet_errs() << " Current IndexTreeComputeOp:";
+  comet_debug() << " Current IndexTreeComputeOp:";
   comet_vdump(cur_op);
 
   const bool comp_worksp_opt(cur_op.comp_worksp_opt());
-  comet_errs() << " comp_worksp_opt (bool: true is compressed): " << comp_worksp_opt << "\n";
+  comet_debug() << " comp_worksp_opt (bool: true is compressed): " << comp_worksp_opt << "\n";
 
   // Two cases:
   // 1. for the initial workspace, only 1 auxiliary vector w
@@ -1291,10 +1293,10 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   /// The insertion location should be "the end of the body of parent loop"
   std::vector<OpsTree *> ancestorsOps;
   getAncestorsOps(opstree, ancestorsOps);
-  comet_errs() << " ancestorsOps.size(): " << ancestorsOps.size() << "\n";
+  comet_debug() << " ancestorsOps.size(): " << ancestorsOps.size() << "\n";
   for (unsigned int i = 0; i < ancestorsOps.size(); i++)
   {
-    comet_errs() << " ancestorsOps[i]->id:" << ancestorsOps[i]->id << "\n";
+    comet_debug() << " ancestorsOps[i]->id:" << ancestorsOps[i]->id << "\n";
   }
 
   /// 1. get the nested loops, from innermost to outermost order
@@ -1303,24 +1305,24 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
   for (unsigned int i = 0; i < ancestorsOps.size(); i++)
   {
-    comet_errs() << " ancestorsOps[" << i << "]->forOps.size(): " << ancestorsOps[i]->forOps.size() << ", ancestorsOps->id: "
+    comet_debug() << " ancestorsOps[" << i << "]->forOps.size(): " << ancestorsOps[i]->forOps.size() << ", ancestorsOps->id: "
                  << ancestorsOps[i]->id << "\n";
     if (ancestorsOps[i]->forOps.size() > 0)
     { // for loops OpsTree node
       for (int j = ancestorsOps[i]->forOps.size() - 1; j >= 0; j--)
       {
-        comet_errs() << " j: " << j << "\n";
+        comet_debug() << " j: " << j << "\n";
         nested_forops.push_back(ancestorsOps[i]->forOps[j]);
-        comet_errs() << "AccessIdx: " << ancestorsOps[i]->accessIdx[j] << "\n";
+        comet_debug() << "AccessIdx: " << ancestorsOps[i]->accessIdx[j] << "\n";
         nested_AccessIdx.push_back(ancestorsOps[i]->accessIdx[j]);
       }
     }
   }
-  comet_errs() << " nested_forops.size(): " << nested_forops.size() << "\n";
+  comet_debug() << " nested_forops.size(): " << nested_forops.size() << "\n";
   std::vector<int64_t> nested_forops_indices;
   for (unsigned int i = 0; i < ancestorsWps.size(); i++)
   {
-    comet_errs() << " ";
+    comet_debug() << " ";
     comet_vdump(ancestorsWps[i]);
 
     if (indexTree::IndexTreeIndicesOp cur_op = dyn_cast<mlir::indexTree::IndexTreeIndicesOp>(ancestorsWps[i].getDefiningOp()))
@@ -1339,15 +1341,15 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       }
     }
   }
-  comet_errs() << " nested_forops_indices.size(): " << nested_forops_indices.size() << "\n";
+  comet_debug() << " nested_forops_indices.size(): " << nested_forops_indices.size() << "\n";
 
   assert(nested_forops.size() == nested_forops_indices.size() && "nested_forops.size() != nested_forops_indices.size()");
 
   /// Reset the insertion point: the body of the innermost loop
   assert(nested_forops.size() > 0 && "No loops\n");
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_pdump(nested_forops[0].getBody());
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_pdump(nested_forops[0].getBody()->getTerminator());
   rewriter.setInsertionPoint(nested_forops[0].getBody()->getTerminator());
 
@@ -1362,28 +1364,28 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   /// --- only one rhs, it will be a fill op; if two, check op_type (+, +=, *=)
   /// Check the indices contained in each tensor
   /// Generate loadOp, compute ops, StoreOp.
-  comet_errs() << " \n";
+  comet_debug() << " \n";
   // New version
   Value lhs = cur_op.lhs().getDefiningOp()->getOperand(0);
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_vdump(lhs);
   // lhs is TensorLoadOp
   #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
   Value lhs_alloc = (lhs.getDefiningOp())->getOperand(0);
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_vdump(lhs_alloc);
   #endif
 
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_vdump(cur_op);
   std::vector<Value> tensors_rhs;
   for (auto n : cur_op.rhs())
   {
-    comet_errs() << " ";
+    comet_debug() << " ";
     comet_vdump(n);
     for (unsigned i = 0; i < n.getDefiningOp()->getNumOperands(); i++)
     {
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(n.getDefiningOp()->getOperand(i));
       tensors_rhs.push_back(n.getDefiningOp()->getOperand(i));
     }
@@ -1392,7 +1394,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   std::vector<Value> tensors_lhs;
   for (unsigned i = 0; i < cur_op.lhs().getDefiningOp()->getNumOperands(); i++)
   {
-    comet_errs() << " ";
+    comet_debug() << " ";
     comet_vdump(cur_op.lhs().getDefiningOp()->getOperand(i));
     tensors_lhs.push_back(cur_op.lhs().getDefiningOp()->getOperand(i));
   }
@@ -1400,23 +1402,23 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   // Currently, only one case, the rhs is constant. Wj = 0.0;
   std::vector<Value> tensors_all = tensors_rhs; // Including ConstantOp
   tensors_all.insert(tensors_all.end(), tensors_lhs.begin(), tensors_lhs.end());
-  comet_errs() << " tensors_all.size(): " << tensors_all.size() << "\n";
+  comet_debug() << " tensors_all.size(): " << tensors_all.size() << "\n";
 
   std::vector<std::vector<Value>> tensors_lhs_Allocs = getAllAllocs(tensors_lhs);
-  comet_errs() << " tensors_lhs_Allocs.size(): " << tensors_lhs_Allocs.size() << "\n";
+  comet_debug() << " tensors_lhs_Allocs.size(): " << tensors_lhs_Allocs.size() << "\n";
   std::vector<std::vector<Value>> tensors_rhs_Allocs = getAllAllocs(tensors_rhs);
-  comet_errs() << " tensors_rhs_Allocs.size(): " << tensors_rhs_Allocs.size() << "\n";
+  comet_debug() << " tensors_rhs_Allocs.size(): " << tensors_rhs_Allocs.size() << "\n";
 
   #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-  comet_errs() << " tensors_rhs_Allocs: \n";
+  comet_debug() << " tensors_rhs_Allocs: \n";
   for (auto m : tensors_rhs_Allocs)
   {
-    comet_errs() << " ";
+    comet_debug() << " ";
     for (auto n : m)
     {
       comet_vdump(n);
     }
-    comet_errs() << "\n";
+    comet_debug() << "\n";
   }
   #endif
 
@@ -1424,31 +1426,31 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   std::vector<std::vector<int>> allPerms;
   getPermsOfComputeOp(cur_op.getOperation()->getResult(0), allPerms);
 
-  comet_errs() << " allPerms: \n";
+  comet_debug() << " allPerms: \n";
   for (auto m : allPerms)
   {
-    comet_errs() << " "; // print_vector(m);
+    comet_debug() << " "; // print_vector(m);
     for (auto n : m)
     {
-      comet_errs() << n << " ";
+      comet_debug() << n << " ";
     }
-    comet_errs() << "\n";
+    comet_debug() << "\n";
   }
 
   std::vector<std::vector<std::string>> allFormats;
   getFormatsOfComputeOp(cur_op.getOperation()->getResult(0), allFormats);
-  comet_errs() << " allFormats: \n";
+  comet_debug() << " allFormats: \n";
   for (auto m : allFormats)
   {
-    comet_errs() << " ";
+    comet_debug() << " ";
     for (auto n : m)
     {
-      comet_errs() << n << " ";
+      comet_debug() << n << " ";
     }
-    comet_errs() << "\n";
+    comet_debug() << "\n";
   }
 
-  comet_errs() << " ";
+  comet_debug() << " ";
   comet_vdump(cur_op);
 
   std::vector<std::vector<std::string>> rhsFormats;
@@ -1462,17 +1464,17 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   {
     assert(allPerms[m].size() == allFormats[m].size() && "allPerms[m].size() != allFormats[m].size()\n");
   }
-  comet_errs() << " allPerms.size(): " << allPerms.size() << "\n";
+  comet_debug() << " allPerms.size(): " << allPerms.size() << "\n";
   // tensor_nums means the actual tensors except the auxiliary tensors
   // Suppose for LHSOp, there are "n" real tensors, then allPerms[m].size()
 
   std::vector<std::vector<int>> allPerms_rhs;
   getRHSPermsOfComputeOp(cur_op.getOperation()->getResult(0), allPerms_rhs);
-  comet_errs() << " allPerms_rhs.size(): " << allPerms_rhs.size() << "\n";
+  comet_debug() << " allPerms_rhs.size(): " << allPerms_rhs.size() << "\n";
   std::vector<std::vector<int>> allPerms_lhs;
   getLHSPermsOfComputeOp(cur_op.getOperation()->getResult(0), allPerms_lhs);
 
-  comet_errs() << " allPerms_lhs.size(): " << allPerms_lhs.size() << "\n";
+  comet_debug() << " allPerms_lhs.size(): " << allPerms_lhs.size() << "\n";
   std::vector<Value> main_tensors_all;
   std::vector<Value> main_tensors_rhs;
   std::vector<Value> main_tensors_lhs;
@@ -1485,7 +1487,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
     assert(allPerms_rhs.size() == 1 && " rhs contains auxiliary tensors and main tensors at the same time, not support currently\n"); // only 1 main tensor on rhs
     main_tensors_rhs.push_back(tensors_rhs[0]);
   }
-  comet_errs() << " main_tensors_rhs.size(): " << main_tensors_rhs.size() << "\n";
+  comet_debug() << " main_tensors_rhs.size(): " << main_tensors_rhs.size() << "\n";
 
   if (tensors_lhs.size() == allPerms_lhs.size())
   { // all are "main" tensors
@@ -1496,18 +1498,18 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
     assert(allPerms_lhs.size() == 1 && " lhs contains auxiliary tensors and main tensors at the same time, not support currently\n"); // only 1 main tensor on lhs
     main_tensors_lhs.push_back(tensors_lhs[0]);
   }
-  comet_errs() << " main_tensors_lhs.size(): " << main_tensors_lhs.size() << "\n";
+  comet_debug() << " main_tensors_lhs.size(): " << main_tensors_lhs.size() << "\n";
 
   main_tensors_all = main_tensors_rhs;
   main_tensors_all.insert(main_tensors_all.end(), main_tensors_lhs.begin(), main_tensors_lhs.end());
-  comet_errs() << " main_tensors_all.size(): " << main_tensors_all.size() << "\n";
+  comet_debug() << " main_tensors_all.size(): " << main_tensors_all.size() << "\n";
 
   int main_tensor_nums = main_tensors_all.size();
-  comet_errs() << " main_tensor_nums: " << main_tensor_nums << "\n";
+  comet_debug() << " main_tensor_nums: " << main_tensor_nums << "\n";
 
   // Check the loop arg in each tensor
   std::vector<std::vector<Value>> main_tensors_all_Allocs = getAllAllocs(main_tensors_all);
-  comet_errs() << " main_tensors_all_Allocs.size(): " << main_tensors_all_Allocs.size() << "\n";
+  comet_debug() << " main_tensors_all_Allocs.size(): " << main_tensors_all_Allocs.size() << "\n";
 
   std::vector<std::vector<Value>> allLoopsArg(main_tensor_nums);
   std::vector<std::vector<Value>> allAccessIdx(main_tensor_nums);
@@ -1516,9 +1518,9 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
     for (unsigned int j = 0; j < allPerms[i].size(); j++)
     {
       unsigned int index_loc = findIndexInVector<int64_t>(nested_forops_indices, allPerms[i][j]);
-      comet_errs() << " index_loc " << index_loc << "\n";
-      comet_errs() << " Perm: " << allPerms[i][j] << "\n";
-      comet_errs() << " Format: " << allFormats[i][j] << "\n";
+      comet_debug() << " index_loc " << index_loc << "\n";
+      comet_debug() << " Perm: " << allPerms[i][j] << "\n";
+      comet_debug() << " Format: " << allFormats[i][j] << "\n";
       assert(index_loc < nested_forops.size() && "index_loc < nested_forops.size(), i.e. the index not exist in nested for loop\n");
       allLoopsArg[i].push_back(nested_forops[index_loc].getInductionVar());
       allAccessIdx[i].push_back(nested_AccessIdx[index_loc]);
@@ -1530,7 +1532,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   std::vector<std::vector<Value>> allValueAccessIdx(main_tensor_nums);
   for (int i = 0; i < main_tensor_nums; i++)
   { // If constantOp, do not consider it
-    comet_errs() << " ";
+    comet_debug() << " ";
     comet_vdump(main_tensors_all[i]);
     if (main_tensors_all[i].getType().isa<tensorAlgebra::SparseTensorType>())
     { // sparse tensor
@@ -1565,11 +1567,11 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         }
         if (allFormats[i][last_d].compare(0, 1, "D") == 0)
         {
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(allLoopsArg[i][allLoopsArg[i].size() - 1]);
           comet_vdump(valueAccessIdx_part);
           valueAccessIdx_part = rewriter.create<mlir::AddIOp>(loc, allLoopsArg[i][allLoopsArg[i].size() - 1], valueAccessIdx_part);
-          comet_errs() << " AddIOps: ";
+          comet_debug() << " AddIOps: ";
           comet_vdump(valueAccessIdx_part);
         }
       }
@@ -1584,7 +1586,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
   for (unsigned int i = 0; i < allValueAccessIdx.size(); i++)
   {
-    comet_errs() << "allValueAccessIdx[" << i << "].size(): " << allValueAccessIdx[i].size() << ", main_tensors_all_Allocs[" << i << "].size()-1: " << main_tensors_all_Allocs[i].size() - 1 << "\n";
+    comet_debug() << "allValueAccessIdx[" << i << "].size(): " << allValueAccessIdx[i].size() << ", main_tensors_all_Allocs[" << i << "].size()-1: " << main_tensors_all_Allocs[i].size() - 1 << "\n";
   }
 
   int rhs_loc = 0;
@@ -1593,55 +1595,55 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   { // Generate "a = b"
     if (mlir::ConstantOp cstop = dyn_cast<mlir::ConstantOp>(main_tensors_rhs[0].getDefiningOp()))
     { // "a = 1.0"
-      comet_errs() << " ";
+      comet_debug() << " ";
       comet_vdump(cstop);
       if (comp_worksp_opt)  // true attr means compressed workspace
       {
 
-        comet_errs() << " compressed_workspace ComputeOp\n";
+        comet_debug() << " compressed_workspace ComputeOp\n";
         std::vector<MemRefType> tensors_lhs_Allocs_type;
         for (unsigned i = 0; i < tensors_lhs_Allocs.size(); i++)
         {
           // only 1 alloc op for dense type tensor or constant
           assert(tensors_lhs_Allocs[i].size() == 1 && " more than 1 alloc op for dense type tensor or constant\n");
           MemRefType resultType = tensors_lhs_Allocs[i][0].getDefiningOp()->getResult(0).getType().cast<MemRefType>();
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(resultType);
           tensors_lhs_Allocs_type.push_back(resultType);
         }
 
         // Generate Store 1.0, A[...]  this op
         // this case: allPerms[0] is empty, allFormats[0] is empty
-        comet_errs() << " cstop.getValue(): " << cstop.getValue() << "\n";
-        comet_errs() << " ";
+        comet_debug() << " cstop.getValue(): " << cstop.getValue() << "\n";
+        comet_debug() << " ";
         comet_vdump(main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1]);
 
-        comet_errs() << " tensors_lhs_Allocs.size(): " << tensors_lhs_Allocs.size() << "\n";
+        comet_debug() << " tensors_lhs_Allocs.size(): " << tensors_lhs_Allocs.size() << "\n";
         if (allValueAccessIdx[lhs_loc].size() > 0)
         {
           //TODO(gkestor): review this code
-          //llvm::errs() << "This part shouldn't be here\n";          comet_errs() << " ";
+          //llvm::errs() << "This part shouldn't be here\n";          comet_debug() << " ";
           // initialization here of w_already_set, w, and w_index_list.
           rewriter.create<memref::StoreOp>(loc, const_f64_0, tensors_lhs_Allocs[0][0], allValueAccessIdx[lhs_loc]);
-          comet_errs() << " ";
+          comet_debug() << " ";
           rewriter.create<memref::StoreOp>(loc, const_i1_0, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
-          comet_errs() << " ";
+          comet_debug() << " ";
           rewriter.create<memref::StoreOp>(loc, const_index_0, tensors_lhs_Allocs[2][0], allValueAccessIdx[lhs_loc]);
-          comet_errs() << " ";
+          comet_debug() << " ";
         }
         else
         {
-          comet_errs() << " ";
+          comet_debug() << " ";
           insertInitialize(loc, cstop, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1], rewriter);
-          comet_errs() << " ";
+          comet_debug() << " ";
         }
       }
       else
       { // initial workspace
         // Generate Store 1.0, A[...]  this op
         // this case: allPerms[0] is empty, allFormats[0] is empty
-        comet_errs() << " cstop.getValue(): " << cstop.getValue() << "\n";
-        comet_errs() << " ";
+        comet_debug() << " cstop.getValue(): " << cstop.getValue() << "\n";
+        comet_debug() << " ";
         comet_vdump(main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1]);
 
         if (allValueAccessIdx[lhs_loc].size() > 0)
@@ -1661,17 +1663,17 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       {
         // %1 = load b[...]
         // store %1, a[...]
-        comet_errs() << " main_tensors_all_Allocs[" << rhs_loc << "].size(): " << main_tensors_all_Allocs[rhs_loc].size() << ", allValueAccessIdx[" << rhs_loc << "].size(): " << allValueAccessIdx[rhs_loc].size() << "\n";
+        comet_debug() << " main_tensors_all_Allocs[" << rhs_loc << "].size(): " << main_tensors_all_Allocs[rhs_loc].size() << ", allValueAccessIdx[" << rhs_loc << "].size(): " << allValueAccessIdx[rhs_loc].size() << "\n";
 
         Value rhs_value = rewriter.create<memref::LoadOp>(loc, main_tensors_all_Allocs[rhs_loc][main_tensors_all_Allocs[rhs_loc].size() - 1], allValueAccessIdx[rhs_loc]);
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(rhs_value);
 
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1]);
         #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
         auto s1 = rewriter.create<memref::StoreOp>(loc, rhs_value, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1], allValueAccessIdx[lhs_loc]);
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(s1);
         #else
         rewriter.create<memref::StoreOp>(loc, rhs_value, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1], allValueAccessIdx[lhs_loc]);
@@ -1688,15 +1690,15 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         unsigned int lhs_2pos_size_loc = 4 * lhs_ranks - 1;
 
         // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_pdump(lhs.getDefiningOp());
         comet_pdump(lhs.getDefiningOp()->getParentOp());
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(lhs.getDefiningOp()->getOperand(lhs_val_size_loc));
 
         Value lhs_nnz_operand = lhs.getDefiningOp()->getOperand(lhs_val_size_loc);
         Value lhs_nnz_op;
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(lhs_nnz_operand);
         if (isa<IndexCastOp>(lhs_nnz_operand.getDefiningOp()))
         {
@@ -1706,7 +1708,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         {
           lhs_nnz_op = lhs_nnz_operand;
         }
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(lhs_nnz_op);
         auto lhs_nnz_load = cast<memref::LoadOp>(lhs_nnz_op.getDefiningOp());                  // index
         Value lhs_nnz_alloc = cast<memref::AllocOp>(lhs_nnz_load.getMemRef().getDefiningOp()); // index
@@ -1717,7 +1719,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         std::vector<Value> lhs_accessIndex = {lhs_nnz};
 
         Value lhs_val = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1];
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(lhs_val);
 
         if (comp_worksp_opt)  // true attr means compressed workspace
@@ -1727,7 +1729,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
           Value const_index_0 = rewriter.create<mlir::ConstantIndexOp>(loc, 0);
           scf::ForOp theForop = dyn_cast<scf::ForOp>(const_index_0.getDefiningOp()->getParentOp());
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(theForop);
 
           rewriter.setInsertionPoint(theForop);
@@ -1740,7 +1742,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           rewriter.create<mlir::CallOp>(loc, quick_sort_Str, SmallVector<Type, 2>{}, ValueRange{w_index_list_cast, w_index_list_size});
 
           theForop.setUpperBound(w_index_list_size);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(theForop);
 
           rewriter.restoreInsertionPoint(last_insertionPoint);
@@ -1752,25 +1754,25 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           // w_already_set[crd_j] = 0
           rewriter.create<memref::StoreOp>(loc, const_i1_0, tensors_rhs_Allocs[1][0], ValueRange{crd_index});
 
-          comet_errs() << " lhs_loc: " << lhs_loc << "\n";
-          comet_errs() << " format: " << allFormats[lhs_loc][allFormats[lhs_loc].size() - 1] << "\n";
+          comet_debug() << " lhs_loc: " << lhs_loc << "\n";
+          comet_debug() << " format: " << allFormats[lhs_loc][allFormats[lhs_loc].size() - 1] << "\n";
           if (allFormats[lhs_loc][allFormats[lhs_loc].size() - 1].compare(0, 2, "CU") == 0)
           {
             Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 2];
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_vdump(lhs_2crd);
 
             rewriter.create<memref::StoreOp>(loc, crd_index, lhs_2crd, ValueRange{lhs_nnz});
           }
 
-          comet_errs() << "\n";
+          comet_debug() << "\n";
           Value cst_1_index = rewriter.create<ConstantIndexOp>(loc, 1);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs_nnz);
           Value lhs_nnz_new = rewriter.create<AddIOp>(loc, lhs_nnz, cst_1_index);
-          comet_errs() << " AddIOps: ";
+          comet_debug() << " AddIOps: ";
           comet_vdump(lhs_nnz_new);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs_nnz_alloc);
 
           rewriter.create<memref::StoreOp>(loc, lhs_nnz_new, lhs_nnz_alloc, ValueRange{cst_0_index});
@@ -1786,23 +1788,23 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           {
             lhs_2crd_op = lhs_2crd;
           }
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs_2crd_op);
           auto c2crd_size_load = cast<memref::LoadOp>(lhs_2crd_op.getDefiningOp());                    // index
           Value c2crd_size_alloc = cast<memref::AllocOp>(c2crd_size_load.getMemRef().getDefiningOp()); // index
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(c2crd_size_alloc);
 
           rewriter.create<memref::StoreOp>(loc, lhs_nnz_new, c2crd_size_alloc, ValueRange{cst_0_index});
 
           // Fill C2pos
-          comet_errs() << " \n";
+          comet_debug() << " \n";
           auto prev_forop = nested_forops[nested_forops.size() - 1 - 1];
           rewriter.setInsertionPointAfter(prev_forop);
 
           Value lhs_2pos_0 = lhs.getDefiningOp()->getOperand(lhs_2pos_size_loc);
           Value lhs_2pos_op;
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs_2pos_0);
           if (isa<IndexCastOp>(lhs_2pos_0.getDefiningOp()))
           {
@@ -1812,7 +1814,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           {
             lhs_2pos_op = lhs_2pos_0;
           }
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs_2pos_op);
           auto c2pos_size_load = cast<memref::LoadOp>(lhs_2pos_op.getDefiningOp());                    // index
           Value c2pos_size_alloc = cast<memref::AllocOp>(c2pos_size_load.getMemRef().getDefiningOp()); // index
@@ -1823,15 +1825,15 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
           // store crd_size into pos
           Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 3];
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs_2pos);
           rewriter.create<memref::StoreOp>(loc, c2crd_size_nnz, lhs_2pos, ValueRange{c2pos_size_value});
 
           Value cst_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(c2pos_size_value);
           Value c2pos_size_value_new = rewriter.create<mlir::AddIOp>(loc, c2pos_size_value, cst_index_1);
-          comet_errs() << " AddIOps";
+          comet_debug() << " AddIOps";
           comet_vdump(c2pos_size_value_new);
 
           rewriter.create<memref::StoreOp>(loc, c2pos_size_value_new, c2pos_size_alloc, ValueRange{cst_index_000});
@@ -1845,12 +1847,12 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           //    store %1, cval[Cnnz]
           //    store Cnnz+1, Cop.operand(4d+1)
           // }
-          comet_errs() << " main_tensors_all_Allocs[" << rhs_loc << "].size(): " << main_tensors_all_Allocs[rhs_loc].size() << ", allValueAccessIdx[" << rhs_loc << "].size(): " << allValueAccessIdx[rhs_loc].size() << "\n";
+          comet_debug() << " main_tensors_all_Allocs[" << rhs_loc << "].size(): " << main_tensors_all_Allocs[rhs_loc].size() << ", allValueAccessIdx[" << rhs_loc << "].size(): " << allValueAccessIdx[rhs_loc].size() << "\n";
           Value rhs_value = rewriter.create<memref::LoadOp>(loc, main_tensors_all_Allocs[rhs_loc][main_tensors_all_Allocs[rhs_loc].size() - 1], allValueAccessIdx[rhs_loc]);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(rhs_value);
           Value isNonzero = rewriter.create<mlir::CmpFOp>(loc, CmpFPredicate::ONE, rhs_value, const_f64_0);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(isNonzero);
           auto if_nonzero = rewriter.create<scf::IfOp>(loc, isNonzero, /*WithElseRegion*/ false);
 
@@ -1867,28 +1869,28 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
             if (allFormats[lhs_loc][allFormats[lhs_loc].size() - 1].compare(0, 2, "CU") == 0)
             {
               Value crd_index = allAccessIdx[allAccessIdx.size() - 1][allAccessIdx[allAccessIdx.size() - 1].size() - 1];
-              comet_errs() << " ";
+              comet_debug() << " ";
               comet_vdump(crd_index);
               Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 2];
-              comet_errs() << " ";
+              comet_debug() << " ";
               comet_vdump(lhs_2crd);
 
               rewriter.create<memref::StoreOp>(loc, crd_index, lhs_2crd, lhs_accessIndex);
             }
 
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             Value cst_1_index = rewriter.create<ConstantIndexOp>(loc, 1);
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_vdump(lhs_nnz);
             Value lhs_nnz_new = rewriter.create<AddIOp>(loc, lhs_nnz, cst_1_index);
-            comet_errs() << " AddIOps: ";
+            comet_debug() << " AddIOps: ";
             comet_vdump(lhs_nnz_new);
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_vdump(lhs_nnz_alloc);
 
             rewriter.create<memref::StoreOp>(loc, lhs_nnz_new, lhs_nnz_alloc, ValueRange{cst_0_index});
 
-            comet_errs() << "\n";
+            comet_debug() << "\n";
             Value lhs_2crd = lhs.getDefiningOp()->getOperand(lhs_2crd_size_loc);
             Value lhs_2crd_op;
             comet_vdump(lhs_2crd);
@@ -1900,25 +1902,25 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
             {
               lhs_2crd_op = lhs_2crd;
             }
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_vdump(lhs_2crd_op);
             // unsigned int lhs_2crd_size_loc = 4*lhs_ranks;
             auto c2crd_size_load = cast<memref::LoadOp>(lhs_2crd_op.getDefiningOp());                    // index
             Value c2crd_size_alloc = cast<memref::AllocOp>(c2crd_size_load.getMemRef().getDefiningOp()); // index
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_vdump(c2crd_size_alloc);
 
             rewriter.create<memref::StoreOp>(loc, lhs_nnz_new, c2crd_size_alloc, ValueRange{cst_0_index});
 
-            comet_errs() << " \n";
+            comet_debug() << " \n";
             rewriter.restoreInsertionPoint(last_insertionPoint);
           }
 
-          comet_errs() << " \n";
+          comet_debug() << " \n";
           auto prev_forop = nested_forops[nested_forops.size() - 1 - 1];
           rewriter.setInsertionPointAfter(prev_forop);
 
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs.getDefiningOp()->getOperand(lhs_2pos_size_loc));
           Value lhs_2pos_0 = lhs.getDefiningOp()->getOperand(lhs_2pos_size_loc);
           Value lhs_2pos_op;
@@ -1931,7 +1933,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           {
             lhs_2pos_op = lhs_2pos_0;
           }
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs_2pos_op);
           auto c2pos_size_load = cast<memref::LoadOp>(lhs_2pos_op.getDefiningOp());                    // index
           Value c2pos_size_alloc = cast<memref::AllocOp>(c2pos_size_load.getMemRef().getDefiningOp()); // index
@@ -1949,7 +1951,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           {
             lhs_2crd_op = lhs_2crd;
           }
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs_2crd_op);
           auto c2crd_size_load = cast<memref::LoadOp>(lhs_2crd_op.getDefiningOp());                    // index
           Value c2crd_size_alloc = cast<memref::AllocOp>(c2crd_size_load.getMemRef().getDefiningOp()); // index
@@ -1957,16 +1959,16 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
           // store crd_size into pos
           Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 3];
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(lhs_2pos);
 
           rewriter.create<memref::StoreOp>(loc, c2crd_size_nnz, lhs_2pos, ValueRange{c2pos_size_value});
 
           Value cst_1_index = rewriter.create<ConstantIndexOp>(loc, 1);
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(c2pos_size_value);
           Value c2pos_size_value_new = rewriter.create<mlir::AddIOp>(loc, c2pos_size_value, cst_1_index);
-          comet_errs() << " AddIOps";
+          comet_debug() << " AddIOps";
           comet_vdump(c2pos_size_value_new);
 
           rewriter.create<memref::StoreOp>(loc, c2pos_size_value_new, c2pos_size_alloc, ValueRange{cst_0_index});
@@ -1983,10 +1985,10 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       {
         Value s = rewriter.create<memref::LoadOp>(loc, main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
         allLoads[m] = s;
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(s);
       }
-      comet_errs() << " allLoads.size(): " << allLoads.size() << "\n";
+      comet_debug() << " allLoads.size(): " << allLoads.size() << "\n";
 
       rewriter.create<memref::StoreOp>(loc, allLoads[0], main_tensors_all_Allocs[1][main_tensors_all_Allocs[1].size() - 1], allValueAccessIdx[1]);
     }
@@ -2054,7 +2056,7 @@ namespace
       // auto module = rootOp->getParentOfType<ModuleOp>();
 
       assert(isa<indexTree::IndexTreeOp>(rootOp));
-      comet_errs() << "\nIndexTreeIRLowering in LowerIndexTreeIRToSCF\n";
+      comet_debug() << "\nIndexTreeIRLowering in LowerIndexTreeIRToSCF\n";
       comet_pdump(rootOp.getOperation()->getParentOp());
       // Here, should check the operands, at least one operand should be sparse;
       // Otherwise, if all dense operands, just return.
@@ -2063,10 +2065,10 @@ namespace
       std::vector<mlir::Value> wp_ops;
       dfsRootOpTree(rootOp.children(), wp_ops);
       #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-      comet_errs() << " wp_ops.size(): " << wp_ops.size() << "\n";
+      comet_debug() << " wp_ops.size(): " << wp_ops.size() << "\n";
       for (auto n : wp_ops)
       {
-        comet_errs() << " ";
+        comet_debug() << " ";
         comet_vdump(n);
         // Declare opsTree
       }
@@ -2085,11 +2087,11 @@ namespace
 
         for (auto n : wp_op.getDefiningOp()->getUsers())
         {
-          comet_errs() << " " << i << " ";
+          comet_debug() << " " << i << " ";
           comet_pdump(n);
           wp_parent = n->getResult(0);
 
-          comet_errs() << " parent: " << findIndexInVector_Value(wp_ops, wp_parent) << "\n";
+          comet_debug() << " parent: " << findIndexInVector_Value(wp_ops, wp_parent) << "\n";
           bool isInTree = false;
           if (findIndexInVector_Value(wp_ops, wp_parent) < wp_ops.size())
           {
@@ -2102,10 +2104,10 @@ namespace
       }
 
       #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-      comet_errs() << " parent_idx: " << parent_idx.size() << "\n";
+      comet_debug() << " parent_idx: " << parent_idx.size() << "\n";
       for (auto n : parent_idx)
       {
-        comet_errs() << " " << n << " \n";
+        comet_debug() << " " << n << " \n";
         // Declare opsTree
       }
       #endif
@@ -2122,7 +2124,7 @@ namespace
         { // Not rootop
           parent = opstree_vec[parent_idx[i]];
         }
-        comet_errs() << " \n";
+        comet_debug() << " \n";
         OpsTree *ops = new OpsTree(forOps, accessIdx, cmptOps, parent, i);
         if (parent != NULL)
         { // add child to the parent
@@ -2136,25 +2138,25 @@ namespace
       // Check the parent node
       for (auto n : opstree_vec)
       {
-        comet_errs() << " " << n->id << " ";
+        comet_debug() << " " << n->id << " ";
         if (n->parent != NULL)
         {
-          comet_errs() << "parent: " << n->parent->id << "\n";
+          comet_debug() << "parent: " << n->parent->id << "\n";
         }
         else
-          comet_errs() << "parent: null \n";
+          comet_debug() << "parent: null \n";
       }
       #endif
 
       for (unsigned int i = 0; i < wp_ops.size(); i++)
       {
-        comet_errs() << " i: " << i << "\n";
+        comet_debug() << " i: " << i << "\n";
         comet_vdump(wp_ops[i]);
         if (indexTree::IndexTreeIndicesOp cur_op = dyn_cast<mlir::indexTree::IndexTreeIndicesOp>(wp_ops[i].getDefiningOp()))
         {
           // Get indices
           ArrayAttr op_indices = cur_op.indices();
-          comet_errs() << "curOp is IndexTreeIndicesOp\n";
+          comet_debug() << "curOp is IndexTreeIndicesOp\n";
           comet_vdump(cur_op);
 
           std::vector<int> indices;
@@ -2164,15 +2166,15 @@ namespace
             int idx = op_indices[j].cast<IntegerAttr>().getInt();
             indices.push_back(idx);
           }
-          comet_errs() << " indices.size(): " << indices.size() << "\n";
+          comet_debug() << " indices.size(): " << indices.size() << "\n";
 
           std::vector<Value> leafs;
           findLeafs(cur_op, indices, wp_ops, leafs);
           #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-          comet_errs() << " leafs.size(): " << leafs.size() << "\n";
+          comet_debug() << " leafs.size(): " << leafs.size() << "\n";
           for (auto n : leafs)
           {
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_vdump(n);
           }
           #endif
@@ -2181,15 +2183,15 @@ namespace
           std::vector<unsigned int> ids;
           std::vector<std::string> formats;
 
-          comet_errs() << " ";
+          comet_debug() << " ";
           comet_vdump(cur_op);
 
           getFormatsInfo(cur_op, indices, leafs, tensors, ids, formats);
 
-          comet_errs() << " indices.size(): " << indices.size() << " tensors.size(): " << tensors.size() << "\n";
+          comet_debug() << " indices.size(): " << indices.size() << " tensors.size(): " << tensors.size() << "\n";
           for (unsigned int m = 0; m < tensors.size(); m++)
           {
-            comet_errs() << " Formats:" << formats[m] << " " << ids[m] << " ";
+            comet_debug() << " Formats:" << formats[m] << " " << ids[m] << " ";
             comet_vdump(tensors[m]);
           }
 
@@ -2197,18 +2199,18 @@ namespace
           std::vector<Value> ancestors_wp; // workspace tree ancestor
           getAncestorsWp(cur_op, ancestors_wp, wp_ops);
           #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-          comet_errs() << " Current Op (IndexTreeIndicesOp): ";
+          comet_debug() << " Current Op (IndexTreeIndicesOp): ";
           comet_vdump(cur_op);
           for (auto n : ancestors_wp)
           {
-            comet_errs() << " ancestors_wp:";
+            comet_debug() << " ancestors_wp:";
             comet_vdump(n);
           }
           #endif
 
-          comet_errs() << " call genForOps, i = " << i << "\n";
+          comet_debug() << " call genForOps, i = " << i << "\n";
           genForOps(tensors, ids, formats, rootOp, rewriter, opstree_vec[i], ancestors_wp);
-          comet_errs() << " finished call genForOps, i = " << i << "\n";
+          comet_debug() << " finished call genForOps, i = " << i << "\n";
         }
         else if (indexTree::IndexTreeComputeOp cur_op = dyn_cast<mlir::indexTree::IndexTreeComputeOp>(wp_ops[i].getDefiningOp()))
         {
@@ -2216,24 +2218,24 @@ namespace
           std::vector<Value> ancestors_wp; // workspace tree ancestor
           getAncestorsWp(cur_op, ancestors_wp, wp_ops);
           #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-          comet_errs() << " Current Op (IndexTreeComputeOp):";
+          comet_debug() << " Current Op (IndexTreeComputeOp):";
           comet_vdump(cur_op);
           for (auto n : ancestors_wp)
           {
-            comet_errs() << " ";
+            comet_debug() << " ";
             comet_vdump(n);
           }
           #endif
 
-          comet_errs() << " call genCmptOps, i = " << i << "\n";
+          comet_debug() << " call genCmptOps, i = " << i << "\n";
           // ancestors_wp can give all the indices of the nested loops
           genCmptOps(cur_op, rootOp, rewriter, opstree_vec[i], ancestors_wp);
-          comet_errs() << " finished call genCmptOps, i = " << i << "\n";
+          comet_debug() << " finished call genCmptOps, i = " << i << "\n";
         }
       }
 
       rewriter.eraseOp(rootOp);
-      comet_errs() << " \n";
+      comet_debug() << " \n";
       return success();
     }
   }; // IndexTreeIRLowering
@@ -2248,7 +2250,7 @@ namespace
 
 void LowerIndexTreeIRToSCFPass::runOnFunction()
 {
-  comet_errs() << "start LowerIndexTreeIRToSCFPass\n";
+  comet_debug() << "start LowerIndexTreeIRToSCFPass\n";
   auto function = getFunction();
   auto module = function.getOperation()->getParentOfType<ModuleOp>();
   auto *ctx = &getContext();
