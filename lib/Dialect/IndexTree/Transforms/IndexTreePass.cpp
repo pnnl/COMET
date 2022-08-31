@@ -63,7 +63,6 @@ namespace
   struct IndexTreePass
       : public PassWrapper<IndexTreePass, FunctionPass>
   {
-    //static Index_Tree *getTree();
     void runOnFunction() final;
   };
 } // namespace
@@ -376,12 +375,6 @@ void treeToDialect(Index_Tree *tree)
     op->erase();
   }
 }
-
-//TODO(gkestor): review the following code
-//Index_Tree *IndexTreePass::getTree()
-//{
-//  return tree.get();
-//}
 
 void IndexTreePass::runOnFunction()
 {

@@ -340,18 +340,19 @@ namespace tensorAlgebra
           RHS(std::move(RHS)), beta(in_beta) {}
 
     TensorOpKind getOp() { return Op; }
-    std::string getOpStr() {
+    std::string getOpStr()
+    {
       std::string ret = "";
       switch (Op)
       {
-        case TensorOpKind::Tensor_Set:
-          ret = "SetOp";
-          break;
-        case TensorOpKind::Tensor_Acc:
-          ret = "AccOp";
-          break;
-        default:
-          ret = "";
+      case TensorOpKind::Tensor_Set:
+        ret = "SetOp";
+        break;
+      case TensorOpKind::Tensor_Acc:
+        ret = "AccOp";
+        break;
+      default:
+        ret = "";
         break;
       }
       return ret;

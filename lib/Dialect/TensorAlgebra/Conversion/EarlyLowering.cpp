@@ -206,9 +206,9 @@ namespace
       // std::vector<Value> dim_sizes;
       for (unsigned int i = 0; i < op.getOperation()->getNumOperands(); i++)
       {
-        if (isa<tensorAlgebra::IndexLabelOp>(op.getOperation()->getOperand(i).getDefiningOp()))
+        if (isa<tensorAlgebra::IndexLabelStaticOp>(op.getOperation()->getOperand(i).getDefiningOp()))
         {
-          Value indexlabelop = dyn_cast<tensorAlgebra::IndexLabelOp>(op.getOperation()->getOperand(i).getDefiningOp());
+          Value indexlabelop = dyn_cast<tensorAlgebra::IndexLabelStaticOp>(op.getOperation()->getOperand(i).getDefiningOp());
           dimSizes.push_back(indexlabelop.getDefiningOp()->getOperand(1));
           ;
         }
@@ -307,10 +307,10 @@ namespace
         else // The constant dim size must NOT comes from the sparse matrix
           cur_memref.push_back(resultMemTy.getDimSize(i));
 
-        if (isa<tensorAlgebra::IndexLabelOp>(tensor_decl_value.labels()[i].getDefiningOp()))
+        if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp()))
         {
           comet_vdump(tensor_decl_value.labels()[i]);
-          auto label_decl_value = cast<tensorAlgebra::IndexLabelOp>(tensor_decl_value.labels()[i].getDefiningOp());
+          auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp());
           auto hi = label_decl_value.max();
           if (resultMemTy.isDynamicDim(i))
             cur_indices.push_back(hi); // IndexCastOp
@@ -330,7 +330,7 @@ namespace
       // op.replaceAllUsesWith(tensorLoad);
       // rewriter.replaceOp(op, tensorLoad);
 
-      //Check if this tensor is explicitly initialized with ta.fill operation
+      // Check if this tensor is explicitly initialized with ta.fill operation
       bool is_filled = false;
       for (auto u : op->getUsers())
       {
@@ -342,12 +342,12 @@ namespace
       Value init_alloc;
       if (is_filled)
       {
-        //if is_filled is true, only allocate memory and let ta.fill initializes tensors
+        // if is_filled is true, only allocate memory and let ta.fill initializes tensors
         init_alloc = rewriter.create<memref::AllocOp>(loc, resultMemTy, ValueRange(cur_indices));
       }
       else
       {
-        //if is_filled is false, allocate memory and initialize it
+        // if is_filled is false, allocate memory and initialize it
         init_alloc = insertAllocAndInitialize(loc, resultMemTy, ValueRange(cur_indices), rewriter);
       }
       init_alloc.getDefiningOp()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
@@ -577,7 +577,7 @@ namespace
               comet_debug() << " FIND IT: " << i << "\n";
               if (i == 1)
               {
-                // (ruiqin): output of ta.elews_mul
+                // output of ta.elews_mul
                 isOutputTensor = true;
               }
             }
@@ -784,7 +784,7 @@ namespace
             comet_debug() << "\n";
             std::string read_input_sizes_str = "read_input_sizes_3D_f64";
             comet_debug() << " "
-                         << "dim_format.size(): " << dim_format.size() << " \n";
+                          << "dim_format.size(): " << dim_format.size() << " \n";
             auto read_input_sizes_f64Call = rewriter.create<mlir::CallOp>(
                 loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], dim_format[2], alloc_sizes_cast});
             read_input_sizes_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
@@ -931,12 +931,12 @@ namespace
             auto step = label_decl_value.step();
             auto hi = array_sizes[2 * rank_size + 1 + i];
             // mlir::Value value =
-            Value new_index = rewriter.create<IndexLabelOp>(loc, lo, hi, step);
+            Value new_index = rewriter.create<IndexLabelStaticOp>(loc, lo, hi, step);
             label_decl_value.replaceAllUsesWith(new_index);
           }
-          else if (isa<tensorAlgebra::IndexLabelOp>(tensor_decl_value.labels()[i].getDefiningOp()))
+          else if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp()))
           {
-            comet_debug() << " isa<tensorAlgebra::IndexLabelOp\n";
+            comet_debug() << " isa<tensorAlgebra::IndexLabelStaticOp\n";
           }
         }
 
@@ -949,11 +949,11 @@ namespace
         // Is sparse output ,lower to ta.output_tensor_decl
         auto tensor_decl_value = cast<tensorAlgebra::SparseTensorDeclOp>(op);
         auto labels = tensor_decl_value.labels();
-        auto tensor_format = tensor_decl_value.format(); 
+        auto tensor_format = tensor_decl_value.format();
         auto tensor_type = tensor_decl_value.getType();
 
         mlir::Value outputtensordecl = rewriter.create<SparseOutputTensorDeclOp>(loc,
-                                                                           tensor_type, labels, tensor_format);
+                                                                                 tensor_type, labels, tensor_format);
         op.replaceAllUsesWith(outputtensordecl);
         rewriter.replaceOp(op, outputtensordecl);
       }
@@ -1426,10 +1426,10 @@ namespace
           else // The constant dim size must NOT comes from the sparse matrix
             cur_memref.push_back(resultMemTy.getDimSize(i));
 
-          if (isa<tensorAlgebra::IndexLabelOp>(tensor_decl_value.labels()[i].getDefiningOp()))
+          if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp()))
           {
             // comet_vdump(tensor_decl_value.labels()[i]);
-            auto label_decl_value = cast<tensorAlgebra::IndexLabelOp>(tensor_decl_value.labels()[i].getDefiningOp());
+            auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp());
             auto hi = label_decl_value.max();
             if (resultMemTy.isDynamicDim(i))
               cur_indices.push_back(hi); // IndexCastOp
@@ -1521,14 +1521,12 @@ void DenseTensorDeclLoweringPass::runOnFunction()
   auto function = getFunction();
 
   ConversionTarget target(getContext());
-  target.addLegalDialect<LinalgDialect, scf::SCFDialect, 
-                        StandardOpsDialect, memref::MemRefDialect,
-                        ITDialect>();
+  target.addLegalDialect<LinalgDialect, scf::SCFDialect,
+                         StandardOpsDialect, memref::MemRefDialect,
+                         ITDialect>();
 
   target.addIllegalDialect<tensorAlgebra::TADialect>();
-
-  target.addLegalOp<tensorAlgebra::TensorMultOp,
-                    tensorAlgebra::PrintOp,
+  target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
                     tensorAlgebra::TransposeOp,
@@ -1536,11 +1534,11 @@ void DenseTensorDeclLoweringPass::runOnFunction()
                     tensorAlgebra::GetTimeOp,
                     tensorAlgebra::PrintElapsedTimeOp,
                     tensorAlgebra::TensorSetOp,
-                    tensorAlgebra::TensorElewsMultOp>();
-
-  target.addLegalOp<tensorAlgebra::SparseOutputTensorDeclOp,
+                    tensorAlgebra::TensorMultOp,
+                    tensorAlgebra::TensorElewsMultOp,
+                    tensorAlgebra::SparseOutputTensorDeclOp,
                     tensorAlgebra::IndexLabelDynamicOp,
-                    tensorAlgebra::IndexLabelOp,
+                    tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::SparseTensorConstructOp>();
 
   OwningRewritePatternList patterns(&getContext());
@@ -1548,7 +1546,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
-    llvm::errs() << "Failed to Convert DenseTensorDeclLoweringPass\n";
+    llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
     signalPassFailure();
   }
 
@@ -1566,24 +1564,27 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
 {
   ConversionTarget target(getContext());
 
-  target.addLegalDialect<LinalgDialect, StandardOpsDialect, 
-                        scf::SCFDialect, AffineDialect, 
-                        mlir::memref::MemRefDialect>();
+  target.addLegalDialect<LinalgDialect, StandardOpsDialect,
+                         scf::SCFDialect,
+                         mlir::memref::MemRefDialect,
+                         ITDialect>();
 
-  target.addLegalOp<tensorAlgebra::SparseTensorConstructOp>();
-  target.addLegalOp<tensorAlgebra::IndexLabelOp>();
-  target.addLegalOp<tensorAlgebra::GenericCallOp>();
-  target.addLegalOp<tensorAlgebra::TensorMultOp,
+  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  target.addLegalOp<tensorAlgebra::PrintOp,
+                    tensorAlgebra::TAReturnOp,
+                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::TransposeOp,
+                    tensorAlgebra::TensorFillOp,
+                    tensorAlgebra::GetTimeOp,
+                    tensorAlgebra::PrintElapsedTimeOp,
+                    tensorAlgebra::SparseTensorConstructOp,
+                    tensorAlgebra::TensorMultOp,
                     tensorAlgebra::TensorSetOp,
-                    tensorAlgebra::TensorElewsMultOp>();
-  target.addLegalOp<tensorAlgebra::SparseOutputTensorDeclOp>();
-  target.addLegalOp<tensorAlgebra::DenseTensorDeclOp>();
-  target.addLegalOp<tensorAlgebra::IndexLabelDynamicOp>();
-  target.addLegalOp<tensorAlgebra::TensorFillOp>();
-
-  target.addLegalOp<indexTree::IndexTreeOp>();
-  target.addLegalOp<indexTree::IndexTreeIndicesOp>();
-  target.addLegalOp<indexTree::IndexTreeComputeOp>();
+                    tensorAlgebra::TensorElewsMultOp,
+                    tensorAlgebra::SparseOutputTensorDeclOp,
+                    tensorAlgebra::DenseTensorDeclOp,
+                    tensorAlgebra::IndexLabelStaticOp,
+                    tensorAlgebra::IndexLabelDynamicOp>();
 
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<SparseInputTensorDeclOpLowering>(&getContext());
@@ -1600,24 +1601,29 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
 /*******************************************************************/
 void SparseOutputTensorDeclLoweringPass::runOnFunction()
 {
-  comet_debug() << "start SparseOutputTensorDeclLoweringPass\n";
+  comet_debug() << "SparseOutputTensorDeclLoweringPass\n";
   ConversionTarget target(getContext());
 
-  target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
+  target.addLegalDialect<LinalgDialect,
+                         StandardOpsDialect,
+                         scf::SCFDialect,
+                         memref::MemRefDialect,
+                         ITDialect>();
 
-  target.addLegalOp<tensorAlgebra::SparseTensorConstructOp>();
-  target.addLegalOp<tensorAlgebra::IndexLabelOp>();
-  target.addLegalOp<tensorAlgebra::GenericCallOp>();
-
-  target.addLegalOp<tensorAlgebra::TensorMultOp, tensorAlgebra::TensorSetOp,
-                    tensorAlgebra::TensorElewsMultOp>();
-  target.addLegalOp<tensorAlgebra::IndexLabelDynamicOp>();
-
-  target.addLegalOp<indexTree::IndexTreeOp>();
-  target.addLegalOp<indexTree::IndexTreeIndicesOp>();
-  target.addLegalOp<indexTree::IndexTreeComputeOp>();
-
-  comet_debug() << " ";
+  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  target.addLegalOp<tensorAlgebra::PrintOp,
+                    tensorAlgebra::TAReturnOp,
+                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::TransposeOp,
+                    tensorAlgebra::TensorFillOp,
+                    tensorAlgebra::GetTimeOp,
+                    tensorAlgebra::PrintElapsedTimeOp,
+                    tensorAlgebra::SparseTensorConstructOp,
+                    tensorAlgebra::TensorMultOp,
+                    tensorAlgebra::TensorSetOp,
+                    tensorAlgebra::TensorElewsMultOp,
+                    tensorAlgebra::IndexLabelStaticOp,
+                    tensorAlgebra::IndexLabelDynamicOp>();
 
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<SparseOutputTensorDeclOpLowering>(&getContext());

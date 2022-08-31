@@ -132,7 +132,7 @@ namespace tensorAlgebra
     std::unique_ptr<ExprAST> parseElewsExpr()
     {
       auto loc = lexer.getLastLocation();
-      comet_debug() << " going to consume tok_elews\n";
+      comet_debug() << "going to consume tok_elews\n";
       lexer.consume(tok_elews);
 
       // return takes an optional argument
@@ -151,7 +151,7 @@ namespace tensorAlgebra
     /// literalList ::= tensorLiteral | tensorLiteral, literalList
     std::unique_ptr<ExprAST> parseTensorLiteralExpr()
     {
-      comet_debug() << " in parseTensorLiteralExpr\n";
+      comet_debug() << "in parseTensorLiteralExpr\n";
       auto loc = lexer.getLastLocation();
       lexer.consume(Token('['));
 
@@ -243,11 +243,11 @@ namespace tensorAlgebra
     std::unique_ptr<ExprAST> parseIdentifierExpr()
     {
       std::string name(lexer.getId());
-      comet_debug() << name << " \n";
+      comet_debug() << "Name:" << name << " \n";
 
       auto loc = lexer.getLastLocation();
       lexer.getNextToken(); // eat identifier.
-      comet_debug() << lexer.getCurToken() << " \n";
+      comet_debug() << "CurToken:" << lexer.getCurToken() << " \n";
 
       if (lexer.getCurToken() != '(' &&
           lexer.getCurToken() != '[')
@@ -335,7 +335,7 @@ namespace tensorAlgebra
 
       if (name == "read_from_file")
       { // It can be a builtin call to read_from_file
-        comet_debug() << " read_from_file\n";
+        comet_debug() << "read_from_file\n";
         if (args.size() == 0)
         {
           args.push_back(nullptr);
@@ -344,14 +344,14 @@ namespace tensorAlgebra
 
       if (name == "random")
       {
-        comet_debug() << " random\n";
+        comet_debug() << "random\n";
         if (args.size() == 0)
         {
           args.push_back(nullptr);
         }
         // CallExprAST is generated for random()
       }
-      comet_debug() << " generate CallExprAST node\n ";
+      comet_debug() << "generate CallExprAST node\n ";
       return std::make_unique<CallExprAST>(std::move(loc), name, std::move(args[0]));
     }
 
@@ -362,7 +362,7 @@ namespace tensorAlgebra
     ///   ::= tensorliteral
     std::unique_ptr<ExprAST> parsePrimary()
     {
-      comet_debug() << " in parsePrimary, curToken: " << lexer.getCurToken() << " \n";
+      comet_debug() << "in parsePrimary, curToken: " << lexer.getCurToken() << " \n";
       switch (lexer.getCurToken())
       {
       default:
@@ -373,9 +373,9 @@ namespace tensorAlgebra
       }
       case tok_identifier:
       {
-        comet_debug() << " call parseIdentifierExpr start\n";
+        comet_debug() << "call parseIdentifierExpr start\n";
         auto lhs = parseIdentifierExpr();
-        comet_debug() << " call parseIdentifierExpr end\n";
+        comet_debug() << "call parseIdentifierExpr end\n";
         if (lhs.get()->getKind() == tensorAlgebra::ExprAST::Expr_Call)
         {
           comet_debug() << "\n";
@@ -397,7 +397,7 @@ namespace tensorAlgebra
       // for .* (elews in ta)
       case tok_elews:
       {
-        comet_debug() << " parse elementwise start\n";
+        comet_debug() << "parse elementwise start\n";
         return parseElewsExpr();
       }
 
@@ -460,7 +460,7 @@ namespace tensorAlgebra
         // Okay, we know this is a binop.
         int binOp = lexer.getCurToken();
         comet_debug() << " going to consume current tok: " << lexer.getCurToken() << "\n";
-        auto loc_old = lexer.getLastLocation(); // ruiqin
+        auto loc_old = lexer.getLastLocation();
         comet_debug() << " loc_old: " << loc_old.line << " " << loc_old.col << " \n";
         lexer.consume(Token(binOp));
 

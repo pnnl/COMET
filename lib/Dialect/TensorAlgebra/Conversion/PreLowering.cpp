@@ -116,7 +116,7 @@ bool isNeedTensorDecl(t op)
         {
           comet_debug() << " FIND IT: " << i << "\n";
           if (i == 0)
-          { // DONE(ruiqin): used as source tensor
+          { // used as source tensor
             isUsedInSetSource = false;
           }
         }

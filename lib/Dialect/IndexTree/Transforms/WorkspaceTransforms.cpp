@@ -939,7 +939,7 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
     // Only one child??
     // Build a map, which index is in which IndexTreeIndicesOp
     // ------ Notice: each index is only in one IndicesOp in original index tree here
-    // ------ TODO(ruiqin): handle more complicate cases: one index is in more than one IndicesOp
+    // ------ TODO(gkestor): handle more complicate cases: one index is in more than one IndicesOp
     // For an indexTree, the indices ids are
     std::map<int, mlir::Value> indexValueMap;
     

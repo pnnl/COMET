@@ -144,9 +144,9 @@ namespace tensorAlgebra
     void consume(Token tok)
     {
       assert(tok == curTok && "consume Token mismatch expectation");
-      comet_debug() << " consume one token: " << tok << " \n";
+      comet_debug() << "consume one token: " << tok << " \n";
       Token nextTok = getNextToken();
-      comet_debug() << " next token: " << nextTok << " \n";
+      comet_debug() << "next token: " << nextTok << " \n";
     }
 
     /// Return the current identifier (prereq: getCurToken() == tok_identifier)
@@ -383,7 +383,7 @@ namespace tensorAlgebra
           comet_debug() << IdentifierStr << "\n";
           if (LastChar == tok_semicolon || LastChar == tok_parenthese_open || LastChar == tok_parenthese_close || LastChar == tok_bracket_open || LastChar == tok_bracket_close || LastChar == tok_sbracket_open || LastChar == tok_sbracket_close)
           {
-            comet_debug() << " not allow special tokens in strings\n";
+            comet_debug() << "not allow special tokens in strings\n";
             llvm::errs() << "Special tokens in strings are not allowed, source location (" << curLineNum << ", " << curCol << ")\n";
             exit(0);
           }
@@ -419,7 +419,7 @@ namespace tensorAlgebra
       //               semiring or monoid ops.
       if (LastChar == '@' && checkNextChar() == '(')
       {
-        comet_debug() << " semiring operations \n";
+        comet_debug() << "semiring operations \n";
         std::string semiringStr[2] = {"", ""};
         LastChar = Token(getNextChar());
         semiringStr[0] = getSemiringStr();
