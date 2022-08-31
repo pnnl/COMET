@@ -99,18 +99,6 @@ OpFoldResult CastOp::fold(ArrayRef<Attribute> operands)
   return mlir::impl::foldCastOp(*this);
 }
 
-/// Fold struct constants.
-OpFoldResult SparseTensorConstantOp::fold(ArrayRef<Attribute> operands)
-{
-  return value();
-}
-
-/// Fold struct constants.
-OpFoldResult SparseTensorVarOp::fold(ArrayRef<Attribute> operands)
-{
-  return value();
-}
-
 namespace
 {
   struct TAOptimalTCFactorizationPass
@@ -147,15 +135,20 @@ void TAOptimalTCFactorizationPass::runOnFunction()
 
   ConversionTarget target(getContext());
   target.addLegalDialect<StandardOpsDialect>();
-  target.addLegalOp<tensorAlgebra::TensorMultOp, tensorAlgebra::TensorFillOp,
-                    tensorAlgebra::PrintOp, tensorAlgebra::TAReturnOp,
-                    ConstantOp, tensorAlgebra::MulOp, tensorAlgebra::TensorDeclOp,
-                    tensorAlgebra::TensorCopyOp>();
-  target.addLegalOp<tensorAlgebra::SparseTensorDeclOp, tensorAlgebra::DenseTensorDeclOp>();
+
+  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  target.addLegalOp<tensorAlgebra::TensorMultOp,
+                    tensorAlgebra::TensorFillOp,
+                    tensorAlgebra::PrintOp,
+                    tensorAlgebra::TAReturnOp,
+                    ConstantOp, tensorAlgebra::MulOp,
+                    tensorAlgebra::TensorCopyOp,
+                    tensorAlgebra::SparseTensorDeclOp,
+                    tensorAlgebra::DenseTensorDeclOp>();
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
-    llvm::errs() << "Failed to Convert\n";
+    llvm::errs() << "Failed to applyPartialConversion in TAOptimalTCFactorizationPass\n";
     signalPassFailure();
   }
 }
@@ -168,15 +161,30 @@ void LowerTAMulChainPass::runOnFunction()
 
   ConversionTarget target(getContext());
   target.addLegalDialect<StandardOpsDialect>();
-  target.addLegalOp<tensorAlgebra::TensorMultOp, tensorAlgebra::TensorFillOp,
-                    tensorAlgebra::PrintOp, tensorAlgebra::TAReturnOp,
-                    ConstantOp, tensorAlgebra::MulOp, tensorAlgebra::TensorDeclOp,
-                    tensorAlgebra::TensorCopyOp>();
-  target.addLegalOp<tensorAlgebra::SparseTensorDeclOp, tensorAlgebra::DenseTensorDeclOp>();
+
+  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  target.addLegalOp<tensorAlgebra::PrintOp,
+                    tensorAlgebra::TAReturnOp,
+                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::TransposeOp,
+                    tensorAlgebra::TensorFillOp,
+                    tensorAlgebra::TensorFillFromFileOp,
+                    tensorAlgebra::GetTimeOp,
+                    tensorAlgebra::PrintElapsedTimeOp,
+                    tensorAlgebra::TensorMultOp,
+                    tensorAlgebra::TensorElewsMultOp,
+                    tensorAlgebra::TensorSetOp,
+                    tensorAlgebra::MulOp,
+                    tensorAlgebra::TensorCopyOp,
+                    tensorAlgebra::IndexLabelDynamicOp,
+                    tensorAlgebra::IndexLabelStaticOp,
+                    tensorAlgebra::SparseTensorDeclOp,
+                    tensorAlgebra::DenseTensorDeclOp,
+                    tensorAlgebra::SparseTensorConstructOp>();
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
-    llvm::errs() << "Failed to Convert\n";
+    llvm::errs() << "Failed to applyPartialConversion in LowerTAMulChainPass\n";
     signalPassFailure();
   }
 }

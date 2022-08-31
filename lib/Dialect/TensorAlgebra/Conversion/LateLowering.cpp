@@ -117,7 +117,6 @@ namespace
       // values to a corresponding memref allocation.
       auto tensorType = op.getType().cast<TensorType>();
       auto memRefType = convertTensorToMemRef(tensorType);
-      // auto alloc = insertAllocAndDealloc(memRefType, loc, rewriter);
 
       // We will be generating constant indices up-to the largest dimension.
       // Create these constants up-front to avoid large amounts of redundant

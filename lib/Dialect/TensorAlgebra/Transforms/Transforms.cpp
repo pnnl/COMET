@@ -150,7 +150,7 @@ namespace
       }
 
       std::map<Operation *, Value> labelValues;
-      // IndexLabelOp to size map
+      // IndexLabelStaticOp to size map
       std::map<Operation *, int64_t> lblSizes;
       // LabeledTensorOp to label set map
       std::map<Operation *, std::vector<Operation *>> lblMaps;

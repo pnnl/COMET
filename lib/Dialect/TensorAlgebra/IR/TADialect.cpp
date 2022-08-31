@@ -47,7 +47,6 @@ using namespace mlir::tensorAlgebra;
 
 /// Dialect creation, the instance will be owned by the context. This is the
 /// point of registration of custom types and operations for the dialect.
-// TADialect::TADialect(mlir::MLIRContext *ctx) : mlir::Dialect("ta", ctx) { //Ruiqin update into the following
 TADialect::TADialect(mlir::MLIRContext *ctx) : mlir::Dialect("ta", ctx, mlir::TypeID::get<TADialect>())
 {
   addTypes<RangeType, SparseTensorType>();
@@ -196,73 +195,6 @@ static mlir::LogicalResult verify(DenseConstantOp op)
   return mlir::success();
 }
 
-static mlir::LogicalResult verify(SparseTensorConstantOp op)
-{
-  // If the return type of the constant is not an unranked tensor, the shape
-  // must match the shape of the attribute holding the data.
-  auto resultType =
-      op.getResult().getType().dyn_cast<mlir::RankedTensorType>();
-  if (!resultType)
-    return success();
-
-  // Check that the rank of the attribute type matches the rank of the constant
-  // result type.
-  auto attrType = op.value().getType().cast<mlir::TensorType>();
-  if (attrType.getRank() != resultType.getRank())
-  {
-    return op.emitOpError(
-               "return type must match the one of the attached value "
-               "attribute: ")
-           << attrType.getRank() << " != " << resultType.getRank();
-  }
-
-  // Check that each of the dimensions match between the two types.
-  for (int dim = 0, dimE = attrType.getRank(); dim < dimE; ++dim)
-  {
-    if (attrType.getShape()[dim] != resultType.getShape()[dim])
-    {
-      return op.emitOpError(
-                 "return type shape mismatches its attribute at dimension ")
-             << dim << ": " << attrType.getShape()[dim]
-             << " != " << resultType.getShape()[dim];
-    }
-  }
-  return mlir::success();
-}
-
-static mlir::LogicalResult verify(SparseTensorVarOp op)
-{
-  // If the return type of the constant is not an unranked tensor, the shape
-  // must match the shape of the attribute holding the data.
-  auto resultType =
-      op.getResult().getType().dyn_cast<mlir::RankedTensorType>();
-  if (!resultType)
-    return success();
-
-  // Check that the rank of the attribute type matches the rank of the constant
-  // result type.
-  auto attrType = op.value().getType().cast<mlir::TensorType>();
-  if (attrType.getRank() != resultType.getRank())
-  {
-    return op.emitOpError(
-               "return type must match the one of the attached value "
-               "attribute: ")
-           << attrType.getRank() << " != " << resultType.getRank();
-  }
-
-  // Check that each of the dimensions match between the two types.
-  for (int dim = 0, dimE = attrType.getRank(); dim < dimE; ++dim)
-  {
-    if (attrType.getShape()[dim] != resultType.getShape()[dim])
-    {
-      return op.emitOpError(
-                 "return type shape mismatches its attribute at dimension ")
-             << dim << ": " << attrType.getShape()[dim]
-             << " != " << resultType.getShape()[dim];
-    }
-  }
-  return mlir::success();
-}
 
 //===----------------------------------------------------------------------===//
 // AddOp
@@ -343,7 +275,6 @@ static mlir::LogicalResult verify(TAReturnOp op)
 {
   // We know that the parent operation is a function, because of the 'HasParent'
   // trait attached to the operation definition.
-  // auto function = cast<FuncOp>(op.getParentOp()); //Ruiqin change into following
   auto function = cast<FuncOp>(op.getOperation()->getParentOp());
 
   /// ReturnOps can only have a single optional operand.
@@ -457,8 +388,7 @@ SparseTensorType SparseTensorType::get(llvm::ArrayRef<mlir::Type> elementTypes)
   // kind of the type. The parameters after the type kind are forwarded to the
   // storage instance.
   mlir::MLIRContext *ctx = elementTypes.front().getContext();
-  // return Base::get(ctx, TATypes::SparseTensor, elementTypes); //Ruiqin comment
-  return Base::get(ctx, elementTypes); // Ruiqin add
+  return Base::get(ctx, elementTypes);
 }
 
 /// Returns the element types of this sparse tensor type.

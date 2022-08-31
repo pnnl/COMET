@@ -1816,7 +1816,7 @@ namespace mlir
 
     int64_t labelSize(Operation *op)
     {
-      auto range = cast<tensorAlgebra::IndexLabelOp>(op);
+      auto range = cast<tensorAlgebra::IndexLabelStaticOp>(op);
       auto min_idx = cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
       auto max_idx = cast<mlir::ConstantIndexOp>(range.max().getDefiningOp());
       auto step_idx = cast<mlir::ConstantIndexOp>(range.step().getDefiningOp());
@@ -1935,7 +1935,6 @@ namespace mlir
 
       auto affineMapArrayAttr = rewriter.getAffineMapArrayAttr(affineMaps);
       comet_debug() << "\n";
-      // ruiqin:
       SmallVector<mlir::StringRef, 8> formats;
       std::vector<mlir::Operation *> defops{rhs1Tensor.getDefiningOp(), rhs2Tensor.getDefiningOp(), lhsTensor.getDefiningOp()};
       for (auto defop : defops)

@@ -139,7 +139,7 @@ namespace
     default:
       llvm::errs() << "[ERR] Semiring operator number not defined \n";
     }
-    comet_debug() << " Semiring op name: " << opName << "\n";
+    comet_debug() << "Semiring op name: " << opName << "\n";
     return opName;
   };
 
@@ -304,8 +304,7 @@ namespace
     mlir::Value mlirGen(BinaryExprAST &binop,
                         const std::set<std::string> &out_lbls = {})
     {
-      comet_debug() << "\n"
-                   << __LINE__ << " mlirGen for  BinaryExprAST \n";
+      comet_debug() << " mlirGen for  BinaryExprAST \n";
       // First emit the operations for each side of the operation before emitting
       // the operation itself. For example if the expression is `a + foo(a)`
       // 1) First it will visiting the LHS, which will return a reference to the
@@ -324,8 +323,7 @@ namespace
 
       if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor)
       {
-        comet_debug() << "\n"
-                     << __LINE__ << " lhsAST is Expr_LabeledTensor \n";
+        comet_debug() << " lhsAST is Expr_LabeledTensor \n";
         auto lblsVec = cast<LabeledTensorExprAST>(lhsAST)->getLabelNames();
         for (const auto &lbl : lblsVec)
         {
@@ -335,10 +333,10 @@ namespace
       else if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_BinOp)
       {
         comet_debug() << "\n"
-                     << __LINE__ << " lhsAST is Expr_BinOp \n";
+                      << __LINE__ << " lhsAST is Expr_BinOp \n";
         auto lblsSet = cast<BinaryExprAST>(lhsAST)->getLabels();
         comet_debug() << "\n"
-                     << __LINE__ << " lhsAST.getOp(): " << cast<BinaryExprAST>(lhsAST)->getOp() << "\n";
+                      << __LINE__ << " lhsAST.getOp(): " << cast<BinaryExprAST>(lhsAST)->getOp() << "\n";
 
         for (const auto &lbl : lblsSet)
         {
@@ -348,18 +346,18 @@ namespace
       else if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_Call)
       {
         comet_debug() << "\n"
-                     << __LINE__ << " lhsAST is Expr_Call  \n";
+                      << __LINE__ << " lhsAST is Expr_Call  \n";
       }
       else
       {
         comet_debug() << "\n"
-                     << __LINE__ << " lhsAST is not Expr_BinOp/Expr_LabeledTensor/CallExprAST  \n";
+                      << __LINE__ << " lhsAST is not Expr_BinOp/Expr_LabeledTensor/CallExprAST  \n";
       }
 
       if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor)
       {
         comet_debug() << "\n"
-                     << __LINE__ << " rhsAST is Expr_LabeledTensor \n";
+                      << __LINE__ << " rhsAST is Expr_LabeledTensor \n";
         auto lblsVec = cast<LabeledTensorExprAST>(rhsAST)->getLabelNames();
         for (const auto &lbl : lblsVec)
         {
@@ -369,10 +367,10 @@ namespace
       else if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_BinOp)
       {
         comet_debug() << "\n"
-                     << __LINE__ << " rhsAST is Expr_BinOp \n";
+                      << __LINE__ << " rhsAST is Expr_BinOp \n";
         auto lblsSet = cast<BinaryExprAST>(rhsAST)->getLabels();
         comet_debug() << "\n"
-                     << __LINE__ << " rhsAST.getOp(): " << cast<BinaryExprAST>(rhsAST)->getOp() << "\n";
+                      << __LINE__ << " rhsAST.getOp(): " << cast<BinaryExprAST>(rhsAST)->getOp() << "\n";
 
         for (const auto &lbl : lblsSet)
         {
@@ -382,12 +380,12 @@ namespace
       else if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Transpose)
       {
         comet_debug() << "\n"
-                     << __LINE__ << " rhsAST is Expr_Transpose  \n";
+                      << __LINE__ << " rhsAST is Expr_Transpose  \n";
       }
       else
       {
         comet_debug() << "\n"
-                     << __LINE__ << " rhsAST is not Expr_BinOp/Expr_LabeledTensor/CallExprAST/TransposeExprAST  \n";
+                      << __LINE__ << " rhsAST is not Expr_BinOp/Expr_LabeledTensor/CallExprAST/TransposeExprAST  \n";
       }
 
       mlir::Value lhs = mlirGen(*binop.getLHS(), rhs_lbls);
@@ -407,7 +405,7 @@ namespace
           rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var)
       {
         comet_debug() << "\n"
-                     << __LINE__ << " rhsAST and lhsAST are all Expr_Var\n";
+                      << __LINE__ << " rhsAST and lhsAST are all Expr_Var\n";
 
         switch (binop.getOp())
         {
@@ -432,7 +430,7 @@ namespace
       else if (isa<DenseConstantOp>(lhs.getDefiningOp()))
       {
         comet_debug() << "\n"
-                     << __LINE__ << " lhs is DenseConstantOp\n";
+                      << __LINE__ << " lhs is DenseConstantOp\n";
         switch (binop.getOp())
         {
         case '+':
@@ -448,7 +446,7 @@ namespace
       else if (isa<DenseConstantOp>(rhs.getDefiningOp()))
       {
         comet_debug() << "\n"
-                     << __LINE__ << " rhs is DenseConstantOp\n";
+                      << __LINE__ << " rhs is DenseConstantOp\n";
         switch (binop.getOp())
         {
         case '+':
@@ -512,7 +510,7 @@ namespace
           else if (isa<TransposeOp>(rhsOp))
           { // * transpose(A[i,j])
             comet_debug() << " "
-                         << "\n";
+                          << "\n";
           }
         }
         else
@@ -543,7 +541,7 @@ namespace
         {
           if (auto var = symbolTable.lookup(lbl_str))
           {
-            if (isa<IndexLabelOp>(var.getDefiningOp()))
+            if (isa<IndexLabelStaticOp>(var.getDefiningOp()))
             {
               if (summed_labels.find(var.getDefiningOp()) ==
                   summed_labels.end())
@@ -1221,7 +1219,7 @@ namespace
       {
         if (auto var = symbolTable.lookup(lbl_str))
         {
-          if (isa<IndexLabelOp>(var.getDefiningOp()))
+          if (isa<IndexLabelStaticOp>(var.getDefiningOp()))
           {
             labels.push_back(var);
           }
@@ -1371,7 +1369,7 @@ namespace
       else
       {
         value =
-            builder.create<IndexLabelOp>(loc(labeldecl.loc()), lo, hi, step);
+            builder.create<IndexLabelStaticOp>(loc(labeldecl.loc()), lo, hi, step);
       }
 
       if (failed(declare(labeldecl.getName(), value)))
@@ -1402,15 +1400,15 @@ namespace
       auto dim_lbls = tensordecl.getDims();
       std::vector<int64_t> dims_sizes;
       std::vector<mlir::Value> labels;
-      auto tensor_format = tensordecl.getFormat(); // ruiqin
+      auto tensor_format = tensordecl.getFormat();
       for (const auto &lbl_str : dim_lbls)
       {
         if (auto var = symbolTable.lookup(lbl_str))
         {
-          if (isa<IndexLabelOp>(var.getDefiningOp()))
+          if (isa<IndexLabelStaticOp>(var.getDefiningOp()))
           {
             labels.push_back(var);
-            auto range = cast<IndexLabelOp>(var.getDefiningOp());
+            auto range = cast<IndexLabelStaticOp>(var.getDefiningOp());
             auto min_idx =
                 cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
             auto max_idx =
@@ -1479,15 +1477,15 @@ namespace
       auto dim_lbls = tensordecl.getDims();
       std::vector<int64_t> dims_sizes;
       std::vector<mlir::Value> labels;
-      auto tensor_format = tensordecl.getFormat(); // ruiqin
+      auto tensor_format = tensordecl.getFormat();
       for (const auto &lbl_str : dim_lbls)
       {
         if (auto var = symbolTable.lookup(lbl_str))
         {
-          if (isa<IndexLabelOp>(var.getDefiningOp()))
+          if (isa<IndexLabelStaticOp>(var.getDefiningOp()))
           {
             labels.push_back(var);
-            auto range = cast<IndexLabelOp>(var.getDefiningOp());
+            auto range = cast<IndexLabelStaticOp>(var.getDefiningOp());
             auto min_idx =
                 cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
             auto max_idx =
@@ -1533,7 +1531,7 @@ namespace
       auto name = tensordecl.getName();
 
       mlir::Value value = builder.create<SparseOutputTensorDeclOp>(loc(tensordecl.loc()),
-                                                             tensor_type, labels, tensor_format);
+                                                                   tensor_type, labels, tensor_format);
       comet_vdump(value);
 
       if (failed(declare(name, value)))
@@ -1873,9 +1871,9 @@ namespace
                   ExprAST::ExprASTKind::Expr_BinOp)
               {
                 comet_debug() << "LHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getLHS()->getKind()
-                             << "\n";
+                              << "\n";
                 comet_debug() << "RHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getRHS()->getKind()
-                             << "\n";
+                              << "\n";
               }
 
               assert(false && "Not supported match for lhs and rhs\n");
@@ -1928,7 +1926,7 @@ namespace
         break;
       case VarType::TY_INT:
         retType = mlir::RankedTensorType::get(type.shape,
-                                           builder.getIntegerType(64));
+                                              builder.getIntegerType(64));
         break;
       }
 
@@ -1974,10 +1972,10 @@ namespace
       for (const auto &lbl_str : labels)
       {
         auto lbl = symbolTable.lookup(lbl_str);
-        if (isa<IndexLabelOp>(lbl.getDefiningOp()))
+        if (isa<IndexLabelStaticOp>(lbl.getDefiningOp()))
         {
           comet_debug() << "\n";
-          auto range = cast<IndexLabelOp>(lbl.getDefiningOp());
+          auto range = cast<IndexLabelStaticOp>(lbl.getDefiningOp());
           auto min_idx = cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
           auto max_idx = cast<mlir::ConstantIndexOp>(range.max().getDefiningOp());
           auto step_idx = cast<mlir::ConstantIndexOp>(range.step().getDefiningOp());
@@ -2002,7 +2000,7 @@ namespace
         }
         else
         {
-          llvm::errs() << "Neither IndexLabelOp nor IndexLabelDynamicOp\n";
+          llvm::errs() << "Neither IndexLabelStaticOp nor IndexLabelDynamicOp\n";
         }
       }
 
@@ -2014,9 +2012,9 @@ namespace
       std::vector<int64_t> dims_sizes;
       for (auto &lbl : labels)
       {
-        if (isa<IndexLabelOp>(lbl.getDefiningOp()))
+        if (isa<IndexLabelStaticOp>(lbl.getDefiningOp()))
         {
-          auto range = cast<IndexLabelOp>(lbl.getDefiningOp());
+          auto range = cast<IndexLabelStaticOp>(lbl.getDefiningOp());
           auto min_idx = cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
           auto max_idx = cast<mlir::ConstantIndexOp>(range.max().getDefiningOp());
           auto step_idx = cast<mlir::ConstantIndexOp>(range.step().getDefiningOp());
@@ -2040,7 +2038,7 @@ namespace
         }
         else
         {
-          llvm::errs() << "Neither IndexLabelOp nor IndexLabelDynamicOp\n";
+          llvm::errs() << "Neither IndexLabelStaticOp nor IndexLabelDynamicOp\n";
         }
       }
 

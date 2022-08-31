@@ -447,8 +447,7 @@ namespace
             MemRefType::get(lhsDims, lhsMemrefType.getElementType()), loc,
             rewriter);
         useLHSTranspose = true;
-        // TODO(gkestor): we might need this copy if we support update C[] += A[] *
-        /// B[]
+        // TODO(gkestor): we might need this copy if we support update C[] += A[] * B[]
         rewriter.create<linalg::CopyOp>(loc, lhsMemref, lhsAlloc, lhsInMap, lhsOutMap);
       }
 
@@ -821,11 +820,9 @@ void TALoweringTTGTPass::runOnFunction()
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
-    llvm::errs() << "Failed to Convert\n";
+    llvm::errs() << "Failed to applyPartialConversion in TALoweringTTGTPass\n";
     signalPassFailure();
   }
-
-  comet_debug() << "ttgt lowering finished\n";
 }
 
 /// Create a pass for lowering operations in the `LinAlg` and `Std` dialects,

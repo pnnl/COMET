@@ -74,7 +74,7 @@ def TA_AnyTensor : AnyTypeOf<[TensorOf<[AnyType]>, SparseTensor]>;
 //===----------------------------------------------------------------------===//
 // Tensor Algebra Operations
 //===----------------------------------------------------------------------===//
-def IndexLabelOp :
+def IndexLabelStaticOp :
     TA_Op<"index_label_static", [NoSideEffect]>,
     Arguments<(ins Index:$min, Index:$max, Index:$step)>,
     Results<(outs Range)> {
@@ -125,62 +125,6 @@ def IndexLabelDynamicOp :
   let verifier = ?;
 }
 
-
-// We define a ta operation by inherting from our base 'TA_Op' class above.
-// Here we provide the mnemonic and a list of traits for the operation. The
-// constant operation is marked as 'NoSideEffect' as it is a pure operation
-// and may be removed if dead.
-def TensorDeclOp : TA_Op<"tensor_decl", [NoSideEffect]> {
-  // Provide a summary and description for this operation. This can be used to
-  // auto-generate documenatation of the operations within our dialect.
-  let summary = "Create a tensor declaration";
-  let description = [{
-    Tensor declaration operation turns a literal into an SSA value. The data is attached
-    to the operation as an attribute. For example:
-
-    ```mlir
-      %0 = "ta.tensor_decl"()
-         { labels = vector[] : tensor<*x*xf64> }
-        : () -> tensor<2x3xf64>
-    ```
-  }];
-
-  // The constant operation takes an attribute as the only input.
-  let arguments = (ins Variadic<Range>:$labels, StrAttr:$format);
-
-  // The constant operation returns a single value of TensorType.
-  let results = (outs AnyTensor);
-
-  // Invoke a static verify method to verify this constant operation.
-  let verifier = ?;
-}
-
-def SparseOutputTensorDeclOp : TA_Op<"sparse_output_tensor_decl", [NoSideEffect]> {
-  // Provide a summary and description for this operation. This can be used to
-  // auto-generate documenatation of the operations within our dialect.
-  let summary = "Create an output tensor declaration";
-  let description = [{
-    Tensor declaration operation turns a literal into an SSA value. The data is attached
-    to the operation as an attribute. For example:
-
-    ```mlir
-      %0 = "ta.sparse_output_tensor_decl"()
-         { labels = vector[] : tensor<*x*xf64> }
-        : () -> tensor<2x3xf64>
-    ```
-  }];
-
-  // The constant operation takes an attribute as the only input.
-  // let arguments = (ins Variadic<Range>:$labels);
-  let arguments = (ins Variadic<Range>:$labels, StrAttr:$format);
-
-  // The constant operation returns a single value of TensorType.
-  let results = (outs AnyTensor);
-
-  // Invoke a static verify method to verify this constant operation.
-  let verifier = ?;
-}
-
 def DenseTensorDeclOp : TA_Op<"dense_tensor_decl", [NoSideEffect]> {
   // Provide a summary and description for this operation. This can be used to
   // auto-generate documenatation of the operations within our dialect.
@@ -197,7 +141,6 @@ def DenseTensorDeclOp : TA_Op<"dense_tensor_decl", [NoSideEffect]> {
   }];
 
   // The constant operation takes an attribute as the only input.
-  // let arguments = (ins Variadic<Range>:$labels);
   let arguments = (ins Variadic<Range>:$labels, StrAttr:$format);
 
   // The constant operation returns a single value of TensorType.
@@ -217,6 +160,32 @@ def SparseTensorDeclOp : TA_Op<"sparse_tensor_decl", [NoSideEffect]> {
 
     ```mlir
       %0 = "ta.sparse_tensor_decl"()
+         { labels = vector[] : tensor<*x*xf64> }
+        : () -> tensor<2x3xf64>
+    ```
+  }];
+
+  // The constant operation takes an attribute as the only input.
+  // let arguments = (ins Variadic<Range>:$labels);
+  let arguments = (ins Variadic<Range>:$labels, StrAttr:$format);
+
+  // The constant operation returns a single value of TensorType.
+  let results = (outs AnyTensor);
+
+  // Invoke a static verify method to verify this constant operation.
+  let verifier = ?;
+}
+
+def SparseOutputTensorDeclOp : TA_Op<"sparse_output_tensor_decl", [NoSideEffect]> {
+  // Provide a summary and description for this operation. This can be used to
+  // auto-generate documenatation of the operations within our dialect.
+  let summary = "Create an output tensor declaration";
+  let description = [{
+    Tensor declaration operation turns a literal into an SSA value. The data is attached
+    to the operation as an attribute. For example:
+
+    ```mlir
+      %0 = "ta.sparse_output_tensor_decl"()
          { labels = vector[] : tensor<*x*xf64> }
         : () -> tensor<2x3xf64>
     ```
@@ -317,33 +286,11 @@ def TensorFillOp : TA_Op<"fill", [NoSideEffect]>{
   
 }
 
-def TensorFillFromFileOp : TA_Op<"fill_from_file", [NoSideEffect]>{
-  
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins TA_AnyTensor:$lhs, AnyAttr:$filename);
-  let verifier = ?;
-  
-}
-
-def TensorCopyOp : TA_Op<"copy", [NoSideEffect]>{
-  
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs, AffineMapAttr:$inputPerm, AffineMapAttr:$outputPerm);
-
-  let verifier = ?;
-}
 
 // We define a ta operation by inherting from our base 'TA_Op' class above.
 // Here we provide the mnemonic and a list of traits for the operation. The
 // constant operation is marked as 'NoSideEffect' as it is a pure operation
 // and may be removed if dead.
-
 def DenseConstantOp : TA_Op<"constant", [NoSideEffect]> {
   // Provide a summary and description for this operation. This can be used to
   // auto-generate documenatation of the operations within our dialect.
@@ -376,52 +323,6 @@ def DenseConstantOp : TA_Op<"constant", [NoSideEffect]> {
   let verifier = [{ return ::verify(*this); }];
 }
 
-def SparseTensorConstantOp : TA_Op<"sptensor_constant", [ConstantLike, NoSideEffect]> {
-  let summary = "sparse tensor constant";
-  let description = [{
-    Constant operation turns a literal struct value into an SSA value. The data
-    is attached to the operation as an attribute. The struct constant is encoded
-    as an array of other constant values. For example:
-
-    ```mlir
-      %0 = ta.sptensor_constant [
-        dense<[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]> : tensor<2x3xf64>
-      ] : !ta.sptensor<tensor<*xf64>>
-    ```
-  }];
-
-  let arguments = (ins ArrayAttr:$value);
-  let results = (outs SparseTensor:$output);
-
-  let assemblyFormat = "$value attr-dict `:` type($output)";
-
-  let verifier = [{ return ::verify(*this); }];
-  let hasFolder = 1;
-}
-
-def SparseTensorVarOp : TA_Op<"sptensor_var", [ConstantLike, NoSideEffect]> {
-  let summary = "sparse tensor constant";
-  let description = [{
-    Constant operation turns a literal struct value into an SSA value. The data
-    is attached to the operation as an attribute. The struct constant is encoded
-    as an array of other constant values. For example:
-
-    ```mlir
-      %0 = ta.sptensor_var [
-        %A_idx : tensor<2x3xf64>
-      ] : !ta.sptensor<tensor<*xf64>>
-    ```
-  }];
-
-  let arguments = (ins ArrayAttr:$value);
-  let results = (outs SparseTensor:$output);
-
-  let assemblyFormat = "$value attr-dict `:` type($output)";
-
-  let verifier = [{ return ::verify(*this); }];
-  let hasFolder = 1;
-}
-
 def SparseTensorConstructOp : TA_Op<"sptensor_construct", [NoSideEffect]>{
 
   let summary = "";
@@ -445,6 +346,143 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [NoSideEffect]>{
     `(` $indices `)` attr-dict `:` `(` type($indices) `)` `->` `(` type($output) `)`
   }];
 
+  let verifier = ?;
+  
+}
+
+def TransposeOp : TA_Op<"transpose",[NoSideEffect]> {
+  let summary = "transpose operation";
+
+  let arguments = (ins TA_AnyTensor:$rhs, Variadic<Range>:$index_labels, AffineMapArrayAttr:$indexing_maps, StrArrayAttr:$formats);
+  
+  let results = (outs TA_AnyTensor); 
+
+  let verifier = ?;
+}
+
+def SUMOp : TA_Op<"sum",[NoSideEffect]> {
+  let summary = "reduction operation";
+
+  let arguments = (ins TA_AnyTensor:$rhs); 
+
+  let results = (outs F64:$lhs);
+
+  let builders = [OpBuilder<
+    (ins "mlir::Value":$input)>];
+
+  let verifier = ?;
+}
+
+// The interface CallOpInterface 
+def GenericCallOp : TA_Op<"generic_call",
+    [DeclareOpInterfaceMethods<CallOpInterface>]> {
+  let summary = "generic call operation";
+  let description = [{
+    Generic calls represent calls to a user defined function that needs to
+    be specialized for the shape of its arguments. The callee name is attached
+    as a symbol reference via an attribute. The arguments list must match the
+    arguments expected by the callee. For example:
+
+    ```mlir
+     %4 = "ta.generic_call"(%1, %3) {callee = @my_func}
+           : (tensor<2x3xf64>, tensor<2x3xf64>) -> tensor<*xf64>
+    ```
+
+    This is only valid if a function named "my_func" exists and takes two
+    arguments.
+  }];
+
+  // The generic call operation takes a symbol reference attribute as the
+  // callee, and inputs for the call.
+  let arguments = (ins SymbolRefAttr:$callee, TA_AnyTensor:$rhs);
+  
+
+  // The generic call operation returns a single value of TensorType.
+  let results = (outs TA_AnyTensor:$lhs);
+
+  let builders = [OpBuilder<(ins "StringRef":$callee,
+    "::mlir::Value":$arguments)>
+  ];
+}
+
+def PrintOp : TA_Op<"print"> {
+  let summary = "print operation";
+  let description = [{
+    The "print" builtin operation prints a given input tensor, and produces
+    no results.
+  }];
+
+  // The print operation takes an input tensor to print.
+  // We can extend the list of supported datatype for print with F64Tensor, I8MemRef, I64MemRef, F32MemRef, etc.
+  let arguments = (ins AnyTypeOf<[F64,
+                                  F64MemRef, 
+                                  TA_AnyTensor]>:$input);
+}
+
+def GetTimeOp : TA_Op<"getTime"> {
+  let summary = "getTime operation";
+  let description = [{
+    The "getTime" builtin operation for getting the clock time
+  }];
+
+  let results = (outs F64);
+}
+
+def PrintElapsedTimeOp : TA_Op<"print_elapsed_time"> {
+  let summary = "printElapsedTime operation";
+  let description = [{
+    The "print_elapsed_time" builtin operation prints the time elapsed for the start
+    and end times
+  }];
+
+  // The print elapsed time gets two clock times as an input to compute and print
+  // elapsed time
+  let arguments = (ins F64:$start, F64:$end);
+}
+
+def TAReturnOp : TA_Op<"return", [Terminator, HasParent<"FuncOp">]> {
+  let summary = "return operation";
+  let description = [{
+    The "return" operation represents a return operation within a function.
+    The operation takes an optional tensor operand and produces no results.
+    The operand type must match the signature of the function that contains
+    the operation. For example:
+
+    ```mlir
+      func @foo() -> tensor<2xf64> {
+        ...
+        ta.return %0 : tensor<2xf64>
+      }
+    ```
+  }];
+
+  // The return operation takes an optional input operand to return. This
+  // value must match the return type of the enclosing function.
+  let arguments = (ins Variadic<F64Tensor>:$input);
+
+  let builders = [OpBuilder<
+    (ins ), 
+    [{
+      build($_builder, $_state, llvm::None);
+    }]>];
+
+  // Provide extra utility definitions on the c++ operation class definition.
+  let extraClassDeclaration = [{
+    bool hasOperand() { return getNumOperands() != 0; }
+  }];
+
+  // Invoke a static verify method to verify this return operation.
+  let verifier = [{ return ::verify(*this); }];
+}
+
+///////////
+
+def TensorFillFromFileOp : TA_Op<"fill_from_file", [NoSideEffect]>{
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins TA_AnyTensor:$lhs, AnyAttr:$filename);
   let verifier = ?;
   
 }
@@ -537,30 +575,16 @@ def MulOp : TA_Op<"mul",
   ]; 
 }
 
-def TransposeOp : TA_Op<"transpose",[NoSideEffect]> {
-  let summary = "transpose operation";
-
-  let arguments = (ins TA_AnyTensor:$rhs, Variadic<Range>:$index_labels, AffineMapArrayAttr:$indexing_maps, StrArrayAttr:$formats);
+def TensorCopyOp : TA_Op<"copy", [NoSideEffect]>{
   
-  let results = (outs TA_AnyTensor); 
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs, AffineMapAttr:$inputPerm, AffineMapAttr:$outputPerm);
 
   let verifier = ?;
 }
-
-
-def SUMOp : TA_Op<"sum",[NoSideEffect]> {
-  let summary = "reduction operation";
-
-  let arguments = (ins TA_AnyTensor:$rhs); 
-
-  let results = (outs F64:$lhs);
-
-  let builders = [OpBuilder<
-    (ins "mlir::Value":$input)>];
-
-  let verifier = ?;
-}
-
 
 // The interface CallOpInterface is defined in mlir/Analysis/CallInterfaces.td
 def ScalarOp : TA_Op<"scalar",[NoSideEffect]> {
@@ -584,108 +608,6 @@ def ScalarAssignOp : TA_Op<"scalarAssign",[NoSideEffect]> {
   let verifier = ?;
 }
 
-// The interface CallOpInterface is defined in mlir/Analysis/CallInterfaces.td
-def GenericCallOp : TA_Op<"generic_call",
-    [DeclareOpInterfaceMethods<CallOpInterface>]> {
-  let summary = "generic call operation";
-  let description = [{
-    Generic calls represent calls to a user defined function that needs to
-    be specialized for the shape of its arguments. The callee name is attached
-    as a symbol reference via an attribute. The arguments list must match the
-    arguments expected by the callee. For example:
-
-    ```mlir
-     %4 = "ta.generic_call"(%1, %3) {callee = @my_func}
-           : (tensor<2x3xf64>, tensor<2x3xf64>) -> tensor<*xf64>
-    ```
-
-    This is only valid if a function named "my_func" exists and takes two
-    arguments.
-  }];
-
-  // The generic call operation takes a symbol reference attribute as the
-  // callee, and inputs for the call.
-  let arguments = (ins SymbolRefAttr:$callee, TA_AnyTensor:$rhs);
-  
-
-  // The generic call operation returns a single value of TensorType.
-  let results = (outs TA_AnyTensor:$lhs);
-
-  let builders = [OpBuilder<(ins "StringRef":$callee,
-    "::mlir::Value":$arguments)>
-  ];
-}
-
-
-def PrintOp : TA_Op<"print"> {
-  let summary = "print operation";
-  let description = [{
-    The "print" builtin operation prints a given input tensor, and produces
-    no results.
-  }];
-
-  // The print operation takes an input tensor to print.
-  // We can extend the list of supported datatype for print with F64Tensor, I8MemRef, I64MemRef, F32MemRef, etc.
-  let arguments = (ins AnyTypeOf<[F64,
-                                  F64MemRef, 
-                                  TA_AnyTensor]>:$input);
-}
-
-def GetTimeOp : TA_Op<"getTime"> {
-  let summary = "getTime operation";
-  let description = [{
-    The "getTime" builtin operation for getting the clock time
-  }];
-
-  let results = (outs F64);
-}
-
-def PrintElapsedTimeOp : TA_Op<"print_elapsed_time"> {
-  let summary = "printElapsedTime operation";
-  let description = [{
-    The "print_elapsed_time" builtin operation prints the time elapsed for the start
-    and end times
-  }];
-
-  // The print elapsed time gets two clock times as an input to compute and print
-  // elapsed time
-  let arguments = (ins F64:$start, F64:$end);
-}
-
-def TAReturnOp : TA_Op<"return", [Terminator, HasParent<"FuncOp">]> {
-  let summary = "return operation";
-  let description = [{
-    The "return" operation represents a return operation within a function.
-    The operation takes an optional tensor operand and produces no results.
-    The operand type must match the signature of the function that contains
-    the operation. For example:
-
-    ```mlir
-      func @foo() -> tensor<2xf64> {
-        ...
-        ta.return %0 : tensor<2xf64>
-      }
-    ```
-  }];
-
-  // The return operation takes an optional input operand to return. This
-  // value must match the return type of the enclosing function.
-  let arguments = (ins Variadic<F64Tensor>:$input);
-
-  let builders = [OpBuilder<
-    (ins ), 
-    [{
-      build($_builder, $_state, llvm::None);
-    }]>];
-
-  // Provide extra utility definitions on the c++ operation class definition.
-  let extraClassDeclaration = [{
-    bool hasOperand() { return getNumOperands() != 0; }
-  }];
-
-  // Invoke a static verify method to verify this return operation.
-  let verifier = [{ return ::verify(*this); }];
-}
 
 #endif // TA_OPS
 
