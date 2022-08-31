@@ -26,6 +26,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "comet/ExecutionEngine/blis_interface.h"
+#include "comet/ExecutionEngine/generic_mkernel.h"
+
 #include <assert.h>
 #include <iostream>
 
@@ -53,10 +55,38 @@ extern "C" void _mlir_ciface_linalg_matmul_viewsxsxf64_viewsxsxf64_viewsxsxf64(
     beta = 1.0;
   }
 
-  // TODO(gkestor): check hardware type, if it is not haswell give a message
-  //  micro kernel for Intel Haswell
-  bli_dgemm_haswell_asm_6x8(A->sizes[1], &alpha, A->data + A->offset,
-                            B->data + B->offset, &beta,
-                            C->data + C->offset, C->strides[0], C->strides[1],
-                            NULL, NULL);
+  // get the micro-arch
+  arch_t id     = bli_cpuid_query_id();
+  const char* s = bli_arch_string(id);
+
+
+  // check the micro-arch and call the micro-kernel accordingly.
+  // according to blis, the haswell dgemm micro-kernel can be executed on multiple micro-archs.
+  if ( (strcmp("haswell",s) == 0) || 
+       (strcmp("zen", s) == 0) || (strcmp("zen2", s) == 0) || (strcmp("zen3", s) == 0) || 
+       (strcmp("skx", s) == 0) || (strcmp("knl", s) == 0) )
+  {  
+    bli_dgemm_haswell_asm_6x8 ( A->sizes[0], // m
+    			        B->sizes[1], // n
+    				A->sizes[1], // k
+    				&alpha, 
+                                A->data + A->offset,
+    				B->data + B->offset, 
+                                &beta,
+    				C->data + C->offset, C->strides[0], C->strides[1],
+    				NULL, NULL);
+  }
+  else
+  {
+    //printf("WARNING: falling back to a generic gemm implementation that is arch-independent.\n");
+    dgemm_generic_noopt_mxn ( (int64_t) A->sizes[0], // m
+			      (int64_t) B->sizes[1], // n
+			      (int64_t) A->sizes[1], // k
+                              &alpha, 
+                              A->data + A->offset,
+                              B->data + B->offset, 
+                              &beta,
+                              C->data + C->offset,
+                              (int64_t) C->strides[0], (int64_t) C->strides[1] ); 
+   }
 }
