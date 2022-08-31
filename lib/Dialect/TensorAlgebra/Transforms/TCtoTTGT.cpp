@@ -774,7 +774,8 @@ namespace
       : public PassWrapper<TALoweringTTGTPass, FunctionPass>
   {
 
-    TALoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops) : isSelectBestPerm(isSelectBestPerm), whatPerm(whatPerm), printFlops{printFlops} {};
+    TALoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops) : 
+                      isSelectBestPerm(isSelectBestPerm), whatPerm(whatPerm), printFlops{printFlops} {};
     void runOnFunction() final;
 
   private:
