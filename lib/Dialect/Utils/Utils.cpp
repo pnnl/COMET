@@ -262,7 +262,7 @@ namespace mlir
     }
 
     template <class T>
-    unsigned int findIndexInVector(std::vector<T> vec, T e)
+    unsigned int findIndexInVector(std::vector<T> const &vec, T e)
     {
       // Check if element e exists in vector
       auto it = std::find(vec.begin(), vec.end(), e);

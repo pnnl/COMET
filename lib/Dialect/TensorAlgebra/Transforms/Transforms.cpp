@@ -107,7 +107,7 @@ namespace
   struct MulOpFactorization : public ConversionPattern
   {
     MulOpFactorization(MLIRContext *ctx)
-        : ConversionPattern(tensorAlgebra::TensorChainSetOp::getOperationName(), 2,
+          : ConversionPattern(tensorAlgebra::TensorSetOp::getOperationName(), 2,
                             ctx) {}
     LogicalResult
     matchAndRewrite(Operation *op, ArrayRef<Value> operands,
@@ -115,34 +115,40 @@ namespace
     {
       comet_pdump(op);
       auto loc = op->getLoc();
-      auto lhsOp = operands[0].getDefiningOp();
+      auto lhsOp = operands[0].getDefiningOp();  // TensorMultOp
       auto rhsOp = operands[1].getDefiningOp();
+
+      std::set<Operation *> MultOpsToRemove; 
+      std::set<Operation *> LTOpsToRemove;
 
       std::vector<Operation *> inLTOps;
       std::map<Operation *, Value> inLTValues;
 
-      if (isa<tensorAlgebra::MulOp>(rhsOp))
+      comet_debug() << "MulOpFactorization begin...\n";
+      
+      // collect all operands from series of ta.tc ops
+      if (isa<tensorAlgebra::TensorMultOp>(lhsOp))
       {
         std::stack<Operation *> stack;
-        Value currValue = operands[1];
+        Value currValue = operands[0];
+        comet_vdump(currValue);
         Operation *curr = currValue.getDefiningOp();
-        while (isa<tensorAlgebra::MulOp>(curr) || !stack.empty())
+        while (isa<tensorAlgebra::TensorMultOp>(curr) || !stack.empty())
         {
-          while (isa<tensorAlgebra::MulOp>(curr))
+          while (isa<tensorAlgebra::TensorMultOp>(curr))
           {
             stack.push(curr);
-            currValue = cast<tensorAlgebra::MulOp>(curr).lhs();
+            MultOpsToRemove.insert(cast<tensorAlgebra::TensorMultOp>(curr).getOperation());
+            currValue = cast<tensorAlgebra::TensorMultOp>(curr).getOperation()->getOperand(1);
             curr = currValue.getDefiningOp();
           }
 
-          if (isa<tensorAlgebra::LabeledTensorOp>(curr))
-          {
-            inLTOps.push_back(curr);
-            inLTValues[curr] = currValue;
-          }
+          inLTOps.push_back(curr);
+          inLTValues[curr] = currValue;
+
           curr = stack.top();
           stack.pop();
-          currValue = cast<tensorAlgebra::MulOp>(curr).rhs();
+          currValue = cast<tensorAlgebra::TensorMultOp>(curr).getOperation()->getOperand(0);
           curr = currValue.getDefiningOp();
         }
         inLTOps.push_back(curr);
@@ -157,7 +163,7 @@ namespace
 
       for (auto op : inLTOps)
       {
-        auto labels = cast<tensorAlgebra::LabeledTensorOp>(op).labels();
+        auto labels = cast<tensorAlgebra::DenseTensorDeclOp>(op).labels();
         std::vector<Operation *> labelVec;
         for (auto lbl : labels)
         {
@@ -172,11 +178,13 @@ namespace
         lblMaps[op] = labelVec;
       }
 
-      auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(lhsOp).labels();
+      auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).labels();
+      LTOpsToRemove.insert(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
       std::vector<Operation *> outLabelVec;
       for (auto lbl : outLabels)
       {
         auto lblOp = lbl.getDefiningOp();
+        //comet_debug() << " outlabels: " << lbl << "\n";
         outLabelVec.push_back(lblOp);
       }
       lblMaps[lhsOp] = outLabelVec;
@@ -188,11 +196,14 @@ namespace
 
       bool same_order = hasSameOrder(getIdentityPermutation(order.size()), order);
 
+      // updated ta dialect generation.
       if (!same_order)
       {
 
         Value newRhs1, newRhs2;
-        newRhs1 = inLTValues[inLTOps[order[0]]];
+        std::vector<Value> ___newSumLabels; // needed for intermediate tensor information
+
+        newRhs1 = inLTValues[inLTOps[order[0]]];  // updated later for subsequent ta.tc ops in the chain
         for (size_t i = 1; i < order.size(); i++)
         {
           newRhs2 = inLTValues[inLTOps[order[i]]];
@@ -200,25 +211,195 @@ namespace
           auto newType = RankedTensorType::get(lhsTensorShapes[i - 1], elType);
           std::vector<Value> newSumLabels;
 
-          for (auto lbl : sumLabels[i - 1])
+          std::vector<Operation *> rhs1Labels = lblMaps.at(inLTOps[order[i-1]]);
+          std::vector<Operation *> rhs2Labels = lblMaps.at(inLTOps[order[i]]);
+          std::set<Operation *> remainingLabels(lblMaps.at(lhsOp).begin(),
+                                                lblMaps.at(lhsOp).end());
+
+          for (size_t j = i + 1; j < order.size(); j++)
+          {
+            auto lblSet = lblMaps.at(inLTOps[order[j]]);
+            remainingLabels.insert(lblSet.begin(), lblSet.end());
+          }
+          auto lhsLabels = findOutput(rhs1Labels, rhs2Labels, remainingLabels);
+          // find difference of {rhs1Labels, rhs2Labels}, {lhsLabels}
+          auto tempLabelsOps = getSumLabels(rhs1Labels, rhs2Labels, lhsLabels);
+
+          for (auto lbl : lhsLabels)
           {
             newSumLabels.push_back(labelValues[lbl]);
+            //comet_vdump(labelValues[lbl]);
+          }
+          if (! isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()) ) { // store the output label values for subsequent ta.tc ops
+            ___newSumLabels = newSumLabels;
+          } 
+
+          std::vector<Value> new_all_lbls_value;
+          std::vector<Value> new_lhs_lbls_value;
+          std::vector<Value> new_rhs_lbls_value;
+          for (auto lbl : rhs2Labels) 
+          {
+            new_lhs_lbls_value.push_back(labelValues[lbl]);
+            new_all_lbls_value.push_back(labelValues[lbl]);
+            //comet_vdump(labelValues[lbl]);
+          }
+          if ( isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()) ) { // retrieve the labels from prev iteration. 
+            new_rhs_lbls_value = ___newSumLabels;
+            for (auto lbl : new_rhs_lbls_value) {
+              auto result1 = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), lbl);
+              if (result1 == new_all_lbls_value.end())
+              {
+                new_all_lbls_value.push_back(lbl);
+              }
+              //comet_vdump(lbl);
+            }
+          } else {  // retrieve the labels from lblMaps
+              for (auto lbl : rhs1Labels) {
+                new_rhs_lbls_value.push_back(labelValues[lbl]);
+                auto result1 = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), labelValues[lbl]);
+                if (result1 == new_all_lbls_value.end())
+                {
+                  new_all_lbls_value.push_back(labelValues[lbl]);
+                }
+                //comet_vdump(labelValues[lbl]);
+              }
           }
 
-          auto newMulOp = rewriter.create<tensorAlgebra::MulOp>(loc, newType, newRhs1, newRhs2, newSumLabels);
-          newRhs1 = newMulOp;
+          // formats
+          SmallVector<mlir::StringRef, 8> formats;
+          if (isa<DenseTensorDeclOp>(newRhs2.getDefiningOp())) {
+            auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).format();
+            //auto lhs_lbls = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).labels();
+            formats.push_back(lhs_format);
+          }
+          if (isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()) ) {
+            auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).format();
+            formats.push_back(rhs_format);
+          }
+          if ( isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()) && 
+                isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()) ) {
+            auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).format();
+            formats.push_back(rhs_format);
+          }
+          if ( isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()) ) {  // for series of ta.tc case
+            auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).format();
+            formats.push_back(lhs_format);
+            formats.push_back(lhs_format); 
+          }
+          auto strAttr = rewriter.getStrArrayAttr(formats);
+          
+          std::vector<int> lhs_lbls;
+          std::vector<int> rhs_lbls;
+          for (unsigned int i = 0; i < new_all_lbls_value.size(); i++)
+          {
+            auto result1 = std::find(new_lhs_lbls_value.begin(), new_lhs_lbls_value.end(), new_all_lbls_value[i]);
+            if (result1 != new_lhs_lbls_value.end())
+            {
+              lhs_lbls.push_back(i);
+            }
+
+            auto result2 = std::find(new_rhs_lbls_value.begin(), new_rhs_lbls_value.end(), new_all_lbls_value[i]);
+            if (result2 != new_rhs_lbls_value.end())
+            {
+              rhs_lbls.push_back(i);
+            }
+          }
+
+          std::vector<int> sum_lbls;
+          std::set_intersection(lhs_lbls.begin(), lhs_lbls.end(), rhs_lbls.begin(), rhs_lbls.end(), std::back_inserter(sum_lbls));
+          std::vector<int> all_lbls;
+          std::set_union(lhs_lbls.begin(), lhs_lbls.end(), rhs_lbls.begin(), rhs_lbls.end(), std::back_inserter(all_lbls));
+          std::vector<int> ret_lbls;
+          std::set_difference(all_lbls.begin(), all_lbls.end(), sum_lbls.begin(), sum_lbls.end(), std::back_inserter(ret_lbls));
+         
+          std::map<int, mlir::AffineExpr> expr_map;
+          unsigned dim = 0;
+          for (const auto &lbl : all_lbls)
+          {
+            expr_map[lbl] = getAffineDimExpr(dim++, rewriter.getContext());
+          }
+
+          std::vector<mlir::AffineExpr> lhs_exprs;
+          std::vector<mlir::AffineExpr> rhs_exprs;
+          std::vector<mlir::AffineExpr> ret_exprs;
+          for (const auto &lbl : lhs_lbls)
+          {
+            lhs_exprs.push_back(expr_map[lbl]);
+          }
+
+          for (const auto &lbl : rhs_lbls)
+          {
+            rhs_exprs.push_back(expr_map[lbl]);
+          }
+
+          for (const auto &lbl : ret_lbls)
+          {
+            ret_exprs.push_back(expr_map[lbl]);
+          }
+
+          auto context = rewriter.getContext();
+          SmallVector<mlir::AffineMap, 8> affine_maps{
+            mlir::AffineMap::get(dim, 0, rhs_exprs, context),
+            mlir::AffineMap::get(dim, 0, lhs_exprs, context),
+            mlir::AffineMap::get(dim, 0, ret_exprs, context)};
+          auto affineMapArrayAttr = rewriter.getAffineMapArrayAttr(affine_maps);
+
+          auto SemiringAttr = rewriter.getStringAttr("plusxy_times");          
+          Value tcop = rewriter.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
+                                                             newSumLabels, affineMapArrayAttr, strAttr, SemiringAttr); 
+          tcop.getDefiningOp()->setAttr("__alpha__", rewriter.getF64FloatAttr(1.0));
+          tcop.getDefiningOp()->setAttr("__beta__", rewriter.getF64FloatAttr(0.0));
+          
+          newRhs1 = tcop;
         }
 
-        auto resultType = op->getResultTypes()[0];
-        rewriter.replaceOpWithNewOp<tensorAlgebra::TensorChainSetOp>(op, resultType, operands[0], newRhs1);
-        comet_debug() << "\n";
+        //mlir::tensorAlgebra::TensorSetOp newSetOp = rewriter.replaceOpWithNewOp<tensorAlgebra::TensorSetOp>(op, newRhs1, operands[1].getDefiningOp()->getOperand(0));
+        mlir::tensorAlgebra::TensorSetOp newSetOp = rewriter.create<tensorAlgebra::TensorSetOp>(loc, newRhs1, operands[1].getDefiningOp()->getOperand(0)); 
+        newSetOp->setAttr("__beta__", rewriter.getF64FloatAttr(0.0));
+        // Remove the old TensorMultOps, the LabeledTensorOps (since they are not used), and the old setOp
+        // TODO: the following erase does not work.
+        comet_debug() << "Finding the LabeledTensorOps that need to be removed\n";
+        for (auto LT : inLTOps) 
+        {
+          Operation *firstUser;
+          for (auto user : LT->getResult(0).getUsers())
+          {
+            firstUser = user;
+            if (isa<tensorAlgebra::LabeledTensorOp>(firstUser))
+              break;
+          }
+          assert(isa<tensorAlgebra::LabeledTensorOp>(firstUser));
+          comet_pdump(firstUser);
+          LTOpsToRemove.insert(firstUser);
+        }
+
+        //rewriter.eraseOp(op);  // remove the old setOp
+        comet_debug() << "Removing the LabelTensorOps\n";
+        int uses = 0;
+        for (auto elem : LTOpsToRemove)
+        {
+          comet_pdump(elem);
+          comet_debug() << "uses: ";
+          uses = 0;
+          for (auto u: elem->getUsers()) {
+            uses++;
+            comet_pdump(u);
+            rewriter.eraseOp(u);
+            //u->erase();
+          }
+          if (uses == 0)
+            //rewriter.eraseOp(elem);
+            elem->erase();
+          comet_debug() << "\n";
+        }
       }
       else
       {
         auto resultType = op->getResultTypes()[0];
-        rewriter.replaceOpWithNewOp<tensorAlgebra::TensorChainSetOp>(op, resultType, operands[0], operands[1]);
+        rewriter.replaceOpWithNewOp<tensorAlgebra::TensorSetOp>(op, resultType, operands[0], operands[1]);
       }
 
+      comet_debug() << "MulOpFactorization end\n";
       return success();
     }
 
@@ -290,6 +471,7 @@ namespace
         labelIdMap[op] = id++;
       }
 
+      // go through each and every permutation of result vector.
       do
       {
         totalCost = 0;
@@ -310,7 +492,9 @@ namespace
             remainingLabels.insert(lblSet.begin(), lblSet.end());
           }
 
+          // find intersection of {rhs1Labels, rhs2Labels}, {remainingLabels}
           auto lhsLabels = findOutput(rhs1Labels, rhs2Labels, remainingLabels);
+          // find difference of {rhs1Labels, rhs2Labels}, {lhsLabels}
           sumLabels.push_back(getSumLabels(rhs1Labels, rhs2Labels, lhsLabels));
           auto permA = getLabelPerm(rhs1Labels, labelIdMap);
           auto permB = getLabelPerm(rhs2Labels, labelIdMap);
@@ -332,6 +516,7 @@ namespace
           rhs1Labels = lhsLabels;
         }
 
+        // update global 
         if (totalCost <= minCost)
         {
           minCost = totalCost;
@@ -346,6 +531,8 @@ namespace
     }
   };
 
+  // TODO: verify the use of the SetOpLowering Pass.
+  //       need to check the usage of TensorChainSetOp op.
   struct SetOpLowering : public ConversionPattern
   {
     SetOpLowering(MLIRContext *ctx)
@@ -528,7 +715,8 @@ namespace
 void mlir::tensorAlgebra::populateMultiOpFactorizationPatterns(
     OwningRewritePatternList &patterns, MLIRContext *context)
 {
-  patterns.insert<MulOpFactorization, SetOpLowering>(context);
+  //patterns.insert<MulOpFactorization, SetOpLowering>(context);
+  patterns.insert<MulOpFactorization>(context);  // not sure why setOpLowering pass is needed if I modified ta.mult -> ta.tc
 }
 
 // =============================================================================
