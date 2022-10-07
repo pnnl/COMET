@@ -1,0 +1,28 @@
+# RUN: comet-opt --opt-bestperm-ttgt --opt-multiop-factorize --convert-tc-to-ttgt %s &> ccsd_t1_11_ttgt_multiop.mlir
+# RUN: mlir-opt --convert-linalg-to-loops --convert-linalg-to-std --convert-linalg-to-llvm --convert-scf-to-std --convert-std-to-llvm ccsd_t1_11_ttgt_multiop.mlir &> ccsd_t1_11_ttgt_multiop.llvm
+# RUN: mlir-cpu-runner ccsd_t1_11_ttgt_multiop.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+def main() {
+    #IndexLabel Declarations
+    IndexLabel [i, c, n] = [2];
+    IndexLabel [m, a, d] = [2];
+
+    Tensor<double> A([c, d, m, n], {Dense});
+    Tensor<double> B([i, n, a, d], {Dense});
+    Tensor<double> C([m, c], {Dense});
+    Tensor<double> D([a, i], {Dense});
+
+    A[c, d, m, n] = 2.3;
+    B[i, n, a, d] = 3.4;
+    C[m, c] = 1.1;
+    D[a, i] = 0.0;
+
+    #Tensor contraction
+    D[a, i] = A[c, d, m, n] * B[i, n, a, d] * C[m, c];
+    print(D);
+
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 62.56,62.56,62.56,62.56,62.56,62.56,62.56,62.56,

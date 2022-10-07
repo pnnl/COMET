@@ -136,13 +136,16 @@ void TAOptimalTCFactorizationPass::runOnFunction()
   ConversionTarget target(getContext());
   target.addLegalDialect<StandardOpsDialect>();
 
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  //target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::TensorMultOp,
+                    tensorAlgebra::LabeledTensorOp,
+                    tensorAlgebra::IndexLabelStaticOp,
+                    //tensorAlgebra::TensorSetOp,
                     tensorAlgebra::TensorFillOp,
                     tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     ConstantOp, tensorAlgebra::MulOp,
-                    tensorAlgebra::TensorCopyOp,
+                    tensorAlgebra::TensorCopyOp,   // TODO: do we need this op?
                     tensorAlgebra::SparseTensorDeclOp,
                     tensorAlgebra::DenseTensorDeclOp>();
 
@@ -162,7 +165,7 @@ void LowerTAMulChainPass::runOnFunction()
   ConversionTarget target(getContext());
   target.addLegalDialect<StandardOpsDialect>();
 
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  //target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
