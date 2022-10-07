@@ -9,6 +9,8 @@ add_llvm_library(COMETIndexTree
   Transforms/Tensor.cpp
   Transforms/UnitExpression.cpp
   Transforms/WorkspaceTransforms.cpp 
+  Transforms/WorkspaceTransforms.cpp 
+  Transforms/PartialFusion.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${COMET_MAIN_INCLUDE_DIR}/comet/Dialect/IndexTree
