@@ -2268,6 +2268,7 @@ void LowerIndexTreeIRToSCFPass::runOnFunction()
                     tensorAlgebra::TensorSetOp,
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp,
+                    tensorAlgebra::LabeledTensorOp,
                     FuncOp>();
 
   OwningRewritePatternList patterns(&getContext());
@@ -2275,7 +2276,7 @@ void LowerIndexTreeIRToSCFPass::runOnFunction()
 
   if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
   {
-    llvm::errs() << "Failed to Lower\n";
+    llvm::errs() << "Failed to Lower LowerIndexTreeIRToSCFPass\n";
   }
 }
 
