@@ -1538,7 +1538,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
                          StandardOpsDialect, memref::MemRefDialect,
                          ITDialect>();
 
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  //target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
@@ -1583,7 +1583,7 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
                          mlir::memref::MemRefDialect,
                          ITDialect>();
 
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  //target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
@@ -1624,7 +1624,7 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
                          memref::MemRefDialect,
                          ITDialect>();
 
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  //target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
