@@ -972,7 +972,7 @@ namespace
 
           comet_vdump(rhs_tensor);
           comet_debug() << "\n";
-          auto SemiringAttr = builder.getStringAttr("plus_times"); // this is for standard matrix multiplication
+          auto SemiringAttr = builder.getStringAttr("plusxy_times"); // this is for standard matrix multiplication
           mlir::Value tcop = builder.create<TensorMultOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                                           labels, affineMapArrayAttr, strAttr, SemiringAttr);
           tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
@@ -1864,20 +1864,7 @@ namespace
                 return mlir::success();
               continue;
             }
-
-            else
-            {
-              if (tensor_op->getRHS()->getKind() ==
-                  ExprAST::ExprASTKind::Expr_BinOp)
-              {
-                comet_debug() << "LHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getLHS()->getKind()
-                              << "\n";
-                comet_debug() << "RHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getRHS()->getKind()
-                              << "\n";
-              }
-
-              assert(false && "Not supported match for lhs and rhs\n");
-            }
+            // there is a fall through case at the end, so don't put an else here.
           }
           else
           {

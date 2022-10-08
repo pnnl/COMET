@@ -436,7 +436,7 @@ void genForOps(std::vector<Value> tensors,
               dyn_dims_vec.push_back(i);
             }
           } // ? x ? x 20 x ?
-          auto rhs1_loc_dyn = findIndexInVector(dyn_dims_vec, id);
+          auto rhs1_loc_dyn = findIndexInVector<unsigned int>(dyn_dims_vec, id);
           comet_vdump(rhs1_alloc.getDefiningOp()->getOperand(rhs1_loc_dyn));
 
           upperBound = rhs1_alloc.getDefiningOp()->getOperand(rhs1_loc_dyn);
@@ -1354,7 +1354,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
   auto f64Type = rewriter.getF64Type();
   auto indexType = IndexType::get(rootOp.getContext());
-  Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
+  //Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
   Value const_f64_0 = rewriter.create<mlir::ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
   Value const_i1_0 = rewriter.create<mlir::ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
   Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
@@ -2268,6 +2268,7 @@ void LowerIndexTreeIRToSCFPass::runOnFunction()
                     tensorAlgebra::TensorSetOp,
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp,
+                    tensorAlgebra::LabeledTensorOp,
                     FuncOp>();
 
   OwningRewritePatternList patterns(&getContext());
@@ -2275,7 +2276,7 @@ void LowerIndexTreeIRToSCFPass::runOnFunction()
 
   if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
   {
-    llvm::errs() << "Failed to Lower\n";
+    llvm::errs() << "Failed to Lower LowerIndexTreeIRToSCFPass\n";
   }
 }
 
