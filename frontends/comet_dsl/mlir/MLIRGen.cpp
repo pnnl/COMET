@@ -794,7 +794,7 @@ namespace
         SmallVector<mlir::AffineMap, 8> affine_maps{
             mlir::AffineMap::get(dim, 0, lhs_exprs, context),
             mlir::AffineMap::get(dim, 0, rhs_exprs, context),
-            mlir::AffineMap::get(dim, 0, lhs_exprs, context)};
+            mlir::AffineMap::get(dim, 0, ret_exprs, context)};
 
         std::vector<mlir::Value> ret_lbls_value;
         for (auto n : ret_lbls)
