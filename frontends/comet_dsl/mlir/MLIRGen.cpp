@@ -734,13 +734,13 @@ namespace
         comet_debug() << " print lhs_lbls\n";
         for (auto n : lhs_lbls)
         {
-          comet_debug() << n << " ";
+          comet_debug() << n << " \n";
         }
         comet_debug() << "\n";
         comet_debug() << " print rhs_lbls\n";
         for (auto n : rhs_lbls)
         {
-          comet_debug() << n << " ";
+          comet_debug() << n << " \n";
         }
         comet_debug() << "\n";
 
@@ -760,7 +760,7 @@ namespace
         comet_debug() << " print ret_lbls\n";
         for (auto n : ret_lbls)
         {
-          comet_debug() << n << " ";
+          comet_debug() << n << " \n";
         }
         comet_debug() << "\n";
 
@@ -794,7 +794,7 @@ namespace
         SmallVector<mlir::AffineMap, 8> affine_maps{
             mlir::AffineMap::get(dim, 0, lhs_exprs, context),
             mlir::AffineMap::get(dim, 0, rhs_exprs, context),
-            mlir::AffineMap::get(dim, 0, lhs_exprs, context)};
+            mlir::AffineMap::get(dim, 0, ret_exprs, context)};
 
         std::vector<mlir::Value> ret_lbls_value;
         for (auto n : ret_lbls)
