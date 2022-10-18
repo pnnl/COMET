@@ -178,6 +178,9 @@ static cl::opt<bool> IsLoweringtoSCF("convert-to-loops", // Lower sparse/dense m
 // =============================================================================
 // Utility functions
 // =============================================================================
+static cl::opt<bool> IsSimulationAnalysis("sim-analysis", cl::init(false),
+                                          cl::desc("Performs analysis on tensor contractions for hardware/software co-design"));
+
 static cl::opt<bool> IsPrintFlops("print-flops", cl::init(false),
                                   cl::desc("Print the flops per tensor contraction"));
 
@@ -261,6 +264,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::tensorAlgebra::createFindOptimalTCFactorizationPass());
   }
 
+  if (IsSimulationAnalysis)
+  {
+    /// createSimulationAnalysisPass is an analysis pass for tensor contractions.
+    /// it should be applied when ta.tc operations are relatively final.
+    optPM.addPass(mlir::tensorAlgebra::createSimulationAnalysisPass());
+  }
+  
   optPM.addPass(mlir::tensorAlgebra::createLowerTAMulChainPass()); // Lowering for chain operations
   optPM.addPass(mlir::tensorAlgebra::createPreLoweringPass());     // Creating tensor declarations for temporal tensors in chain operations
 

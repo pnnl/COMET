@@ -53,6 +53,10 @@ namespace mlir
 
         std::unique_ptr<Pass> createLowerTAMulChainPass();
 
+        /// Create a pass for hardware/software co-design.
+        /// Perform analysis on ta dialect to do hardware simulations.
+        std::unique_ptr<Pass> createSimulationAnalysisPass();
+
         /// Create a pass for pre lowering
         std::unique_ptr<Pass> createPreLoweringPass();
 
