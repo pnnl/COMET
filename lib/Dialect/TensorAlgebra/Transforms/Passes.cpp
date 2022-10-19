@@ -182,9 +182,25 @@ DetermineIndexVals (Operation *rhsOp0, Operation *rhsOp1)
       //comet_vdump(lbl);
     }
   }
+  else if (isa<tensorAlgebra::SparseTensorDeclOp>(rhsOp0))
+  {
+    auto rhs0Labels = cast<tensorAlgebra::SparseTensorDeclOp>(rhsOp0).labels();
+    for (auto lbl : rhs0Labels)
+    {
+      // check if user provided dynamic index labels for sparse input.
+      // these are not supported due to limitations of the simulation framework.
+      if (isa<tensorAlgebra::IndexLabelDynamicOp>(lbl.getDefiningOp())) 
+      {
+        assert (false && "Dynamic index labels are not supported in the sim-analysis pass!");
+      }
+      rhs0_lbls_value.push_back(lbl);
+      all_lbls_value.push_back(lbl);
+      //comet_vdump(lbl);
+    }
+  }
   else
   {
-    assert (false && "TO BE SUPPORTED! (Sparse)");
+    assert (false && "TO BE SUPPORTED!");
   }
 
   if (isa<tensorAlgebra::DenseTensorDeclOp>(rhsOp1))
@@ -201,9 +217,27 @@ DetermineIndexVals (Operation *rhsOp0, Operation *rhsOp1)
       // comet_vdump(lbl);
     }
   } // end-dense-decl
-  else
+  else if (isa<tensorAlgebra::SparseTensorDeclOp>(rhsOp0))
   {
-    assert (false && "TO BE SUPPORTED! (Sparse)");
+    auto rhs1Labels = cast<tensorAlgebra::SparseTensorDeclOp>(rhsOp1).labels();
+    for (auto lbl : rhs1Labels)
+    {
+      if (isa<tensorAlgebra::IndexLabelDynamicOp>(lbl.getDefiningOp())) 
+      {
+        assert (false && "Dynamic index labels are not supported in the sim-analysis pass!");
+      }
+      rhs1_lbls_value.push_back(lbl);
+      auto result1 = std::find(all_lbls_value.begin(), all_lbls_value.end(), lbl);
+      if (result1 == all_lbls_value.end())
+      {
+        all_lbls_value.push_back(lbl);
+      }
+      // comet_vdump(lbl);
+    }
+  } // end-sparse-decl
+  else 
+  {
+    assert (false && "TO BE SUPPORTED!");
   }
 
   std::vector<int> rhs0_lbls;
@@ -298,12 +332,6 @@ void SimulationAnalysisPass::SimulationAnalysis(tensorAlgebra::TensorMultOp op)
   bool IsformatDenseOp0 = DetermineTensorType (rhsOp0);
   bool IsformatDenseOp1 = DetermineTensorType (rhsOp1);
 
-  if (!IsformatDenseOp0)
-    assert (false && "TO BE SUPPORTED! (Sparse)");
-
-  if (!IsformatDenseOp1)
-    assert (false && "TO BE SUPPORTED! (Sparse)");
-
   // determine the indexing maps
   std::map<int, long long> IndexToSizes; 
   std::vector<std::vector<int>> IndicesAll;
@@ -357,6 +385,25 @@ void SimulationAnalysisPass::SimulationAnalysis(tensorAlgebra::TensorMultOp op)
             elem.second << ", ";
   }
   std::cout << "}\n";
+
+  if (!IsformatDenseOp0) // for sparse input 0
+  {
+    std::cout << "    densities:\n";
+    std::cout << "      " << alphabets[0] << ":\n";
+    std::cout << "        distribution: " << "fixed-structured" << "\n";
+    std::cout << "        density: " << 0.25 << "\n";
+  }
+  if (!IsformatDenseOp1) // for sparse input 1
+  {
+    if (IsformatDenseOp0) // header only if Op0 was not sparse
+    {
+      std::cout << "    densities:\n";
+    }
+    std::cout << "      " << alphabets[1] << ":\n";
+    std::cout << "        distribution: " << "fixed-structured" << "\n";
+    std::cout << "        density: " << 0.5 << "\n";
+
+  }
   comet_debug() << "done with config file...\n";
 
 }
