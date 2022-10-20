@@ -69,6 +69,7 @@ namespace
     void dump(TensorDeclExprAST *node);
     void dump(LabeledTensorExprAST *node);
     void dump(TensorOpExprAST *node);
+    void dump(TransposeExprAST *node);
     void dump(PrintElapsedTimeExprAST *node);
     void dump(GetTimeExprAST *node);
 
@@ -117,6 +118,7 @@ void ASTDumper::dump(ExprAST *expr)
   dispatch(TensorDeclExprAST);
   dispatch(LabeledTensorExprAST);
   dispatch(TensorOpExprAST);
+  dispatch(TransposeExprAST);
   dispatch(PrintElapsedTimeExprAST);
   dispatch(GetTimeExprAST);
   // No match, fallback to a generic message
@@ -353,6 +355,22 @@ void ASTDumper::dump(TensorOpExprAST *node)
                << "\n";
   dump(node->getLHS());
   dump(node->getRHS());
+}
+
+void ASTDumper::dump(TransposeExprAST *node)
+{
+  INDENT();
+  llvm::errs() << "Transpose: " << node->getName() << " " << loc(node);
+               //<< "\n";
+  llvm::errs() << "  Src Dims: [";
+  for (auto elem : node->getSrcDims())
+    llvm::errs() << elem << ", ";
+  llvm::errs() << "], ";
+
+  llvm::errs() << "Dst Dims: [";
+  for (auto elem : node->getDstDims())
+    llvm::errs() << elem << ", ";
+  llvm::errs() << "]" << "\n";
 }
 
 void ASTDumper::dump(PrintElapsedTimeExprAST *node)
