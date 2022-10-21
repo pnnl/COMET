@@ -734,13 +734,13 @@ namespace
         comet_debug() << " print lhs_lbls\n";
         for (auto n : lhs_lbls)
         {
-          comet_debug() << n << " ";
+          comet_debug() << n << " \n";
         }
         comet_debug() << "\n";
         comet_debug() << " print rhs_lbls\n";
         for (auto n : rhs_lbls)
         {
-          comet_debug() << n << " ";
+          comet_debug() << n << " \n";
         }
         comet_debug() << "\n";
 
@@ -760,7 +760,7 @@ namespace
         comet_debug() << " print ret_lbls\n";
         for (auto n : ret_lbls)
         {
-          comet_debug() << n << " ";
+          comet_debug() << n << " \n";
         }
         comet_debug() << "\n";
 
