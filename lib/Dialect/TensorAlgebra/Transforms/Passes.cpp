@@ -252,7 +252,6 @@ optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
       ContractionPlan plan{permA, tensorShapeA,
                            permB, tensorShapeB,
                            permC, tensorShapeC};
-
       // make getTotal optional to include only the operation count or
       // plus the cost  operation transpose
       totalCost += plan.getTotalTime();
@@ -279,13 +278,13 @@ void TAOptimalTCFactorizationPass::TAOptimalTCFactorization(tensorAlgebra::Tenso
   OpBuilder builder(op);
   comet_pdump(op);
   auto operands = op->getOperands();
-  auto module = op->getParentOfType<ModuleOp>();
+  //auto module = op->getParentOfType<ModuleOp>();
   auto loc = op->getLoc();
   auto lhsOp = operands[0].getDefiningOp(); // TensorMultOp
   auto rhsOp = operands[1].getDefiningOp();
 
-  std::set<Operation *> MultOpsToRemove;
-  std::set<Operation *> LTOpsToRemove;
+  std::vector<Operation *> MultOpsToRemove;
+  std::vector<Operation *> LTOpsToRemove;
 
   std::vector<Operation *> inLTOps;
   std::map<Operation *, Value> inLTValues;
@@ -304,7 +303,7 @@ void TAOptimalTCFactorizationPass::TAOptimalTCFactorization(tensorAlgebra::Tenso
       while (isa<tensorAlgebra::TensorMultOp>(curr))
       {
         stack.push(curr);
-        MultOpsToRemove.insert(cast<tensorAlgebra::TensorMultOp>(curr).getOperation());
+        MultOpsToRemove.push_back(cast<tensorAlgebra::TensorMultOp>(curr).getOperation());
         currValue = cast<tensorAlgebra::TensorMultOp>(curr).getOperation()->getOperand(1);
         curr = currValue.getDefiningOp();
       }
@@ -345,7 +344,7 @@ void TAOptimalTCFactorizationPass::TAOptimalTCFactorization(tensorAlgebra::Tenso
   }
 
   auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).labels();
-  LTOpsToRemove.insert(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
+  LTOpsToRemove.push_back(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
   std::vector<Operation *> outLabelVec;
   for (auto lbl : outLabels)
   {
