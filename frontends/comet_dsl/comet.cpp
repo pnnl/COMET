@@ -136,28 +136,28 @@ static cl::opt<bool> OptCallToMatMulMicroKernel("opt-matmul-mkernel",
 static cl::opt<bool> OptDenseTransposeOp("opt-dense-transpose",
                                          cl::desc("Optimize transpose operation: optimal loop ordering and tiling"));
 
-
 // =============================================================================
 // Sparse kernel optimizations
 // =============================================================================
 static cl::opt<bool> OptWorkspace("opt-comp-workspace", cl::init(false),
                                   cl::desc("Optimize sparse output code generation while reducing iteration space for nonzero elements"));
 
-// =============================================================================
-// TTGT reformulation for tensor contraction operations
-// =============================================================================
-static cl::opt<bool> IsLoweringTCtoTTGT("convert-tc-to-ttgt",
-                                        cl::desc("Output IR after lowering dense tensor contractions operations through a TTGT approach"));
 
-// The details of the partial fusion can be found in the following paper.
+// The details of the fusion algorithm can be found in the following paper.
 // ReACT: Redundancy-Aware Code Generation for Tensor Expressions.
 // Tong Zhou, Ruiqin Tian, Rizwan A Ashraf, Roberto Gioiosa, Gokcen Kestor, Vivek Sarkar.
 // 2022 31st International Conference on Parallel Architectures and Compilation Techniques (PACT). October 2022.
 //  =============================================================================
 //  Partial Fusion (ReACT Fusion) on Index Tree dialect
 //  =============================================================================
-static cl::opt<bool> OptPartialFusionIT("opt-partial-fusion", cl::init(false),
-                                        cl::desc("Output IT dialect after partial fusion"));
+static cl::opt<bool> OptKernelFusion("opt-fusion", cl::init(false),
+                                        cl::desc("Output IT dialect after redundancy-aware fusion"));
+
+// =============================================================================
+// TTGT reformulation for tensor contraction operations
+// =============================================================================
+static cl::opt<bool> IsLoweringTCtoTTGT("convert-tc-to-ttgt",
+                                        cl::desc("Output IR after lowering dense tensor contractions operations through a TTGT approach"));
 
 
 // =============================================================================
@@ -311,10 +311,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       return 0;
     }
   }
-  if (OptPartialFusionIT)
+  if (OptKernelFusion)
   {
     // Apply partial fusion on index tree dialect for some compound expressions.
-    optPM.addPass(mlir::IndexTree::createPartialFusionPass());
+    optPM.addPass(mlir::IndexTree::createKernelFusionPass());
   }
 
   if (OptWorkspace)

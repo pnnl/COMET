@@ -102,15 +102,15 @@ OpFoldResult CastOp::fold(ArrayRef<Attribute> operands)
 
 namespace
 {
-  class TAOptimalTCFactorizationPass
-      : public mlir::PassWrapper<TAOptimalTCFactorizationPass, mlir::FunctionPass>
+  class FindOptimalTCFactorizationPass
+      : public mlir::PassWrapper<FindOptimalTCFactorizationPass, mlir::FunctionPass>
   {
 
   public:
     void runOnFunction() final;
 
-    void TAOptimalTCFactorization(tensorAlgebra::TensorSetOp op);
-  }; // class TAOptimalTCFactorizationPass
+    void FindOptimalTCFactorization(tensorAlgebra::TensorSetOp op);
+  }; // class FindOptimalTCFactorizationPass
 } // End anonymous namespace
 
 namespace
@@ -273,7 +273,7 @@ optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
   return std::make_tuple(minResult, minSumLabels, minLHSTensorShapes);
 }
 
-void TAOptimalTCFactorizationPass::TAOptimalTCFactorization(tensorAlgebra::TensorSetOp op)
+void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::TensorSetOp op)
 {
   OpBuilder builder(op);
   comet_pdump(op);
@@ -544,13 +544,13 @@ void TAOptimalTCFactorizationPass::TAOptimalTCFactorization(tensorAlgebra::Tenso
   return;
 }
 
-void TAOptimalTCFactorizationPass::runOnFunction()
+void FindOptimalTCFactorizationPass::runOnFunction()
 {
-  comet_debug() << " start TAOptimalTCFactorizationPass pass \n";
+  comet_debug() << " start FindOptimalTCFactorizationPass pass \n";
   auto function = getFunction();
 
   function.walk([&](tensorAlgebra::TensorSetOp op)
-              { TAOptimalTCFactorization(op); });
+              { FindOptimalTCFactorization(op); });
 }
 
 
@@ -607,7 +607,7 @@ void STCRemoveDeadOpsPass::runOnFunction()
 
 std::unique_ptr<Pass> mlir::tensorAlgebra::createFindOptimalTCFactorizationPass()
 {
-  return std::make_unique<TAOptimalTCFactorizationPass>();
+  return std::make_unique<FindOptimalTCFactorizationPass>();
 }
 
 std::unique_ptr<Pass> mlir::tensorAlgebra::createLowerTAMulChainPass()
