@@ -71,6 +71,7 @@ def IndexTreeComputeOp : IT_Op<"itCompute", [NoSideEffect]>{
   let description = [{
   }];
 
+  //TODO(gkestor): rethink the use of comp_worksp_opt, should we decouple that?
   let arguments = (ins Variadic<AnyType>:$rhs, 
                    AnyType:$lhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring); 
 

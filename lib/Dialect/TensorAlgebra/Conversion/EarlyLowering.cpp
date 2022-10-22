@@ -180,6 +180,8 @@ namespace
     comet_debug() << " sparse output is used in itComputeOp op\n";
     comet_debug() << " sparseOutputFormat: " << sparseOutputFormat << "\n";
 
+    comet_vdump(op);
+
     IndexType indexType = IndexType::get(op.getContext());
     FloatType f64Type = FloatType::getF64(op.getContext());
     auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
@@ -1288,10 +1290,10 @@ namespace
                 comet_debug() << " rhsPerms: \n";
                 for (auto m : rhsPerms)
                 {
-                  comet_debug() << " ";
+                  comet_debug() << " \n";
                   for (auto n : m)
                   {
-                    comet_debug() << n << " ";
+                    comet_debug() << n << " \n";
                   }
                   comet_debug() << "\n";
                 }
@@ -1299,16 +1301,19 @@ namespace
                 comet_debug() << " rhsFormats: \n";
                 for (auto m : rhsFormats)
                 {
-                  comet_debug() << " ";
+                  comet_debug() << " \n";
                   for (auto n : m)
                   {
-                    comet_debug() << n << " ";
+                    comet_debug() << n << " \n";
                   }
                   comet_debug() << "\n";
                 }
 
                 bool isElementwise = checkIsElementwise(rhsPerms);
+                
+                comet_debug() << "Checking if it is mixed mode\n";
                 bool isMixedMode = checkIsMixedMode(rhsFormats);
+
 
                 comet_debug() << "IsElementWise: " << isElementwise << " isMixedMode: " << isMixedMode << "\n";
                 if (isElementwise && isMixedMode)
@@ -1351,7 +1356,15 @@ namespace
                   }
                   else
                   {
-                    assert(false && "Mix-mode sparse computation with sparse output not yet supported such as TTM (tensor times matrix)");
+                    //assert(false && "Mix-mode sparse computation with sparse output not yet supported such as TTM (tensor times matrix)");
+                    //TODO(gkestor): if the sparsity patterns is known
+                    //check the code, it always assume that the first tensor is sparse
+                    mixModeEltWiseMultSparseTensorOutputLowering(computeOp,
+                                                                 loc,
+                                                                 rhsPerms,
+                                                                 dimSizes,
+                                                                 tensorload_sizes_vec,
+                                                                 array_sizes_vec, rewriter);
                   }
                 }
               }
@@ -1548,7 +1561,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
                          StandardOpsDialect, memref::MemRefDialect,
                          ITDialect>();
 
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  //target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
@@ -1567,6 +1580,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<DenseTensorDeclOpLowering>(&getContext());
 
+  
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
@@ -1592,7 +1606,7 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
                          mlir::memref::MemRefDialect,
                          ITDialect>();
 
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  //target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
@@ -1633,7 +1647,7 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
                          memref::MemRefDialect,
                          ITDialect>();
 
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  //target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,

@@ -51,6 +51,7 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <stack>
 
 #include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
@@ -101,11 +102,19 @@ OpFoldResult CastOp::fold(ArrayRef<Attribute> operands)
 
 namespace
 {
-  struct TAOptimalTCFactorizationPass
-      : public PassWrapper<TAOptimalTCFactorizationPass, FunctionPass>
+  class FindOptimalTCFactorizationPass
+      : public mlir::PassWrapper<FindOptimalTCFactorizationPass, mlir::FunctionPass>
   {
+
+  public:
     void runOnFunction() final;
-  };
+
+    void FindOptimalTCFactorization(tensorAlgebra::TensorSetOp op);
+  }; // class FindOptimalTCFactorizationPass
+} // End anonymous namespace
+
+namespace
+{
 
   struct LowerTAMulChainPass
       : public PassWrapper<LowerTAMulChainPass, FunctionPass>
@@ -127,31 +136,423 @@ namespace
 
 } // end anonymous namespace.
 
-void TAOptimalTCFactorizationPass::runOnFunction()
+void removeAllUsers(Operation *op)
 {
-  auto function = getFunction();
-  OwningRewritePatternList patterns(&getContext());
-  populateMultiOpFactorizationPatterns(patterns, &getContext());
-
-  ConversionTarget target(getContext());
-  target.addLegalDialect<StandardOpsDialect>();
-
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
-  target.addLegalOp<tensorAlgebra::TensorMultOp,
-                    tensorAlgebra::TensorFillOp,
-                    tensorAlgebra::PrintOp,
-                    tensorAlgebra::TAReturnOp,
-                    ConstantOp, tensorAlgebra::MulOp,
-                    tensorAlgebra::TensorCopyOp,
-                    tensorAlgebra::SparseTensorDeclOp,
-                    tensorAlgebra::DenseTensorDeclOp>();
-
-  if (failed(applyPartialConversion(function, target, std::move(patterns))))
+  for (auto u : op->getUsers())
   {
-    llvm::errs() << "Failed to applyPartialConversion in TAOptimalTCFactorizationPass\n";
-    signalPassFailure();
+    comet_debug() << "Users\n";
+    comet_pdump(u);
+    removeAllUsers(u);
   }
+  comet_debug() << "Deleting started\n";
+  comet_pdump(op);
+  op->erase();
+  comet_debug() << "Deleting ends\n";
 }
+
+std::vector<int64_t> getTensorShape(const std::vector<Operation *> &labels,
+                                             const std::map<Operation *, int64_t> &lblSizes)
+{
+  std::vector<int64_t> result;
+
+  for (auto lbl : labels)
+  {
+    result.push_back(lblSizes.at(lbl));
+  }
+
+  return result;
+}
+
+IndexVector getLabelPerm(const std::vector<Operation *> &labels,
+                                           const std::map<Operation *, unsigned> &labelIdMap)
+{
+  IndexVector result;
+  for (auto lbl : labels)
+  {
+    result.push_back(labelIdMap.at(lbl));
+  }
+  return result;
+}
+
+std::vector<Operation *> findOutput(const std::vector<Operation *> &rhs1Labels,
+                                         const std::vector<Operation *> &rhs2Labels,
+                                         const std::set<Operation *> &outLabels)
+{
+  std::vector<Operation *> result_labels;
+
+  std::set<Operation *> inLabels(rhs1Labels.begin(), rhs1Labels.end());
+  inLabels.insert(rhs2Labels.begin(), rhs2Labels.end());
+
+  std::set_intersection(inLabels.begin(), inLabels.end(), outLabels.begin(),
+                        outLabels.end(),
+                        std::back_inserter(result_labels));
+
+  return result_labels;
+}
+
+std::tuple<IndexVector, std::vector<std::vector<Operation *>>, std::vector<std::vector<int64_t>>>
+optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
+             const std::map<Operation *, int64_t> &lblSizes,
+             const std::map<Operation *, std::vector<Operation *>> &lblMaps)
+{
+  IndexVector result;
+  for (size_t i = 0; i < inLTOps.size(); i++)
+  {
+    result.push_back(i);
+  }
+
+  double minCost = std::numeric_limits<double>::max();
+  std::vector<unsigned> minResult;
+  std::vector<std::vector<Operation *>> minSumLabels;
+  std::vector<std::vector<int64_t>> minLHSTensorShapes;
+  double totalCost = 0;
+  std::map<Operation *, unsigned> labelIdMap;
+
+  unsigned id = 0;
+  for (auto op_size_pair : lblSizes)
+  {
+    auto op = op_size_pair.first;
+    labelIdMap[op] = id++;
+  }
+
+  // go through each and every permutation of result vector.
+  do
+  {
+    totalCost = 0;
+
+    std::vector<std::vector<Operation *>> sumLabels;
+    std::vector<std::vector<int64_t>> lhsTensorShapes;
+    std::vector<Operation *> rhs1Labels = lblMaps.at(inLTOps[result[0]]);
+    for (size_t i = 1; i < result.size(); i++)
+    {
+      std::vector<Operation *> rhs2Labels = lblMaps.at(inLTOps[result[i]]);
+
+      std::set<Operation *> remainingLabels(lblMaps.at(outLTOp).begin(),
+                                            lblMaps.at(outLTOp).end());
+
+      for (size_t j = i + 1; j < result.size(); j++)
+      {
+        auto lblSet = lblMaps.at(inLTOps[result[j]]);
+        remainingLabels.insert(lblSet.begin(), lblSet.end());
+      }
+
+      // find intersection of {rhs1Labels, rhs2Labels}, {remainingLabels}
+      auto lhsLabels = findOutput(rhs1Labels, rhs2Labels, remainingLabels);
+      // find difference of {rhs1Labels, rhs2Labels}, {lhsLabels}
+      sumLabels.push_back(getSumLabels(rhs1Labels, rhs2Labels, lhsLabels));
+      auto permA = getLabelPerm(rhs1Labels, labelIdMap);
+      auto permB = getLabelPerm(rhs2Labels, labelIdMap);
+      auto permC = getLabelPerm(lhsLabels, labelIdMap);
+
+      auto tensorShapeA = getTensorShape(rhs1Labels, lblSizes);
+      auto tensorShapeB = getTensorShape(rhs2Labels, lblSizes);
+      auto tensorShapeC = getTensorShape(lhsLabels, lblSizes);
+      lhsTensorShapes.push_back(tensorShapeC);
+
+      ContractionPlan plan{permA, tensorShapeA,
+                           permB, tensorShapeB,
+                           permC, tensorShapeC};
+      // make getTotal optional to include only the operation count or
+      // plus the cost  operation transpose
+      totalCost += plan.getTotalTime();
+
+      rhs1Labels = lhsLabels;
+    }
+
+    // update global
+    if (totalCost <= minCost)
+    {
+      minCost = totalCost;
+      minResult = result;
+      minSumLabels = sumLabels;
+      minLHSTensorShapes = lhsTensorShapes;
+    }
+
+  } while (std::next_permutation(result.begin(), result.end()));
+
+  return std::make_tuple(minResult, minSumLabels, minLHSTensorShapes);
+}
+
+void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::TensorSetOp op)
+{
+  OpBuilder builder(op);
+  comet_pdump(op);
+  auto operands = op->getOperands();
+  //auto module = op->getParentOfType<ModuleOp>();
+  auto loc = op->getLoc();
+  auto lhsOp = operands[0].getDefiningOp(); // TensorMultOp
+  auto rhsOp = operands[1].getDefiningOp();
+
+  std::vector<Operation *> MultOpsToRemove;
+  std::vector<Operation *> LTOpsToRemove;
+
+  std::vector<Operation *> inLTOps;
+  std::map<Operation *, Value> inLTValues;
+
+  comet_debug() << "MulOpFactorization begin...\n";
+
+  // collect all operands from series of ta.tc ops
+  if (isa<tensorAlgebra::TensorMultOp>(lhsOp))
+  {
+    std::stack<Operation *> stack;
+    Value currValue = operands[0];
+    comet_vdump(currValue);
+    Operation *curr = currValue.getDefiningOp();
+    while (isa<tensorAlgebra::TensorMultOp>(curr) || !stack.empty())
+    {
+      while (isa<tensorAlgebra::TensorMultOp>(curr))
+      {
+        stack.push(curr);
+        MultOpsToRemove.push_back(cast<tensorAlgebra::TensorMultOp>(curr).getOperation());
+        currValue = cast<tensorAlgebra::TensorMultOp>(curr).getOperation()->getOperand(1);
+        curr = currValue.getDefiningOp();
+      }
+
+      inLTOps.push_back(curr);
+      inLTValues[curr] = currValue;
+
+      curr = stack.top();
+      stack.pop();
+      currValue = cast<tensorAlgebra::TensorMultOp>(curr).getOperation()->getOperand(0);
+      curr = currValue.getDefiningOp();
+    }
+    inLTOps.push_back(curr);
+    inLTValues[curr] = currValue;
+  }
+
+  std::map<Operation *, Value> labelValues;
+  // IndexLabelStaticOp to size map
+  std::map<Operation *, int64_t> lblSizes;
+  // LabeledTensorOp to label set map
+  std::map<Operation *, std::vector<Operation *>> lblMaps;
+
+  for (auto op : inLTOps)
+  {
+    auto labels = cast<tensorAlgebra::DenseTensorDeclOp>(op).labels();
+    std::vector<Operation *> labelVec;
+    for (auto lbl : labels)
+    {
+      auto lblOp = lbl.getDefiningOp();
+      if (lblSizes.count(lblOp) == 0)
+      {
+        lblSizes[lblOp] = mlir::tensorAlgebra::labelSize(lblOp);
+        labelValues[lblOp] = lbl;
+      }
+      labelVec.push_back(lblOp);
+    }
+    lblMaps[op] = labelVec;
+  }
+
+  auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).labels();
+  LTOpsToRemove.push_back(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
+  std::vector<Operation *> outLabelVec;
+  for (auto lbl : outLabels)
+  {
+    auto lblOp = lbl.getDefiningOp();
+    // comet_debug() << " outlabels: " << lbl << "\n";
+    outLabelVec.push_back(lblOp);
+  }
+  lblMaps[lhsOp] = outLabelVec;
+
+  IndexVector order;
+  std::vector<std::vector<Operation *>> sumLabels;
+  std::vector<std::vector<int64_t>> lhsTensorShapes;
+  std::tie(order, sumLabels, lhsTensorShapes) = optimalOrder(inLTOps, lhsOp, lblSizes, lblMaps);
+
+  bool same_order = hasSameOrder(getIdentityPermutation(order.size()), order);
+
+  // updated ta dialect generation.
+  if (!same_order)
+  {
+
+    Value newRhs1, newRhs2;
+    std::vector<Value> ___newSumLabels; // needed for intermediate tensor information
+
+    newRhs1 = inLTValues[inLTOps[order[0]]]; // updated later for subsequent ta.tc ops in the chain
+    for (size_t i = 1; i < order.size(); i++)
+    {
+      newRhs2 = inLTValues[inLTOps[order[i]]];
+      auto elType = newRhs1.getType().dyn_cast<RankedTensorType>().getElementType();
+      auto newType = RankedTensorType::get(lhsTensorShapes[i - 1], elType);
+      std::vector<Value> newSumLabels;
+
+      std::vector<Operation *> rhs1Labels = lblMaps.at(inLTOps[order[i - 1]]);
+      std::vector<Operation *> rhs2Labels = lblMaps.at(inLTOps[order[i]]);
+      std::set<Operation *> remainingLabels(lblMaps.at(lhsOp).begin(),
+                                            lblMaps.at(lhsOp).end());
+
+      for (size_t j = i + 1; j < order.size(); j++)
+      {
+        auto lblSet = lblMaps.at(inLTOps[order[j]]);
+        remainingLabels.insert(lblSet.begin(), lblSet.end());
+      }
+      auto lhsLabels = findOutput(rhs1Labels, rhs2Labels, remainingLabels);
+      // find difference of {rhs1Labels, rhs2Labels}, {lhsLabels}
+      auto tempLabelsOps = getSumLabels(rhs1Labels, rhs2Labels, lhsLabels);
+
+      for (auto lbl : lhsLabels)
+      {
+        newSumLabels.push_back(labelValues[lbl]);
+        // comet_vdump(labelValues[lbl]);
+      }
+      if (!isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
+      { // store the output label values for subsequent ta.tc ops
+        ___newSumLabels = newSumLabels;
+      }
+
+      std::vector<Value> new_all_lbls_value;
+      std::vector<Value> new_lhs_lbls_value;
+      std::vector<Value> new_rhs_lbls_value;
+      for (auto lbl : rhs2Labels)
+      {
+        new_lhs_lbls_value.push_back(labelValues[lbl]);
+        new_all_lbls_value.push_back(labelValues[lbl]);
+        // comet_vdump(labelValues[lbl]);
+      }
+      if (isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
+      { // retrieve the labels from prev iteration.
+        new_rhs_lbls_value = ___newSumLabels;
+        for (auto lbl : new_rhs_lbls_value)
+        {
+          auto result1 = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), lbl);
+          if (result1 == new_all_lbls_value.end())
+          {
+            new_all_lbls_value.push_back(lbl);
+          }
+          // comet_vdump(lbl);
+        }
+      }
+      else
+      { // retrieve the labels from lblMaps
+        for (auto lbl : rhs1Labels)
+        {
+          new_rhs_lbls_value.push_back(labelValues[lbl]);
+          auto result1 = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), labelValues[lbl]);
+          if (result1 == new_all_lbls_value.end())
+          {
+            new_all_lbls_value.push_back(labelValues[lbl]);
+          }
+          // comet_vdump(labelValues[lbl]);
+        }
+      }
+
+      // formats
+      SmallVector<mlir::StringRef, 8> formats;
+      if (isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()))
+      {
+        auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).format();
+        // auto lhs_lbls = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).labels();
+        formats.push_back(lhs_format);
+      }
+      if (isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()))
+      {
+        auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).format();
+        formats.push_back(rhs_format);
+      }
+      if (isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()) &&
+          isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()))
+      {
+        auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).format();
+        formats.push_back(rhs_format);
+      }
+      if (isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
+      { // for series of ta.tc case
+        auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).format();
+        formats.push_back(lhs_format);
+        formats.push_back(lhs_format);
+      }
+      auto strAttr = builder.getStrArrayAttr(formats);
+
+      std::vector<int> lhs_lbls;
+      std::vector<int> rhs_lbls;
+      for (unsigned int i = 0; i < new_all_lbls_value.size(); i++)
+      {
+        auto result1 = std::find(new_lhs_lbls_value.begin(), new_lhs_lbls_value.end(), new_all_lbls_value[i]);
+        if (result1 != new_lhs_lbls_value.end())
+        {
+          lhs_lbls.push_back(i);
+        }
+
+        auto result2 = std::find(new_rhs_lbls_value.begin(), new_rhs_lbls_value.end(), new_all_lbls_value[i]);
+        if (result2 != new_rhs_lbls_value.end())
+        {
+          rhs_lbls.push_back(i);
+        }
+      }
+
+      std::vector<int> sum_lbls;
+      std::set_intersection(lhs_lbls.begin(), lhs_lbls.end(), rhs_lbls.begin(), rhs_lbls.end(), std::back_inserter(sum_lbls));
+      std::vector<int> all_lbls;
+      std::set_union(lhs_lbls.begin(), lhs_lbls.end(), rhs_lbls.begin(), rhs_lbls.end(), std::back_inserter(all_lbls));
+      std::vector<int> ret_lbls;
+      std::set_difference(all_lbls.begin(), all_lbls.end(), sum_lbls.begin(), sum_lbls.end(), std::back_inserter(ret_lbls));
+
+      std::map<int, mlir::AffineExpr> expr_map;
+      unsigned dim = 0;
+      for (const auto &lbl : all_lbls)
+      {
+        expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
+      }
+
+      std::vector<mlir::AffineExpr> lhs_exprs;
+      std::vector<mlir::AffineExpr> rhs_exprs;
+      std::vector<mlir::AffineExpr> ret_exprs;
+      for (const auto &lbl : lhs_lbls)
+      {
+        lhs_exprs.push_back(expr_map[lbl]);
+      }
+
+      for (const auto &lbl : rhs_lbls)
+      {
+        rhs_exprs.push_back(expr_map[lbl]);
+      }
+
+      for (const auto &lbl : ret_lbls)
+      {
+        ret_exprs.push_back(expr_map[lbl]);
+      }
+
+      auto context = builder.getContext();
+      SmallVector<mlir::AffineMap, 8> affine_maps{
+          mlir::AffineMap::get(dim, 0, rhs_exprs, context),
+          mlir::AffineMap::get(dim, 0, lhs_exprs, context),
+          mlir::AffineMap::get(dim, 0, ret_exprs, context)};
+      auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
+
+      auto SemiringAttr = builder.getStringAttr("plusxy_times");
+      Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
+                                                               newSumLabels, affineMapArrayAttr, strAttr, SemiringAttr);
+      tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
+      tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
+
+      newRhs1 = tcop;
+    }
+
+    mlir::tensorAlgebra::TensorSetOp newSetOp = builder.create<tensorAlgebra::TensorSetOp>(loc, newRhs1, operands[1].getDefiningOp()->getOperand(0)); 
+    newSetOp->setAttr("__beta__", builder.getF64FloatAttr(0.0));
+
+
+    comet_debug() << "are they previous multop\n";
+    for (auto oldTcOp : MultOpsToRemove)
+    {
+      comet_debug() << "Calling removeAllUsers\n";
+      removeAllUsers(oldTcOp);
+    }
+
+  }
+  comet_debug() << "MulOpFactorization end\n";
+  return;
+}
+
+void FindOptimalTCFactorizationPass::runOnFunction()
+{
+  comet_debug() << " start FindOptimalTCFactorizationPass pass \n";
+  auto function = getFunction();
+
+  function.walk([&](tensorAlgebra::TensorSetOp op)
+              { FindOptimalTCFactorization(op); });
+}
+
 
 void LowerTAMulChainPass::runOnFunction()
 {
@@ -162,7 +563,7 @@ void LowerTAMulChainPass::runOnFunction()
   ConversionTarget target(getContext());
   target.addLegalDialect<StandardOpsDialect>();
 
-  target.addIllegalDialect<tensorAlgebra::TADialect>();
+  // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
@@ -206,7 +607,7 @@ void STCRemoveDeadOpsPass::runOnFunction()
 
 std::unique_ptr<Pass> mlir::tensorAlgebra::createFindOptimalTCFactorizationPass()
 {
-  return std::make_unique<TAOptimalTCFactorizationPass>();
+  return std::make_unique<FindOptimalTCFactorizationPass>();
 }
 
 std::unique_ptr<Pass> mlir::tensorAlgebra::createLowerTAMulChainPass()

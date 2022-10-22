@@ -104,7 +104,7 @@ namespace mlir
       return false;
     }
 
-    //TODO(gkestor): review the use of this code
+    // TODO(gkestor): review the use of this code
     /// Insert an allocation and deallocation for the given MemRefType.
     Value insertAllocAndDealloc(MemRefType memtype, Location loc,
                                 PatternRewriter &rewriter)
@@ -146,7 +146,7 @@ namespace mlir
         comet_debug() << "Element type Index\n";
         cst_init = rewriter.create<ConstantIndexOp>(loc, 0);
       }
-        else if (elementType.isInteger(1))
+      else if (elementType.isInteger(1))
       {
         comet_debug() << "Element type I1 - boolean\n";
         cst_init = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
@@ -156,12 +156,13 @@ namespace mlir
         llvm::errs() << __FILE__ << " " << __LINE__ << "Not supported memory reference type. Supported element Types are F32, F64, Index \n";
       }
 
-      auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-      auto upperBound = alloc_op.getDefiningOp()->getOperand(0);
-      auto step = rewriter.create<ConstantIndexOp>(loc, 1);
-      auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-      auto insertPt = rewriter.saveInsertionPoint();
-      rewriter.setInsertionPointToStart(loop.getBody());
+      // TODO(gkestor): add better initialization method based on the dimension, leverage linalg.copy or something else
+       auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
+       auto upperBound = alloc_op.getDefiningOp()->getOperand(0);
+       auto step = rewriter.create<ConstantIndexOp>(loc, 1);
+       auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
+       auto insertPt = rewriter.saveInsertionPoint();
+       rewriter.setInsertionPointToStart(loop.getBody());
 
       // Build loop body
       std::vector<Value> indices = {loop.getInductionVar()};
@@ -213,7 +214,7 @@ namespace mlir
         // need to restore the insertion point to the previous point
         rewriter.restoreInsertionPoint(insertPt);
         comet_debug() << " insertAllocAndInitialize loop "
-                     << "\n";
+                      << "\n";
         comet_vdump(loop);
       }
     }
@@ -241,13 +242,13 @@ namespace mlir
 
     void print_vector_value(std::vector<Value> vec)
     {
-      // Special code for Array<bool>
-      #ifdef DEBUG_MODE_UTILS
+// Special code for Array<bool>
+#ifdef DEBUG_MODE_UTILS
       for (auto n : vec)
       {
         comet_vdump(n);
       }
-      #endif
+#endif
     }
     /*
      ** Convert the Type* objects' dump() to screen information into string
@@ -262,7 +263,7 @@ namespace mlir
     }
 
     template <class T>
-    unsigned int findIndexInVector(std::vector<T> vec, T e)
+    unsigned int findIndexInVector(std::vector<T> const &vec, T e)
     {
       // Check if element e exists in vector
       auto it = std::find(vec.begin(), vec.end(), e);
@@ -461,7 +462,7 @@ namespace mlir
         else
         {
           comet_debug() << __LINE__ << " not in"
-                       << "\n";
+                        << "\n";
         }
       }
 
@@ -477,7 +478,7 @@ namespace mlir
         else
         {
           comet_debug() << __LINE__ << " not in"
-                       << "\n";
+                        << "\n";
         }
       }
 
@@ -810,8 +811,10 @@ namespace mlir
 
     bool checkIsMixedMode(std::vector<std::vector<std::string>> formats)
     {
-      if (formats[0].size() == formats[1].size()) // to check the case produced after workspace transformations, there is only one format
-      {
+      //TODO(gkestor): review the following code
+      comet_debug() << "how many operands format:" << formats.size() << "\n";
+      if (formats.size() == 2)
+      { // binary operation
         bool isFirstDense = checkIsDense(formats[0]);
         bool isSecondDense = checkIsDense(formats[1]);
 
@@ -823,8 +826,22 @@ namespace mlir
         else
           return false;
       }
-      else
+      if (formats.size() == 1) // new computeOp produces after workspace transformations. There is only one operand on rhs
         return false;
+      // if (formats[0].size() == formats[1].size())       {
+      //   bool isFirstDense = checkIsDense(formats[0]);
+      //   bool isSecondDense = checkIsDense(formats[1]);
+
+      //   comet_debug() << "isFirstDense:" << isFirstDense << " isSecondDense: " << isSecondDense << "\n";
+      //   if ((isFirstDense && !isSecondDense) || (!isFirstDense && isSecondDense))
+      //   {
+      //     return true;
+      //   }
+      //   else
+      //     return false;
+      // }
+      // else
+      //   return false;
     }
 
     std::vector<Value> getFormatsValue(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IndexType indexType)
@@ -1471,14 +1488,14 @@ namespace mlir
 
             std::vector<Value> leafop_tensors = leafop_inputTensors;
             leafop_tensors.insert(leafop_tensors.end(), leafop_outputTensors.begin(), leafop_outputTensors.end());
-            #ifdef DEBUG_MODE_UTILS
+#ifdef DEBUG_MODE_UTILS
             comet_debug() << " getFormatsInfo:leafop_tensors.size(): " << leafop_tensors.size() << "\n";
             for (auto n : leafop_tensors)
             {
               comet_debug() << " ";
               comet_vdump(n);
             }
-            #endif
+#endif
             // Check if this index is in this leaf's perms
 
             std::vector<std::string> formats_local;
@@ -1750,7 +1767,7 @@ namespace mlir
       { // row major: last one has no penalty
         // const int idx = loopOrder[dim_-1-i];
         // const int posB = findPos(idx, perm_);
-        int idx;  // position in sourceOrder
+        int idx;      // position in sourceOrder
         int posB = 0; // position in destOrder
         for (unsigned ii = 0; ii < sourceOrder.size(); ii++)
         {

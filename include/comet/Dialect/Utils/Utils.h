@@ -63,7 +63,7 @@ namespace mlir
     bool hasFuncDeclaration(ModuleOp &module, std::string funcName);
     bool isFuncInMod(std::string funcname, ModuleOp module);
     template <class T>
-    unsigned int findIndexInVector(std::vector<T> vec, T e);
+    unsigned int findIndexInVector(std::vector<T> const &vec, T e);
     template <typename T>
     void print_vector(std::vector<T> vec);
     template <>

@@ -739,13 +739,13 @@ namespace
         comet_debug() << " print lhs_lbls\n";
         for (auto n : lhs_lbls)
         {
-          comet_debug() << n << " ";
+          comet_debug() << n << " \n";
         }
         comet_debug() << "\n";
         comet_debug() << " print rhs_lbls\n";
         for (auto n : rhs_lbls)
         {
-          comet_debug() << n << " ";
+          comet_debug() << n << " \n";
         }
         comet_debug() << "\n";
 
@@ -765,7 +765,7 @@ namespace
         comet_debug() << " print ret_lbls\n";
         for (auto n : ret_lbls)
         {
-          comet_debug() << n << " ";
+          comet_debug() << n << " \n";
         }
         comet_debug() << "\n";
 
@@ -799,7 +799,7 @@ namespace
         SmallVector<mlir::AffineMap, 8> affine_maps{
             mlir::AffineMap::get(dim, 0, lhs_exprs, context),
             mlir::AffineMap::get(dim, 0, rhs_exprs, context),
-            mlir::AffineMap::get(dim, 0, lhs_exprs, context)};
+            mlir::AffineMap::get(dim, 0, ret_exprs, context)};
 
         std::vector<mlir::Value> ret_lbls_value;
         for (auto n : ret_lbls)
@@ -977,7 +977,7 @@ namespace
 
           comet_vdump(rhs_tensor);
           comet_debug() << "\n";
-          auto SemiringAttr = builder.getStringAttr("plus_times"); // this is for standard matrix multiplication
+          auto SemiringAttr = builder.getStringAttr("plusxy_times"); // this is for standard matrix multiplication
           mlir::Value tcop = builder.create<TensorMultOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                                           labels, affineMapArrayAttr, strAttr, SemiringAttr);
           tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
@@ -2021,7 +2021,7 @@ namespace
                 return mlir::success();
               continue;
             }
-          // fall-thru here.
+            // there is a fall through case at the end, so don't put an else here.
           }
           else
           {
