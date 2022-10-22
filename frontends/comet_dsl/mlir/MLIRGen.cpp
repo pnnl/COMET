@@ -348,10 +348,15 @@ namespace
         comet_debug() << "\n"
                       << __LINE__ << " lhsAST is Expr_Call  \n";
       }
+      else if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_Transpose)
+      {
+        comet_debug() << "\n"
+                      << __LINE__ << " lhsAST is Expr_Transpose  \n";
+      }
       else
       {
         comet_debug() << "\n"
-                      << __LINE__ << " lhsAST is not Expr_BinOp/Expr_LabeledTensor/CallExprAST  \n";
+                      << __LINE__ << " lhsAST is not Expr_BinOp/Expr_LabeledTensor/CallExprAST/TransposeExprAST  \n";
       }
 
       if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor)
@@ -1662,6 +1667,158 @@ namespace
       return t;
     }
 
+    // Handle tranpose(A[i,j], {j, i}) in DSL, when no lhs_LabeledTensor has been created.
+    mlir::Value mlirGen(TransposeExprAST &transpose)
+    {
+      comet_debug() << "TransposeExprAST with no lhs labeled tensor \n";
+
+      mlir::Value rhs_tensor = symbolTable.lookup(transpose.getName());
+
+      comet_vdump(rhs_tensor);
+
+      auto rhs_lbls = transpose.getSrcDims();
+      auto lhs_lbls = transpose.getDstDims();
+
+      StringSet all_lbls;
+      all_lbls.insert(rhs_lbls.begin(), rhs_lbls.end());
+      all_lbls.insert(lhs_lbls.begin(), lhs_lbls.end());
+
+      std::map<std::string, mlir::AffineExpr> expr_map;
+      unsigned dim = 0;
+      for (const auto &lbl : all_lbls)
+      {
+        expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
+      }
+      std::vector<mlir::AffineExpr> rhs_exprs;
+      std::vector<mlir::AffineExpr> lhs_exprs;
+
+      for (const auto &lbl : rhs_lbls)
+      {
+        rhs_exprs.push_back(expr_map[lbl]);
+      }
+
+      for (const auto &lbl : lhs_lbls)
+      {
+        lhs_exprs.push_back(expr_map[lbl]);
+      }
+
+      auto context = builder.getContext();
+
+      SmallVector<mlir::AffineMap, 8> affine_maps{
+          mlir::AffineMap::get(dim, 0, rhs_exprs, context),
+          mlir::AffineMap::get(dim, 0, lhs_exprs, context)};
+
+      auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
+
+      SmallVector<mlir::StringRef, 8> formats;
+
+      // Firstly, Look at the rhs
+      if (isa<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()))
+      {
+        comet_debug() << " is TensorDeclOp\n";
+        // infer the format
+        auto rhs_format = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
+        comet_debug() << " rhs_format: " << rhs_format << "\n";
+        formats.push_back(rhs_format);
+      }
+      else if (isa<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()))
+      {
+        comet_debug() << " is TensorDeclOp\n";
+        // infer the format
+        auto rhs_format = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
+        comet_debug() << " rhs_format: " << rhs_format << "\n";
+        formats.push_back(rhs_format);
+      }
+      else
+      {
+        comet_debug() << " not TensorDeclOp\n";
+      }
+
+      // Secondly, Look at the lhs
+      // Collect labels values
+      std::vector<mlir::Value> lhs_labels_val;
+      for (const auto &lbl_str : lhs_lbls)
+      {
+        if (auto var = symbolTable.lookup(lbl_str))
+        {
+          if (isa<IndexLabelStaticOp>(var.getDefiningOp()))
+          {
+            lhs_labels_val.push_back(var);
+          }
+          else if (isa<IndexLabelDynamicOp>(var.getDefiningOp()))
+          {
+            lhs_labels_val.push_back(var);
+          }
+          else
+          {
+            emitError(loc(transpose.loc()), "Index label variable required '")
+                << lbl_str << "'";
+          }
+        }
+        else
+        {
+          emitError(loc(transpose.loc()),
+                    " Unknown variable TransposeExprAST' ")
+              << lbl_str << "'";
+        }
+      }
+
+      // Create Tensor Declarations Ops and populate formats (for lhs)
+      mlir::Value lhsLT;
+      mlir::Type return_type; 
+      if (isa<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()))
+      {
+        return_type =
+            cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).getResult().getType();
+        
+        // for DenseTensorDeclOp create
+        mlir::StringRef format_strref = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
+        mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
+        mlir::Value lhs_tensor = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr);
+
+        // TODO: remove labeledTensorOp
+        lhsLT = builder.create<LabeledTensorOp>(
+            loc(transpose.loc()), return_type, lhs_tensor, lhs_labels_val);
+
+        // populate formats 
+        // assumes lhs and rhs formats are same
+        auto lhs_format = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
+        formats.push_back(lhs_format);
+
+      }
+      else if (isa<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()))
+      {
+        return_type =
+            cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getResult().getType();
+
+        // for SparseTensorDeclOp create
+        mlir::StringRef format_strref = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
+        mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
+        mlir::Value lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr);
+
+        // TODO: remove labeledTensorOp
+        lhsLT = builder.create<LabeledTensorOp>(
+            loc(transpose.loc()), return_type, lhs_tensor, lhs_labels_val);
+
+        // populate formats 
+        // assumes lhs and rhs formats are same
+        auto lhs_format = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
+        formats.push_back(lhs_format);
+      }
+
+      comet_debug() << " formats.size(): " << formats.size() << "\n";
+      auto strAttr = builder.getStrArrayAttr(formats);
+
+      comet_debug() << " create TransposeOp\n";
+      mlir::Value t = builder.create<TransposeOp>(loc(transpose.loc()), return_type, //lhsLT.getType(),
+                                                  rhs_tensor, lhs_labels_val, affineMapArrayAttr, strAttr);
+      // TODO: replace with DenseTensorDeclOp or SparseTensorDeclOp
+      builder.create<TensorSetOp>(loc(transpose.loc()), t.getDefiningOp()->getResult(0), lhsLT);
+      comet_vdump(t);
+
+      return t;
+    }
+
     /// Codegen a list of expression, return failure if one of them hit an error.
     mlir::LogicalResult mlirGen(ExprASTList &blockAST)
     {
@@ -1864,20 +2021,7 @@ namespace
                 return mlir::success();
               continue;
             }
-
-            else
-            {
-              if (tensor_op->getRHS()->getKind() ==
-                  ExprAST::ExprASTKind::Expr_BinOp)
-              {
-                comet_debug() << "LHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getLHS()->getKind()
-                              << "\n";
-                comet_debug() << "RHS: " << llvm::cast<BinaryExprAST>(tensor_op->getRHS())->getRHS()->getKind()
-                              << "\n";
-              }
-
-              assert(false && "Not supported match for lhs and rhs\n");
-            }
+          // fall-thru here.
           }
           else
           {

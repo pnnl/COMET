@@ -534,6 +534,7 @@ namespace
           {
             // comet_vdump(n);
             std::string n_str = dump2str(p->getOperand(i));
+            comet_debug() << "the operands: " << n_str << "\n";
             if (n_str.compare(0, op_str.size(), op_str) == 0)
             {
               comet_debug() << " FIND IT: " << i << "\n";
@@ -542,6 +543,23 @@ namespace
                 isOutputTensor = true;
               }
             }
+          }
+        }
+        else if(isa<tensorAlgebra::TensorElewsMultOp>(u1))
+        {
+          comet_debug() << " used in ta.elews_mul op\n";
+          auto p = cast<tensorAlgebra::TensorElewsMultOp>(u1).getOperation();
+          for (unsigned int i = 0; i < p->getNumOperands(); i++)
+          {
+            std::string n_str = dump2str(p->getOperand(i));
+            if (n_str.compare(0, op_str.size(), op_str) == 0)
+            {
+              comet_debug() << " FIND IT: " << i << "\n";
+              if (i == 1)
+              {
+                isOutputTensor = true;
+              }
+            } 
           }
         }
         else if (isa<tensorAlgebra::TensorSetOp>(u1))
@@ -609,6 +627,11 @@ namespace
         else if (isa<tensorAlgebra::TensorElewsMultOp>(u1))
         {
           comet_debug() << " the tensor is in Elementwise multiplication\n";
+        }
+        else if (isa<tensorAlgebra::TensorFillOp>(u1))
+        {
+          // do nothing
+          comet_debug() << " the tensor is in fill op\n";
         }
         else
         {
