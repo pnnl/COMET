@@ -1,4 +1,4 @@
-//===- PartialFusion.cpp  ------===//
+//===- Fusion.cpp  ------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,7 +21,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This pass performs Partial kernel Fusion on index tree dialect
+// This pass performs redundancy-aware kernel Fusion on index tree dialect
 // The details of the partial fusion can be found in the following paper.
 // ReACT: Redundancy-Aware Code Generation for Tensor Expressions.
 // Tong Zhou, Ruiqin Tian, Rizwan A Ashraf, Roberto Gioiosa, Gokcen Kestor, Vivek Sarkar.
@@ -80,11 +80,11 @@ using llvm::StringRef;
 #define DEBUG_TYPE "partial-fusion"
 
 // *********** For debug purpose *********//
-//#ifndef DEBUG_MODE_PartialFusionPass
-//#define DEBUG_MODE_PartialFusionPass
+//#ifndef DEBUG_MODE_KernelFusionPass
+//#define DEBUG_MODE_KernelFusionPass
 //#endif
 
-#ifdef DEBUG_MODE_PartialFusionPass
+#ifdef DEBUG_MODE_KernelFusionPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
@@ -100,13 +100,13 @@ using llvm::StringRef;
 // *********** For debug purpose *********//
 
 //===----------------------------------------------------------------------===//
-// PartialFusion PASS
+// KernelFusion PASS
 //===----------------------------------------------------------------------===//
 
 namespace
 {
-  class PartialFusionPass
-      : public mlir::PassWrapper<PartialFusionPass, mlir::FunctionPass>
+  class KernelFusionPass
+      : public mlir::PassWrapper<KernelFusionPass, mlir::FunctionPass>
   {
   private:
     static void test(mlir::FuncOp &funcop);
@@ -154,20 +154,19 @@ namespace
         const mlir::Value &new_tensor_alloc,
         const mlir::Value &new_tensor_load);
 
-    static void doPartialFusion(std::vector<mlir::Operation *> &itrees, mlir::FuncOp &funcop);
+    static void doKernelFusion(std::vector<mlir::Operation *> &itrees, mlir::FuncOp &funcop);
 
     static void reduceTensorDimension(std::vector<mlir::Operation *> &LHSs, mlir::FuncOp &funcop);
 
   public:
     void runOnFunction() final;
 
-    void PartialFusion(mlir::FuncOp &funcop);
-  }; // class PartialFusionPass
+    void RedundancyAwareFusion(mlir::FuncOp &funcop);
+  }; // class KernelFusionPass
 } // End anonymous namespace
 
-/* -------------------- */
-/* --- example code --- */
-void PartialFusionPass::test(mlir::FuncOp &funcop)
+
+void KernelFusionPass::test(mlir::FuncOp &funcop)
 {
   int level = 0;
   funcop.walk([&](mlir::Operation *op)
@@ -257,7 +256,7 @@ void PartialFusionPass::test(mlir::FuncOp &funcop)
                 } });
 }
 
-std::vector<mlir::Operation *> PartialFusionPass::getAllItrees(mlir::FuncOp &funcop)
+std::vector<mlir::Operation *> KernelFusionPass::getAllItrees(mlir::FuncOp &funcop)
 {
   std::vector<mlir::Operation *> itrees;
   funcop.walk([&](indexTree::IndexTreeOp op)
@@ -266,7 +265,7 @@ std::vector<mlir::Operation *> PartialFusionPass::getAllItrees(mlir::FuncOp &fun
   return itrees;
 }
 
-std::vector<mlir::Operation *> PartialFusionPass::getAllComputeLHSs(mlir::FuncOp &funcop)
+std::vector<mlir::Operation *> KernelFusionPass::getAllComputeLHSs(mlir::FuncOp &funcop)
 {
   std::vector<mlir::Operation *> lhss;
   funcop.walk([&](indexTree::IndexTreeComputeLHSOp op)
@@ -275,7 +274,7 @@ std::vector<mlir::Operation *> PartialFusionPass::getAllComputeLHSs(mlir::FuncOp
   return lhss;
 }
 
-int PartialFusionPass::getIndicesOpsIndex(mlir::Operation *op)
+int KernelFusionPass::getIndicesOpsIndex(mlir::Operation *op)
 {
   assert(llvm::isa<indexTree::IndexTreeIndicesOp>(op) && "Error: op is not IndexTreeIndicesOp.");
   auto indices_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(*op);
@@ -283,7 +282,7 @@ int PartialFusionPass::getIndicesOpsIndex(mlir::Operation *op)
   return index;
 }
 
-std::vector<mlir::Operation *> PartialFusionPass::getPathFromRoot(mlir::Operation *op)
+std::vector<mlir::Operation *> KernelFusionPass::getPathFromRoot(mlir::Operation *op)
 {
   std::vector<mlir::Operation *> path;
 
@@ -301,7 +300,7 @@ std::vector<mlir::Operation *> PartialFusionPass::getPathFromRoot(mlir::Operatio
   return path;
 }
 
-std::vector<mlir::Operation *> PartialFusionPass::
+std::vector<mlir::Operation *> KernelFusionPass::
     getLongestCommonPrefix(std::vector<std::vector<mlir::Operation *>> &paths)
 {
   std::vector<mlir::Operation *> lcp;
@@ -331,7 +330,7 @@ std::vector<mlir::Operation *> PartialFusionPass::
   return lcp;
 }
 
-void PartialFusionPass::createNewTensor(
+void KernelFusionPass::createNewTensor(
     const mlir::Value &old_tensor_alloc,
     const mlir::Value &old_tensor_load,
     uint32_t rank_base,
@@ -438,11 +437,11 @@ void PartialFusionPass::createNewTensor(
   }
   else
   {
-    llvm::errs() << "Error: PartialFusionPass::createNewTensor() does not support tensors whose rank is larger than 2.";
+    llvm::errs() << "Error: KernelFusionPass::createNewTensor() does not support tensors whose rank is larger than 2.";
   }
 }
 
-mlir::Value PartialFusionPass::createReducedComputeLHS(
+mlir::Value KernelFusionPass::createReducedComputeLHS(
     mlir::Operation *lhs_op,
     mlir::Value &new_tensor_load,
     uint32_t rank_base)
@@ -486,7 +485,7 @@ mlir::Value PartialFusionPass::createReducedComputeLHS(
   return new_lhs_op;
 }
 
-mlir::Value PartialFusionPass::createReducedComputeRHS(
+mlir::Value KernelFusionPass::createReducedComputeRHS(
     mlir::Operation *rhs_op,
     mlir::Value &new_tensor_load,
     mlir::Value &old_tensor_load,
@@ -574,7 +573,7 @@ mlir::Value PartialFusionPass::createReducedComputeRHS(
   return new_rhs_op;
 }
 
-void PartialFusionPass::replaceOldOperandToNew(mlir::Operation *old_operand, mlir::Value &new_val)
+void KernelFusionPass::replaceOldOperandToNew(mlir::Operation *old_operand, mlir::Value &new_val)
 {
   for (auto user : old_operand->getUsers())
   {
@@ -595,7 +594,7 @@ void PartialFusionPass::replaceOldOperandToNew(mlir::Operation *old_operand, mli
   old_operand->erase();
 }
 
-void PartialFusionPass::replaceOldLinalgFillOp(
+void KernelFusionPass::replaceOldLinalgFillOp(
     mlir::Value &old_tensor_alloc,
     mlir::Value &old_tensor_load,
     mlir::Value &new_tensor_load)
@@ -664,7 +663,7 @@ void PartialFusionPass::replaceOldLinalgFillOp(
   }
 }
 
-mlir::Value PartialFusionPass::createResetComputeRHS(
+mlir::Value KernelFusionPass::createResetComputeRHS(
     const mlir::Value &new_tensor_alloc,
     mlir::Operation *last_common_prefix)
 {
@@ -723,7 +722,7 @@ mlir::Value PartialFusionPass::createResetComputeRHS(
   return compute_rhs;
 }
 
-mlir::Value PartialFusionPass::createResetComputeLHS(
+mlir::Value KernelFusionPass::createResetComputeLHS(
     const mlir::Value &new_tensor_load,
     mlir::Operation *last_common_prefix,
     int &lcp_index,
@@ -802,7 +801,7 @@ mlir::Value createResetIndicesOps(
   return last_indices_op;
 }
 
-void PartialFusionPass::insertTensorReset(
+void KernelFusionPass::insertTensorReset(
     const std::vector<mlir::Operation *> &lcp,
     const mlir::Value &new_tensor_alloc,
     const mlir::Value &new_tensor_load)
@@ -860,7 +859,7 @@ void PartialFusionPass::insertTensorReset(
   last_common_prefix->setOperands(operands);
 }
 
-void PartialFusionPass::doPartialFusion(
+void KernelFusionPass::doKernelFusion(
     std::vector<mlir::Operation *> &itrees,
     mlir::FuncOp &funcop)
 {
@@ -960,7 +959,7 @@ void PartialFusionPass::doPartialFusion(
   }
 }
 
-void PartialFusionPass::reduceTensorDimension(std::vector<mlir::Operation *> &LHSs, mlir::FuncOp &funcop)
+void KernelFusionPass::reduceTensorDimension(std::vector<mlir::Operation *> &LHSs, mlir::FuncOp &funcop)
 {
   for (mlir::Operation *lhs_op : LHSs)
   {
@@ -1068,7 +1067,7 @@ void PartialFusionPass::reduceTensorDimension(std::vector<mlir::Operation *> &LH
   }
 }
 
-void PartialFusionPass::PartialFusion(mlir::FuncOp &funcop)
+void KernelFusionPass::RedundancyAwareFusion(mlir::FuncOp &funcop)
 {
 
   comet_debug() << "ParitalFusionIT pass\n";
@@ -1081,23 +1080,23 @@ void PartialFusionPass::PartialFusion(mlir::FuncOp &funcop)
     return;
   }
 
-  doPartialFusion(itrees, funcop);
+  doKernelFusion(itrees, funcop);
 
   /// Reduce tensor dimension
   std::vector<mlir::Operation *> LHSs = getAllComputeLHSs(funcop);
   reduceTensorDimension(LHSs, funcop);
 }
 
-void PartialFusionPass::runOnFunction()
+void KernelFusionPass::runOnFunction()
 {
-  LLVM_DEBUG(llvm::dbgs() << "start PartialFusionPass\n");
-  comet_debug() << " start PartialFusion pass \n";
+  LLVM_DEBUG(llvm::dbgs() << "start KernelFusionPass\n");
+  comet_debug() << " start KernelFusion pass \n";
   auto function = getFunction();
-  PartialFusion(function);
+  RedundancyAwareFusion(function);
 }
 
 // Apply the partial fusion on the index tree IR
-std::unique_ptr<Pass> mlir::IndexTree::createPartialFusionPass()
+std::unique_ptr<Pass> mlir::IndexTree::createKernelFusionPass()
 {
-  return std::make_unique<PartialFusionPass>();
+  return std::make_unique<KernelFusionPass>();
 }

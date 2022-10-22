@@ -10,7 +10,7 @@ add_llvm_library(COMETIndexTree
   Transforms/UnitExpression.cpp
   Transforms/WorkspaceTransforms.cpp 
   Transforms/WorkspaceTransforms.cpp 
-  Transforms/PartialFusion.cpp
+  Transforms/Fusion.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${COMET_MAIN_INCLUDE_DIR}/comet/Dialect/IndexTree

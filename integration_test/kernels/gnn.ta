@@ -1,0 +1,38 @@
+# Graph Neural NetwoRK (GNN)
+# A[i,j] = (B[i,k] * C[k,h]) * D[h,j]; A sparse-dense matrix multiplication (SpMM) followed by a dense matrix multiplication (M
+# B[i,k] is sparse, the rest is dense
+
+# RUN: comet-opt --convert-ta-to-it --opt-fusion --convert-to-loops  %s &> gnn_loops.mlir
+# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm gnn_loops.mlir &> gnn_loops.llvm
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2_small.mtx
+# RUN: mlir-cpu-runner gnn_loops.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+def main() {
+    #IndexLabel Declarations
+    IndexLabel [i] = [?];
+    IndexLabel [k] = [?];
+    IndexLabel [j] = [4];
+    IndexLabel [h] = [4];
+
+    #Tensor Declarations
+    Tensor<double> B([i, k], {CSR});
+    Tensor<double> C([k, h], {Dense});
+    Tensor<double> D([h, j], {Dense});
+    Tensor<double> A([i, j], {Dense});
+    Tensor<double> T([i, h], {Dense});
+
+    #Tensor Data Initialization
+    B[i, k] = read_from_file(0);
+    C[k, h] = 1.2;
+    D[h, j] = 3.4;
+    A[i, j] = 0.0;
+    T[i, h] = 0.0;
+
+    T[i, h] = B[i,k] * C[k,h];
+    A[i, j] = T[i, h] * D[h, j];
+    print(A);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 48.96,48.96,48.96,48.96,114.24,114.24,114.24,114.24,0,0,0,0,81.6,81.6,81.6,81.6,212.16,212.16,212.16,212.16,
