@@ -202,6 +202,7 @@ def SparseOutputTensorDeclOp : TA_Op<"sparse_output_tensor_decl", [NoSideEffect]
   let verifier = ?;
 }
 
+//TODO(gkestor): need to evaluate its use cases
 def LabeledTensorOp : TA_Op<"labeled_tensor", [NoSideEffect]>{
 
   let summary = "Produce a sliced `subview` of a base `tensor`.";

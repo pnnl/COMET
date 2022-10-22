@@ -130,7 +130,6 @@ namespace
       assert(isa<tensorAlgebra::TransposeOp>(op));
 
       auto module = op->getParentOfType<ModuleOp>();
-      // module->dump();
       Location loc = op.getLoc();
       comet_debug() << " Transpose lowering\n";
       comet_vdump(op);

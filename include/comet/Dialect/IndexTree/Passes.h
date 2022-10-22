@@ -45,6 +45,8 @@ namespace mlir
     /// Create a pass for lowering IndexTree IR ops to scf dialect version
     std::unique_ptr<Pass> createLowerIndexTreeIRToSCFPass();
 
+    /// Create a pass for the redundancy-aware kernel fusion on index tree dialect for some compound expressions
+    std::unique_ptr<Pass> createKernelFusionPass();
   } // end namespace IndexTree
 } // end namespace mlir
 

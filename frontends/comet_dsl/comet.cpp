@@ -67,9 +67,9 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "comet_dsl"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_COMET_DSL
-// #define DEBUG_MODE_COMET_DSL
-// #endif
+#ifndef DEBUG_MODE_COMET_DSL
+#define DEBUG_MODE_COMET_DSL
+#endif
 
 #ifdef DEBUG_MODE_COMET_DSL
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -142,11 +142,23 @@ static cl::opt<bool> OptDenseTransposeOp("opt-dense-transpose",
 static cl::opt<bool> OptWorkspace("opt-comp-workspace", cl::init(false),
                                   cl::desc("Optimize sparse output code generation while reducing iteration space for nonzero elements"));
 
+
+// The details of the fusion algorithm can be found in the following paper.
+// ReACT: Redundancy-Aware Code Generation for Tensor Expressions.
+// Tong Zhou, Ruiqin Tian, Rizwan A Ashraf, Roberto Gioiosa, Gokcen Kestor, Vivek Sarkar.
+// 2022 31st International Conference on Parallel Architectures and Compilation Techniques (PACT). October 2022.
+//  =============================================================================
+//  Partial Fusion (ReACT Fusion) on Index Tree dialect
+//  =============================================================================
+static cl::opt<bool> OptKernelFusion("opt-fusion", cl::init(false),
+                                        cl::desc("Output IT dialect after redundancy-aware fusion"));
+
 // =============================================================================
 // TTGT reformulation for tensor contraction operations
 // =============================================================================
 static cl::opt<bool> IsLoweringTCtoTTGT("convert-tc-to-ttgt",
                                         cl::desc("Output IR after lowering dense tensor contractions operations through a TTGT approach"));
+
 
 // =============================================================================
 // Lowering TA operations to IT dialect
@@ -154,11 +166,14 @@ static cl::opt<bool> IsLoweringTCtoTTGT("convert-tc-to-ttgt",
 static cl::opt<bool> IsLoweringtoIndexTree("convert-ta-to-it", // Lower sparse/dense mult (semiring) and elemwise (monoid) ops to index-tree dialect
                                            cl::desc("Output IT dialect after processing dense sparse/dense mult and elemwise ops"));
 
+
 // =============================================================================
 // Lowering IT operations to loops
 // =============================================================================
 static cl::opt<bool> IsLoweringtoSCF("convert-to-loops", // Lower sparse/dense mult (semiring) and elemwise (monoid) ops to index-tree dialect
                                      cl::desc("Output IR after processing all ops"));
+
+
 
 // =============================================================================
 // Utility functions
@@ -296,6 +311,11 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       return 0;
     }
   }
+  if (OptKernelFusion)
+  {
+    // Apply partial fusion on index tree dialect for some compound expressions.
+    optPM.addPass(mlir::IndexTree::createKernelFusionPass());
+  }
 
   if (OptWorkspace)
   {
@@ -311,6 +331,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::tensorAlgebra::createSparseInputTensorDeclLoweringPass());
     optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());        // early lowering for dense input/output
     optPM.addPass(mlir::tensorAlgebra::createSparseOutputTensorDeclLoweringPass()); // early lowering for sparse output
+    //tensor.fill operation might be added after the partial fusion pass
+    optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass()); 
     //=============================================================================
 
     // =============================================================================

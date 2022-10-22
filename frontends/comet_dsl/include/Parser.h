@@ -1298,7 +1298,7 @@ namespace tensorAlgebra
 
       if (RHS.get()->getKind() == tensorAlgebra::ExprAST::Expr_Call)
       {
-        comet_debug() << __FILE__ << __LINE__ << " TensorOpExprAST rhs is Expr_Transpose\n";
+        comet_debug() << __FILE__ << __LINE__ << " TensorOpExprAST rhs is Expr_Call\n";
 
         //CallExprAST *call = llvm::cast<CallExprAST>(RHS.get());
         //llvm::StringRef callee = call->getCallee();
