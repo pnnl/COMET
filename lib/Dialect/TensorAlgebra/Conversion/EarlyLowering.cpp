@@ -105,10 +105,22 @@ namespace
 
     //  elementwise mul op in mix sparse dense case
     //  If elementwise, copy sparse input arrays for elementwise mul
-    int sparse_inputtensor_id = 0;
-
+    int sparse_inputtensor_id = -1;
     auto rhsComputeOp = computeOp.getDefiningOp()->getOperand(0).getDefiningOp();
-    comet_debug() << " SparseTensorConstructOp: ";
+    if (isa<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(0).getDefiningOp()))
+    {
+      sparse_inputtensor_id = 0;
+    }
+    else if (isa<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(1).getDefiningOp()))
+    {
+      sparse_inputtensor_id = 1;
+    }
+    else
+    {
+      assert(false && "SparseTensorConstructOp was not found as one of the operands for itCompute");
+    }
+
+    comet_debug() << " SparseTensorConstructOp: \n";
     comet_pdump(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
     auto sptensor_construct_op = cast<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
 
@@ -516,7 +528,7 @@ namespace
       comet_vdump(op);
       mlir::MLIRContext *ctx = rewriter.getContext();
       auto function = cast<FuncOp>(op->getParentOp());
-      comet_vdump(function);
+      //comet_vdump(function);
       auto module = function.getOperation()->getParentOfType<ModuleOp>();
       // module->dump();
 
@@ -557,7 +569,7 @@ namespace
             if (n_str.compare(0, op_str.size(), op_str) == 0)
             {
               comet_debug() << " FIND IT: " << i << "\n";
-              if (i == 1)
+              if (i == 2)
               {
                 isOutputTensor = true;
               }
@@ -595,7 +607,7 @@ namespace
             if (n_str.compare(0, op_str.size(), op_str) == 0)
             {
               comet_debug() << " FIND IT: " << i << "\n";
-              if (i == 1)
+              if (i == 2)
               {
                 // output of ta.elews_mul
                 isOutputTensor = true;
@@ -632,8 +644,8 @@ namespace
         }
         else if (isa<tensorAlgebra::TensorFillOp>(u1))
         {
-          // do nothing
-          comet_debug() << " the tensor is in fill op\n";
+          // TODO: should we add this warning for user?
+          //assert(false && " the sparse input tensor is using fill-op. Please use read_from_file() for sparse tensor inputs.");
         }
         else
         {
@@ -666,6 +678,7 @@ namespace
 
       comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
+      // tensor is sparse and input.
       if (isDense(formats_str, ", ") == false && isOutputTensor == false)
       {
         comet_debug() << " Sparse input tensor \n";
@@ -1358,7 +1371,7 @@ namespace
                   {
                     //assert(false && "Mix-mode sparse computation with sparse output not yet supported such as TTM (tensor times matrix)");
                     //TODO(gkestor): if the sparsity patterns is known
-                    //check the code, it always assume that the first tensor is sparse
+                    comet_debug() << "It is an mix mode element-wise multiplication\n";
                     mixModeEltWiseMultSparseTensorOutputLowering(computeOp,
                                                                  loc,
                                                                  rhsPerms,
@@ -1443,6 +1456,7 @@ namespace
 
           op.replaceAllUsesWith(sptensor);
           rewriter.replaceOp(op, sptensor);
+          // TODO removal of SparseOutputTensorDeclOp is not working. 
         } // for (auto u : op.getOperation()->getUsers())
       }
       else
@@ -1483,6 +1497,7 @@ namespace
 
         op.replaceAllUsesWith(tensorLoad);
         rewriter.replaceOp(op, tensorLoad);
+        // TODO removal of SparseOutputTensorDeclOp is not working.
       }
       comet_debug() << "--------------SparseOutputTensorDeclOpLowering in format end\n";
       return success();
@@ -1505,7 +1520,15 @@ namespace
       auto tensorFillOp = cast<tensorAlgebra::TensorFillOp>(op);
 
       auto tensorOperand = operands[0];
-      auto tensorLoadOp = cast<memref::TensorLoadOp>(tensorOperand.getDefiningOp());
+      mlir::memref::TensorLoadOp tensorLoadOp;
+      if (!isa<memref::TensorLoadOp>(tensorOperand.getDefiningOp()))
+      {
+        // TODO: may need to re-visit when doing reduction support.
+        // the user declared output to have zeros.
+        rewriter.eraseOp(op);
+        return success();  
+      }
+      tensorLoadOp = cast<memref::TensorLoadOp>(tensorOperand.getDefiningOp());
       auto memref = tensorLoadOp.memref();
       auto valueAttr = tensorFillOp.value();
       auto constantOp = rewriter.create<ConstantOp>(loc, valueAttr);
@@ -1553,7 +1576,11 @@ namespace
 /// Dense tensor declaration lowering
 void DenseTensorDeclLoweringPass::runOnFunction()
 {
-  comet_debug() << "DenseTensorDeclLoweringPass begin\n";
+  // a pass on DenseTensorDeclOp.
+  // if fill already there, then alloc and load op,
+  //    otherwise, allocAndInitialize and load.
+  // At end of the pass, load op replaces DenseTensorDeclOp.
+  comet_debug() << "---------------DenseTensorDeclLoweringPass begin\n";
   auto function = getFunction();
 
   ConversionTarget target(getContext());
@@ -1587,7 +1614,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
     signalPassFailure();
   }
 
-  comet_debug() << "Early lowering finished\n";
+  comet_debug() << "---------------DenseTensorDeclLoweringPass end\n";
 }
 
 /**********************************************************************/
@@ -1599,6 +1626,10 @@ void DenseTensorDeclLoweringPass::runOnFunction()
 //===----------------------------------------------------------------===//
 void SparseInputTensorDeclLoweringPass::runOnFunction()
 {
+  comet_debug() << "---------------SparseInputTensorDeclLoweringPass begin\n";
+  // this pass will determine if sparse tensor is output and input. 
+  // if input, replace with runtime calls to read_from_file...
+  // if output, replace with sp-tensor-output
   ConversionTarget target(getContext());
 
   target.addLegalDialect<LinalgDialect, StandardOpsDialect,
@@ -1631,6 +1662,7 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
     llvm::errs() << "Failed to Lower SparseInputTensorDeclLoweringPass\n";
     signalPassFailure();
   }
+  comet_debug() << "---------------SparseInputTensorDeclLoweringPass end\n";
 }
 
 /******************************************************************/
@@ -1638,7 +1670,9 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
 /*******************************************************************/
 void SparseOutputTensorDeclLoweringPass::runOnFunction()
 {
-  comet_debug() << "SparseOutputTensorDeclLoweringPass\n";
+  // Sparse output tensor declaration happens after lowering to index tree dialect
+  // this pass takes SparseOutputTensorDeclOp that was produced during SparseInputTensorDeclLoweringPass
+  comet_debug() << "---------------SparseOutputTensorDeclLoweringPass begin\n";
   ConversionTarget target(getContext());
 
   target.addLegalDialect<LinalgDialect,
@@ -1670,11 +1704,13 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
     llvm::errs() << "Failed to Lower STCOutputLowering\n";
     signalPassFailure();
   }
+  comet_debug() << "---------------SparseOutputTensorDeclLoweringPass end\n";
 }
 
 void TensorFillLoweringPass::runOnFunction()
 {
-  comet_debug() << "start TensorFillLoweringPass\n";
+  comet_debug() << "---------------TensorFillLoweringPass start\n";
+  // this is a simple pass that replaces tensor decl with linalg.fill
 
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
@@ -1686,9 +1722,10 @@ void TensorFillLoweringPass::runOnFunction()
     llvm::errs() << "Failed to Lower STCOutputLowering\n";
     signalPassFailure();
   }
+  comet_debug() << "---------------TensorFillLoweringPass end\n";
 }
 
-/// Create a pass for lowering dense tensor (inputs and utput) declaration operations in memref dialect
+/// Create a pass for lowering dense tensor (inputs and output) declaration operations in memref dialect
 std::unique_ptr<Pass> mlir::tensorAlgebra::createDenseTensorDeclLoweringPass()
 {
   return std::make_unique<DenseTensorDeclLoweringPass>();
