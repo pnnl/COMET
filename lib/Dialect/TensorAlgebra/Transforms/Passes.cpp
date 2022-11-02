@@ -836,17 +836,6 @@ void SimulationAnalysisPass::runOnFunction()
   comet_debug() << " end SimulationAnalysisPass pass \n";  
 }
 
-void SimulationAnalysisPass::runOnFunction()
-{
-  comet_debug() << " start SimulationAnalysisPass pass \n";
-  auto function = getFunction();
-
-  function.walk([&](tensorAlgebra::TensorMultOp op)
-              { SimulationAnalysis(op); });
-
-  comet_debug() << " end SimulationAnalysisPass pass \n";  
-}
-
 void LowerTAMulChainPass::runOnFunction()
 {
   auto function = getFunction();
