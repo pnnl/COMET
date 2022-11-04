@@ -647,6 +647,11 @@ namespace
           // TODO: should we add this warning for user?
           //assert(false && " the sparse input tensor is using fill-op. Please use read_from_file() for sparse tensor inputs.");
         }
+        else if (isa<tensorAlgebra::LabeledTensorOp>(u1))
+        {
+          // do nothing!
+          comet_debug() << " the tensor has use in LabeledTensorOp and this use will be ignored!\n";
+        }
         else
         {
           u1->dump();
