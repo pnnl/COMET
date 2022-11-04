@@ -1190,7 +1190,22 @@ namespace
 
       auto tens_beta = tensor_op.getBeta();
 
-      auto ret_op = builder.create<TensorSetOp>(loc(tensor_op.loc()), rhs, lhs);
+      // skip the use of labeledTensorOp in TensorSetOp
+      mlir::Value lhs_decl;
+      if (isa<DenseTensorDeclOp>(lhs.getDefiningOp()->getOperand(0).getDefiningOp()))
+      {
+        lhs_decl = lhs.getDefiningOp()->getOperand(0);
+      } 
+      else if (isa<SparseTensorDeclOp>(lhs.getDefiningOp()->getOperand(0).getDefiningOp()))
+      {
+        lhs_decl = lhs.getDefiningOp()->getOperand(0);
+      }
+      else
+      {
+        emitError(loc(tensor_op.loc()),
+                  "error: Tensor Decl Not Found! '");
+      }
+      auto ret_op = builder.create<TensorSetOp>(loc(tensor_op.loc()), rhs, lhs_decl);
       ret_op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
       return rhs;
@@ -1763,22 +1778,19 @@ namespace
         }
       }
 
+
+      // get return-type based on lhs-labels
+      std::vector<int64_t> result_dims = getDimSizes(lhs_labels_val);
+      mlir::Type return_type = getType(result_dims);
+
       // Create Tensor Declarations Ops and populate formats (for lhs)
-      mlir::Value lhsLT;
-      mlir::Type return_type; 
+      mlir::Value lhs_tensor;
       if (isa<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()))
-      {
-        return_type =
-            cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).getResult().getType();
-        
+      { 
         // for DenseTensorDeclOp create
         mlir::StringRef format_strref = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
-        mlir::Value lhs_tensor = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr);
-
-        // TODO: remove labeledTensorOp
-        lhsLT = builder.create<LabeledTensorOp>(
-            loc(transpose.loc()), return_type, lhs_tensor, lhs_labels_val);
+        lhs_tensor = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr);
 
         // populate formats 
         // assumes lhs and rhs formats are same
@@ -1788,17 +1800,10 @@ namespace
       }
       else if (isa<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()))
       {
-        return_type =
-            cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getResult().getType();
-
         // for SparseTensorDeclOp create
         mlir::StringRef format_strref = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
-        mlir::Value lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr);
-
-        // TODO: remove labeledTensorOp
-        lhsLT = builder.create<LabeledTensorOp>(
-            loc(transpose.loc()), return_type, lhs_tensor, lhs_labels_val);
+        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr);
 
         // populate formats 
         // assumes lhs and rhs formats are same
@@ -1810,10 +1815,9 @@ namespace
       auto strAttr = builder.getStrArrayAttr(formats);
 
       comet_debug() << " create TransposeOp\n";
-      mlir::Value t = builder.create<TransposeOp>(loc(transpose.loc()), return_type, //lhsLT.getType(),
+      mlir::Value t = builder.create<TransposeOp>(loc(transpose.loc()), return_type,
                                                   rhs_tensor, lhs_labels_val, affineMapArrayAttr, strAttr);
-      // TODO: replace with DenseTensorDeclOp or SparseTensorDeclOp
-      builder.create<TensorSetOp>(loc(transpose.loc()), t.getDefiningOp()->getResult(0), lhsLT);
+      builder.create<TensorSetOp>(loc(transpose.loc()), t.getDefiningOp()->getResult(0), lhs_tensor);
       comet_vdump(t);
 
       return t;
