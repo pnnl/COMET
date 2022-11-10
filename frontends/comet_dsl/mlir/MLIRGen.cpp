@@ -403,7 +403,7 @@ namespace
 
       comet_vdump(lhs);
       comet_vdump(rhs);
-      comet_debug() << " " << lhsAST->getKind() << " " << rhsAST->getKind();
+      comet_debug() << " " << lhsAST->getKind() << " " << rhsAST->getKind() << "\n";
 
       int op = 0;
       if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var &&
@@ -412,6 +412,29 @@ namespace
         comet_debug() << "\n"
                       << __LINE__ << " rhsAST and lhsAST are all Expr_Var\n";
 
+        switch (binop.getOp())
+        {
+        case '+':
+          op = '+';
+          break;
+        case '-':
+          op = '-';
+          break;
+        case '*':
+          op = '*';
+          break;
+        case '/':
+          op = '/';
+          break;
+        default:
+          comet_debug() << "ERROR: unsupported operator type: ASCII Code(" << binop.getOp() << ")\n";
+        }
+        mlir::IntegerAttr opAttr = builder.getI32IntegerAttr(op);
+        return builder.create<ScalarOp>(location, builder.getF64Type(), rhs, lhs, opAttr);
+      }
+      else if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Num)
+      {
+        comet_debug() << "rhsAST is Expr_Num \n";
         switch (binop.getOp())
         {
         case '+':
