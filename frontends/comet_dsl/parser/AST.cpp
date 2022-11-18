@@ -68,6 +68,7 @@ namespace
     void dump(IndexLabelDeclExprAST *node);
     void dump(TensorDeclExprAST *node);
     void dump(LabeledTensorExprAST *node);
+    void dump(ForLoopExprAST *node);
     void dump(TensorOpExprAST *node);
     void dump(PrintElapsedTimeExprAST *node);
     void dump(GetTimeExprAST *node);
@@ -116,6 +117,7 @@ void ASTDumper::dump(ExprAST *expr)
   dispatch(IndexLabelDeclExprAST);
   dispatch(TensorDeclExprAST);
   dispatch(LabeledTensorExprAST);
+  dispatch(ForLoopExprAST);
   dispatch(TensorOpExprAST);
   dispatch(PrintElapsedTimeExprAST);
   dispatch(GetTimeExprAST);
@@ -344,6 +346,15 @@ void ASTDumper::dump(LabeledTensorExprAST *node)
 
   llvm::errs() << "\b\b"
                << "] " << loc(node) << "\n";
+}
+
+void ASTDumper::dump(ForLoopExprAST *node)
+{
+  INDENT();
+  llvm::errs() << "For Loop, it-var: " << node->getName() << " (";
+
+  llvm::errs() << node->getBegin() << "," << node->getEnd() << "," << node->getIncrement() 
+               << ") " << loc(node) << "\n";
 }
 
 void ASTDumper::dump(TensorOpExprAST *node)

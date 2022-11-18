@@ -70,6 +70,7 @@ namespace tensorAlgebra
   enum Token : int
   {
     tok_semicolon = ';',
+    tok_colon = ':',
     tok_parenthese_open = '(',
     tok_parenthese_close = ')',
     tok_bracket_open = '{',
@@ -100,7 +101,9 @@ namespace tensorAlgebra
     tok_transpose = -15,
     tok_elews = -16,
     tok_semiring = -17,
-    tok_monoid = -18
+    tok_monoid = -18,
+    tok_for = -19,  // for loop
+    tok_end = -20   // for loop-body end
   };
 
   enum SemiringOp : int
@@ -340,6 +343,8 @@ namespace tensorAlgebra
           return tok_int;
         if (IdentifierStr == "transpose")
           return tok_transpose;
+        if (IdentifierStr == "for")
+          return tok_for;
 
         comet_debug() << "Identifier:" << IdentifierStr << "\n";
         return tok_identifier;
@@ -381,7 +386,7 @@ namespace tensorAlgebra
         while (LastChar != tok_quotation)
         {
           comet_debug() << IdentifierStr << "\n";
-          if (LastChar == tok_semicolon || LastChar == tok_parenthese_open || LastChar == tok_parenthese_close || LastChar == tok_bracket_open || LastChar == tok_bracket_close || LastChar == tok_sbracket_open || LastChar == tok_sbracket_close)
+          if (LastChar == tok_semicolon || LastChar == tok_colon || LastChar == tok_parenthese_open || LastChar == tok_parenthese_close || LastChar == tok_bracket_open || LastChar == tok_bracket_close || LastChar == tok_sbracket_open || LastChar == tok_sbracket_close)
           {
             comet_debug() << "not allow special tokens in strings\n";
             llvm::errs() << "Special tokens in strings are not allowed, source location (" << curLineNum << ", " << curCol << ")\n";

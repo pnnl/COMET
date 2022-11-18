@@ -84,7 +84,8 @@ namespace tensorAlgebra
       Expr_LabeledTensor,
       Expr_Tensor,
       Expr_PrintElapsed,
-      Expr_GetTime
+      Expr_GetTime,
+      Expr_ForLoop
     };
 
     ExprAST(ExprASTKind kind, Location location)
@@ -465,6 +466,33 @@ namespace tensorAlgebra
     /// LLVM style RTTI
     static bool classof(const ExprAST *C) { return C->getKind() == Expr_Call; }
   };
+
+  /// Expression class for loops, i.e. for index in range(start, end, increment);
+  class ForLoopExprAST : public ExprAST
+  {
+    std::string name;
+    int64_t begin;
+    int64_t end;
+    int64_t increment;
+
+  public:
+    ForLoopExprAST(Location loc, const std::string &name, int64_t begin,
+                          int64_t end, int64_t increment = 1)
+        : ExprAST(Expr_ForLoop, loc), name(name), begin(begin), end(end),
+          increment(increment) {}
+
+    llvm::StringRef getName() { return name; }
+    int64_t getBegin() { return begin; }
+    int64_t getEnd() { return end; }
+    int64_t getIncrement() { return increment; }
+
+    /// LLVM style RTTI
+    static bool classof(const ExprAST *C)
+    {
+      return C->getKind() == Expr_ForLoop;
+    }
+  };
+
 
   /// Expression class for builtin print calls.
   class PrintExprAST : public ExprAST

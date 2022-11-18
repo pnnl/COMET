@@ -236,6 +236,92 @@ namespace tensorAlgebra
       return v;
     }
 
+    /// forExpr ::= for var in range(start, end, step)
+    /// supported alternatives:
+    ///     for var in range(end)
+    ///     for var in range(start, end)  # default step: 1 
+    std::unique_ptr<ExprAST> parseForLoop()
+    {
+      std::vector<std::unique_ptr<ForLoopExprAST>> ret;
+
+      auto loc = lexer.getLastLocation();
+
+      lexer.getNextToken(); // eat 'for'
+      std::string id(lexer.getId());
+      comet_debug() << "The id is: " << id << "\n";
+      lexer.getNextToken(); // eat var-name
+
+      std::unique_ptr<VarType> type; // Type is optional, it can be inferred
+      if (lexer.getCurToken() == '<')
+      {
+        type = parseType();
+        if (!type)
+          return nullptr;
+      }
+
+      if (!type)
+        type = std::make_unique<VarType>();
+
+      lexer.getNextToken(); // eat 'in'
+      lexer.getNextToken(); // eat 'range'
+    
+      if (lexer.getCurToken() != '(')
+      { // tested
+        return parseError<ExprAST>("(", "to start for-loop range");
+      }
+
+      lexer.consume(Token('(')); // eat (
+      
+      int64_t start = 0;
+      int64_t end = start;
+      int64_t incr = 1;
+      if (lexer.getCurToken() == tok_number)
+      {
+        start = lexer.getValue();
+        lexer.getNextToken(); // eat start
+
+        if (lexer.getCurToken() == ',')
+        {
+          lexer.consume(Token(',')); // eat ,
+        }
+        else if (lexer.getCurToken() == ')')  // (32)
+        {
+          end = start;
+          start = 0;
+          lexer.consume(Token(')')); // eat )
+          return std::make_unique<ForLoopExprAST>(loc, id, start, end, incr); 
+        }
+        else
+        {
+          return parseError<ExprAST>(")", "to end for-loop range");
+        }
+      }
+
+      if (lexer.getCurToken() == tok_number)
+      {
+        end = lexer.getValue();
+        lexer.getNextToken(); // eat num
+      }
+
+      // int64_t incr = 1;
+      if (lexer.getCurToken() == ',')
+      {
+        lexer.consume(Token(',')); // eat ,
+        incr = lexer.getValue();
+        lexer.getNextToken(); // eat num
+      }
+
+      if (lexer.getCurToken() != ')')
+      { // tested
+        return parseError<ExprAST>(")", "to end for-loop range");
+      }
+
+      lexer.consume(Token(')'));
+
+      return std::make_unique<ForLoopExprAST>(loc, id, start, end, incr); 
+
+    }
+
     /// identifierexpr
     ///   ::= identifier
     ///   ::= identifier '(' expression ')'
@@ -432,6 +518,10 @@ namespace tensorAlgebra
         return nullptr;
       case tok_transpose:
         return ParseTranspose();
+      case tok_for:
+        return parseForLoop();
+      case ':':  // for
+        return nullptr;
       }
       return nullptr;
     }
@@ -1351,6 +1441,7 @@ namespace tensorAlgebra
         return parseError<ExprASTList>("{", "to begin block");
       lexer.consume(Token('{'));
 
+      bool itsForLoop = false;
       auto exprList = std::make_unique<ExprASTList>();
 
       // Ignore empty expressions: swallow sequences of semicolons.
@@ -1440,6 +1531,14 @@ namespace tensorAlgebra
             return nullptr;
           exprList->push_back(std::move(varOp));
         }
+        else if (lexer.getCurToken() == tok_for)
+        {
+          auto forLoop = parseForLoop();
+          if (!forLoop)
+            return nullptr;
+          itsForLoop = true;
+          exprList->push_back(std::move(forLoop));
+        }
         else
         {
           auto loc = lexer.getLastLocation();
@@ -1449,9 +1548,14 @@ namespace tensorAlgebra
           exprList->push_back(std::move(expr));
         }
         // Ensure that elements are separated by a semicolon.
-        if (lexer.getCurToken() != ';')
+        if (!itsForLoop && lexer.getCurToken() != ';')  // skip this check for for-loops since they end with colon
           return parseError<ExprASTList>(";", "after expression");
 
+        if (itsForLoop) 
+        {
+          while(lexer.getCurToken() == ':')   // consume colon for for-loops
+            lexer.consume(Token(':'));
+        }
         // Ignore empty expressions: swallow sequences of semicolons.
         while (lexer.getCurToken() == ';')
           lexer.consume(Token(';'));
