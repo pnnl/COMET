@@ -1662,6 +1662,40 @@ namespace
       return t;
     }
 
+    /// Codegen for-loop 
+    mlir::LogicalResult mlirGen(ForLoopExprAST &forLoop)
+    {
+      comet_debug() << "codegen: ForLoopExprAST \n";
+
+      mlir::Value lo = builder.create<mlir::ConstantIndexOp>(
+          loc(forLoop.loc()), forLoop.getBegin());
+      mlir::Value hi = builder.create<mlir::ConstantIndexOp>(loc(forLoop.loc()),
+                                                             forLoop.getEnd());
+      mlir::Value step = builder.create<mlir::ConstantIndexOp>(
+          loc(forLoop.loc()), forLoop.getIncrement());
+
+      mlir::Value value = builder.create<IndexLabelStaticOp>(loc(forLoop.loc()), lo, hi, step);
+    
+      builder.create<ForLoopStartOp>(loc(forLoop.loc()), value, forLoop.getName());
+
+      if (failed(declare(forLoop.getName(), value)))
+        return mlir::failure();
+
+      comet_debug() << "codegen: ForLoopExprAST done \n";
+      return mlir::success();
+    }
+
+    /// Codegen for-loop 
+    mlir::LogicalResult mlirGen(ForLoopEndExprAST &forLoopEnd)
+    {
+      comet_debug() << "codegen: ForLoopEndExprAST \n";
+
+      builder.create<ForLoopEndOp>(loc(forLoopEnd.loc()));
+
+      comet_debug() << "codegen: ForLoopEndExprAST done \n";
+      return mlir::success();
+    }
+
     /// Codegen a list of expression, return failure if one of them hit an error.
     mlir::LogicalResult mlirGen(ExprASTList &blockAST)
     {
@@ -1723,6 +1757,20 @@ namespace
         if (auto *printElapsedTime = dyn_cast<PrintElapsedTimeExprAST>(expr.get()))
         {
           if (mlir::failed(mlirGen(*printElapsedTime)))
+            return mlir::success();
+          continue;
+        }
+
+        if (auto *forLoopStart = dyn_cast<ForLoopExprAST>(expr.get()))
+        {
+          if (mlir::failed(mlirGen(*forLoopStart)))
+            return mlir::success();
+          continue;
+        }
+
+        if (auto *forLoopEnd = dyn_cast<ForLoopEndExprAST>(expr.get()))
+        {
+          if (mlir::failed(mlirGen(*forLoopEnd)))
             return mlir::success();
           continue;
         }
