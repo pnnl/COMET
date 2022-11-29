@@ -85,7 +85,8 @@ namespace tensorAlgebra
       Expr_Tensor,
       Expr_PrintElapsed,
       Expr_GetTime,
-      Expr_ForLoop
+      Expr_ForLoop,
+      Expr_ForEnd
     };
 
     ExprAST(ExprASTKind kind, Location location)
@@ -493,6 +494,17 @@ namespace tensorAlgebra
     }
   };
 
+  /// Expression class for end of loops, i.e. end
+  class ForLoopEndExprAST : public ExprAST
+  {
+    public:
+      ForLoopEndExprAST(Location loc) : ExprAST (Expr_ForEnd, loc) {}
+
+    static bool classof(const ExprAST *C)
+    {
+      return C->getKind() == Expr_ForEnd;
+    }
+  };
 
   /// Expression class for builtin print calls.
   class PrintExprAST : public ExprAST

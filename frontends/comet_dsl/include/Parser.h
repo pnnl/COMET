@@ -236,14 +236,12 @@ namespace tensorAlgebra
       return v;
     }
 
-    /// forExpr ::= for var in range(start, end, step)
+    /// forExpr ::= for %index in range(%start, %end, %step)
     /// supported alternatives:
-    ///     for var in range(end)
-    ///     for var in range(start, end)  # default step: 1 
+    ///     for %index in range(%end)
+    ///     for %index in range(%start, %end)  # default step: 1 
     std::unique_ptr<ExprAST> parseForLoop()
     {
-      std::vector<std::unique_ptr<ForLoopExprAST>> ret;
-
       auto loc = lexer.getLastLocation();
 
       lexer.getNextToken(); // eat 'for'
@@ -320,6 +318,13 @@ namespace tensorAlgebra
 
       return std::make_unique<ForLoopExprAST>(loc, id, start, end, incr); 
 
+    }
+
+    std::unique_ptr<ExprAST> parseForLoopEnd()
+    {
+      lexer.getNextToken(); // eat 'end'
+      auto loc = lexer.getLastLocation();
+      return std::make_unique<ForLoopEndExprAST>(loc); 
     }
 
     /// identifierexpr
@@ -522,6 +527,8 @@ namespace tensorAlgebra
         return parseForLoop();
       case ':':  // for
         return nullptr;
+      case tok_end:
+        return parseForLoopEnd();
       }
       return nullptr;
     }
@@ -1538,6 +1545,13 @@ namespace tensorAlgebra
             return nullptr;
           itsForLoop = true;
           exprList->push_back(std::move(forLoop));
+        }
+        else if (lexer.getCurToken() == tok_end)
+        {
+          auto forLoopEnd = parseForLoopEnd();
+          if (!forLoopEnd)
+            return nullptr;
+          exprList->push_back(std::move(forLoopEnd));
         }
         else
         {

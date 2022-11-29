@@ -345,6 +345,8 @@ namespace tensorAlgebra
           return tok_transpose;
         if (IdentifierStr == "for")
           return tok_for;
+        if (IdentifierStr == "end")
+          return tok_end;
 
         comet_debug() << "Identifier:" << IdentifierStr << "\n";
         return tok_identifier;
