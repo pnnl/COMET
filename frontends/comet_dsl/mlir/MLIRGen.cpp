@@ -1673,13 +1673,8 @@ namespace
                                                              forLoop.getEnd());
       mlir::Value step = builder.create<mlir::ConstantIndexOp>(
           loc(forLoop.loc()), forLoop.getIncrement());
-
-      mlir::Value value = builder.create<IndexLabelStaticOp>(loc(forLoop.loc()), lo, hi, step);
     
-      builder.create<ForLoopStartOp>(loc(forLoop.loc()), value, forLoop.getName());
-
-      if (failed(declare(forLoop.getName(), value)))
-        return mlir::failure();
+      builder.create<ForLoopBeginOp>(loc(forLoop.loc()), lo, hi, step, forLoop.getName());
 
       comet_debug() << "codegen: ForLoopExprAST done \n";
       return mlir::success();

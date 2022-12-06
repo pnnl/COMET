@@ -441,16 +441,16 @@ def PrintElapsedTimeOp : TA_Op<"print_elapsed_time"> {
   let arguments = (ins F64:$start, F64:$end);
 }
 
-def ForLoopStartOp : TA_Op<"start_for_loop">
+def ForLoopBeginOp : TA_Op<"begin_for_loop">
 {
   let summary = "identifies the start of a for-loop body";
   let description = [{
-    The "start_for_loop" identifies the start of a for-loop body
+    The "begin_for_loop" identifies the start of a for-loop body
   }];
 
-  // the inputs are 1) index_label_static (index start, index end, index step)
-  // and 2) string-attr with info about the iterator
-  let arguments = (ins Range:$label, StrAttr:$iterator);
+  // the inputs are 1) index start, 2) index end, 3) index step,
+  // and 4) string-attr with name of the iterator (this info to be used).
+  let arguments = (ins Index:$min, Index:$max, Index:$step, StrAttr:$iterator);
 }
 
 def ForLoopEndOp : TA_Op<"end_for_loop"> {
