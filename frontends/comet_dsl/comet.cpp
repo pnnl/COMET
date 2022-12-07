@@ -338,6 +338,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // =============================================================================
     // Lowering of other operations such as transpose, sum, etc. to SCF dialect
     // =============================================================================
+    optPM.addPass(mlir::tensorAlgebra::createPCToLoopsLoweringPass());
     optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
     optPM.addPass(mlir::tensorAlgebra::createSUMLowerToSCFPass());
     // If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.

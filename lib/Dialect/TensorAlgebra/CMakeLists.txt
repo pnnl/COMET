@@ -6,6 +6,7 @@ add_llvm_library(COMETTensorAlgebra
   Conversion/SUMLowerToSCF.cpp
   Conversion/TransposeLowering.cpp
   Conversion/LateLowering.cpp 
+  Conversion/LowerPCToLoops.cpp
 
   Transforms/Transforms.cpp
   Transforms/LinalgTransforms.cpp

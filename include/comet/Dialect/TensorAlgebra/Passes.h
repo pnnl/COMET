@@ -91,6 +91,9 @@ namespace mlir
         /// Create a pass for lowering sparse TA operations to SCFDimAttrGPU
         std::unique_ptr<Pass> createSCFToSCFParallelPass();
 
+        /// Create a pass for lowering programming constructs to SCF ops
+        std::unique_ptr<Pass> createPCToLoopsLoweringPass();
+
     } // end namespace tensorAlgebra
 } // end namespace mlir
 
