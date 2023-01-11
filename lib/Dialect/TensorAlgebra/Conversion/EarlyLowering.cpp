@@ -1292,6 +1292,8 @@ namespace
             bool completed = false;
             for (auto uLHS : lhsOp.getOperation()->getUsers())
             {
+              comet_debug() << " lhsOp user: ";
+              comet_pdump(uLHS);
               if (isa<indexTree::IndexTreeComputeOp>(uLHS))
               {
                 completed = true;
@@ -1389,7 +1391,7 @@ namespace
             }
 
             if (!completed)
-              assert(false && "Sparse tensor output tensor declaration was not completed\n");
+              assert(false && "Sparse tensor output tensor declaration was not completed. There is no user of sparse tensor declaration\n");
           }
           else if (isa<indexTree::IndexTreeComputeRHSOp>(u))
           {

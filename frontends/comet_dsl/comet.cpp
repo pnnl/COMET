@@ -29,16 +29,15 @@
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/IndexTree/IR/ITDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
+#include "MLIRGen.h"
+#include "Parser.h"
+
 #include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
 #include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
 #include "mlir/Dialect/Linalg/Passes.h"
-
 #include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
 #include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVMPass.h"
-#include "MLIRGen.h"
-#include "Parser.h"
-
 #include "mlir/IR/Verifier.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
@@ -65,23 +64,6 @@ using namespace tensorAlgebra;
 using namespace mlir::indexTree;
 
 #define DEBUG_TYPE "comet_dsl"
-
-// *********** For debug purpose *********//
-#ifndef DEBUG_MODE_COMET_DSL
-#define DEBUG_MODE_COMET_DSL
-#endif
-
-#ifdef DEBUG_MODE_COMET_DSL
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n) n->dump()
-#define comet_vdump(n) n.dump()
-#else
-#define comet_debug() llvm::nulls()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
-// *********** For debug purpose *********//
-
 namespace cl = llvm::cl;
 
 static cl::opt<std::string> inputFilename(cl::Positional,
@@ -142,7 +124,6 @@ static cl::opt<bool> OptDenseTransposeOp("opt-dense-transpose",
 static cl::opt<bool> OptWorkspace("opt-comp-workspace", cl::init(false),
                                   cl::desc("Optimize sparse output code generation while reducing iteration space for nonzero elements"));
 
-
 // The details of the fusion algorithm can be found in the following paper.
 // ReACT: Redundancy-Aware Code Generation for Tensor Expressions.
 // Tong Zhou, Ruiqin Tian, Rizwan A Ashraf, Roberto Gioiosa, Gokcen Kestor, Vivek Sarkar.
@@ -151,7 +132,7 @@ static cl::opt<bool> OptWorkspace("opt-comp-workspace", cl::init(false),
 //  Partial Fusion (ReACT Fusion) on Index Tree dialect
 //  =============================================================================
 static cl::opt<bool> OptKernelFusion("opt-fusion", cl::init(false),
-                                        cl::desc("Output IT dialect after redundancy-aware fusion"));
+                                     cl::desc("Output IT dialect after redundancy-aware fusion"));
 
 // =============================================================================
 // TTGT reformulation for tensor contraction operations
@@ -159,21 +140,17 @@ static cl::opt<bool> OptKernelFusion("opt-fusion", cl::init(false),
 static cl::opt<bool> IsLoweringTCtoTTGT("convert-tc-to-ttgt",
                                         cl::desc("Output IR after lowering dense tensor contractions operations through a TTGT approach"));
 
-
 // =============================================================================
 // Lowering TA operations to IT dialect
 // =============================================================================
 static cl::opt<bool> IsLoweringtoIndexTree("convert-ta-to-it", // Lower sparse/dense mult (semiring) and elemwise (monoid) ops to index-tree dialect
                                            cl::desc("Output IT dialect after processing dense sparse/dense mult and elemwise ops"));
 
-
 // =============================================================================
 // Lowering IT operations to loops
 // =============================================================================
 static cl::opt<bool> IsLoweringtoSCF("convert-to-loops", // Lower sparse/dense mult (semiring) and elemwise (monoid) ops to index-tree dialect
                                      cl::desc("Output IR after processing all ops"));
-
-
 
 // =============================================================================
 // Utility functions
@@ -262,16 +239,59 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   }
 
   optPM.addPass(mlir::tensorAlgebra::createLowerTAMulChainPass()); // Lowering for chain operations
-  optPM.addPass(mlir::tensorAlgebra::createPreLoweringPass());     // Creating tensor declarations for temporal tensors in chain operations
+  //  =============================================================================
 
-  // Sparse input and dense input/output tensor declarations needed be lowered for TTGT
+  //  =============================================================================
+  //  Creating tensor declarations for temporal tensors in compound expressions, preprocessing.
+  //  =============================================================================
+  optPM.addPass(mlir::tensorAlgebra::createPreLoweringPass()); // Creating tensor declarations for temporal tensors in chain operations
+  //  =============================================================================
+
+  // ===================================================================================
+  // Lowering of TC (tensor contraction) operation to Index Tree dialect
+  // Also performs optimization at the Index Tree dialect
+  // ===================================================================================
+  if (IsLoweringtoIndexTree || emitIT)
+  {
+    /// Generate the index tree IR
+    optPM.addPass(mlir::IndexTree::createIndexTreePass());
+
+    // Dump index tree dialect.
+    if (emitIT)
+    {
+      if (mlir::failed(pm.run(*module)))
+        return 4;
+      return 0;
+    }
+  }
+
+  if (OptKernelFusion)
+  {
+    // Apply partial fusion on index tree dialect for some compound expressions.
+    optPM.addPass(mlir::IndexTree::createKernelFusionPass());
+  }
+
+  if (OptWorkspace)
+  {
+    // Optimized workspace transformations, reduce iteration space for nonzero elements
+    optPM.addPass(mlir::IndexTree::createCompressedWorkspaceTransformsPass());
+  }
+  // =============================================================================
+
+  // =============================================================================
+  // Early lowering for the following passes to lower IndexTree and TA dialect to loops
+  // =============================================================================
+  /// Early lowering pases based on the sparsity property of inputs/outputs
+  /// Sparse input tensor declararion should be lowered before dense input tensor declaration
   optPM.addPass(mlir::tensorAlgebra::createSparseInputTensorDeclLoweringPass()); // sparse input tensor declaration lowering
   optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());       // dense input tensor declaration lowering
   optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass());
+  // =============================================================================
 
-  /// TTGT reformulation for dense tensor contraction operations
+  // TTGT reformulation for dense tensor contraction operations
   if (IsLoweringTCtoTTGT)
   {
+    // Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
     optPM.addPass(mlir::tensorAlgebra::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
   }
 
@@ -295,44 +315,16 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulMicroKernelPass());
   }
 
-  // ===================================================================================
-  // Lowering of TC (tensor contraction) operation to Index Tree dialect, then SCF dialect
-  // ===================================================================================
-  if (IsLoweringtoIndexTree || emitIT)
-  {
-    /// Generate the index tree IR
-    optPM.addPass(mlir::IndexTree::createIndexTreePass());
-
-    // Dump index tree dialect.
-    if (emitIT)
-    {
-      if (mlir::failed(pm.run(*module)))
-        return 4;
-      return 0;
-    }
-  }
-  if (OptKernelFusion)
-  {
-    // Apply partial fusion on index tree dialect for some compound expressions.
-    optPM.addPass(mlir::IndexTree::createKernelFusionPass());
-  }
-
-  if (OptWorkspace)
-  {
-    // Optimized workspace transformations, reduce iteration space for nonzero elements
-    optPM.addPass(mlir::IndexTree::createCompressedWorkspaceTransformsPass());
-  }
   // =============================================================================
-
+  // Lowering all the operations to loops
+  // =============================================================================
   if (IsLoweringtoSCF)
   {
-    /// Early lowering pases based on the sparsity property of inputs/outputs
-    /// Sparse input tensor declararion should be lowered before dense input tensor declaration
-    optPM.addPass(mlir::tensorAlgebra::createSparseInputTensorDeclLoweringPass());
+    /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
     optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());        // early lowering for dense input/output
     optPM.addPass(mlir::tensorAlgebra::createSparseOutputTensorDeclLoweringPass()); // early lowering for sparse output
-    //tensor.fill operation might be added after the partial fusion pass
-    optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass()); 
+    // The partial Fusion pass might add new tensor.fill operations
+    optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass());
     //=============================================================================
 
     // =============================================================================
