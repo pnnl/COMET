@@ -748,7 +748,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
 void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location loc)
 {
-  auto comp_worksp_opt = builder.getBoolAttr(workspace);
+  auto comp_worksp_opt = builder.getBoolAttr(compressedworkspace);
   for (auto computeOp : computeOps)
   {
     /// 1. get the opFormats and opPerms of the computeOp

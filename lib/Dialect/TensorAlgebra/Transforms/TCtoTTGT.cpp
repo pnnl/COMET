@@ -692,7 +692,7 @@ namespace
         comet_debug() << "\n";
         if (plan.swapAB_)
         {
-          // TODO-gokcen - there is error with the building process
+          // TODO(gkestor) - there is error with the building process
           matmulop = rewriter.create<linalg::MatmulOp>(
               loc, ValueRange{rhs2Reshape, rhs1Reshape},
               ValueRange{lhsReshape});
