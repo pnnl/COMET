@@ -302,7 +302,7 @@ namespace
 
     /// Emit a binary operation
     mlir::Value mlirGen(BinaryExprAST &binop,
-                        const std::set<std::string> &out_lbls = {})
+                        const std::set<std::string> &out_lbls = {}, std::string out_format = "")
     {
       comet_debug() << " mlirGen for  BinaryExprAST \n";
       // First emit the operations for each side of the operation before emitting
@@ -970,9 +970,17 @@ namespace
         {
           formats.push_back("CSR");
         }
-        else
+        else if (formats[0].compare("Dense") == 0 && formats[1].compare("Dense") == 0)
         {
           formats.push_back("Dense");
+        }
+        else if (out_format.length() > 0) // non-empty format string provided.
+        {
+          formats.push_back(out_format);
+        }
+        else
+        {
+          assert (false && " the format of output tensor could not be determined during generation of binOp");
         }
         comet_debug() << " formats.size(): " << formats.size() << "\n";
         auto strAttr = builder.getStrArrayAttr(formats);
@@ -1194,6 +1202,27 @@ namespace
       }
       comet_debug() << " lhs is LabeledTensorOp \n";
 
+      // skip the use of labeledTensorOp in TensorSetOp
+      mlir::Value lhs_decl;
+      std::string out_format;
+      if (isa<DenseTensorDeclOp>(lhs.getDefiningOp()->getOperand(0).getDefiningOp()))
+      {
+        lhs_decl = lhs.getDefiningOp()->getOperand(0);
+        out_format = "Dense";
+      } 
+      else if (isa<SparseTensorDeclOp>(lhs.getDefiningOp()->getOperand(0).getDefiningOp()))
+      {
+        lhs_decl = lhs.getDefiningOp()->getOperand(0);
+        auto lhs_decl_op = cast<SparseTensorDeclOp>(lhs_decl.getDefiningOp());
+        std::string formatStr (lhs_decl_op.formatAttr().cast<mlir::StringAttr>().getValue());
+        out_format = formatStr; 
+      }
+      else
+      {
+        emitError(loc(tensor_op.loc()),
+                  "error: Tensor Decl Not Found! '");
+      }
+
       auto out_lbls_vec =
           cast<tensorAlgebra::LabeledTensorExprAST>(*tensor_op.getLHS())
               .getLabelNames();
@@ -1206,28 +1235,13 @@ namespace
       }
       comet_debug() << "\n";
 
-      auto rhs = mlirGen(*tensor_op.getRHS(), out_labels);
+      auto rhs = mlirGen(*tensor_op.getRHS(), out_labels, out_format);
       if (!rhs)
         return nullptr;
       comet_debug() << " get rhs\n";
 
       auto tens_beta = tensor_op.getBeta();
 
-      // skip the use of labeledTensorOp in TensorSetOp
-      mlir::Value lhs_decl;
-      if (isa<DenseTensorDeclOp>(lhs.getDefiningOp()->getOperand(0).getDefiningOp()))
-      {
-        lhs_decl = lhs.getDefiningOp()->getOperand(0);
-      } 
-      else if (isa<SparseTensorDeclOp>(lhs.getDefiningOp()->getOperand(0).getDefiningOp()))
-      {
-        lhs_decl = lhs.getDefiningOp()->getOperand(0);
-      }
-      else
-      {
-        emitError(loc(tensor_op.loc()),
-                  "error: Tensor Decl Not Found! '");
-      }
       auto ret_op = builder.create<TensorSetOp>(loc(tensor_op.loc()), rhs, lhs_decl);
       ret_op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
@@ -1305,13 +1319,13 @@ namespace
 
     /// Dispatch codegen for the right expression subclass using RTTI.
     mlir::Value mlirGen(ExprAST &expr,
-                        const std::set<std::string> out_lbls = {})
+                        const std::set<std::string> out_lbls = {}, std::string out_format = "")
     {
       comet_debug() << " mlirGen ExprAST " << expr.getKind() << " \n";
       switch (expr.getKind())
       {
       case tensorAlgebra::ExprAST::Expr_BinOp:
-        return mlirGen(cast<BinaryExprAST>(expr), out_lbls);
+        return mlirGen(cast<BinaryExprAST>(expr), out_lbls, out_format);
       case tensorAlgebra::ExprAST::Expr_Var:
         return mlirGen(cast<VariableExprAST>(expr));
       case tensorAlgebra::ExprAST::Expr_Literal:
