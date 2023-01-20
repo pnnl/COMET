@@ -1,8 +1,8 @@
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> compound_spmm_dTranspose_CSRxDense.mlir
-# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-std-to-llvm compound_spmm_dTranspose_CSRxDense.mlir &> compound_spmm_dTranspose_CSRxDense.llvm
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> CSR_mult_dTranspose.mlir
+# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-std-to-llvm CSR_mult_dTranspose.mlir &> CSR_mult_dTranspose.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
 # RUN: export SORT_TYPE=SEQ_QSORT
-# RUN: mlir-cpu-runner compound_spmm_dTranspose_CSRxDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner CSR_mult_dTranspose.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {
 	#IndexLabel Declarations

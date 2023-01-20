@@ -1,6 +1,8 @@
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> compound_dTranspose_mult_DensexDense.mlir
-# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-std-to-llvm compound_dTranspose_mult_DensexDense.mlir &> compound_dTranspose_mult_DensexDense.llvm
-# RUN: mlir-cpu-runner compound_dTranspose_mult_DensexDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> dTranspose_mult_Dense.mlir
+# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-std-to-llvm dTranspose_mult_Dense.mlir &> dTranspose_mult_Dense.llvm
+# RUN: mlir-cpu-runner dTranspose_mult_Dense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+#TODO(gkestor): read dense input from file
 
 def main() {
 	#IndexLabel Declarations

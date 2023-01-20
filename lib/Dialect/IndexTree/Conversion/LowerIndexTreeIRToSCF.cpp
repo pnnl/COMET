@@ -77,9 +77,9 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-// #define DEBUG_MODE_LowerIndexTreeIRToSCFPass
-// #endif
+#ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#define DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -912,6 +912,8 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
     comet_debug() << " ";
     comet_vdump(notAlreadySet);
     auto if_notAlreadySet = rewriter.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
+    comet_debug() << " If branch:\n";
+    comet_vdump(if_notAlreadySet);
 
     // if-then region corresponding to if_notAlreadySet instruction.
     // if (&if_notAlreadySet.thenRegion())
@@ -1055,6 +1057,9 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       comet_debug() << " sparse_inputtensor_id: " << sparse_inputtensor_id << "\n";
       Value denseInput_is_nonzero = rewriter.create<mlir::CmpFOp>(loc, CmpFPredicate::ONE, allLoads[dense_inputtensor_id], const_f64_0);
       auto if_nonzero = rewriter.create<scf::IfOp>(loc, denseInput_is_nonzero, /*WithElseRegion*/ false);
+      comet_debug() << " If branch:\n";
+      comet_vdump(if_nonzero);
+
       if (!if_nonzero.thenRegion().empty())
       {
 
@@ -1198,6 +1203,8 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
           auto Cnnz_index_new = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
           auto has_nnz_row = rewriter.create<mlir::CmpIOp>(loc, CmpIPredicate::ne, Cnnz_index_new, Cnnz_index_old);
           auto has_nnz_row_ifOp = rewriter.create<scf::IfOp>(loc, has_nnz_row, /*WithElseRegion*/ false);
+          comet_debug() << " If branch:\n";
+          comet_vdump(has_nnz_row_ifOp);
 
           if (!has_nnz_row_ifOp.thenRegion().empty())
           {
@@ -1354,7 +1361,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
   auto f64Type = rewriter.getF64Type();
   auto indexType = IndexType::get(rootOp.getContext());
-  //Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
+  // Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
   Value const_f64_0 = rewriter.create<mlir::ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
   Value const_i1_0 = rewriter.create<mlir::ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
   Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
@@ -1618,7 +1625,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         comet_vdump(main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1]);
         comet_debug() << " tensors_lhs_Allocs.size(): " << tensors_lhs_Allocs.size() << "\n";
         comet_debug() << " ";
-        
+
         insertInitialize(loc, cstop, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1], rewriter);
         comet_debug() << " ";
       }
@@ -1839,6 +1846,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           comet_debug() << " ";
           comet_vdump(isNonzero);
           auto if_nonzero = rewriter.create<scf::IfOp>(loc, isNonzero, /*WithElseRegion*/ false);
+          comet_debug() << " If branch:\n";
+          comet_vdump(if_nonzero);
 
           if (!if_nonzero.thenRegion().empty())
           {
@@ -2037,7 +2046,7 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
       // auto ctx = rewriter.getContext();
-      // auto module = rootOp->getParentOfType<ModuleOp>();
+      auto module = rootOp->getParentOfType<ModuleOp>();
 
       assert(isa<indexTree::IndexTreeOp>(rootOp));
       comet_debug() << "\nIndexTreeIRLowering in LowerIndexTreeIRToSCF\n";
@@ -2220,6 +2229,8 @@ namespace
 
       rewriter.eraseOp(rootOp);
       comet_debug() << " \n";
+      comet_debug() << " ModuleDump:\n";
+      module->dump();
       return success();
     }
   }; // IndexTreeIRLowering
@@ -2251,11 +2262,11 @@ void LowerIndexTreeIRToSCFPass::runOnFunction()
   }
 
   ConversionTarget target(getContext());
-  target.addLegalDialect<LinalgDialect, 
-                         StandardOpsDialect, 
-                         scf::SCFDialect, 
+  target.addLegalDialect<LinalgDialect,
+                         StandardOpsDialect,
+                         scf::SCFDialect,
                          memref::MemRefDialect>();
-  
+
   target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,

@@ -62,9 +62,9 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "early-lowering"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_EarlyLoweringPass
-// #define DEBUG_MODE_EarlyLoweringPass
-// #endif
+#ifndef DEBUG_MODE_EarlyLoweringPass
+#define DEBUG_MODE_EarlyLoweringPass
+#endif
 
 #ifdef DEBUG_MODE_EarlyLoweringPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -1071,37 +1071,41 @@ namespace
           comet_pdump(u);
           if (isa<tensorAlgebra::LabeledTensorOp>(u))
           {
-            comet_pdump(u);
-            auto labeledtensorop = cast<tensorAlgebra::LabeledTensorOp>(u);
-            comet_debug() << " labeled_tensor op\n";
-            for (auto u1 : u->getUsers())
-            {
-              if (isa<tensorAlgebra::TensorChainSetOp>(u1))
-              {
-                comet_debug() << " tensor set_op\n";
-                auto setop = cast<tensorAlgebra::TensorChainSetOp>(u1);
-                auto read_from_file_operand = setop.getOperand(1).getDefiningOp(); // funccall
-                if (isa<tensorAlgebra::GenericCallOp>(read_from_file_operand))
-                {
-                  auto genericcallop = cast<tensorAlgebra::GenericCallOp>(read_from_file_operand);
-                  // comet_vdump(genericcallop);
-                  comet_debug() << " read_from_file op\n";
-                  std::string read_ref(genericcallop.callee().getLeafReference());
-                  comet_debug() << " read_ref: " << read_ref << "\n";
-                  if (read_ref.compare(0, 14, "read_from_file") == 0)
-                  {
-                    comet_debug() << " yes, read_from_file op\n";
-                    // get filename through operand
-                    comet_debug() << " genericcallop.getNumOperands(): " << genericcallop.getOperation()->getNumOperands() << "\n";
+            //TODO(gkestor): LabeledTensorOp is not used in the current design, needs cleaning up. 
+            //Look at the generated code. We should not generate LabeledTensorOp
+            continue;
+            // assert(false && "There is no current use of LabeledTensorOp - needs refactoring the code");
+            // comet_pdump(u);
+            // auto labeledtensorop = cast<tensorAlgebra::LabeledTensorOp>(u);
+            // comet_debug() << " labeled_tensor op\n";
+            // for (auto u1 : u->getUsers())
+            // {
+            //   if (isa<tensorAlgebra::TensorChainSetOp>(u1))
+            //   {
+            //     comet_debug() << " tensor set_op\n";
+            //     auto setop = cast<tensorAlgebra::TensorChainSetOp>(u1);
+            //     auto read_from_file_operand = setop.getOperand(1).getDefiningOp(); // funccall
+            //     if (isa<tensorAlgebra::GenericCallOp>(read_from_file_operand))
+            //     {
+            //       auto genericcallop = cast<tensorAlgebra::GenericCallOp>(read_from_file_operand);
+            //       // comet_vdump(genericcallop);
+            //       comet_debug() << " read_from_file op\n";
+            //       std::string read_ref(genericcallop.callee().getLeafReference());
+            //       comet_debug() << " read_ref: " << read_ref << "\n";
+            //       if (read_ref.compare(0, 14, "read_from_file") == 0)
+            //       {
+            //         comet_debug() << " yes, read_from_file op\n";
+            //         // get filename through operand
+            //         comet_debug() << " genericcallop.getNumOperands(): " << genericcallop.getOperation()->getNumOperands() << "\n";
 
-                    // Erase the useless ops
-                    rewriter.eraseOp(setop);
-                    rewriter.eraseOp(genericcallop);
-                    rewriter.eraseOp(labeledtensorop);
-                  }
-                }
-              }
-            }
+            //         // Erase the useless ops
+            //         rewriter.eraseOp(setop);
+            //         rewriter.eraseOp(genericcallop);
+            //         rewriter.eraseOp(labeledtensorop);
+            //       }
+            //     }
+            //   }
+            // }
           }
 
           else if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
@@ -1703,6 +1707,7 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp>();
 
+  getFunction().dump();
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<SparseOutputTensorDeclOpLowering>(&getContext());
 
