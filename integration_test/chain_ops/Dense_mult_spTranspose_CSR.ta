@@ -1,14 +1,8 @@
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> compound_spmm_spTranspose_DensexCSR.mlir
-# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm compound_spmm_spTranspose_DensexCSR.mlir &> compound_spmm_spTranspose_DensexCSR.llvm
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> Dense_mult_spTranspose_CSR.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm Dense_mult_spTranspose_CSR.mlir &> Dense_mult_spTranspose_CSR.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
 # RUN: export SORT_TYPE=SEQ_QSORT
-# RUN: mlir-cpu-runner compound_spmm_spTranspose_DensexCSR.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
-
-## GOOD TEST (merge request)
-# SPMM: output is dense
-# SpM .* dM = SpM
-
-# TBD: add spM * spM = SpM test case with opt-workspace
+# RUN: mlir-cpu-runner Dense_mult_spTranspose_CSR.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {
 	#IndexLabel Declarations

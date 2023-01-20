@@ -245,6 +245,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   //  Creating tensor declarations for temporal tensors in compound expressions, preprocessing.
   //  =============================================================================
   optPM.addPass(mlir::tensorAlgebra::createPreLoweringPass()); // Creating tensor declarations for temporal tensors in chain operations
+
   //  =============================================================================
 
   // ===================================================================================
@@ -330,10 +331,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // =============================================================================
     // Lowering of other operations such as transpose, sum, etc. to SCF dialect
     // =============================================================================
-    optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
-    optPM.addPass(mlir::tensorAlgebra::createSUMLowerToSCFPass());
     // If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
     // If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
+    optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
+    optPM.addPass(mlir::tensorAlgebra::createSUMLowerToSCFPass());
     optPM.addPass(mlir::tensorAlgebra::createTransposeLoweringPass());
     // =============================================================================
   }
