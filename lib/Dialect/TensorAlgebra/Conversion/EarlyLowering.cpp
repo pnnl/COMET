@@ -365,7 +365,7 @@ namespace
     }
   };
 
-  void insertReadFileLibCall(int rank_size, MLIRContext *ctx, ModuleOp &module, FuncOp function)
+  void insertReadFileLibCall(int rank_size, MLIRContext *ctx, ModuleOp &module, FuncOp function, bool lowerTri, bool upperTri)
   {
     comet_debug() << "Inserting insertReadFileLibCall\n";
     FloatType f32Type, f64Type;
@@ -393,9 +393,32 @@ namespace
 
       if (VALUETYPE.compare("f32") == 0)
       {
-        if (isFuncInMod("read_input_2D_f32", module) == false)
+        std::string read_base = "read_input_2D";
+        std::string _f32 = "_f32";
+        std::string read_str;
+        bool insertDef = false;
+
+        if (lowerTri && !upperTri && 
+              (isFuncInMod("read_input_2D_lowerTriangle_f32", module) == false) )
         {
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_2D_f32",
+          read_str = read_base + "_lowerTriangle" + _f32;
+          insertDef = true;
+        }
+        else if (!lowerTri && upperTri && 
+              (isFuncInMod("read_input_2D_upperTriangle_f32", module) == false) )
+        {
+          read_str = read_base + "_upperTriangle" + _f32;  
+          insertDef = true;
+        }
+        else if (isFuncInMod("read_input_2D_f32", module) == false)
+        {
+          read_str = read_base + _f32;
+          insertDef = true;
+        }
+
+        if (insertDef)
+        {
+          FuncOp func1 = FuncOp::create(function.getLoc(), read_str,
                                         readInput2DF32Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -403,10 +426,33 @@ namespace
       }
       else
       {
-        if (isFuncInMod("read_input_2D_f64", module) == false)
+        std::string read_base = "read_input_2D";
+        std::string _f64 = "_f64";
+        std::string read_str;
+        bool insertDef = false;
+
+        if (lowerTri && !upperTri && 
+              (isFuncInMod("read_input_2D_lowerTriangle_f64", module) == false) )
+        {
+          read_str = read_base + "_lowerTriangle" + _f64; 
+          insertDef = true;
+        }
+        else if (!lowerTri && upperTri && 
+              (isFuncInMod("read_input_2D_upperTriangle_f64", module) == false) )
+        {
+          read_str = read_base + "_upperTriangle" + _f64;
+          insertDef = true;
+        }
+        else if (isFuncInMod("read_input_2D_f64", module) == false)
+        {
+          read_str = read_base + _f64;
+          insertDef = true;
+        }
+
+        if (insertDef)
         {
           comet_debug() << " Inserting read_input_2D_f64\n";
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_2D_f64",
+          FuncOp func1 = FuncOp::create(function.getLoc(), read_str,
                                         readInput2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -417,9 +463,32 @@ namespace
 
       if (VALUETYPE.compare("f32") == 0)
       {
-        if (isFuncInMod("read_input_sizes_2D_f32", module) == false)
+        std::string read_base = "read_input_sizes_2D";
+        std::string _f32 = "_f32";
+        std::string read_str;
+        bool insertDef = false;
+
+        if (lowerTri && !upperTri && 
+              (isFuncInMod("read_input_sizes_2D_lowerTriangle_f32", module) == false) )
         {
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_sizes_2D_f32",
+          read_str = read_base + "_lowerTriangle" + _f32;
+          insertDef = true;
+        }
+        else if (!lowerTri && upperTri && 
+              (isFuncInMod("read_input_sizes_2D_upperTriangle_f32", module) == false) )
+        {
+          read_str = read_base + "_upperTriangle" + _f32;  
+          insertDef = true;
+        }
+        else if (isFuncInMod("read_input_sizes_2D_f32", module) == false)
+        {
+          read_str = read_base + _f32;
+          insertDef = true;
+        }
+
+        if (insertDef)
+        {
+          FuncOp func1 = FuncOp::create(function.getLoc(), read_str,
                                         readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -427,10 +496,33 @@ namespace
       }
       else
       {
-        if (isFuncInMod("read_input_sizes_2D_f64", module) == false)
+        std::string read_base = "read_input_sizes_2D";
+        std::string _f64 = "_f64";
+        std::string read_str;
+        bool insertDef = false;
+
+        if (lowerTri && !upperTri && 
+              (isFuncInMod("read_input_sizes_2D_lowerTriangle_f64", module) == false) )
+        {
+          read_str = read_base + "_lowerTriangle" + _f64; 
+          insertDef = true;
+        }
+        else if (!lowerTri && upperTri && 
+              (isFuncInMod("read_input_sizes_2D_upperTriangle_f64", module) == false) )
+        {
+          read_str = read_base + "_upperTriangle" + _f64;  
+          insertDef = true;
+        }
+        else if (isFuncInMod("read_input_sizes_2D_f64", module) == false)
+        {
+          read_str = read_base + _f64;
+          insertDef = true;
+        }
+
+        if (insertDef)
         {
           comet_debug() << " Inserting read_input_sizes_2D_f64\n";
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_sizes_2D_f64",
+          FuncOp func1 = FuncOp::create(function.getLoc(), read_str,
                                         readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -595,7 +687,9 @@ namespace
           comet_debug() << " used in ta.itComputeLHS op\n";
           isOutputTensor = true;
         }
-        else if (isa<tensorAlgebra::TensorFillFromFileOp>(u1))
+        else if (isa<tensorAlgebra::TensorFillFromFileOp>(u1) ||
+                 isa<tensorAlgebra::TensorLowerTriFillFromFileOp>(u1) ||
+                 isa<tensorAlgebra::TensorUpperTriFillFromFileOp>(u1) )
         {
           // do nothing
           comet_debug() << " the tensor is in fill_from_file op\n";
@@ -649,6 +743,7 @@ namespace
         // search read_from_file function call to get the input file name
         // Currently, has no filename
         std::string input_filename;
+        bool lowerTri = false, upperTri = false;
         for (auto u : op.getOperation()->getUsers())
         {
           // Used in LabeledTensorOp and then the LabeledTensorOp is used in TensorChainSetOp
@@ -691,14 +786,37 @@ namespace
             }
           }
           // Used in TensorFillFromFileOp
-          else if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
+          else if (isa<tensorAlgebra::TensorFillFromFileOp>(u) ||
+                   isa<tensorAlgebra::TensorLowerTriFillFromFileOp>(u) ||
+                   isa<tensorAlgebra::TensorUpperTriFillFromFileOp>(u))
           {
+
             // comet_pdump(u);
             comet_debug() << "\n";
-            auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
-            // Can get filename, from "filename" attribute of fillfromfileop
-
-            StringAttr filename = fillfromfileop.filename().cast<StringAttr>();
+            StringAttr filename;
+            if (isa<tensorAlgebra::TensorLowerTriFillFromFileOp>(u))
+            {
+              lowerTri = true;
+              auto fillfromfileop = cast<tensorAlgebra::TensorLowerTriFillFromFileOp>(u);
+              // Can get filename, from "filename" attribute of fillfromfileop
+              filename = fillfromfileop.filename().cast<StringAttr>();
+              rewriter.eraseOp(fillfromfileop);
+            }
+            else if (isa<tensorAlgebra::TensorUpperTriFillFromFileOp>(u))
+            {
+              upperTri = true;
+              auto fillfromfileop = cast<tensorAlgebra::TensorUpperTriFillFromFileOp>(u);
+              // Can get filename, from "filename" attribute of fillfromfileop
+              filename = fillfromfileop.filename().cast<StringAttr>();
+              rewriter.eraseOp(fillfromfileop);
+            }
+            else
+            {
+              auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
+              // Can get filename, from "filename" attribute of fillfromfileop
+              filename = fillfromfileop.filename().cast<StringAttr>();
+              rewriter.eraseOp(fillfromfileop);
+            }
 
             comet_debug() << " filename: " << filename.getValue() << "\n";
 
@@ -706,7 +824,7 @@ namespace
             input_filename = filename_str;
             comet_debug() << " " << input_filename << "\n";
 
-            rewriter.eraseOp(fillfromfileop);
+            
           }
         }
 
@@ -746,18 +864,30 @@ namespace
         if (rank_size == 2)
         { // 2D
           comet_debug() << " 2D\n";
-          insertReadFileLibCall(rank_size, ctx, module, function);
+          insertReadFileLibCall(rank_size, ctx, module, function, lowerTri, upperTri);
 
           if (VALUETYPE.compare(0, 3, "f32") == 0)
           {
-            std::string read_input_sizes_str = "read_input_sizes_2D_f32";
-            auto read_input_sizes_f64Call = rewriter.create<mlir::CallOp>(
+            std::string read_input_sizes_str;
+            if (lowerTri && !upperTri)
+              read_input_sizes_str = "read_input_sizes_2D_lowerTriangle_f32";
+            else if (upperTri && !lowerTri)
+              read_input_sizes_str = "read_input_sizes_2D_upperTriangle_f32";
+            else
+              read_input_sizes_str = "read_input_sizes_2D_f32";
+            auto read_input_sizes_f32Call = rewriter.create<mlir::CallOp>(
                 loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], alloc_sizes_cast});
-            read_input_sizes_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
+            read_input_sizes_f32Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
           }
           else
           {
-            std::string read_input_sizes_str = "read_input_sizes_2D_f64";
+            std::string read_input_sizes_str;
+            if (lowerTri && !upperTri)
+              read_input_sizes_str = "read_input_sizes_2D_lowerTriangle_f64";
+            else if (upperTri && !lowerTri)
+              read_input_sizes_str = "read_input_sizes_2D_upperTriangle_f64";
+            else
+              read_input_sizes_str = "read_input_sizes_2D_f64";
             auto read_input_sizes_f64Call = rewriter.create<mlir::CallOp>(
                 loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], alloc_sizes_cast});
             read_input_sizes_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
@@ -770,7 +900,7 @@ namespace
         { // 3D
 
           comet_debug() << " 3D\n";
-          insertReadFileLibCall(rank_size, ctx, module, function);
+          insertReadFileLibCall(rank_size, ctx, module, function, lowerTri, upperTri); 
 
           if (VALUETYPE.compare(0, 3, "f32") == 0)
           {
@@ -843,11 +973,21 @@ namespace
           std::string read_input_str;
           if (VALUETYPE.compare(0, 3, "f32") == 0)
           {
-            read_input_str = "read_input_2D_f32";
+            if (lowerTri && !upperTri)
+              read_input_str = "read_input_2D_lowerTriangle_f32";
+            else if (upperTri && !lowerTri)
+              read_input_str = "read_input_2D_upperTriangle_f32";
+            else
+              read_input_str = "read_input_2D_f32";
           }
           else
           {
-            read_input_str = "read_input_2D_f64";
+            if (lowerTri && !upperTri)
+              read_input_str = "read_input_2D_lowerTriangle_f64";
+            else if (upperTri && !lowerTri)
+              read_input_str = "read_input_2D_upperTriangle_f64";
+            else
+              read_input_str = "read_input_2D_f64";
           }
           auto read_input_f64Call = rewriter.create<mlir::CallOp>(
               loc, read_input_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1], alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3], alloc_sizes_cast_vec[4]});
@@ -1063,12 +1203,29 @@ namespace
             }
           }
 
-          else if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
+          else if (isa<tensorAlgebra::TensorFillFromFileOp>(u) ||
+                   isa<tensorAlgebra::TensorLowerTriFillFromFileOp>(u) ||
+                   isa<tensorAlgebra::TensorUpperTriFillFromFileOp>(u))
           {
             comet_debug() << " Sparse output is used in TensorFillFromFileOp\n";
-            auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
-            // Can get filename, from "filename" attribute of fillfromfileop
-            rewriter.eraseOp(fillfromfileop);
+            if (isa<tensorAlgebra::TensorLowerTriFillFromFileOp>(u))
+            {
+              auto fillfromfileop = cast<tensorAlgebra::TensorLowerTriFillFromFileOp>(u);
+              rewriter.eraseOp(fillfromfileop);
+            }
+            else if (isa<tensorAlgebra::TensorUpperTriFillFromFileOp>(u))
+            {
+              auto fillfromfileop = cast<tensorAlgebra::TensorUpperTriFillFromFileOp>(u);
+              // Can get filename, from "filename" attribute of fillfromfileop
+              rewriter.eraseOp(fillfromfileop);
+            }
+            else
+            {
+              auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
+              // Can get filename, from "filename" attribute of fillfromfileop
+              rewriter.eraseOp(fillfromfileop);
+            }
+            
           }
 
           else if (isa<tensorAlgebra::TransposeOp>(u) ||
@@ -1663,6 +1820,8 @@ void TensorFillLoweringPass::runOnFunction()
     llvm::errs() << "Failed to Lower STCOutputLowering\n";
     signalPassFailure();
   }
+
+  comet_debug() << "end TensorFillLoweringPass\n";
 }
 
 /// Create a pass for lowering dense tensor (inputs and utput) declaration operations in memref dialect

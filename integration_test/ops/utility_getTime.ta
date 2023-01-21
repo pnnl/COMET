@@ -19,10 +19,10 @@ def main() {
 	B[b, c] = 2.1;
 	C[a, c] = 0.0;
 
-	var start = getTime();
+	var t0 = getTime();
 	C[a, c] = A[a, b] * B[b, c];
-	var end = getTime();
-	printElapsedTime(start, end);
+	var t1 = getTime();
+	printElapsedTime(t0, t1);
 }
 
 # Print the elapsed time for computation

@@ -1826,7 +1826,8 @@ namespace
 
               // Builting calls have their custom operation, meaning this is a
               // straightforward emission.
-              if (callee == "read_from_file")
+              if (callee == "read_from_file" || callee == "read_lowerTri_from_file"
+                    || callee == "read_upperTri_from_file")
               {
                 comet_debug() << " call read_from_file \n";
 
@@ -1872,7 +1873,24 @@ namespace
                   }
                 }
 
-                if (mlir::failed(mlirGenTensorFillFromFile(loc(tensor_op->loc()), tensor_name, filenamestr)))
+                bool lower, upper;
+                if (callee == "read_lowerTri_from_file")
+                {
+                  lower = true;
+                  upper = false;
+                }
+                else if (callee == "read_upperTri_from_file") 
+                {
+                  lower = false;
+                  upper = true;
+                }
+                else 
+                {
+                  lower = false;
+                  upper = false;
+                }
+
+                if (mlir::failed(mlirGenTensorFillFromFile(loc(tensor_op->loc()), tensor_name, filenamestr, lower, upper)))
                   return mlir::success();
               }
               if (callee == "random")
@@ -2400,11 +2418,18 @@ namespace
     }
 
     mlir::LogicalResult mlirGenTensorFillFromFile(mlir::Location loc,
-                                                  StringRef tensor_name, StringRef filename)
+                                                  StringRef tensor_name, StringRef filename, 
+                                                  bool lower, bool upper)
     {
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
       mlir::StringAttr filenameAttr = builder.getStringAttr(filename);
-      builder.create<TensorFillFromFileOp>(loc, tensorValue, filenameAttr);
+        
+      if (lower && !upper) 
+        builder.create<TensorLowerTriFillFromFileOp>(loc, tensorValue, filenameAttr);
+      else if (upper && !lower)
+        builder.create<TensorUpperTriFillFromFileOp>(loc, tensorValue, filenameAttr);
+      else // standard read_from_file
+        builder.create<TensorFillFromFileOp>(loc, tensorValue, filenameAttr);
 
       return mlir::success();
     }

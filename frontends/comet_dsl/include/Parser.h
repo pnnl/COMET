@@ -433,6 +433,24 @@ namespace tensorAlgebra
         }
       }
 
+      if (name == "read_lowerTri_from_file")
+      {
+        comet_debug() << "read_lowerTri_from_file\n";
+        if (args.size() == 0)
+        {
+          args.push_back(nullptr);
+        }
+      }
+
+      if (name == "read_upperTri_from_file")
+      {
+        comet_debug() << "read_upperTri_from_file\n";
+        if (args.size() == 0)
+        {
+          args.push_back(nullptr);
+        }
+      }
+
       if (name == "random")
       {
         comet_debug() << "random\n";
