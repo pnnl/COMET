@@ -131,7 +131,6 @@ namespace
 
       auto module = op->getParentOfType<ModuleOp>();
       Location loc = op.getLoc();
-      comet_debug() << " Transpose lowering\n";
       comet_vdump(op);
       auto *ctx = op->getContext();
       auto inputType = op->getOperand(0).getType();
@@ -225,19 +224,19 @@ namespace
           unsigned int tensor_rank = (tensors[n].getDefiningOp()->getNumOperands() - 2) / 5;
           comet_debug() << " tensor_rank: " << tensor_rank << "\n";
           comet_debug() << " tensor[n]: "
-                       << "\n";
+                        << "\n";
           comet_pdump(tensors[n].getDefiningOp());
 
           for (unsigned int i = 0; i < 2 * tensor_rank + 1; i++)
           {
             auto tensorload_op = tensors[n].getDefiningOp()->getOperand(i);
             comet_debug() << " tensorload_op "
-                         << "\n";
+                          << "\n";
             comet_vdump(tensorload_op);
 
             auto alloc_op = tensorload_op.getDefiningOp()->getOperand(0);
             comet_debug() << " alloc_op "
-                         << "\n";
+                          << "\n";
             comet_vdump(alloc_op);
 
             if (i < 2 * tensor_rank)
@@ -257,7 +256,7 @@ namespace
           auto memrefload_op = tensors[n].getDefiningOp()->getOperand(tensors[n].getDefiningOp()->getNumOperands() - 1);
           allocs_for_sparse_tensors[n].push_back(memrefload_op);
           comet_debug() << " memrefload_op "
-                       << "\n";
+                        << "\n";
           comet_vdump(memrefload_op);
         }
 
@@ -348,6 +347,7 @@ namespace
 
 void TensorTransposeLowering::TransposeLoweringPass::runOnFunction()
 {
+  comet_debug() << " Transpose lowering starts\n";
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
   OwningRewritePatternList patterns(&getContext());
@@ -357,6 +357,8 @@ void TensorTransposeLowering::TransposeLoweringPass::runOnFunction()
   {
     signalPassFailure();
   }
+
+  comet_debug() << " Transpose lowering ends\n";
 }
 
 // Lower sparse tensor algebra operation to loops

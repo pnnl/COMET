@@ -82,6 +82,39 @@ Value getRealLhs(Operation *op)
   return setOp.getOperand(1);
 }
 
+Value getRealRhs(Operation *op)
+{
+  Operation *firstUser = op->getNextNode();  // this will return set_op for transpose, but messes up getUsers() or subsequent calls to it.
+  comet_pdump(firstUser);
+  // TODO: need to find out why user set_op is not showing up in users of TransposeOp
+  //       from the for loop below. once resolved, remove getNextNode().
+  //Operation *firstUser;
+  //for (auto user : op->getResult(0).getUsers())
+  //{
+  //  firstUser = user;
+  //  break;
+  //}
+  
+  if (isa<tensorAlgebra::TransposeOp>(op)) 
+  {
+    if (isa<TensorSetOp>(firstUser))
+    {
+      TensorSetOp setOp = cast<TensorSetOp>(firstUser);
+      return setOp.getOperand(1);
+    }
+    else
+    {
+      assert(false && "Transpose has no set_op after it!");
+    }
+  }
+  else
+  {
+    // do nothing
+    return op->getResult(0);
+  }
+  return op->getResult(0);
+}
+
 void buildDefUseInfo(UnitExpression *e)
 {
   auto lhs = e->getLHS();
@@ -97,8 +130,10 @@ void buildDefUseInfo(UnitExpression *e)
 
 void doTensorMultOp(TensorMultOp op)
 {
-  Value rhs1 = op.rhs1();
-  Value rhs2 = op.rhs2();
+  //Value rhs1 = op.rhs1();
+  Value rhs1 = getRealRhs(op.rhs1().getDefiningOp());
+  //Value rhs2 = op.rhs2();
+  Value rhs2 = getRealRhs(op.rhs2().getDefiningOp());
   Value lhs = getRealLhs(op);
 
 
@@ -159,9 +194,17 @@ void doTensorMultOp(TensorMultOp op)
 void doElementWiseMultOp(TensorElewsMultOp op)
 {
   // getFunction()->dump();
-  Value rhs1 = op.rhs1();
-  Value rhs2 = op.rhs2();
+  Value rhs1 = getRealRhs(op.rhs1().getDefiningOp());
+  //Value rhs1 = op.rhs1();
+  Value rhs2 = getRealRhs(op.rhs2().getDefiningOp());
+  //Value rhs2 = op.rhs2();
   Value lhs = getRealLhs(op);
+
+  comet_debug() << "IndexTreePass: doElementWiseMultOp\n";
+  comet_debug() << "rhs1\n";
+  comet_vdump(rhs1);
+  comet_debug() << "rhs2\n";
+  comet_vdump(rhs2);
 
   auto allPerms = getAllPerms(op.indexing_maps());
   auto allFormats = getAllFormats(op.formatsAttr(), allPerms);
@@ -223,6 +266,8 @@ void doElementWiseMultOp(TensorElewsMultOp op)
 Operation *getSetOpForTC(Operation *op)
 {
   assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op));
+  // TODO: fix the issue with getUsers() after getRealRhs().
+  comet_debug() << "The following loop may cause issue!\n";
   Operation *firstUser;
   for (auto user : op->getResult(0).getUsers())
   {

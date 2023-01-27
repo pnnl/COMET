@@ -71,10 +71,13 @@ namespace mlir
         std::unique_ptr<Pass> createDenseTensorDeclLoweringPass();
 
         /// Create a pass to lower sparse input tensor declarations
-        std::unique_ptr<Pass> createSparseInputTensorDeclLoweringPass();
+        std::unique_ptr<Pass> createSparseTensorDeclLoweringPass();
 
         /// Create a pass for lowering sparse tensor output tensor decl operations
         std::unique_ptr<Pass> createSparseOutputTensorDeclLoweringPass();
+
+        /// Create a pass for lowering temporal sparse tensor output tensor decl operations generated for compound expressions
+        std::unique_ptr<Pass> createTempSparseOutputTensorDeclLoweringPass();
 
         /// Create a pass for lowering tensor fill operation to linalg.fill
         std::unique_ptr<Pass> createTensorFillLoweringPass();
@@ -93,6 +96,9 @@ namespace mlir
 
         /// Create a pass for lowering programming constructs to SCF ops
         std::unique_ptr<Pass> createPCToLoopsLoweringPass();
+        
+        //TODO(gkestor): this pass is a workout to handle redundant LabeledTensor operations
+        std::unique_ptr<Pass> createRemoveLabeledTensorOpsPass();
 
     } // end namespace tensorAlgebra
 } // end namespace mlir
