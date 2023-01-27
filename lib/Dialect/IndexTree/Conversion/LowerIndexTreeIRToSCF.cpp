@@ -77,9 +77,9 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-#ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-#define DEBUG_MODE_LowerIndexTreeIRToSCFPass
-#endif
+// #ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+// #define DEBUG_MODE_LowerIndexTreeIRToSCFPass
+// #endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -523,7 +523,6 @@ void genForOps(std::vector<Value> tensors,
             comet_debug() << " parent upperBound:\n";
             comet_vdump(parent_UpperBound);
 
-            // module->dump();
             //  check if parent's and child's upper bounds come from the same sparse tensor
             auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
             comet_debug() << " parent upperBound alloc\n";
@@ -867,10 +866,6 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                           std::vector<std::vector<std::string>> rhsFormats,
                           std::vector<std::vector<std::string>> lhsFormats)
 {
-
-  // auto module = forLoops[0].getOperation()->getParentOfType<ModuleOp>();
-  // module->dump();
-
   bool isMixedMode = checkIsMixedMode(rhsFormats);
   bool isElementwise = checkIsElementwise(rhsPerms);
   comet_debug() << " isElementwise:" << isElementwise << " isMixedMode: " << isMixedMode << "\n";
@@ -1266,8 +1261,6 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       rewriter.create<memref::StoreOp>(loc, reduceResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
     }
   }
-
-  // module->dump();
 }
 
 /// 1. Get the nested loops
@@ -2045,7 +2038,6 @@ namespace
     LogicalResult matchAndRewrite(indexTree::IndexTreeOp rootOp,
                                   PatternRewriter &rewriter) const final
     {
-      // auto ctx = rewriter.getContext();
       auto module = rootOp->getParentOfType<ModuleOp>();
 
       assert(isa<indexTree::IndexTreeOp>(rootOp));
@@ -2229,8 +2221,6 @@ namespace
 
       rewriter.eraseOp(rootOp);
       comet_debug() << " \n";
-      comet_debug() << " ModuleDump:\n";
-      module->dump();
       return success();
     }
   }; // IndexTreeIRLowering

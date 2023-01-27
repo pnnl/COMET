@@ -1,6 +1,6 @@
 # RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> spTranspose_CSR_eltwise_Dense.mlir
 # RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm spTranspose_CSR_eltwise_Dense.mlir &> spTranspose_CSR_eltwise_Dense.llvm
-# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2_small.mtx
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
 # RUN: export SORT_TYPE=SEQ_QSORT
 # RUN: mlir-cpu-runner spTranspose_CSR_eltwise_Dense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
@@ -24,5 +24,13 @@ def main() {
 }
 
 # Print the result for verification.
-# CHECK: data =
-# CHECK-NEXT: 2.3,6.9,0,0,0,0,9.2,0,11.5,0,0,0,0,0,13.8,4.6,0,0,0,16.1,
+# CHECK: data = 
+# CHECK-NEXT: 5,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,2,4,5,7,9,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,3,1,4,2,0,3,1,4,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 2.3,9.43,4.6,11.96,6.9,3.22,9.2,5.75,11.5,

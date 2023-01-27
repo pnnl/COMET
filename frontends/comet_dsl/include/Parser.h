@@ -755,7 +755,7 @@ namespace tensorAlgebra
 
       comet_debug() << " " << lexer.getCurToken() << "\n";
 
-      if (lexer.getCurToken() != tok_index_label_dynamic)
+      if (lexer.getCurToken() != tok_dynamic_index_label)
       {
         ret.push_back(parseError<IndexLabelDeclDynamicExprAST>(
             "IndexLabelDynamic", "to begin index label declaration"));
@@ -992,135 +992,6 @@ namespace tensorAlgebra
 
       return std::make_unique<TensorDeclExprAST>(std::move(loc), std::move(id),
                                                  std::move(*type), dims, format);
-    }
-
-    /// Parse a tensor declaration with format attribute, (e.g. CSR, COO, ...)
-    /// it starts with a `Tensor` keyword followed by a type (double, float, int), ///// an identifier and a list of dimension labels
-    /// decl ::= Tensor<el_type> identifier({Dimension list, format)
-    /// Tensor<double> A([a, b], COO);
-    /// Tensor<double> A([a, b], [CN, S]);
-    std::unique_ptr<OutputTensorDeclExprAST> ParseOutputTensorDeclaration()
-    {
-      comet_debug() << __FILE__ << __LINE__ << " is in ParseOutputTensorDeclaration\n";
-      if (lexer.getCurToken() != tok_outputtensor)
-        return parseError<OutputTensorDeclExprAST>("OTensor",
-                                                   "to begin output tensor declaration");
-      auto loc = lexer.getLastLocation();
-      lexer.getNextToken(); // eat Tensor
-
-      std::unique_ptr<VarType> type; // Type is optional, it can be inferred
-      if (lexer.getCurToken() == '<')
-      {
-        lexer.consume(Token('<')); // eat <
-        type = std::make_unique<VarType>();
-        if (lexer.getCurToken() == tok_double)
-        {
-          type->elt_ty = VarType::TY_DOUBLE;
-        }
-        else if (lexer.getCurToken() == tok_float)
-        {
-          type->elt_ty = VarType::TY_FLOAT;
-        }
-        else if (lexer.getCurToken() == tok_int)
-        {
-          type->elt_ty = VarType::TY_INT;
-        }
-        lexer.getNextToken(); // eat el_type
-        if (lexer.getCurToken() != '>')
-          return parseError<OutputTensorDeclExprAST>(">", "to end type");
-        lexer.getNextToken(); // eat >
-      }
-
-      if (lexer.getCurToken() != tok_identifier)
-        return parseError<OutputTensorDeclExprAST>("identifier",
-                                                   "after 'OTensor' declaration");
-      std::string id(lexer.getId());
-      lexer.getNextToken(); // eat id
-
-      std::vector<std::string> dims;
-      std::string format;
-      std::vector<std::string> formatattr;
-      if (lexer.getCurToken() == '(')
-      {
-        lexer.getNextToken(); // eat (
-
-        if (lexer.getCurToken() == '[')
-        {
-          lexer.getNextToken(); // eat [
-
-          while (lexer.getCurToken() == tok_identifier)
-          {
-            dims.push_back(lexer.getId().str());
-            lexer.getNextToken(); // eat id
-            if (lexer.getCurToken() == ',')
-            {
-              lexer.getNextToken(); // eat ,
-            }
-          }
-          if (lexer.getCurToken() != ']')
-          {
-            return parseError<OutputTensorDeclExprAST>(
-                "}", "after 'OTensor' dimension declaration");
-          }
-          lexer.getNextToken(); // eat ]
-        }
-        if (lexer.getCurToken() != ',')
-        {
-          return parseError<OutputTensorDeclExprAST>(
-              ",", "after 'OTensor' dimension declaration");
-        }
-        lexer.getNextToken(); // eat ,
-
-        if (lexer.getCurToken() == tok_identifier)
-        {
-          format = lexer.getId().str();
-          // LLVM_DEBUG(comet_debug() << " format: " << format << "\n");
-          lexer.getNextToken(); // eat format
-        }
-        else
-        { // {CN, S}
-
-          if (lexer.getCurToken() == '{')
-          {
-            lexer.getNextToken(); // eat {
-
-            while (lexer.getCurToken() == tok_identifier)
-            {
-              formatattr.push_back(lexer.getId().str());
-              // comet_debug() << lexer.getId().str() << "\n";
-              lexer.getNextToken(); // eat id
-              if (lexer.getCurToken() == ',')
-              {
-                lexer.getNextToken(); // eat ,
-              }
-            }
-            if (lexer.getCurToken() != '}')
-            {
-              return parseError<OutputTensorDeclExprAST>(
-                  "}", "after 'OTensor' dimension declaration");
-            }
-            lexer.getNextToken(); // eat }
-          }
-        }
-
-        if (formatattr.size() > 0)
-        {
-          for (unsigned int i = 0; i < formatattr.size() - 1; i++)
-          {
-            format = format + formatattr[i] + ", ";
-          }
-          format = format + formatattr[formatattr.size() - 1];
-          comet_debug() << "format: " << format << "\n";
-        }
-
-        if (lexer.getCurToken() != ')')
-          return parseError<OutputTensorDeclExprAST>(
-              ")", "after 'OTensor' format declaration");
-        lexer.getNextToken(); // eat )
-      }
-
-      return std::make_unique<OutputTensorDeclExprAST>(std::move(loc), std::move(id),
-                                                       std::move(*type), dims, format);
     }
 
     /// Parse "transpose(A[i, j], {j, i})" operation in DSL
@@ -1371,7 +1242,7 @@ namespace tensorAlgebra
             exprList->push_back(std::move(decl));
           }
         }
-        else if (lexer.getCurToken() == tok_index_label_dynamic)
+        else if (lexer.getCurToken() == tok_dynamic_index_label)
         {
           // IndexLabel declaration
           // comet_debug() << " ParseIndexLabelDynamicDeclaration\n";
@@ -1391,15 +1262,6 @@ namespace tensorAlgebra
           if (!tensorDecl)
             return nullptr;
           exprList->push_back(std::move(tensorDecl));
-        }
-        else if (lexer.getCurToken() == tok_outputtensor)
-        {
-          // Tensor declaration
-          // comet_debug() << "ParseOutputTensorDeclaration\n";
-          auto outputtensorDecl = ParseOutputTensorDeclaration();
-          if (!outputtensorDecl)
-            return nullptr;
-          exprList->push_back(std::move(outputtensorDecl));
         }
         else if (lexer.getCurToken() == tok_var)
         {
