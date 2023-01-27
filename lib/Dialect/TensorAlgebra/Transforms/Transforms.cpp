@@ -89,21 +89,21 @@ std::vector<Value> dim_format;
 
 namespace
 {
-  template <typename TAOp>
-  struct RemoveTAOpLowering : public ConversionPattern
-  {
-    RemoveTAOpLowering(MLIRContext *ctx)
-        : ConversionPattern(TAOp::getOperationName(), 1, ctx) {}
+  // template <typename TAOp>
+  // struct RemoveTAOpLowering : public ConversionPattern
+  // {
+  //   RemoveTAOpLowering(MLIRContext *ctx)
+  //       : ConversionPattern(TAOp::getOperationName(), 1, ctx) {}
 
-    LogicalResult
-    matchAndRewrite(Operation *op, ArrayRef<Value> operands,
-                    ConversionPatternRewriter &rewriter) const final
-    {
-      rewriter.eraseOp(op);
+  //   LogicalResult
+  //   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+  //                   ConversionPatternRewriter &rewriter) const final
+  //   {
+  //     rewriter.eraseOp(op);
 
-      return success();
-    }
-  };
+  //     return success();
+  //   }
+  // };
 
 
   // TODO: verify the use of the SetOpLowering Pass.

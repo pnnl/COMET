@@ -95,12 +95,11 @@ namespace tensorAlgebra
     tok_double = -10,
     tok_float = -11,
     tok_int = -12,
-    tok_index_label_dynamic = -13,
-    tok_outputtensor = -14,
-    tok_transpose = -15,
-    tok_elews = -16,
-    tok_semiring = -17,
-    tok_monoid = -18
+    tok_dynamic_index_label = -13,
+    tok_transpose = -14,
+    tok_elews = -15,
+    tok_semiring = -16,
+    tok_monoid = -17
   };
 
   enum SemiringOp : int

@@ -62,9 +62,9 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "early-lowering"
 
 // *********** For debug purpose *********//
-#ifndef DEBUG_MODE_EarlyLoweringPass
-#define DEBUG_MODE_EarlyLoweringPass
-#endif
+// #ifndef DEBUG_MODE_EarlyLoweringPass
+// #define DEBUG_MODE_EarlyLoweringPass
+// #endif
 
 #ifdef DEBUG_MODE_EarlyLoweringPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -107,11 +107,15 @@ namespace
     //  If elementwise, copy sparse input arrays for elementwise mul
     int sparse_inputtensor_id = -1;
     auto rhsComputeOp = computeOp.getDefiningOp()->getOperand(0).getDefiningOp();
-    if (isa<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(0).getDefiningOp()))
+
+    auto first_operand = rhsComputeOp->getOperand(0).getDefiningOp();
+    auto second_operand = rhsComputeOp->getOperand(1).getDefiningOp();
+
+    if (isa<tensorAlgebra::SparseTensorConstructOp>(first_operand))
     {
       sparse_inputtensor_id = 0;
     }
-    else if (isa<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(1).getDefiningOp()))
+    else if (isa<tensorAlgebra::SparseTensorConstructOp>(second_operand))
     {
       sparse_inputtensor_id = 1;
     }
@@ -120,7 +124,7 @@ namespace
       assert(false && "SparseTensorConstructOp was not found as one of the operands for itCompute");
     }
 
-    comet_debug() << " SparseTensorConstructOp: \n";
+    comet_debug() << " SparseTensorConstructOp for computeOp: \n";
     comet_pdump(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
     auto sptensor_construct_op = cast<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
 
@@ -163,7 +167,7 @@ namespace
       comet_pdump(sptensor_construct_op.getOperand(sizes_i).getDefiningOp());
 
       Value input_load_op = sptensor_construct_op.getOperand(sizes_i);
-      comet_debug() << " ";
+      comet_debug() << "Ops push_back for Sparse Tensor Construct Op for MixedMode elementwise multiplication (array_sizes_vec):\n";
       comet_vdump(input_load_op);
       array_sizes_vec.push_back(input_load_op);
     }
@@ -175,13 +179,14 @@ namespace
       comet_pdump(sptensor_construct_op.getOperand(sizes_i).getDefiningOp());
 
       Value input_load_op = sptensor_construct_op.getOperand(sizes_i);
-      comet_debug() << " ";
+      comet_debug() << "Ops push_back for Sparse Tensor Construct Op for MixedMode elementwise multiplication (dimSizes):\n";
       comet_vdump(input_load_op);
       dimSizes.push_back(input_load_op);
     }
   }
 
-  void pureSparseMultSparseTensorOutputLowering(tensorAlgebra::SparseOutputTensorDeclOp op,
+  template <typename T>
+  void pureSparseMultSparseTensorOutputLowering(T op,
                                                 Location loc,
                                                 std::string sparseOutputFormat,
                                                 std::vector<Value> &dimSizes,
@@ -200,7 +205,9 @@ namespace
     auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
 
     Value cst_index_0 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(0));
+    comet_vdump(cst_index_0);
     Value cst_index_1 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
+    comet_vdump(cst_index_1);
 
     unsigned int tensor_rank = op.getOperation()->getNumOperands();
 
@@ -229,7 +236,7 @@ namespace
       }
       // The dim size is the second parameter of the
       Value dim2_posSize = rewriter.create<mlir::AddIOp>(loc, dimSizes[0], cst_index_1);
-      comet_debug() << " ";
+      comet_debug() << "AddIOp generated for dim2_posSize:\n";
       comet_vdump(dim2_posSize);
       initial_array_sizes.push_back(dim2_posSize);
 
@@ -330,19 +337,6 @@ namespace
             cur_indices.push_back(hi); // IndexCastOp
         }
       }
-
-      // auto alloc_sizes1 = rewriter.create<memref::AllocOp>(loc, resultMemTy, ValueRange(cur_indices));
-      // comet_debug() << " ";
-      // comet_vdump(alloc_sizes1);
-
-      // alloc_sizes1.getOperation()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
-
-      // Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes1);
-      // comet_debug() << " ";
-      // comet_vdump(tensorLoad);
-
-      // op.replaceAllUsesWith(tensorLoad);
-      // rewriter.replaceOp(op, tensorLoad);
 
       // Check if this tensor is explicitly initialized with ta.fill operation
       bool is_filled = false;
@@ -511,7 +505,7 @@ namespace
     }
   }
 
-  struct SparseInputTensorDeclOpLowering : public OpRewritePattern<tensorAlgebra::SparseTensorDeclOp>
+  struct SparseTensorDeclOpLowering : public OpRewritePattern<tensorAlgebra::SparseTensorDeclOp>
   {
     using OpRewritePattern<tensorAlgebra::SparseTensorDeclOp>::OpRewritePattern;
     /**
@@ -524,16 +518,15 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
       assert(isa<tensorAlgebra::SparseTensorDeclOp>(op));
-      comet_debug() << " SparseInputTensorDeclOpLowering in format begin\n";
+      comet_debug() << " SparseTensorDeclOpLowering in format begin\n";
       comet_vdump(op);
       mlir::MLIRContext *ctx = rewriter.getContext();
       auto function = cast<FuncOp>(op->getParentOp());
-      //comet_vdump(function);
+      // comet_vdump(function);
+
       auto module = function.getOperation()->getParentOfType<ModuleOp>();
-      // module->dump();
 
       std::string op_str = dump2str(op);
-
       bool isOutputTensor = false;
 
       for (auto u1 : op.getOperation()->getUsers())
@@ -559,7 +552,7 @@ namespace
             }
           }
         }
-        else if(isa<tensorAlgebra::TensorElewsMultOp>(u1))
+        else if (isa<tensorAlgebra::TensorElewsMultOp>(u1))
         {
           comet_debug() << " used in ta.elews_mul op\n";
           auto p = cast<tensorAlgebra::TensorElewsMultOp>(u1).getOperation();
@@ -573,7 +566,7 @@ namespace
               {
                 isOutputTensor = true;
               }
-            } 
+            }
           }
         }
         else if (isa<tensorAlgebra::TensorSetOp>(u1))
@@ -596,7 +589,6 @@ namespace
             }
           }
         }
-
         else if (isa<tensorAlgebra::TransposeOp>(u1))
         {
           comet_debug() << " used in transpose op\n";
@@ -645,7 +637,7 @@ namespace
         else if (isa<tensorAlgebra::TensorFillOp>(u1))
         {
           // TODO: should we add this warning for user?
-          //assert(false && " the sparse input tensor is using fill-op. Please use read_from_file() for sparse tensor inputs.");
+          // assert(false && " the sparse input tensor is using fill-op. Please use read_from_file() for sparse tensor inputs.");
         }
         else if (isa<tensorAlgebra::LabeledTensorOp>(u1))
         {
@@ -954,7 +946,7 @@ namespace
           llvm::errs() << __LINE__ << " more than 3D, not supported\n";
         }
 
-        comet_debug() << " sptensor: ";
+        comet_debug() << "SparseTensorConstructOp generated for input sparse tensor:\n";
         comet_vdump(sptensor);
 
         // create ta.index_label operation.
@@ -994,9 +986,20 @@ namespace
         auto labels = tensor_decl_value.labels();
         auto tensor_format = tensor_decl_value.format();
         auto tensor_type = tensor_decl_value.getType();
+        auto is_temporal_tensor = tensor_decl_value.temporal_tensor();
 
-        mlir::Value outputtensordecl = rewriter.create<SparseOutputTensorDeclOp>(loc,
-                                                                                 tensor_type, labels, tensor_format);
+        mlir::Value outputtensordecl;
+        if (is_temporal_tensor)
+        {
+          // TempSparseOutputTensorDeclOp should be lowered before SparseOutputTensorDeclOp
+          outputtensordecl = rewriter.create<TempSparseOutputTensorDeclOp>(loc,
+                                                                           tensor_type, labels, tensor_format);
+        }
+        else
+          outputtensordecl = rewriter.create<SparseOutputTensorDeclOp>(loc,
+                                                                       tensor_type, labels, tensor_format);
+        comet_debug() << "SparseOutputTensorDecl or TempSparseOutputTensorDeclOp Operation is generated\n";
+        comet_vdump(outputtensordecl);
         op.replaceAllUsesWith(outputtensordecl);
         rewriter.replaceOp(op, outputtensordecl);
       }
@@ -1006,11 +1009,514 @@ namespace
         comet_debug() << " it is dense tensor\n";
       }
 
-      comet_debug() << " SparseInputTensorDeclOpLowering in format end\n";
-      // module->dump();
+      comet_debug() << " SparseTensorDeclOpLowering in format end\n";
       return success();
     }
   };
+
+  // This a common lowering function used to lower SparseOutputTensorDeclOp and TempSparseOutputTensorDeclOp
+  template <typename T>
+  void lowerSparseOutputTensorDec(T op, PatternRewriter &rewriter)
+  {
+    if (isa<SparseOutputTensorDeclOp>(op))
+    {
+      comet_debug() << "lowerSparseOutputTensorDec::SparseOutputTensorDeclOp lowering\n";
+    }
+    else if (isa<TempSparseOutputTensorDeclOp>(op))
+    {
+      comet_debug() << "lowerSparseOutputTensorDec::TempSparseOutputTensorDeclOp lowering\n";
+    }
+
+    assert(isa<SparseOutputTensorDeclOp>(op) || isa<TempSparseOutputTensorDeclOp>(op) &&
+                                                    "Op should be either SparseOutputTensorDeclOp or TempSparseOutputTensorDeclOp");
+
+    comet_vdump(op);
+    auto loc = op.getLoc();
+    StringRef formatsAttr = op.format();
+    std::string formats_str(formatsAttr.data());
+    comet_debug() << " --- " << formats_str << "\n";
+
+    comet_debug() << " " << op.getNumOperands() << "\n";
+    auto rank_size = op.getNumOperands();
+
+    IndexType indexType = IndexType::get(op.getContext());
+    FloatType f64Type = FloatType::getF64(op.getContext());
+    if (VALUETYPE.compare(0, 3, "f32") == 0)
+      f64Type = FloatType::getF32(op.getContext());
+
+    // A1_pos ... A_value
+    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
+    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
+
+    comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
+
+    // sparse output
+    if (isDense(formats_str, ", ") == false)
+    {
+      // search read_from_file function call to get the input file name
+      // Currently, has no filename
+
+      std::vector<Value> tensorload_sizes_vec;
+      std::vector<Value> array_sizes_vec; // Store the size of C1pos, C1crd,..., Cval,C_dim1_size, C_dim2_size....
+
+      // No need to read from file
+      // We need to fill this tensorload_sizes_vec operations with new ones.....
+      // Some should get from sparse input, some are dense
+      std::string input_filename;
+      std::vector<std::vector<unsigned>> allPerms;
+
+      std::vector<Value> dimSizes; // for dimSizes in sptensor_construct
+
+      for (auto u : op.getOperation()->getUsers())
+      {
+        comet_debug() << " Users:\n";
+        comet_pdump(u);
+
+        if (isa<tensorAlgebra::TransposeOp>(u) ||
+            (isa<tensorAlgebra::TensorSetOp>(u) &&
+             isa<tensorAlgebra::TransposeOp>(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp())))
+        {
+          if (!isa<tensorAlgebra::TransposeOp>(u))
+          {
+            comet_debug() << "User of sparse tensor is a set Operation. Src of setOp is transpose\n";
+            // Set the insertion point before its user
+            rewriter.setInsertionPoint(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp());
+          }
+          else
+          {
+            comet_debug() << "User of sparse tensor is transpose operation\n";
+            // Set the insertion point before its user
+            rewriter.setInsertionPoint(u);
+          }
+
+          // Get the freeIndices of the sparse input tensor
+          // Check the dimension size, if it is integer, format is dense and get dim_size
+          // If it is ?, get the sparse input and get the definition, and the freeindex,
+          // tensorAlgebra::TransposeOp transpose_op = cast<tensorAlgebra::TransposeOp>(u);
+          tensorAlgebra::TransposeOp transpose_op;
+          if (isa<tensorAlgebra::TransposeOp>(u))
+          {
+            transpose_op = cast<tensorAlgebra::TransposeOp>(u);
+          }
+          else
+          {
+            transpose_op = cast<tensorAlgebra::TransposeOp>(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp());
+          }
+
+          ArrayAttr indexMaps = transpose_op.indexing_maps();
+          comet_debug() << " we get the indexMaps\n";
+          allPerms = getAllPerms(indexMaps);
+          comet_debug() << " we get the permutations\n";
+
+          // mlir::Value src_input = getOperand(0);
+          // mlir::Value dst_input = transpose_op.getOperand(0);
+          mlir::Value src_input = transpose_op.rhs();
+          comet_debug() << " ";
+          comet_vdump(src_input);
+          mlir::Value dst_input;
+          for (auto u : op.getOperation()->getResult(0).getUsers())
+          {
+            comet_debug() << " ";
+            comet_pdump(u);
+            if (isa<tensorAlgebra::TensorSetOp>(u))
+            {
+              dst_input = u->getOperand(1); // dest tensor is the 2nd
+              comet_vdump(dst_input);
+            }
+          }
+
+          /// If in COO format, for every dimension, different dimensions are
+          std::vector<unsigned int> dstIndexLocInSrcVec;
+          for (auto n : allPerms[1])
+          { // In dst index
+            unsigned int dstIndexLocInSrc = findIndexInVector(allPerms[0], n);
+            assert(dstIndexLocInSrc < allPerms[0].size() && " the index in dest is not found in src for transpose op\n");
+            dstIndexLocInSrcVec.push_back(dstIndexLocInSrc);
+          }
+
+          ArrayAttr allFormats = transpose_op.formats();
+          std::vector<std::string> allFormatsStr;
+          for (unsigned int i = 0; i < allFormats.size(); i++)
+          {
+            std::string formats_str(allFormats[i].cast<mlir::StringAttr>().getValue());
+            allFormatsStr.push_back(formats_str);
+          }
+          std::string src_format = allFormatsStr[0];
+          std::string dst_format = allFormatsStr[1];
+
+          // If in COO format, then the sizes are the same as the input
+          // for A and B: 2x+1 + 2x+1 + x = 5x+2
+          // for ith index in B: pos is 2*i, crd is 2*i + 1
+          //                     pos_size is (2*rank+1) + 2*i, crd_size is (2*rank+1) + 2*i+1
+          // unsigned int dst_rank = (dst_input.getDefiningOp()->getNumOperands() -2)/5;
+          comet_debug() << " ";
+          comet_vdump(dst_input);
+          comet_debug() << " ";
+          comet_pdump(dst_input.getDefiningOp());
+          unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
+          for (unsigned int i = 0; i < dst_rank; i++)
+          {
+            // 4*rank+2 + i
+            dimSizes.push_back(src_input.getDefiningOp()->getOperand(4 * dst_rank + 2 + dstIndexLocInSrcVec[i]));
+          }
+
+          Value cst_index_1 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
+          comet_vdump(cst_index_1);
+          Value cst_index_2 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(2));
+          comet_vdump(cst_index_2);
+
+          /// For COO format, 2D and 3D are the same
+          // if src format is in COO format,
+          if (src_format.compare("COO") == 0)
+          {
+            for (unsigned int i = 0; i < dst_rank; i++)
+            {
+              // 2*dst_rank+1
+              unsigned int dstIndexLocInSrc = dstIndexLocInSrcVec[i];
+              // src_rank = dst_rank
+              unsigned int posLocInSrc = (2 * dst_rank + 1) + 2 * dstIndexLocInSrc;
+              unsigned int crdLocInSrc = posLocInSrc + 1;
+
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(posLocInSrc));
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(crdLocInSrc));
+            }
+            // val array size
+            array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(4 * dst_rank + 1));
+
+            // set the pos array size, 1st dim as 2, all others as 1.
+            for (unsigned int i = 0; i < dst_rank; i++)
+            {
+              if (i == 0)
+              {
+                array_sizes_vec[2 * i] = cst_index_2;
+              }
+              else
+              {
+                array_sizes_vec[2 * i] = cst_index_1;
+              }
+            }
+          }
+          // For 2D, consider CSR
+          else if (dst_rank == 2)
+          {
+            if (src_format.compare("CSR") == 0)
+            {
+              comet_debug() << " 2D CSR transpose to 2D CSR\n";
+              array_sizes_vec.push_back(cst_index_1);
+              array_sizes_vec.push_back(cst_index_1);
+              mlir::Value crd_size = rewriter.create<mlir::AddIOp>(loc, dimSizes[0], cst_index_1);
+              comet_debug() << "AddIOp generated for crd_size for CSR:\n";
+              comet_vdump(crd_size);
+              array_sizes_vec.push_back(crd_size);
+              // B2pos, Bval are the same size with A2pos, Aval
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(9));
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(9));
+            }
+          }
+          // For 3D, consider CSF
+          else if (dst_rank == 3)
+          {
+            if (src_format.compare("CSF") == 0)
+            {
+              comet_debug() << " 3D CSF transpose to 3D CSF\n";
+              array_sizes_vec.push_back(cst_index_2);
+              mlir::Value src_nnz = src_input.getDefiningOp()->getOperand(13);
+              mlir::Value src_nnz_add1 = rewriter.create<mlir::AddIOp>(loc, src_nnz, cst_index_1);
+              comet_debug() << "AddIOp generated for nnz for CSF:\n";
+              comet_vdump(src_nnz_add1);
+              array_sizes_vec.push_back(src_nnz);
+              array_sizes_vec.push_back(src_nnz_add1);
+              array_sizes_vec.push_back(src_nnz);
+              array_sizes_vec.push_back(src_nnz_add1);
+              array_sizes_vec.push_back(src_nnz);
+              array_sizes_vec.push_back(src_nnz_add1);
+            }
+          }
+
+          comet_debug() << " array_sizes_vec.size(): " << array_sizes_vec.size() << "\n";
+          comet_debug() << " dst_rank: " << dst_rank << "\n";
+          for (unsigned int i = 0; i < 2 * dst_rank + 1; i++)
+          {
+            Value alloc_sizes;
+            if (i < 2 * dst_rank)
+            {
+              alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{array_sizes_vec[i]}, rewriter);
+              comet_debug() << " AllocOp: ";
+              comet_vdump(alloc_sizes);
+            }
+            else
+            {
+              alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{array_sizes_vec[i]}, rewriter);
+              comet_debug() << " AllocOp: ";
+              comet_vdump(alloc_sizes);
+            }
+            Value tensorload_sizes = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes);
+            tensorload_sizes_vec.push_back(tensorload_sizes);
+          }
+        }
+        else if (isa<indexTree::IndexTreeComputeLHSOp>(u))
+        {
+          comet_debug() << " sparse output is used in itComputeOp op\n";
+
+          // Set the insertion point before its user
+          rewriter.setInsertionPoint(u);
+
+          indexTree::IndexTreeComputeLHSOp lhsOp = cast<indexTree::IndexTreeComputeLHSOp>(u);
+          comet_debug() << " formats_str: " << formats_str << "\n";
+          comet_debug() << " current Op: ";
+          comet_vdump(lhsOp);
+
+          for (auto uLHS : lhsOp.getOperation()->getUsers())
+          {
+            assert(isa<indexTree::IndexTreeComputeOp>(uLHS) && "User of IndexTreeComputeLHSOp can only be IndexTreeComputeOp");
+
+            comet_debug() << " lhsOp user: ";
+            comet_pdump(uLHS);
+
+            auto computeOp = cast<indexTree::IndexTreeComputeOp>(uLHS);
+            comet_debug() << " Get RHS op: ";
+            comet_vdump(computeOp);
+
+            std::vector<std::vector<int>> rhsPerms;
+            getRHSPermsOfComputeOp(computeOp, rhsPerms);
+
+            std::vector<std::vector<std::string>> rhsFormats;
+            getRHSFormatsOfComputeOp(computeOp, rhsFormats);
+
+            comet_debug() << " rhsPerms: \n";
+            for (auto m : rhsPerms)
+            {
+              comet_debug() << " \n";
+              for (auto n : m)
+              {
+                comet_debug() << n << " \n";
+              }
+              comet_debug() << "\n";
+            }
+
+            comet_debug() << " rhsFormats: \n";
+            for (auto m : rhsFormats)
+            {
+              comet_debug() << " \n";
+              for (auto n : m)
+              {
+                comet_debug() << n << " \n";
+              }
+              comet_debug() << "\n";
+            }
+
+            bool isElementwise = checkIsElementwise(rhsPerms);
+
+            comet_debug() << "Checking if it is mixed mode\n";
+            bool isMixedMode = checkIsMixedMode(rhsFormats);
+
+            comet_debug() << "IsElementWise: " << isElementwise << " isMixedMode: " << isMixedMode << "\n";
+            if (isElementwise && isMixedMode)
+            {
+              comet_debug() << "It is an elementwise multiplication in mixed Mode sparse = sparse * dense\n";
+              if (isMixedMode)
+              {
+                comet_debug() << "It is an mix-mode elementwise multiplication in Mix Mode\n";
+                mixModeEltWiseMultSparseTensorOutputLowering(computeOp,
+                                                             loc,
+                                                             rhsPerms,
+                                                             dimSizes,
+                                                             tensorload_sizes_vec,
+                                                             array_sizes_vec, rewriter);
+              }
+              else
+              {
+                comet_debug() << "It is an pure-sparse elementwise multiplication\n";
+                pureSparseMultSparseTensorOutputLowering<>(op,
+                                                           loc,
+                                                           formats_str,
+                                                           dimSizes,
+                                                           tensorload_sizes_vec,
+                                                           array_sizes_vec,
+                                                           rewriter);
+              }
+            }
+            else
+            {
+              if (!isMixedMode)
+              {
+                comet_debug() << "It is an pure-sparse multiplication or assigment from dense to sparse (produced after workspace transformations)\n";
+                pureSparseMultSparseTensorOutputLowering(op,
+                                                         loc,
+                                                         formats_str,
+                                                         dimSizes,
+                                                         tensorload_sizes_vec,
+                                                         array_sizes_vec,
+                                                         rewriter);
+              }
+              else
+              {
+                // assert(false && "Mix-mode sparse computation with sparse output not yet supported such as TTM (tensor times matrix)");
+                // TODO(gkestor): if the sparsity patterns is known
+                comet_debug() << "It is an mix mode element-wise multiplication\n";
+                mixModeEltWiseMultSparseTensorOutputLowering(computeOp,
+                                                             loc,
+                                                             rhsPerms,
+                                                             dimSizes,
+                                                             tensorload_sizes_vec,
+                                                             array_sizes_vec, rewriter);
+              }
+            }
+          }
+
+        }
+        else if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
+        {
+          comet_debug() << " Sparse output is used in TensorFillFromFileOp\n";
+          auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
+          // Can get filename, from "filename" attribute of fillfromfileop
+          rewriter.eraseOp(fillfromfileop);
+        }
+        else if (isa<indexTree::IndexTreeComputeRHSOp>(u))
+        {
+          comet_debug() << "The tensor is in IndexTreeComputeRHSOp, no action taken\n";
+          continue;
+        }
+        else if (isa<tensorAlgebra::PrintOp>(u))
+        {
+          comet_debug() << "The tensor is in print op,  no action taken\n";
+          continue;
+        }
+        else if (isa<tensorAlgebra::LabeledTensorOp>(u))
+        {
+          // TODO(gkestor): LabeledTensorOp is not used in the current design, needs cleaning up.
+          // Look at the generated code. We should not generate LabeledTensorOp
+          continue;
+        }
+        else
+        {
+          llvm::errs() << __FILE__ << __LINE__ << " tensor is used in the following unsupported op\n";
+          comet_pdump(u);
+        }
+
+        comet_debug() << " Get users after ";
+        // create sparse tensor construct after lowering each sparse tensor output users
+        comet_debug() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
+        // create sptensor_construct
+        SmallVector<mlir::Type, 1> elementTypes;
+        for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
+        {
+          assert(tensorload_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
+          comet_debug() << " " << i << " ";
+          comet_vdump(tensorload_sizes_vec[i]);
+          elementTypes.push_back(tensorload_sizes_vec[i].getType());
+        }
+        comet_debug() << "\n ";
+        // [0 ... 2*rank_size, 2*rank_size+1 ... 4*rank_size+1, 4*rank_size+2 ... 5*rank_size + 1]
+        // 2d+1 + 2d+1 + d => 5d+2
+        for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
+        {
+          assert(array_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
+          comet_debug() << " " << i << " ";
+          comet_vdump(array_sizes_vec[i]);
+          elementTypes.push_back(array_sizes_vec[i].getType());
+        }
+        comet_debug() << "\n ";
+        for (unsigned int i = 0; i < rank_size; i++)
+        {
+          assert(dimSizes.size() > 0 && "ERROR: Please report this error to the developers!");
+          elementTypes.push_back(dimSizes[i].getType());
+        }
+        comet_debug() << "\n ";
+
+        auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
+
+        Value sptensor;
+        if (rank_size == 2)
+        {
+          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
+                                                                             ValueRange{tensorload_sizes_vec[0], // A1pos (each dimension consists of pos and crd arrays)
+                                                                                        tensorload_sizes_vec[1], // A1crd
+                                                                                        tensorload_sizes_vec[2], // A2pos
+                                                                                        tensorload_sizes_vec[3], // A2crd
+                                                                                        tensorload_sizes_vec[4], // Aval
+                                                                                        array_sizes_vec[0],      // A1pos_size (size of each pos and crd arrays)
+                                                                                        array_sizes_vec[1],      // A1crd_size
+                                                                                        array_sizes_vec[2],      // A2pos_size
+                                                                                        array_sizes_vec[3],      // A2crd_size
+                                                                                        array_sizes_vec[4],      // Aval_size (size of value array)
+                                                                                        dimSizes[0],             // dim1_size(size of each dimension in sparse tensor)
+                                                                                        dimSizes[1]});           // dim2_size (size of each dimension in sparse tensor)
+        }
+        else if (rank_size == 3)
+        {
+          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
+                                                                             ValueRange{tensorload_sizes_vec[0],
+                                                                                        tensorload_sizes_vec[1],
+                                                                                        tensorload_sizes_vec[2],
+                                                                                        tensorload_sizes_vec[3],
+                                                                                        tensorload_sizes_vec[4],
+                                                                                        tensorload_sizes_vec[5],
+                                                                                        tensorload_sizes_vec[6],
+                                                                                        array_sizes_vec[0],
+                                                                                        array_sizes_vec[1],
+                                                                                        array_sizes_vec[2],
+                                                                                        array_sizes_vec[3],
+                                                                                        array_sizes_vec[4],
+                                                                                        array_sizes_vec[5],
+                                                                                        array_sizes_vec[6],
+                                                                                        dimSizes[0],
+                                                                                        dimSizes[1],
+                                                                                        dimSizes[2]});
+        }
+        else
+        {
+          assert(false && "Not supported format (Tensors of dimensions greater than 3 are currently not supported).\n");
+        }
+
+        comet_debug() << "SparseTensorConstructOp generated for sparse output tensor:\n";
+        comet_vdump(sptensor);
+
+        // create ta.index_label operation.
+        comet_vdump(op);
+
+        op.replaceAllUsesWith(sptensor);
+        rewriter.replaceOp(op, sptensor);
+      } // for (auto u : op.getOperation()->getUsers())
+    }
+    else
+    { // format == "Dense"
+
+      // <?x32xf64>
+      auto resultTensorType = op.getResult().getType().template cast<mlir::TensorType>();
+      ;
+      std::vector<Value> cur_indices;
+      std::vector<int64_t> cur_memref;
+      auto resultMemTy = convertTensorToMemRef(resultTensorType);
+      for (int i = 0; i < resultMemTy.getRank(); i++)
+      {
+        if (resultMemTy.isDynamicDim(i))
+          cur_memref.push_back(ShapedType::kDynamicSize);
+        else // The constant dim size must NOT comes from the sparse matrix
+          cur_memref.push_back(resultMemTy.getDimSize(i));
+
+        if (isa<tensorAlgebra::IndexLabelStaticOp>(op.labels()[i].getDefiningOp()))
+        {
+          auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(op.labels()[i].getDefiningOp());
+          auto hi = label_decl_value.max();
+          if (resultMemTy.isDynamicDim(i))
+            cur_indices.push_back(hi); // IndexCastOp
+        }
+      }
+      llvm::ArrayRef<int64_t> cur_memref_arrayref = llvm::ArrayRef<int64_t>(cur_memref);
+
+      MemRefType memrefType2 = MemRefType::get(cur_memref_arrayref, f64Type);
+      Value alloc_sizes1 = insertAllocAndInitialize(loc, memrefType2, ValueRange(cur_indices), rewriter);
+      comet_debug() << " AllocOp: ";
+      comet_vdump(alloc_sizes1);
+
+      Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes1);
+      comet_vdump(tensorLoad);
+
+      op.replaceAllUsesWith(tensorLoad);
+      rewriter.replaceOp(op, tensorLoad);
+    }
+  }
 
   struct SparseOutputTensorDeclOpLowering : public OpRewritePattern<tensorAlgebra::SparseOutputTensorDeclOp>
   {
@@ -1029,492 +1535,35 @@ namespace
       comet_debug() << "SparseOutputTensorDeclOpLowering in format begin\n";
       comet_vdump(op);
 
-      auto loc = op.getLoc();
-      StringRef formatsAttr = op.format();
-      std::string formats_str(formatsAttr.data());
-      comet_debug() << " --- " << formats_str << "\n";
+      lowerSparseOutputTensorDec<tensorAlgebra::SparseOutputTensorDeclOp>(op, rewriter);
 
-      comet_debug() << " " << op.getNumOperands() << "\n";
-      auto rank_size = op.getNumOperands();
-
-      IndexType indexType = IndexType::get(op.getContext());
-      FloatType f64Type = FloatType::getF64(op.getContext());
-      if (VALUETYPE.compare(0, 3, "f32") == 0)
-        f64Type = FloatType::getF32(op.getContext());
-
-      // A1_pos ... A_value
-      auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
-      auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
-
-      comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
-
-      // sparse output
-      if (isDense(formats_str, ", ") == false)
-      {
-        // search read_from_file function call to get the input file name
-        // Currently, has no filename
-
-        std::vector<Value> tensorload_sizes_vec;
-        std::vector<Value> array_sizes_vec; // Store the size of C1pos, C1crd,..., Cval,C_dim1_size, C_dim2_size....
-
-        // No need to read from file
-        // We need to fill this tensorload_sizes_vec operations with new ones.....
-        // Some should get from sparse input, some are dense
-        std::string input_filename;
-        std::vector<std::vector<unsigned>> allPerms;
-
-        std::vector<Value> dimSizes; // for dimSizes in sptensor_construct
-
-        for (auto u : op.getOperation()->getUsers())
-        {
-          comet_debug() << " Get users before ";
-          comet_pdump(u);
-          if (isa<tensorAlgebra::LabeledTensorOp>(u))
-          {
-            //TODO(gkestor): LabeledTensorOp is not used in the current design, needs cleaning up. 
-            //Look at the generated code. We should not generate LabeledTensorOp
-            continue;
-            // assert(false && "There is no current use of LabeledTensorOp - needs refactoring the code");
-            // comet_pdump(u);
-            // auto labeledtensorop = cast<tensorAlgebra::LabeledTensorOp>(u);
-            // comet_debug() << " labeled_tensor op\n";
-            // for (auto u1 : u->getUsers())
-            // {
-            //   if (isa<tensorAlgebra::TensorChainSetOp>(u1))
-            //   {
-            //     comet_debug() << " tensor set_op\n";
-            //     auto setop = cast<tensorAlgebra::TensorChainSetOp>(u1);
-            //     auto read_from_file_operand = setop.getOperand(1).getDefiningOp(); // funccall
-            //     if (isa<tensorAlgebra::GenericCallOp>(read_from_file_operand))
-            //     {
-            //       auto genericcallop = cast<tensorAlgebra::GenericCallOp>(read_from_file_operand);
-            //       // comet_vdump(genericcallop);
-            //       comet_debug() << " read_from_file op\n";
-            //       std::string read_ref(genericcallop.callee().getLeafReference());
-            //       comet_debug() << " read_ref: " << read_ref << "\n";
-            //       if (read_ref.compare(0, 14, "read_from_file") == 0)
-            //       {
-            //         comet_debug() << " yes, read_from_file op\n";
-            //         // get filename through operand
-            //         comet_debug() << " genericcallop.getNumOperands(): " << genericcallop.getOperation()->getNumOperands() << "\n";
-
-            //         // Erase the useless ops
-            //         rewriter.eraseOp(setop);
-            //         rewriter.eraseOp(genericcallop);
-            //         rewriter.eraseOp(labeledtensorop);
-            //       }
-            //     }
-            //   }
-            // }
-          }
-
-          else if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
-          {
-            comet_debug() << " Sparse output is used in TensorFillFromFileOp\n";
-            auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
-            // Can get filename, from "filename" attribute of fillfromfileop
-            rewriter.eraseOp(fillfromfileop);
-          }
-
-          else if (isa<tensorAlgebra::TransposeOp>(u) ||
-                   (isa<tensorAlgebra::TensorSetOp>(u) &&
-                    isa<tensorAlgebra::TransposeOp>(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp())))
-          {
-            comet_debug() << " sparse output is used in transpose op\n";
-            // Get the freeIndices of the sparse input tensor
-            // Check the dimension size, if it is integer, format is dense and get dim_size
-            // If it is ?, get the sparse input and get the definition, and the freeindex,
-            // tensorAlgebra::TransposeOp transpose_op = cast<tensorAlgebra::TransposeOp>(u);
-            tensorAlgebra::TransposeOp transpose_op;
-            if (isa<tensorAlgebra::TransposeOp>(u))
-            {
-              transpose_op = cast<tensorAlgebra::TransposeOp>(u);
-            }
-            else
-            {
-              transpose_op = cast<tensorAlgebra::TransposeOp>(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp());
-            }
-
-            ArrayAttr indexMaps = transpose_op.indexing_maps();
-            comet_debug() << " we get the indexMaps\n";
-            allPerms = getAllPerms(indexMaps);
-            comet_debug() << " we get the permutations\n";
-
-            // mlir::Value src_input = getOperand(0);
-            // mlir::Value dst_input = transpose_op.getOperand(0);
-            mlir::Value src_input = transpose_op.rhs();
-            comet_debug() << " ";
-            comet_vdump(src_input);
-            mlir::Value dst_input;
-            for (auto u : op.getOperation()->getResult(0).getUsers())
-            {
-              comet_debug() << " ";
-              comet_pdump(u);
-              if (isa<tensorAlgebra::TensorSetOp>(u))
-              {
-                dst_input = u->getOperand(1); // dest tensor is the 2nd
-                comet_vdump(dst_input);
-              }
-            }
-
-            /// If in COO format, for every dimension, different dimensions are
-            std::vector<unsigned int> dstIndexLocInSrcVec;
-            for (auto n : allPerms[1])
-            { // In dst index
-              unsigned int dstIndexLocInSrc = findIndexInVector(allPerms[0], n);
-              assert(dstIndexLocInSrc < allPerms[0].size() && " the index in dest is not found in src for transpose op\n");
-              dstIndexLocInSrcVec.push_back(dstIndexLocInSrc);
-            }
-
-            ArrayAttr allFormats = transpose_op.formats();
-            std::vector<std::string> allFormatsStr;
-            for (unsigned int i = 0; i < allFormats.size(); i++)
-            {
-              std::string formats_str(allFormats[i].cast<mlir::StringAttr>().getValue());
-              allFormatsStr.push_back(formats_str);
-            }
-            std::string src_format = allFormatsStr[0];
-            std::string dst_format = allFormatsStr[1];
-
-            // ArrayAttr opFormatsArrayAttr = tc_op.formats();
-            // std::vector<std::vector<std::string>> allFormats = getAllFormats(opFormatsArrayAttr, allPerms);
-
-            // If in COO format, then the sizes are the same as the input
-            // for A and B: 2x+1 + 2x+1 + x = 5x+2
-            // for ith index in B: pos is 2*i, crd is 2*i + 1
-            //                     pos_size is (2*rank+1) + 2*i, crd_size is (2*rank+1) + 2*i+1
-            // unsigned int dst_rank = (dst_input.getDefiningOp()->getNumOperands() -2)/5;
-            comet_debug() << " ";
-            comet_vdump(dst_input);
-            comet_debug() << " ";
-            comet_pdump(dst_input.getDefiningOp());
-            unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
-            for (unsigned int i = 0; i < dst_rank; i++)
-            {
-              // 4*rank+2 + i
-              dimSizes.push_back(src_input.getDefiningOp()->getOperand(4 * dst_rank + 2 + dstIndexLocInSrcVec[i]));
-            }
-
-            Value cst_index_1 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
-            Value cst_index_2 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(2));
-
-            /// For COO format, 2D and 3D are the same
-            // if src format is in COO format,
-            if (src_format.compare("COO") == 0)
-            {
-              for (unsigned int i = 0; i < dst_rank; i++)
-              {
-                // 2*dst_rank+1
-                unsigned int dstIndexLocInSrc = dstIndexLocInSrcVec[i];
-                // src_rank = dst_rank
-                unsigned int posLocInSrc = (2 * dst_rank + 1) + 2 * dstIndexLocInSrc;
-                unsigned int crdLocInSrc = posLocInSrc + 1;
-
-                array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(posLocInSrc));
-                array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(crdLocInSrc));
-              }
-              // val array size
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(4 * dst_rank + 1));
-
-              // set the pos array size, 1st dim as 2, all others as 1.
-              for (unsigned int i = 0; i < dst_rank; i++)
-              {
-                if (i == 0)
-                {
-                  array_sizes_vec[2 * i] = cst_index_2;
-                }
-                else
-                {
-                  array_sizes_vec[2 * i] = cst_index_1;
-                }
-              }
-            }
-            // For 2D, consider CSR
-            else if (dst_rank == 2)
-            {
-              if (src_format.compare("CSR") == 0)
-              {
-                comet_debug() << " 2D CSR transpose to 2D CSR\n";
-                array_sizes_vec.push_back(cst_index_1);
-                array_sizes_vec.push_back(cst_index_1);
-                mlir::Value crd_size = rewriter.create<mlir::AddIOp>(loc, dimSizes[0], cst_index_1);
-                array_sizes_vec.push_back(crd_size);
-                // B2pos, Bval are the same size with A2pos, Aval
-                array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(9));
-                array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(9));
-              }
-            }
-            // For 3D, consider CSF
-            else if (dst_rank == 3)
-            {
-              if (src_format.compare("CSF") == 0)
-              {
-                comet_debug() << " 3D CSF transpose to 3D CSF\n";
-                array_sizes_vec.push_back(cst_index_2);
-                mlir::Value src_nnz = src_input.getDefiningOp()->getOperand(13);
-                mlir::Value src_nnz_add1 = rewriter.create<mlir::AddIOp>(loc, src_nnz, cst_index_1);
-                array_sizes_vec.push_back(src_nnz);
-                array_sizes_vec.push_back(src_nnz_add1);
-                array_sizes_vec.push_back(src_nnz);
-                array_sizes_vec.push_back(src_nnz_add1);
-                array_sizes_vec.push_back(src_nnz);
-                array_sizes_vec.push_back(src_nnz_add1);
-              }
-            }
-
-            comet_debug() << " array_sizes_vec.size(): " << array_sizes_vec.size() << "\n";
-            comet_debug() << " dst_rank: " << dst_rank << "\n";
-            for (unsigned int i = 0; i < 2 * dst_rank + 1; i++)
-            {
-              Value alloc_sizes;
-              if (i < 2 * dst_rank)
-              {
-                alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{array_sizes_vec[i]}, rewriter);
-                comet_debug() << " AllocOp: ";
-                comet_vdump(alloc_sizes);
-              }
-              else
-              {
-                alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{array_sizes_vec[i]}, rewriter);
-                comet_debug() << " AllocOp: ";
-                comet_vdump(alloc_sizes);
-              }
-              Value tensorload_sizes = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes);
-              tensorload_sizes_vec.push_back(tensorload_sizes);
-            }
-          }
-
-          else if (isa<indexTree::IndexTreeComputeLHSOp>(u))
-          {
-            comet_debug() << " sparse output is used in itComputeOp op\n";
-            comet_debug() << " formats_str: " << formats_str << "\n";
-
-            indexTree::IndexTreeComputeLHSOp lhsOp = cast<indexTree::IndexTreeComputeLHSOp>(u);
-            comet_debug() << " current Op: ";
-            comet_vdump(lhsOp);
-
-            bool completed = false;
-            for (auto uLHS : lhsOp.getOperation()->getUsers())
-            {
-              comet_debug() << " lhsOp user: ";
-              comet_pdump(uLHS);
-              if (isa<indexTree::IndexTreeComputeOp>(uLHS))
-              {
-                completed = true;
-                auto computeOp = cast<indexTree::IndexTreeComputeOp>(uLHS);
-                comet_debug() << " Get RHS op: ";
-                comet_vdump(computeOp);
-
-                std::vector<std::vector<int>> rhsPerms;
-                getRHSPermsOfComputeOp(computeOp, rhsPerms);
-
-                std::vector<std::vector<std::string>> rhsFormats;
-                getRHSFormatsOfComputeOp(computeOp, rhsFormats);
-
-                comet_debug() << " rhsPerms: \n";
-                for (auto m : rhsPerms)
-                {
-                  comet_debug() << " \n";
-                  for (auto n : m)
-                  {
-                    comet_debug() << n << " \n";
-                  }
-                  comet_debug() << "\n";
-                }
-
-                comet_debug() << " rhsFormats: \n";
-                for (auto m : rhsFormats)
-                {
-                  comet_debug() << " \n";
-                  for (auto n : m)
-                  {
-                    comet_debug() << n << " \n";
-                  }
-                  comet_debug() << "\n";
-                }
-
-                bool isElementwise = checkIsElementwise(rhsPerms);
-                
-                comet_debug() << "Checking if it is mixed mode\n";
-                bool isMixedMode = checkIsMixedMode(rhsFormats);
-
-
-                comet_debug() << "IsElementWise: " << isElementwise << " isMixedMode: " << isMixedMode << "\n";
-                if (isElementwise && isMixedMode)
-                {
-                  comet_debug() << "It is an elementwise multiplication in mixed Mode sparse = sparse * dense\n";
-                  if (isMixedMode)
-                  {
-                    comet_debug() << "It is an mix-mode elementwise multiplication in Mix Mode\n";
-                    mixModeEltWiseMultSparseTensorOutputLowering(computeOp,
-                                                                 loc,
-                                                                 rhsPerms,
-                                                                 dimSizes,
-                                                                 tensorload_sizes_vec,
-                                                                 array_sizes_vec, rewriter);
-                  }
-                  else
-                  {
-                    comet_debug() << "It is an pure-sparse elementwise multiplication\n";
-                    pureSparseMultSparseTensorOutputLowering(op,
-                                                             loc,
-                                                             formats_str,
-                                                             dimSizes,
-                                                             tensorload_sizes_vec,
-                                                             array_sizes_vec,
-                                                             rewriter);
-                  }
-                }
-                else
-                {
-                  if (!isMixedMode)
-                  {
-                    comet_debug() << "It is an pure-sparse multiplication or assigment from dense to sparse (produced after workspace transformations)\n";
-                    pureSparseMultSparseTensorOutputLowering(op,
-                                                             loc,
-                                                             formats_str,
-                                                             dimSizes,
-                                                             tensorload_sizes_vec,
-                                                             array_sizes_vec,
-                                                             rewriter);
-                  }
-                  else
-                  {
-                    //assert(false && "Mix-mode sparse computation with sparse output not yet supported such as TTM (tensor times matrix)");
-                    //TODO(gkestor): if the sparsity patterns is known
-                    comet_debug() << "It is an mix mode element-wise multiplication\n";
-                    mixModeEltWiseMultSparseTensorOutputLowering(computeOp,
-                                                                 loc,
-                                                                 rhsPerms,
-                                                                 dimSizes,
-                                                                 tensorload_sizes_vec,
-                                                                 array_sizes_vec, rewriter);
-                  }
-                }
-              }
-            }
-
-            if (!completed)
-              assert(false && "Sparse tensor output tensor declaration was not completed. There is no user of sparse tensor declaration\n");
-          }
-          else if (isa<indexTree::IndexTreeComputeRHSOp>(u))
-          {
-            comet_debug() << " the tensor is in IndexTreeComputeRHSOp\n";
-            continue;
-          }
-          else if (isa<tensorAlgebra::PrintOp>(u))
-          {
-            comet_debug() << " the tensor is in print op\n";
-            continue;
-          }
-          else
-          {
-            llvm::errs() << __FILE__ << __LINE__ << " tensor is used in the following unsupported op\n";
-            comet_pdump(u);
-          }
-
-          comet_debug() << " Get users after ";
-          // create sparse tensor construct after lowering each sparse tensor output users
-          comet_debug() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
-          // create sptensor_construct
-          SmallVector<mlir::Type, 1> elementTypes;
-          for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
-          {
-            assert(tensorload_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
-            comet_debug() << " " << i << " ";
-            comet_vdump(tensorload_sizes_vec[i]);
-            elementTypes.push_back(tensorload_sizes_vec[i].getType());
-          }
-          comet_debug() << "\n ";
-          // [0 ... 2*rank_size, 2*rank_size+1 ... 4*rank_size+1, 4*rank_size+2 ... 5*rank_size + 1]
-          // 2d+1 + 2d+1 + d => 5d+2
-          for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
-          {
-            assert(array_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
-            comet_debug() << " " << i << " ";
-            comet_vdump(array_sizes_vec[i]);
-            elementTypes.push_back(array_sizes_vec[i].getType());
-          }
-          comet_debug() << "\n ";
-          for (unsigned int i = 0; i < rank_size; i++)
-          {
-            assert(dimSizes.size() > 0 && "ERROR: Please report this error to the developers!");
-            elementTypes.push_back(dimSizes[i].getType());
-          }
-          comet_debug() << "\n ";
-
-          auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
-
-          Value sptensor;
-          if (rank_size == 2)
-          {
-            sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{tensorload_sizes_vec[0], tensorload_sizes_vec[1], tensorload_sizes_vec[2], tensorload_sizes_vec[3], tensorload_sizes_vec[4], array_sizes_vec[0], array_sizes_vec[1], array_sizes_vec[2], array_sizes_vec[3], array_sizes_vec[4], dimSizes[0], dimSizes[1]});
-          }
-          else if (rank_size == 3)
-          {
-            sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{tensorload_sizes_vec[0], tensorload_sizes_vec[1], tensorload_sizes_vec[2], tensorload_sizes_vec[3], tensorload_sizes_vec[4], tensorload_sizes_vec[5], tensorload_sizes_vec[6], array_sizes_vec[0], array_sizes_vec[1], array_sizes_vec[2], array_sizes_vec[3], array_sizes_vec[4], array_sizes_vec[5], array_sizes_vec[6], dimSizes[0], dimSizes[1], dimSizes[2]});
-          }
-          else
-          {
-            assert(false && "Not supported format (Tensors of dimensions greater than 3 are currently not supported).\n");
-          }
-
-          comet_debug() << "sptensor: ";
-          comet_vdump(sptensor);
-
-          // create ta.index_label operation.
-          comet_vdump(op);
-
-          op.replaceAllUsesWith(sptensor);
-          rewriter.replaceOp(op, sptensor);
-          // TODO removal of SparseOutputTensorDeclOp is not working. 
-        } // for (auto u : op.getOperation()->getUsers())
-      }
-      else
-      { // format == "Dense"
-
-        auto tensor_decl_value = cast<tensorAlgebra::SparseOutputTensorDeclOp>(op);
-
-        // <?x32xf64>
-        auto resultTensorType = op.getResult().getType();
-        std::vector<Value> cur_indices;
-        std::vector<int64_t> cur_memref;
-        auto resultMemTy = convertTensorToMemRef(resultTensorType.cast<TensorType>());
-        for (int i = 0; i < resultMemTy.getRank(); i++)
-        {
-          if (resultMemTy.isDynamicDim(i))
-            cur_memref.push_back(ShapedType::kDynamicSize);
-          else // The constant dim size must NOT comes from the sparse matrix
-            cur_memref.push_back(resultMemTy.getDimSize(i));
-
-          if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp()))
-          {
-            // comet_vdump(tensor_decl_value.labels()[i]);
-            auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp());
-            auto hi = label_decl_value.max();
-            if (resultMemTy.isDynamicDim(i))
-              cur_indices.push_back(hi); // IndexCastOp
-          }
-        }
-        llvm::ArrayRef<int64_t> cur_memref_arrayref = llvm::ArrayRef<int64_t>(cur_memref);
-
-        MemRefType memrefType2 = MemRefType::get(cur_memref_arrayref, f64Type);
-        Value alloc_sizes1 = insertAllocAndInitialize(loc, memrefType2, ValueRange(cur_indices), rewriter);
-        comet_debug() << " AllocOp: ";
-        comet_vdump(alloc_sizes1);
-
-        Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes1);
-        comet_vdump(tensorLoad);
-
-        op.replaceAllUsesWith(tensorLoad);
-        rewriter.replaceOp(op, tensorLoad);
-        // TODO removal of SparseOutputTensorDeclOp is not working.
-      }
       comet_debug() << "--------------SparseOutputTensorDeclOpLowering in format end\n";
       return success();
     }
   };
 
+  struct TempSparseOutputTensorDeclOpLowering : public OpRewritePattern<tensorAlgebra::TempSparseOutputTensorDeclOp>
+  {
+    using OpRewritePattern<tensorAlgebra::TempSparseOutputTensorDeclOp>::OpRewritePattern;
+    /**
+     * @brief :
+     * Step 1: Get format and dims
+     * Step 2: Emit alloc() instructions and ta.sptensor_construct operation.
+     * Step 3: Remove the TempSparseOutputTensorDeclOp
+     */
+    LogicalResult matchAndRewrite(tensorAlgebra::TempSparseOutputTensorDeclOp op,
+                                  PatternRewriter &rewriter) const final
+    {
+      // Sparse output tensor declaration happens after lowering to index tree dialect
+      assert(isa<tensorAlgebra::TempSparseOutputTensorDeclOp>(op));
+
+      comet_debug() << "***********TempSparseOutputTensorDeclOpLowering in format begins***********\n";
+      lowerSparseOutputTensorDec<tensorAlgebra::TempSparseOutputTensorDeclOp>(op, rewriter);
+      comet_debug() << "***********TempSparseOutputTensorDeclOpLowering in format ends***********\n";
+
+      return success();
+    }
+  };
   struct TensorFillLowering : public ConversionPattern
   {
     TensorFillLowering(MLIRContext *ctx)
@@ -1537,7 +1586,7 @@ namespace
         // TODO: may need to re-visit when doing reduction support.
         // the user declared output to have zeros.
         rewriter.eraseOp(op);
-        return success();  
+        return success();
       }
       tensorLoadOp = cast<memref::TensorLoadOp>(tensorOperand.getDefiningOp());
       auto memref = tensorLoadOp.memref();
@@ -1551,6 +1600,22 @@ namespace
     }
   };
 
+  struct RemoveLabeledTensorOp : public ConversionPattern
+  {
+    RemoveLabeledTensorOp(MLIRContext *ctx)
+        : ConversionPattern(tensorAlgebra::LabeledTensorOp::getOperationName(), 1,
+                            ctx) {}
+
+    LogicalResult
+    matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                    ConversionPatternRewriter &rewriter) const final
+    {
+      assert(isa<tensorAlgebra::LabeledTensorOp>(op));
+      rewriter.eraseOp(op);
+
+      return success();
+    }
+  };
 }
 //===----------------------------------------------------------------------===//
 /// Early Lowering Passes end
@@ -1564,8 +1629,8 @@ namespace
     void runOnFunction() final;
   };
 
-  struct SparseInputTensorDeclLoweringPass
-      : public PassWrapper<SparseInputTensorDeclLoweringPass, FunctionPass>
+  struct SparseTensorDeclLoweringPass
+      : public PassWrapper<SparseTensorDeclLoweringPass, FunctionPass>
   {
     void runOnFunction() final;
   };
@@ -1576,8 +1641,20 @@ namespace
     void runOnFunction() final;
   };
 
+  struct TempSparseOutputTensorDeclLoweringPass
+      : public PassWrapper<TempSparseOutputTensorDeclLoweringPass, FunctionPass>
+  {
+    void runOnFunction() final;
+  };
+
   struct TensorFillLoweringPass
       : public PassWrapper<TensorFillLoweringPass, FunctionPass>
+  {
+    void runOnFunction() final;
+  };
+
+  struct RemoveLabeledTensorOpPass
+      : public PassWrapper<RemoveLabeledTensorOpPass, FunctionPass>
   {
     void runOnFunction() final;
   };
@@ -1599,7 +1676,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
                          StandardOpsDialect, memref::MemRefDialect,
                          ITDialect>();
 
-  //target.addIllegalDialect<tensorAlgebra::TADialect>();
+  // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
@@ -1611,6 +1688,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
                     tensorAlgebra::TensorMultOp,
                     tensorAlgebra::TensorElewsMultOp,
                     tensorAlgebra::SparseOutputTensorDeclOp,
+                    tensorAlgebra::TempSparseOutputTensorDeclOp,
                     tensorAlgebra::IndexLabelDynamicOp,
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::SparseTensorConstructOp>();
@@ -1618,7 +1696,6 @@ void DenseTensorDeclLoweringPass::runOnFunction()
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<DenseTensorDeclOpLowering>(&getContext());
 
-  
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
@@ -1635,10 +1712,10 @@ void DenseTensorDeclLoweringPass::runOnFunction()
 // it should be apply after high-level optimization such multi operations
 // optimization
 //===----------------------------------------------------------------===//
-void SparseInputTensorDeclLoweringPass::runOnFunction()
+void SparseTensorDeclLoweringPass::runOnFunction()
 {
-  comet_debug() << "---------------SparseInputTensorDeclLoweringPass begin\n";
-  // this pass will determine if sparse tensor is output and input. 
+  comet_debug() << "---------------SparseTensorDeclLoweringPass begin\n";
+  // this pass will determine if sparse tensor is output and input.
   // if input, replace with runtime calls to read_from_file...
   // if output, replace with sp-tensor-output
   ConversionTarget target(getContext());
@@ -1648,7 +1725,7 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
                          mlir::memref::MemRefDialect,
                          ITDialect>();
 
-  //target.addIllegalDialect<tensorAlgebra::TADialect>();
+  // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
@@ -1661,28 +1738,29 @@ void SparseInputTensorDeclLoweringPass::runOnFunction()
                     tensorAlgebra::TensorSetOp,
                     tensorAlgebra::TensorElewsMultOp,
                     tensorAlgebra::SparseOutputTensorDeclOp,
+                    tensorAlgebra::TempSparseOutputTensorDeclOp,
                     tensorAlgebra::DenseTensorDeclOp,
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp>();
 
   OwningRewritePatternList patterns(&getContext());
-  patterns.insert<SparseInputTensorDeclOpLowering>(&getContext());
+  patterns.insert<SparseTensorDeclOpLowering>(&getContext());
 
   if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
   {
-    llvm::errs() << "Failed to Lower SparseInputTensorDeclLoweringPass\n";
+    llvm::errs() << "Failed to Lower SparseTensorDeclLoweringPass\n";
     signalPassFailure();
   }
-  comet_debug() << "---------------SparseInputTensorDeclLoweringPass end\n";
+  comet_debug() << "---------------SparseTensorDeclLoweringPass end\n";
 }
 
-/******************************************************************/
-/********** SparseTCOutputLowering pass: sparse output ************/
-/*******************************************************************/
+/***********************************************************************************************/
+/********** SparseTCOutputLowering pass: sparse output tensor declararion lowering************/
+/************************************************************************************************/
 void SparseOutputTensorDeclLoweringPass::runOnFunction()
 {
   // Sparse output tensor declaration happens after lowering to index tree dialect
-  // this pass takes SparseOutputTensorDeclOp that was produced during SparseInputTensorDeclLoweringPass
+  // this pass takes SparseOutputTensorDeclOp that was produced during SparseTensorDeclLoweringPass
   comet_debug() << "---------------SparseOutputTensorDeclLoweringPass begin\n";
   ConversionTarget target(getContext());
 
@@ -1692,7 +1770,6 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
                          memref::MemRefDialect,
                          ITDialect>();
 
-  //target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::SUMOp,
@@ -1707,9 +1784,49 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp>();
 
-  getFunction().dump();
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<SparseOutputTensorDeclOpLowering>(&getContext());
+
+  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  {
+    llvm::errs() << "Failed to Lower STCOutputLowering\n";
+    signalPassFailure();
+  }
+  comet_debug() << "---------------SparseOutputTensorDeclLoweringPass end\n";
+}
+
+/******************************************************************************************************************/
+/********** TempSparseTCOutputLowering pass: sparse output tensor declaration lowering for temporaries ************/
+/*******************************************************************************************************************/
+void TempSparseOutputTensorDeclLoweringPass::runOnFunction()
+{
+  // Sparse output tensor declaration generated for temporaris in compound expressions
+  // this pass takes TempSparseOutputTensorDeclOp that was produced during SparseTensorDeclLoweringPass
+  comet_debug() << "---------------SparseOutputTensorDeclLoweringPass begin\n";
+  ConversionTarget target(getContext());
+
+  target.addLegalDialect<LinalgDialect,
+                         StandardOpsDialect,
+                         scf::SCFDialect,
+                         memref::MemRefDialect,
+                         ITDialect>();
+
+  target.addLegalOp<tensorAlgebra::PrintOp,
+                    tensorAlgebra::TAReturnOp,
+                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::TransposeOp,
+                    tensorAlgebra::TensorFillOp,
+                    tensorAlgebra::GetTimeOp,
+                    tensorAlgebra::PrintElapsedTimeOp,
+                    tensorAlgebra::SparseTensorConstructOp,
+                    tensorAlgebra::TensorMultOp,
+                    tensorAlgebra::TensorSetOp,
+                    tensorAlgebra::TensorElewsMultOp,
+                    tensorAlgebra::IndexLabelStaticOp,
+                    tensorAlgebra::IndexLabelDynamicOp>();
+
+  OwningRewritePatternList patterns(&getContext());
+  patterns.insert<TempSparseOutputTensorDeclOpLowering>(&getContext());
 
   if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
   {
@@ -1737,6 +1854,24 @@ void TensorFillLoweringPass::runOnFunction()
   comet_debug() << "---------------TensorFillLoweringPass end\n";
 }
 
+void RemoveLabeledTensorOpPass::runOnFunction()
+{
+  ConversionTarget target(getContext());
+  target.addLegalDialect<LinalgDialect,
+                         StandardOpsDialect,
+                         scf::SCFDialect,
+                         AffineDialect,
+                         memref::MemRefDialect>();
+
+  OwningRewritePatternList patterns(&getContext());
+  patterns.insert<RemoveLabeledTensorOp>(&getContext());
+
+  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  {
+    signalPassFailure();
+  }
+}
+
 /// Create a pass for lowering dense tensor (inputs and output) declaration operations in memref dialect
 std::unique_ptr<Pass> mlir::tensorAlgebra::createDenseTensorDeclLoweringPass()
 {
@@ -1744,9 +1879,9 @@ std::unique_ptr<Pass> mlir::tensorAlgebra::createDenseTensorDeclLoweringPass()
 }
 
 // Create a pass for lowering dense input tensor declaration operations
-std::unique_ptr<Pass> mlir::tensorAlgebra::createSparseInputTensorDeclLoweringPass()
+std::unique_ptr<Pass> mlir::tensorAlgebra::createSparseTensorDeclLoweringPass()
 {
-  return std::make_unique<SparseInputTensorDeclLoweringPass>();
+  return std::make_unique<SparseTensorDeclLoweringPass>();
 }
 
 // Create a pass for lowering sparse output declaration
@@ -1755,8 +1890,20 @@ std::unique_ptr<Pass> mlir::tensorAlgebra::createSparseOutputTensorDeclLoweringP
   return std::make_unique<SparseOutputTensorDeclLoweringPass>();
 }
 
+// Create a pass for lowering sparse output declaration for temporaries
+std::unique_ptr<Pass> mlir::tensorAlgebra::createTempSparseOutputTensorDeclLoweringPass()
+{
+  return std::make_unique<TempSparseOutputTensorDeclLoweringPass>();
+}
+
 // Create a pass for lowering tensor fill operation
 std::unique_ptr<Pass> mlir::tensorAlgebra::createTensorFillLoweringPass()
 {
   return std::make_unique<TensorFillLoweringPass>();
+}
+
+// Create a pass for lowering tensor fill operation
+std::unique_ptr<Pass> mlir::tensorAlgebra::createRemoveLabeledTensorOpsPass()
+{
+  return std::make_unique<RemoveLabeledTensorOpPass>();
 }

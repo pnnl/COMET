@@ -759,8 +759,6 @@ namespace
 
       rewriter.eraseOp(setnewop);
       rewriter.eraseOp(op);
-
-      // module->dump();
       return success();
     }
 

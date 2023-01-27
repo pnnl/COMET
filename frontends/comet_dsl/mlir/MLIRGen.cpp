@@ -980,7 +980,7 @@ namespace
         }
         else
         {
-          assert (false && " the format of output tensor could not be determined during generation of binOp");
+          assert(false && " the format of output tensor could not be determined during generation of binOp");
         }
         comet_debug() << " formats.size(): " << formats.size() << "\n";
         auto strAttr = builder.getStrArrayAttr(formats);
@@ -1209,13 +1209,13 @@ namespace
       {
         lhs_decl = lhs.getDefiningOp()->getOperand(0);
         out_format = "Dense";
-      } 
+      }
       else if (isa<SparseTensorDeclOp>(lhs.getDefiningOp()->getOperand(0).getDefiningOp()))
       {
         lhs_decl = lhs.getDefiningOp()->getOperand(0);
         auto lhs_decl_op = cast<SparseTensorDeclOp>(lhs_decl.getDefiningOp());
-        std::string formatStr (lhs_decl_op.formatAttr().cast<mlir::StringAttr>().getValue());
-        out_format = formatStr; 
+        std::string formatStr(lhs_decl_op.formatAttr().cast<mlir::StringAttr>().getValue());
+        out_format = formatStr;
       }
       else
       {
@@ -1512,84 +1512,20 @@ namespace
       std::string formats_str(tensor_format.data());
       if (isDense(formats_str, ", ") == false)
       {
+        // BoolAttr is false because there is explicit sparse densor declaration.
+        // SparseTensorDeclOp is not for temporaries in compound expressions
         value = builder.create<SparseTensorDeclOp>(loc(tensordecl.loc()),
-                                                   tensor_type, labels, tensor_format);
+                                                   tensor_type, labels, tensor_format, false);
+        comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
+        comet_vdump(value);
       }
       else
       {
         value = builder.create<DenseTensorDeclOp>(loc(tensordecl.loc()),
                                                   tensor_type, labels, tensor_format);
+        comet_debug() << "MLIRGen DenseTensorDeclaration creation\n";
+        comet_vdump(value);
       }
-
-      if (failed(declare(name, value)))
-        return nullptr;
-      return value;
-    }
-
-    /// Handle tensor declaration
-    mlir::Value mlirGen(OutputTensorDeclExprAST &tensordecl)
-    {
-      comet_debug() << "OutputTensorDeclExprAST \n";
-
-      auto dim_lbls = tensordecl.getDims();
-      std::vector<int64_t> dims_sizes;
-      std::vector<mlir::Value> labels;
-      auto tensor_format = tensordecl.getFormat();
-      for (const auto &lbl_str : dim_lbls)
-      {
-        if (auto var = symbolTable.lookup(lbl_str))
-        {
-          if (isa<IndexLabelStaticOp>(var.getDefiningOp()))
-          {
-            labels.push_back(var);
-            auto range = cast<IndexLabelStaticOp>(var.getDefiningOp());
-            auto min_idx =
-                cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
-            auto max_idx =
-                cast<mlir::ConstantIndexOp>(range.max().getDefiningOp());
-            auto step_idx =
-                cast<mlir::ConstantIndexOp>(range.step().getDefiningOp());
-
-            auto min = min_idx.getValue();
-            auto max = max_idx.getValue();
-            auto step = step_idx.getValue();
-
-            if (max == mlir::ShapedType::kDynamicSize)
-            {
-              dims_sizes.push_back(mlir::ShapedType::kDynamicSize);
-            }
-            else
-            {
-              dims_sizes.push_back((max - min) / step);
-            }
-          }
-          else if (isa<IndexLabelDynamicOp>(var.getDefiningOp()))
-          {
-
-            labels.push_back(var);
-            dims_sizes.push_back(mlir::ShapedType::kDynamicSize);
-          }
-          else
-          {
-            emitError(loc(tensordecl.loc()), "Index label variable required '")
-                << lbl_str << "'";
-          }
-        }
-        else
-        {
-          emitError(loc(tensordecl.loc()), "Unknown variable TensorDeclExprAST '")
-              << lbl_str << "'";
-        }
-      }
-
-      auto vartype = tensordecl.getElementType();
-      vartype.shape = dims_sizes;
-      auto tensor_type = getTensorType(vartype);
-      auto name = tensordecl.getName();
-
-      mlir::Value value = builder.create<SparseOutputTensorDeclOp>(loc(tensordecl.loc()),
-                                                                   tensor_type, labels, tensor_format);
-      comet_vdump(value);
 
       if (failed(declare(name, value)))
         return nullptr;
@@ -1815,7 +1751,6 @@ namespace
         }
       }
 
-
       // get return-type based on lhs-labels
       std::vector<int64_t> result_dims = getDimSizes(lhs_labels_val);
       mlir::Type return_type = getType(result_dims);
@@ -1823,26 +1758,30 @@ namespace
       // Create Tensor Declarations Ops and populate formats (for lhs)
       mlir::Value lhs_tensor;
       if (isa<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()))
-      { 
+      {
         // for DenseTensorDeclOp create
         mlir::StringRef format_strref = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
         lhs_tensor = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr);
 
-        // populate formats 
+        // populate formats
         // assumes lhs and rhs formats are same
         auto lhs_format = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
         formats.push_back(lhs_format);
-
       }
       else if (isa<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()))
       {
         // for SparseTensorDeclOp create
         mlir::StringRef format_strref = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
-        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr);
 
-        // populate formats 
+        // no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
+        // BoolAttr is true to speficy SparseTensorDeclOp is for temporaries   
+        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr, builder.getBoolAttr(true));
+        comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
+        comet_vdump(lhs_tensor);
+
+        // populate formats
         // assumes lhs and rhs formats are same
         auto lhs_format = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).format();
         formats.push_back(lhs_format);
@@ -1884,13 +1823,6 @@ namespace
         }
 
         if (auto *tensordecl = dyn_cast<TensorDeclExprAST>(expr.get()))
-        {
-          if (!mlirGen(*tensordecl))
-            return mlir::failure();
-          continue;
-        }
-
-        if (auto *tensordecl = dyn_cast<OutputTensorDeclExprAST>(expr.get()))
         {
           if (!mlirGen(*tensordecl))
             return mlir::failure();

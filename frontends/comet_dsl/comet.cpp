@@ -215,15 +215,20 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (int error = loadMLIR(context, module))
     return error;
 
-  // Check to see if we are dumping to TA dialect.
-  if (emitTA)
-    return 0;
-
   mlir::PassManager pm(&context);
   // Apply any generic pass manager command line options and run the pipeline.
   applyPassManagerCLOptions(pm);
 
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
+  optPM.addPass(mlir::tensorAlgebra::createRemoveLabeledTensorOpsPass());
+
+  // Check to see if we are dumping to TA dialect.
+  if (emitTA)
+  {
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+    return 0;
+  }
 
   //  =============================================================================
   //  High-level optimization at the TA dialect
@@ -245,7 +250,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   //  Creating tensor declarations for temporal tensors in compound expressions, preprocessing.
   //  =============================================================================
   optPM.addPass(mlir::tensorAlgebra::createPreLoweringPass()); // Creating tensor declarations for temporal tensors in chain operations
-
   //  =============================================================================
 
   // ===================================================================================
@@ -281,11 +285,14 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   // =============================================================================
   // Early lowering for the following passes to lower IndexTree and TA dialect to loops
+  // Early lowering pases based on the sparsity property of inputs/outputs
   // =============================================================================
-  /// Early lowering pases based on the sparsity property of inputs/outputs
+
   /// Sparse input tensor declararion should be lowered before dense input tensor declaration
-  optPM.addPass(mlir::tensorAlgebra::createSparseInputTensorDeclLoweringPass()); // sparse input tensor declaration lowering
-  optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());       // dense input tensor declaration lowering
+  // sparse input tensor declaration lowering, also generate sparse_output_tensor declaration if needed
+  // input and output sparse tensor declaration lowering are distant and need different information
+  optPM.addPass(mlir::tensorAlgebra::createSparseTensorDeclLoweringPass());
+  optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass()); // dense input tensor declaration lowering
   optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass());
   // =============================================================================
 
@@ -322,8 +329,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (IsLoweringtoSCF)
   {
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
-    optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());        // early lowering for dense input/output
-    optPM.addPass(mlir::tensorAlgebra::createSparseOutputTensorDeclLoweringPass()); // early lowering for sparse output
+    optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());            // early lowering for dense input/output
+    optPM.addPass(mlir::tensorAlgebra::createTempSparseOutputTensorDeclLoweringPass()); // early lowering for sparse output tensor declaration for temporaries
+    optPM.addPass(mlir::tensorAlgebra::createSparseOutputTensorDeclLoweringPass());     // early lowering for sparse output
     // The partial Fusion pass might add new tensor.fill operations
     optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass());
     //=============================================================================
@@ -336,7 +344,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
     optPM.addPass(mlir::tensorAlgebra::createSUMLowerToSCFPass());
     optPM.addPass(mlir::tensorAlgebra::createTransposeLoweringPass());
-    // =============================================================================
+
+    //  =============================================================================
   }
 
   // =============================================================================
