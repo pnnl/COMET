@@ -72,20 +72,35 @@ using namespace mlir::tensorAlgebra;
 using llvm::SmallVector;
 using llvm::StringRef;
 
-#define DEBUG_TYPE "lowering-ta-to-it"
+#define DEBUG_TYPE "workspace-transformations"
 
 // *********** For debug purpose *********//
 // #ifndef DEBUG_MODE_WorkspaceTransformsPass
 // #define DEBUG_MODE_WorkspaceTransformsPass
 // #endif
 
+// #ifdef DEBUG_MODE_WorkspaceTransformsPass
+// #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+// #define comet_pdump(n)                                \
+//   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+//   n->dump()
+// #define comet_vdump(n)                                \
+//   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+//   n.dump()
+// #else
+// #define comet_debug() llvm::nulls()
+// #define comet_pdump(n)
+// #define comet_vdump(n)
+// #endif
+
 #ifdef DEBUG_MODE_WorkspaceTransformsPass
+// #define comet_debug() llvm::errs() << " " << __LINE__ << " "
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+#define comet_pdump(n)                    \
+  llvm::errs() << " " << __LINE__ << " "; \
   n->dump()
-#define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+#define comet_vdump(n)                    \
+  llvm::errs() << " " << __LINE__ << " "; \
   n.dump()
 #else
 #define comet_debug() llvm::nulls()
@@ -532,10 +547,13 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   builder.setInsertionPoint(itComputeOpFirstUsers); // Insert before itree Op
 
   mlir::Value w = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_type, w_lbls_value, w_format);
+  comet_vdump(w);
   auto w_already_set_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getI1Type()); // tensor<?xi1>
   mlir::Value w_already_set = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_already_set_type, w_lbls_value, w_format);
+  comet_vdump(w_already_set);
   auto w_index_list_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getIndexType()); // tensor<?xindex>
   mlir::Value w_index_list = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_index_list_type, w_lbls_value, w_format);
+  comet_vdump(w_index_list);
 
   MemRefType w_index_list_size_type = MemRefType::get({1}, builder.getIndexType());                   // tensor<1xindex>
   mlir::Value w_index_list_size_alloc = builder.create<memref::AllocOp>(loc, w_index_list_size_type); // tensor<1xindex>
@@ -667,8 +685,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
   std::vector<mlir::Value> newComputeOps = {c2, c3};
   sparseIndicesOp.getDefiningOp()->setOperands(newComputeOps);
-  itComputeOp.erase();
-
+  
   // remove redundant indices by calling a function
   // in elementwise: not remove
   // in spgemm: remove
@@ -731,7 +748,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
 void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder, Location loc)
 {
-  auto comp_worksp_opt = builder.getBoolAttr(workspace);
+  auto comp_worksp_opt = builder.getBoolAttr(compressedworkspace);
   for (auto computeOp : computeOps)
   {
     /// 1. get the opFormats and opPerms of the computeOp
@@ -781,6 +798,9 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       comet_vdump(sparseInput);
 
       std::vector<mlir::Value> v_lbls_value = {sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder)};
+      comet_debug() << "Dumping v_lbls_value\n";
+      comet_vdump(v_lbls_value[0]);
+      comet_debug() << "Done\n";
       comet_vdump(sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder));
       std::string v_format = "Dense"; // tensor<?xf64>
       auto v_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getF64Type());
@@ -1014,16 +1034,28 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
       comet_vdump(op);
       // Need the newComputeOps
       CompressedWorkspaceInput(newComputeOps, builder, loc);
-    } }); // end function traverse
+    } 
+
+    itComputeOp.erase(); 
+
+    //Also remove previous IndexTreeComputeOp's LHS and RHS. 
+    indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(itComputeOp->getOperand(0).getDefiningOp());
+    indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(itComputeOp->getOperand(1).getDefiningOp());
+    itComputeOp_rhs.erase();
+    itComputeOp_lhs.erase();
+
+    }); // end function traverse
+
+  comet_debug() << __FILE__ << " " << __LINE__ << "CompressedWorkspaceTransforms pass is done\n";
 }
 
 void CompressedWorkspaceTransformsPass::runOnFunction()
 {
   comet_debug() << __FILE__ << " " << __LINE__ << " starting CompressedWorkspaceTransforms pass \n";
   auto function = getFunction();
-
   // Traverse the function, only handle ta.itree operation
   CompressedWorkspaceTransforms(function);
+  comet_debug() << __FILE__ << " " << __LINE__ << " ending CompressedWorkspaceTransforms pass \n";
 }
 
 // Apply the compressed workspace transformations on the index tree IR
