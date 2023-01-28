@@ -1,17 +1,20 @@
+# Build directory
 /build*
 /cmake-build*
 /docker_build
-.vscode
+
+# OS and libaries
 #*
 *~
 .DS_Store
 __pycache__
 lit.site.cfg.py
 
-# Local Directory
+# Local directory
 /local_stuff
 
 # IDE
+.vscode
 /.idea
 
 # External software

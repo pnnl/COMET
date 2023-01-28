@@ -248,79 +248,88 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
 
-  //  =============================================================================
-  //  High-level optimization at the TA dialect
-  //  Such as finding the optimal ordering of dense tensor contractions, or reformulating tensor contractions
-  //  operations via TTGT
-  //  =============================================================================
-  if (OptMultiOpFactorization)
-  {
-    /// createFindOptimalTCFactorizationPass should be before lowering of input/output tensor declarations
-    /// because this pass finds the optimal ordering of dense tensor multiplication
-    /// operations before lowering them specific tc operations
-    optPM.addPass(mlir::tensorAlgebra::createFindOptimalTCFactorizationPass());
-  }
-
-  optPM.addPass(mlir::tensorAlgebra::createLowerTAMulChainPass()); // Lowering for chain operations
-  optPM.addPass(mlir::tensorAlgebra::createPreLoweringPass());     // Creating tensor declarations for temporal tensors in chain operations
-
-  // Sparse input and dense input/output tensor declarations needed be lowered for TTGT
-  optPM.addPass(mlir::tensorAlgebra::createSparseInputTensorDeclLoweringPass()); // sparse input tensor declaration lowering
-  optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());       // dense input tensor declaration lowering
-  optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass());
-
-  /// TTGT reformulation for dense tensor contraction operations
-  if (IsLoweringTCtoTTGT)
-  {
-    optPM.addPass(mlir::tensorAlgebra::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
-  }
-
-  // =============================================================================
-  // Operation based optimizations
-  // =============================================================================
-  if (OptDenseTransposeOp) // Optimize Dense Transpose operation
-  {
-    // If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
-    optPM.addPass(mlir::tensorAlgebra::createTransposeLoweringPass());
-    optPM.addPass(mlir::tensorAlgebra::createOptDenseTransposePass());
-  }
-
-  if (OptMatmulTiling)
-  {
-    optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulTilingPass());
-  }
-
-  if (OptCallToMatMulMicroKernel)
-  {
-    optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulMicroKernelPass());
-  }
-
-  // ===================================================================================
-  // Lowering of TC (tensor contraction) operation to Index Tree dialect, then SCF dialect
-  // ===================================================================================
-  if (IsLoweringtoIndexTree || emitIT)
-  {
-    /// Generate the index tree IR
-    optPM.addPass(mlir::IndexTree::createIndexTreePass());
-
-    // Dump index tree dialect.
-    if (emitIT)
-    {
-      if (mlir::failed(pm.run(*module)))
-        return 4;
-      return 0;
-    }
-  }
-  if (OptKernelFusion)
-  {
-    // Apply partial fusion on index tree dialect for some compound expressions.
-    optPM.addPass(mlir::IndexTree::createKernelFusionPass());
-  }
+//  //  =============================================================================
+//  //  High-level optimization at the TA dialect
+//  //  Such as finding the optimal ordering of dense tensor contractions, or reformulating tensor contractions
+//  //  operations via TTGT
+//  //  =============================================================================
+//  if (OptMultiOpFactorization)
+//  {
+//    /// createFindOptimalTCFactorizationPass should be before lowering of input/output tensor declarations
+//    /// because this pass finds the optimal ordering of dense tensor multiplication
+//    /// operations before lowering them specific tc operations
+//    optPM.addPass(mlir::tensorAlgebra::createFindOptimalTCFactorizationPass());
+//  }
+//
+//  optPM.addPass(mlir::tensorAlgebra::createLowerTAMulChainPass()); // Lowering for chain operations
+//  optPM.addPass(mlir::tensorAlgebra::createPreLoweringPass());     // Creating tensor declarations for temporal tensors in chain operations
+//
+//  // Sparse input and dense input/output tensor declarations needed be lowered for TTGT
+//  optPM.addPass(mlir::tensorAlgebra::createSparseInputTensorDeclLoweringPass()); // sparse input tensor declaration lowering
+//  optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());       // dense input tensor declaration lowering
+//  optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass());
+//
+//  /// TTGT reformulation for dense tensor contraction operations
+//  if (IsLoweringTCtoTTGT)
+//  {
+//    optPM.addPass(mlir::tensorAlgebra::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
+//  }
+//
+//  // =============================================================================
+//  // Operation based optimizations
+//  // =============================================================================
+//  if (OptDenseTransposeOp) // Optimize Dense Transpose operation
+//  {
+//    // If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
+//    optPM.addPass(mlir::tensorAlgebra::createTransposeLoweringPass());
+//    optPM.addPass(mlir::tensorAlgebra::createOptDenseTransposePass());
+//  }
+//
+//  if (OptMatmulTiling)
+//  {
+//    optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulTilingPass());
+//  }
+//
+//  if (OptCallToMatMulMicroKernel)
+//  {
+//    optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulMicroKernelPass());
+//  }
+//
+//  // ===================================================================================
+//  // Lowering of TC (tensor contraction) operation to Index Tree dialect, then SCF dialect
+//  // ===================================================================================
+//  if (IsLoweringtoIndexTree || emitIT)
+//  {
+//    /// Generate the index tree IR
+//    optPM.addPass(mlir::IndexTree::createIndexTreePass());
+//
+////    // Dump index tree dialect.
+////    if (emitIT)
+////    {
+////      if (mlir::failed(pm.run(*module)))
+////        return 4;
+////      return 0;
+////    }
+//  }
+//  if (OptKernelFusion)
+//  {
+//    // Apply partial fusion on index tree dialect for some compound expressions.
+//    optPM.addPass(mlir::IndexTree::createKernelFusionPass());
+//  }
 
   if (OptWorkspace)
   {
     // Optimized workspace transformations, reduce iteration space for nonzero elements
     optPM.addPass(mlir::IndexTree::createCompressedWorkspaceTransformsPass());
+  }
+
+  /// Added by Zhen Peng on 01/23/2023
+  // Dump index tree dialect.
+  if (emitIT)
+  {
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+    return 0;
   }
   // =============================================================================
 

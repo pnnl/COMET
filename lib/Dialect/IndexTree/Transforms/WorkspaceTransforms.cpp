@@ -75,17 +75,17 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-ta-to-it"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_WorkspaceTransformsPass
-// #define DEBUG_MODE_WorkspaceTransformsPass
-// #endif
+//#ifndef DEBUG_MODE_WorkspaceTransformsPass
+//#define DEBUG_MODE_WorkspaceTransformsPass
+//#endif
 
 #ifdef DEBUG_MODE_WorkspaceTransformsPass
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
 #define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n->dump()
 #define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
 #define comet_debug() llvm::nulls()
@@ -998,7 +998,8 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
     std::vector<Value> newComputeOps;
     // create three IndexTreeComputeOp op
     // sparse dim in output tensor   
-    if(sparseDimsOutput.size() == 1){      
+    if(sparseDimsOutput.size() == 1){
+      comet_debug() << "CompressedWorkspaceOutput()\n";
       newComputeOps = CompressedWorkspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, indexValueMap, builder, op);
     }
     // initially here workspaceOutput content

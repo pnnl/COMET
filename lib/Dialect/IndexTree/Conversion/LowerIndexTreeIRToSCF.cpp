@@ -77,17 +77,17 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-// #define DEBUG_MODE_LowerIndexTreeIRToSCFPass
-// #endif
+#ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#define DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
 #define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n->dump()
 #define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
 #define comet_debug() llvm::nulls()
