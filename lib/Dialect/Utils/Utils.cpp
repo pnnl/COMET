@@ -45,17 +45,17 @@
 
 #define DEBUG_TYPE "ta-utils"
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_UTILS
-// #define DEBUG_MODE_UTILS
-// #endif
+//#ifndef DEBUG_MODE_UTILS
+//#define DEBUG_MODE_UTILS
+//#endif
 
 #ifdef DEBUG_MODE_UTILS
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
 #define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n->dump()
 #define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
 #define comet_debug() llvm::nulls()
