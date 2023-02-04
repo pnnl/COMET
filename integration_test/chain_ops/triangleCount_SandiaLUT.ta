@@ -1,0 +1,46 @@
+# Triangle Counting Algorithm: Sandia_LUT
+# Given a symmetric graph A with no-self edges, triangleCount counts the
+# number of triangles in the graph.  A triangle is a clique of size three,
+# that is, three nodes that are all pairwise connected.
+
+# Reference for this method: Wolf, Deveci, Berry, Hammond,
+# Rajamanickam, "Fast linear algebra- based triangle counting with
+# KokkosKernels", IEEE HPEC'17, https://dx.doi.org/10.1109/HPEC.2017.8091043
+
+# Sandia_LUT: ntri = sum (sum ((L * U') .* L)).  Note that L=U'.
+
+# L and U are the strictly lower and strictly upper triangular parts of the symmetrix matrix A,
+# respectively.
+
+# RUN: comet-opt --opt-comp-workspace --convert-ta-to-it --convert-to-loops %s &> triangleCount_SandiaLUT.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm triangleCount_SandiaLUT.mlir &> triangleCount_SandiaLUT.llvm
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/tc.mtx
+# RUN: export SORT_TYPE=SEQ_QSORT
+# RUN: mlir-cpu-runner triangleCount_SandiaLUT.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+def main() {
+    #IndexLabel Declarations
+    IndexLabel [i] = [?];
+    IndexLabel [j] = [?];
+    IndexLabel [k] = [?];
+
+    #Tensor Declarations
+    Tensor<double> L([i, j], {CSR});
+    Tensor<double> A([i, k], {CSR}); #copy of L
+    Tensor<double> U([k, j], {CSR});
+
+
+    #Tensor Data Initialization
+    U[k, j] = read_upperTri_from_file(0);
+    A[i, k] = read_lowerTri_from_file(0);
+    L[i, j] = read_lowerTri_from_file(0);
+
+    # Sandia_LUT method: ntri = sum (sum ((L * U') .* L)).  Note that L=U'.
+    ## 
+    var ntri = SUM((L[i, j] * transpose(U[k, j],{j,k})) .* A[i,k]);
+    print(ntri);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 5,
