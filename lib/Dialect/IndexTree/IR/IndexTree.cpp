@@ -112,9 +112,32 @@ void Index_Tree::print(string msg)
   getRoot()->print(0);
 }
 
-Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, IndicesType &indices,
-                                      FormatsType &formats)
+IndicesType Index_Tree::getIndices(mlir::Value v)
 {
+  IndicesType indices;
+
+  void *ilabel;
+  for (unsigned int i = 0; i < v.getDefiningOp()->getNumOperands(); i++)
+  {
+    comet_vdump(v.getDefiningOp()->getOperand(i));
+    ilabel = v.getDefiningOp()->getOperand(i).getAsOpaquePointer();
+    if (indexLabelToId.count(ilabel) == 0)
+    {
+      comet_debug() << "Index Label just created:" << indexID << "\n";
+      indexLabelToId[ilabel] = indexID;
+      indexID++;
+    }
+
+    comet_debug() << "Index Label just added to the list:" << indexLabelToId[ilabel] << "\n";
+    indices.push_back(indexLabelToId[ilabel]);
+  }
+
+  return indices;
+}
+
+Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, FormatsType &formats)
+{
+  IndicesType indices  =  getIndices(v);
   void *vp = v.getAsOpaquePointer();
   if (valueToTensor.count(vp) == 0)
   {
@@ -152,7 +175,7 @@ unique_ptr<Index_Tree> Index_Tree::createTreeWithRoot()
 {
   auto tree = make_unique<Index_Tree>();
   tree->addRootNode();
-  //return std::move(tree);
+  // return std::move(tree);
   return tree;
 }
 
