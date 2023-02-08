@@ -685,7 +685,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
   std::vector<mlir::Value> newComputeOps = {c2, c3};
   sparseIndicesOp.getDefiningOp()->setOperands(newComputeOps);
-  
+
   // remove redundant indices by calling a function
   // in elementwise: not remove
   // in spgemm: remove
@@ -946,106 +946,116 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
 {
   funcop.walk([](indexTree::IndexTreeOp op)
               {
-    OpBuilder builder(op);
-    comet_vdump(op);
+                OpBuilder builder(op);
+                comet_vdump(op);
 
-    Location loc = op.getLoc();
+                Location loc = op.getLoc();
 
-    // 1. Find its child, until reach the ta.itCompute op
-    // Get first user
-    Value computeOp = op.getOperation()->getOperand(0);
-    comet_vdump(computeOp);
-    
-    // Only one child??
-    // Build a map, which index is in which IndexTreeIndicesOp
-    // ------ Notice: each index is only in one IndicesOp in original index tree here
-    // ------ TODO(gkestor): handle more complicate cases: one index is in more than one IndicesOp
-    // For an indexTree, the indices ids are
-    std::map<int, mlir::Value> indexValueMap;
-    
-    while(!(isa<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp()))){
-      if(isa<indexTree::IndexTreeIndicesOp>(computeOp.getDefiningOp())){
-        auto indicesop = dyn_cast<indexTree::IndexTreeIndicesOp>(computeOp.getDefiningOp());
-        ArrayAttr idsArrayAttr = indicesop.indices();
-        for(auto n : idsArrayAttr){
-          int ids = n.cast<mlir::IntegerAttr>().getInt();
-          indexValueMap.emplace(ids, computeOp);
-        }      
-      }
-      computeOp = computeOp.getDefiningOp()->getOperand(0); // put here
-    }
-    comet_vdump(computeOp);
-    
-    // 2. Check if there is sparse dim in the ta.itCompute op, 
-    std::vector<std::vector<std::string>> opFormats;
-    std::vector<std::vector<int>> opPerms;
-    std::vector<std::vector<bool> > inputOutputMapping;
-    getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
+                // 1. Find its child, until reach the ta.itCompute op
+                // Get first user
+                Value computeOp = op.getOperation()->getOperand(0);
+                comet_vdump(computeOp);
 
-#ifdef DEBUG_MODE_WorkspaceTransformsPass
-    comet_debug() << "Print opFormats:\n";
-    for (auto n : opFormats)
-    {
-      
-      print_vector<std::string>(n);
-    }
-#endif
-    
-    indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-    
-    //Check the input tensors, and the output tensor, to see if it contains sparse dimensions
-    //get the dim ids
-    std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
+                // Only one child??
+                // Build a map, which index is in which IndexTreeIndicesOp
+                // ------ Notice: each index is only in one IndicesOp in original index tree here
+                // ------ TODO(gkestor): handle more complicate cases: one index is in more than one IndicesOp
+                // For an indexTree, the indices ids are
+                std::map<int, mlir::Value> indexValueMap;
+
+                while (!(isa<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp())))
+                {
+                  if (isa<indexTree::IndexTreeIndicesOp>(computeOp.getDefiningOp()))
+                  {
+                    auto indicesop = dyn_cast<indexTree::IndexTreeIndicesOp>(computeOp.getDefiningOp());
+                    ArrayAttr idsArrayAttr = indicesop.indices();
+                    for (auto n : idsArrayAttr)
+                    {
+                      int ids = n.cast<mlir::IntegerAttr>().getInt();
+                      indexValueMap.emplace(ids, computeOp);
+                    }
+                  }
+                  computeOp = computeOp.getDefiningOp()->getOperand(0); // put here
+                }
+                comet_vdump(computeOp);
+
+                // 2. Check if there is sparse dim in the ta.itCompute op,
+                std::vector<std::vector<std::string>> opFormats;
+                std::vector<std::vector<int>> opPerms;
+                std::vector<std::vector<bool>> inputOutputMapping;
+                getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
 
 #ifdef DEBUG_MODE_WorkspaceTransformsPass
-    comet_debug() << " Print sparseDimsOutput: ";
-    for(auto p : sparseDimsOutput){
-      comet_debug() << p << " ";
-    }
-    comet_debug() << "\n";
+                comet_debug() << "Print opFormats:\n";
+                for (auto n : opFormats)
+                {
+
+                  print_vector<std::string>(n);
+                }
 #endif
 
-    std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
+                indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
 
-    if(sparseDimsOutput.size() == 0 && sparseDimsInput.size() == 0){
-      // No need to apply workspace transformation
-      comet_debug() <<  __FILE__ << __LINE__ << " No need to apply workspace transformation\n";
-      return;
-    }
-    
-    assert(sparseDimsOutput.size() == 1 && " More than one sparse index in the output, we are expecting to support it in the future\n"); 
+                // Check the input tensors, and the output tensor, to see if it contains sparse dimensions
+                // get the dim ids
+                std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
 
-    std::vector<Value> newComputeOps;
-    // create three IndexTreeComputeOp op
-    // sparse dim in output tensor   
-    if(sparseDimsOutput.size() == 1){      
-      newComputeOps = CompressedWorkspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, indexValueMap, builder, op);
-    }
+#ifdef DEBUG_MODE_WorkspaceTransformsPass
+                comet_debug() << " Print sparseDimsOutput: ";
+                for (auto p : sparseDimsOutput)
+                {
+                  comet_debug() << p << " ";
+                }
+                comet_debug() << "\n";
+#endif
+
+                std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
+
+                if (sparseDimsOutput.size() == 0 && sparseDimsInput.size() == 0)
+                {
+                  // No need to apply workspace transformation
+                  comet_debug() << __FILE__ << __LINE__ << " No need to apply workspace transformation\n";
+                  return;
+                }
+
+                assert(sparseDimsOutput.size() == 1 && " More than one sparse index in the output, we are expecting to support it in the future\n");
+
+                std::vector<Value> newComputeOps;
+                // create three IndexTreeComputeOp op
+                // sparse dim in output tensor
+                if (sparseDimsOutput.size() == 1)
+                {
+                  newComputeOps = CompressedWorkspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, indexValueMap, builder, op);
+                }
     // initially here workspaceOutput content
 
 #ifdef DEBUG_MODE_WorkspaceTransformsPass
-    // Should notice, the itree has been the new itree already after call workspaceOutput
-    for(auto n : newComputeOps){
-      
-      comet_vdump(n);
-    }
+                // Should notice, the itree has been the new itree already after call workspaceOutput
+                for (auto n : newComputeOps)
+                {
+
+                  comet_vdump(n);
+                }
 #endif
-    if(sparseDimsInput.size() == 1){
-      comet_vdump(op);
-      // Need the newComputeOps
-      CompressedWorkspaceInput(newComputeOps, builder, loc);
-    } 
+                if (sparseDimsInput.size() == 1)
+                {
+                  comet_vdump(op);
+                  // Need the newComputeOps
+                  CompressedWorkspaceInput(newComputeOps, builder, loc);
+                }
 
-    itComputeOp.erase(); 
 
-    //Also remove previous IndexTreeComputeOp's LHS and RHS. 
-    indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(itComputeOp->getOperand(0).getDefiningOp());
-    indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(itComputeOp->getOperand(1).getDefiningOp());
-    itComputeOp_rhs.erase();
-    itComputeOp_lhs.erase();
+                // Also remove previous IndexTreeComputeOp's LHS and RHS.
+                indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(itComputeOp->getOperand(0).getDefiningOp());
+                indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(itComputeOp->getOperand(1).getDefiningOp());
 
-    }); // end function traverse
+                itComputeOp.erase();
+                itComputeOp_rhs.erase();
+                itComputeOp_lhs.erase();
 
+              }); // end function traverse
+
+  
   comet_debug() << __FILE__ << " " << __LINE__ << "CompressedWorkspaceTransforms pass is done\n";
 }
 

@@ -84,18 +84,18 @@ Value getRealLhs(Operation *op)
 
 Value getRealRhs(Operation *op)
 {
-  Operation *firstUser = op->getNextNode();  // this will return set_op for transpose, but messes up getUsers() or subsequent calls to it.
+  Operation *firstUser = op->getNextNode(); // this will return set_op for transpose, but messes up getUsers() or subsequent calls to it.
   comet_pdump(firstUser);
   // TODO: need to find out why user set_op is not showing up in users of TransposeOp
   //       from the for loop below. once resolved, remove getNextNode().
-  //Operation *firstUser;
-  //for (auto user : op->getResult(0).getUsers())
+  // Operation *firstUser;
+  // for (auto user : op->getResult(0).getUsers())
   //{
   //  firstUser = user;
   //  break;
   //}
-  
-  if (isa<tensorAlgebra::TransposeOp>(op)) 
+
+  if (isa<tensorAlgebra::TransposeOp>(op))
   {
     if (isa<TensorSetOp>(firstUser))
     {
@@ -128,14 +128,32 @@ void buildDefUseInfo(UnitExpression *e)
   }
 }
 
+IndicesType getUnion(IndicesType indices1, IndicesType indices2)
+{ 
+
+    sort(indices1.begin(),indices1.end());
+    sort(indices2.begin(),indices2.end());
+
+        IndicesType allIndices(indices1.size()*2);
+
+    IndicesType::iterator it= set_union(indices1.begin(),indices1.end(),indices2.begin(),indices2.end(),allIndices.begin());
+    allIndices.resize(it-allIndices.begin());
+    return allIndices;
+}
+
 void doTensorMultOp(TensorMultOp op)
 {
-  //Value rhs1 = op.rhs1();
-  Value rhs1 = getRealRhs(op.rhs1().getDefiningOp());
-  //Value rhs2 = op.rhs2();
-  Value rhs2 = getRealRhs(op.rhs2().getDefiningOp());
-  Value lhs = getRealLhs(op);
+  Value rhs1_tensor = getRealRhs(op.rhs1().getDefiningOp());
+  Value rhs2_tensor = getRealRhs(op.rhs2().getDefiningOp());
+  Value lhs_tensor = getRealLhs(op);
 
+  comet_debug() << "IndexTreePass: doTensorMultOp\n";
+  comet_debug() << "rhs1-tensor\n";
+  comet_vdump(rhs1_tensor);
+  comet_debug() << "rhs2-tensor\n";
+  comet_vdump(rhs2_tensor);
+  comet_debug() << "lhs-tensor\n";
+  comet_vdump(lhs_tensor);
 
   auto allPerms = getAllPerms(op.indexing_maps());
   auto allFormats = getAllFormats(op.formatsAttr(), allPerms);
@@ -143,9 +161,9 @@ void doTensorMultOp(TensorMultOp op)
 
   assert(allPerms.size() == 3);
 
-  auto A = tree->getOrCreateTensor(lhs, allPerms[2], allFormats[2]);
-  auto B = tree->getOrCreateTensor(rhs1, allPerms[0], allFormats[0]);
-  auto C = tree->getOrCreateTensor(rhs2, allPerms[1], allFormats[1]);
+  auto B = tree->getOrCreateTensor(rhs1_tensor, allFormats[0]);
+  auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
+  auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
 
   auto e = make_unique<UnitExpression>(A, B, C, "*");
   e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue());
@@ -156,24 +174,16 @@ void doTensorMultOp(TensorMultOp op)
   auto inputDomains = e->computeInputIterDomains();
   auto outputDomains = e->computeOutputIterDomains();
 
-  IndicesType indices;
-  for (auto &perm : allPerms)
-  {
-    for (auto i : perm)
-    {
-      if (std::find(indices.begin(), indices.end(), i) == indices.end())
-      {
-        indices.push_back(i);
-      }
-    }
-  }
+  IndicesType rhs1_indices = tree->getIndices(rhs1_tensor);
+  IndicesType rhs2_indices = tree->getIndices(rhs2_tensor);
+  IndicesType allIndices = getUnion(rhs1_indices, rhs2_indices);
 
   auto lhsIndices = A->getIndices();
 
   TreeNode *parent = tree->getRoot();
-  for (unsigned long i = 0; i < indices.size(); i++)
+  for (unsigned long i = 0; i < allIndices.size(); i++)
   {
-    int index = indices[i];
+    int index = allIndices[i];
     auto &idomain = inputDomains.at(index);
 
     auto node = tree->addIndexNode(index, parent, idomain);
@@ -194,17 +204,17 @@ void doTensorMultOp(TensorMultOp op)
 void doElementWiseMultOp(TensorElewsMultOp op)
 {
   // getFunction()->dump();
-  Value rhs1 = getRealRhs(op.rhs1().getDefiningOp());
-  //Value rhs1 = op.rhs1();
-  Value rhs2 = getRealRhs(op.rhs2().getDefiningOp());
-  //Value rhs2 = op.rhs2();
-  Value lhs = getRealLhs(op);
+  Value rhs1_tensor = getRealRhs(op.rhs1().getDefiningOp());
+  Value rhs2_tensor = getRealRhs(op.rhs2().getDefiningOp());
+  Value lhs_tensor = getRealLhs(op);
 
   comet_debug() << "IndexTreePass: doElementWiseMultOp\n";
-  comet_debug() << "rhs1\n";
-  comet_vdump(rhs1);
-  comet_debug() << "rhs2\n";
-  comet_vdump(rhs2);
+  comet_debug() << "rhs1-tensor\n";
+  comet_vdump(rhs1_tensor);
+  comet_debug() << "rhs2-tensor\n";
+  comet_vdump(rhs2_tensor);
+  comet_debug() << "lhs-tensor\n";
+  comet_vdump(lhs_tensor);
 
   auto allPerms = getAllPerms(op.indexing_maps());
   auto allFormats = getAllFormats(op.formatsAttr(), allPerms);
@@ -212,9 +222,9 @@ void doElementWiseMultOp(TensorElewsMultOp op)
 
   assert(allPerms.size() == 3);
 
-  auto A = tree->getOrCreateTensor(lhs, allPerms[2], allFormats[2]);
-  auto B = tree->getOrCreateTensor(rhs1, allPerms[0], allFormats[0]);
-  auto C = tree->getOrCreateTensor(rhs2, allPerms[1], allFormats[1]);
+  auto B = tree->getOrCreateTensor(rhs1_tensor, allFormats[0]);
+  auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
+  auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
 
   auto e = make_unique<UnitExpression>(A, B, C, "*");
 
@@ -225,24 +235,14 @@ void doElementWiseMultOp(TensorElewsMultOp op)
   auto inputDomains = e->computeInputIterDomains();
   auto outputDomains = e->computeOutputIterDomains();
 
-  IndicesType indices;
-  for (auto &perm : allPerms)
-  {
-    for (auto i : perm)
-    {
-      if (std::find(indices.begin(), indices.end(), i) == indices.end())
-      {
-        indices.push_back(i);
-      }
-    }
-  }
+  //RHS and LHS indices must be the same for elementwise multiplication
+  IndicesType allIndices = tree->getIndices(rhs1_tensor);
 
   auto lhsIndices = A->getIndices();
-
   TreeNode *parent = tree->getRoot();
-  for (unsigned long i = 0; i < indices.size(); i++)
+  for (unsigned long i = 0; i < allIndices.size(); i++)
   {
-    int index = indices[i];
+    int index = allIndices[i];
     auto &idomain = inputDomains.at(index);
 
     auto node = tree->addIndexNode(index, parent, idomain);
@@ -256,7 +256,6 @@ void doElementWiseMultOp(TensorElewsMultOp op)
 
     parent = node;
   }
-
   tree->addComputeNode(std::move(e), parent);
   // cout << "print tree after tc\n";
   // tree->print();
@@ -343,7 +342,7 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
                                                                       mlir::UnrankedTensorType::get(builder.getF64Type()), t_lhs,
                                                                       builder.getArrayAttr(allIndices_lhs),
                                                                       builder.getArrayAttr(allFormats_lhs));
-  bool comp_worksp_opt = false;  // non-compressed workspace, this is a place-holder and it is updated in workspace transform pass.
+  bool comp_worksp_opt = false; // non-compressed workspace, this is a place-holder and it is updated in workspace transform pass.
   llvm::StringRef semiring = expr->getSemiring();
   auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getBoolAttr(comp_worksp_opt), builder.getStringAttr(semiring));
 
@@ -403,12 +402,12 @@ void treeToDialect(Index_Tree *tree)
 
       if (node->getParent() != nullptr && node->getParent()->isFillerIndexNode())
       {
-        #ifdef DEBUG_MODE_IndexTreePass
+#ifdef DEBUG_MODE_IndexTreePass
         Value op = builder.create<indexTree::IndexTreeOp>(loc, i64Type, indexNodeOp);
         comet_vdump(op);
-        #else
+#else
         builder.create<indexTree::IndexTreeOp>(loc, i64Type, indexNodeOp);
-        #endif
+#endif
       }
     }
   }
