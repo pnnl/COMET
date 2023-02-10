@@ -129,16 +129,16 @@ void buildDefUseInfo(UnitExpression *e)
 }
 
 IndicesType getUnion(IndicesType indices1, IndicesType indices2)
-{ 
+{
 
-    sort(indices1.begin(),indices1.end());
-    sort(indices2.begin(),indices2.end());
+  sort(indices1.begin(), indices1.end());
+  sort(indices2.begin(), indices2.end());
 
-        IndicesType allIndices(indices1.size()*2);
+  IndicesType allIndices(indices1.size() * 2);
 
-    IndicesType::iterator it= set_union(indices1.begin(),indices1.end(),indices2.begin(),indices2.end(),allIndices.begin());
-    allIndices.resize(it-allIndices.begin());
-    return allIndices;
+  IndicesType::iterator it = set_union(indices1.begin(), indices1.end(), indices2.begin(), indices2.end(), allIndices.begin());
+  allIndices.resize(it - allIndices.begin());
+  return allIndices;
 }
 
 void doTensorMultOp(TensorMultOp op)
@@ -235,7 +235,7 @@ void doElementWiseMultOp(TensorElewsMultOp op)
   auto inputDomains = e->computeInputIterDomains();
   auto outputDomains = e->computeOutputIterDomains();
 
-  //RHS and LHS indices must be the same for elementwise multiplication
+  // RHS and LHS indices must be the same for elementwise multiplication
   IndicesType allIndices = tree->getIndices(rhs1_tensor);
 
   auto lhsIndices = A->getIndices();
@@ -357,10 +357,11 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
  */
 void treeToDialect(Index_Tree *tree)
 {
-  auto firstTAOp = tree->getContainingTAOps()[0];
-  OpBuilder builder(firstTAOp);
+  vector<mlir::Operation *> TAOps = tree->getContainingTAOps();
+  unsigned int TAOpsID = 0;
+  OpBuilder builder(TAOps[TAOpsID]);
+  auto loc = TAOps[TAOpsID]->getLoc();
   auto context = builder.getContext();
-  auto loc = firstTAOp->getLoc();
 
   std::map<TreeNode *, Value> nodeToOp;
 
@@ -371,7 +372,9 @@ void treeToDialect(Index_Tree *tree)
     if (node->isComputeNode())
     {
       assert(nodeToOp.count(node) == 0);
+      builder.setInsertionPoint(TAOps[TAOpsID]);
       nodeToOp[node] = createComputeNodeOp(builder, node, loc);
+      TAOpsID++;
     }
     else if (node->isRealIndexNode())
     {

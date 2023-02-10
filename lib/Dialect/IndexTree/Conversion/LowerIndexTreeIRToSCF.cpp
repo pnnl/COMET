@@ -279,7 +279,6 @@ std::vector<std::vector<Value>> getAllAllocs(std::vector<Value> tensors)
   std::vector<std::vector<Value>> allAllocs(tensors.size());
   for (unsigned int i = 0; i < tensors.size(); i++)
   {
-
     allAllocs[i] = getAllocs(tensors[i]);
   }
   return allAllocs;
@@ -941,6 +940,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 #else
       rewriter.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
 #endif
+
       rewriter.create<memref::StoreOp>(loc, const_i1_1, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
 
       Value W_index_list_size_old = rewriter.create<memref::LoadOp>(loc, tensors_lhs_Allocs[3][0], ValueRange{const_index_0});
@@ -1354,7 +1354,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
   auto f64Type = rewriter.getF64Type();
   auto indexType = IndexType::get(rootOp.getContext());
-  // Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
+
   Value const_f64_0 = rewriter.create<mlir::ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
   Value const_i1_0 = rewriter.create<mlir::ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
   Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
