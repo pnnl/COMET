@@ -286,7 +286,7 @@ public:
     return "i" + std::to_string(i);
   }
 
-  static unique_ptr<Index_Tree> createTreeWithRoot(); // RA
+  static unique_ptr<Index_Tree> createTreeWithRoot();
 };
 
 #endif // INDEXTREE_H

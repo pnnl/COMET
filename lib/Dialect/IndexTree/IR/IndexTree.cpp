@@ -137,7 +137,7 @@ IndicesType Index_Tree::getIndices(mlir::Value v)
 
 Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, FormatsType &formats)
 {
-  IndicesType indices  =  getIndices(v);
+  IndicesType indices = getIndices(v);
   void *vp = v.getAsOpaquePointer();
   if (valueToTensor.count(vp) == 0)
   {
@@ -175,7 +175,6 @@ unique_ptr<Index_Tree> Index_Tree::createTreeWithRoot()
 {
   auto tree = make_unique<Index_Tree>();
   tree->addRootNode();
-  // return std::move(tree);
   return tree;
 }
 

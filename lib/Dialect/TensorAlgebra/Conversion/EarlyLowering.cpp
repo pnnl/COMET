@@ -1535,6 +1535,11 @@ namespace
           comet_debug() << "The tensor is in print op,  no action taken\n";
           continue;
         }
+        else if (isa<tensorAlgebra::SUMOp>(u))
+        {
+          comet_debug() << "The tensor is in sum op,  no action taken\n";
+          continue;
+        }
         else if (isa<tensorAlgebra::LabeledTensorOp>(u))
         {
           // TODO(gkestor): LabeledTensorOp is not used in the current design, needs cleaning up.
@@ -1543,8 +1548,8 @@ namespace
         }
         else
         {
-          llvm::errs() << __FILE__ << __LINE__ << " tensor is used in the following unsupported op\n";
           comet_pdump(u);
+          llvm::errs() << __FILE__ << __LINE__ << " tensor is used in the following unsupported op\n";
         }
 
         comet_debug() << " Get users after ";
