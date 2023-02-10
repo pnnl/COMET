@@ -225,7 +225,7 @@ struct CooMatrix
 
           if (row > col)
             num_nonzeros_lowerTri++;
-          else
+          else if (row < col)
             num_nonzeros_upperTri++;
 
         }
@@ -264,7 +264,7 @@ struct CooMatrix
 
           if (row-1 > col-1)
             num_nonzeros_lowerTri++;
-          else
+          else if (row-1 < col-1)
             num_nonzeros_upperTri++;
 
         }
@@ -442,7 +442,7 @@ struct CsrMatrix
         values[curr_idx] = coo_matrix.coo_tuples[current_nz].val;
         curr_idx++;
       } 
-      else if (UpperTri && (current_row <= current_col) )
+      else if (UpperTri && (current_row < current_col) )
       {
         // Fill in rows up to and including the current row
         //printf("\t\tUpper> current_nz: %d, curr_idx: %d\n", current_nz, curr_idx);
