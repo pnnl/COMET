@@ -284,6 +284,12 @@ struct CooMatrix
     // Adjust nonzero count (nonzeros along the diagonal aren't reversed)
     num_nonzeros = current_nz;
 
+    if (symmetric)
+    { 
+      // we only do one half if matrix is symmetric, so update num according to lower Triangle read.
+      num_nonzeros_upperTri = num_nonzeros_lowerTri;
+    }
+
     if (verbose)
     {
       printf("done. ");
