@@ -1868,9 +1868,8 @@ void read_input_2D_lowerTriangle (int32_t fileID, int32_t A1format, int32_t A2fo
 
     for (int i = 0; i < coo_matrix.num_nonzeros; i++)
     {
-      // filter lower triangular vals
+      // filter strictly lower triangular vals
       if (coo_matrix.coo_tuples[i].row > coo_matrix.coo_tuples[i].col)
-      //if (coo_matrix.coo_tuples[i].row <= coo_matrix.coo_tuples[i].col) // upperTriangle
       {
         desc_A1crd->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].row;
         desc_A2crd->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].col;
@@ -1995,8 +1994,8 @@ void read_input_2D_upperTriangle (int32_t fileID, int32_t A1format, int32_t A2fo
 
     for (int i = 0; i < coo_matrix.num_nonzeros; i++)
     {
-      // filter upper triangular vals
-      if (coo_matrix.coo_tuples[i].row <= coo_matrix.coo_tuples[i].col)
+      // filter strictly upper triangular vals
+      if (coo_matrix.coo_tuples[i].row < coo_matrix.coo_tuples[i].col)
       {
         desc_A1crd->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].row;
         desc_A2crd->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].col;
