@@ -194,10 +194,12 @@ class Index_Tree
   vector<unique_ptr<UnitExpression>> expressions;
   std::map<UnitExpression *, TreeNode *> exprToNode;
   std::map<void *, unique_ptr<Tensor>> valueToTensor;
+  std::map<void *, int> indexLabelToId;
+  unsigned int indexID = 0;
 
 public:
-  Tensor *getOrCreateTensor(mlir::Value v, IndicesType &indices,
-                            FormatsType &formats);
+  Tensor *getOrCreateTensor(mlir::Value v, FormatsType &formats);
+  IndicesType getIndices(mlir::Value v);
 
   vector<TreeNode *> getNodes();
 
@@ -284,7 +286,7 @@ public:
     return "i" + std::to_string(i);
   }
 
-  static unique_ptr<Index_Tree> createTreeWithRoot(); // RA
+  static unique_ptr<Index_Tree> createTreeWithRoot();
 };
 
 #endif // INDEXTREE_H

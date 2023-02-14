@@ -253,35 +253,6 @@ namespace tensorAlgebra
   };
 
   /// Add format attributes
-  /// Expression class for an index label declaration, i.e. Tensor<double> T{i,j};
-  class OutputTensorDeclExprAST : public ExprAST
-  {
-    std::string name;
-    VarType element_type;
-    std::vector<std::string> dims;
-    std::string format;
-    ExprASTList values;
-
-  public:
-    OutputTensorDeclExprAST(Location loc, const std::string &name, VarType element_type,
-                            const std::vector<std::string> &dims, const std::string &format)
-        : ExprAST(Expr_TensorDecl, loc), name(name), element_type(element_type),
-          dims(dims), format(format) {}
-
-    llvm::StringRef getName() { return name; }
-    VarType &getElementType() { return element_type; }
-    std::vector<std::string> &getDims() { return dims; }
-    std::string &getFormat() { return format; }
-    ExprASTList &getValues() { return values; }
-
-    /// LLVM style RTTI
-    static bool classof(const ExprAST *C)
-    {
-      return C->getKind() == Expr_TensorDecl;
-    }
-  };
-
-  /// Add format attributes
   /// Expression class for an index label declaration, i.e. transpose(A[i,j], {j, i})
   class TransposeExprAST : public ExprAST
   {

@@ -165,10 +165,13 @@ namespace
       else
       { // sparse tensor type
         assert(inputType.isa<SparseTensorType>());
-        comet_debug() << __FILE__ << __LINE__ << "Input Tensor is sparse";
+        comet_debug() << __FILE__ << __LINE__ << "Input Tensor is sparse\n";
 
+        comet_pdump(op);
         int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
+        comet_debug() << "Tensor to sum:\n";
+        comet_pdump(op->getOperand(0).getDefiningOp());
 
         // create the lowerBound, upperbound and step for loop
         int indexValueSize = (tensorRanks * 4) + 1; // 4 corresponding to pos, crd, crd_size, pos_size
@@ -224,6 +227,7 @@ void SUMLowerToSCFPass::runOnFunction()
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<SUMLowering>(&getContext());
 
+  //getFunction().dump();
   if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
   {
     llvm::errs() << "Failed to Lower SUM operation\n";
