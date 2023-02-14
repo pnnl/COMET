@@ -99,6 +99,11 @@ public:
     return indices;
   }
 
+  void setIndices(IndicesType &Updatedindices)
+  {
+    indices = Updatedindices;
+  }
+  
   int getIndex(int i)
   {
     return indices.at(i);

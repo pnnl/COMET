@@ -1,0 +1,30 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> dTranspose_mult_Dense.mlir
+# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-std-to-llvm dTranspose_mult_Dense.mlir &> dTranspose_mult_Dense.llvm
+# RUN: mlir-cpu-runner dTranspose_mult_Dense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+#TODO(gkestor): read dense input from file
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [4];
+	IndexLabel [j] = [4];                     
+    IndexLabel [k] = [4];
+
+	#Tensor Declarations
+	Tensor<double> A([i, j], Dense);
+	Tensor<double> B([i, k], Dense);
+	Tensor<double> C([j, k], Dense);
+
+    #Tensor Readfile Operation      
+    A[i, j] = 3.2;
+	B[i, k] = 1.0;
+	C[j, k] = 0.0;
+
+	#Tensor Transpose
+	C[j, k] = transpose(A[i, j],{j,i}) * B[i, k];
+	print(C);
+}
+
+# Print the result for verification.
+# CHECK: data =
+# CHECK-NEXT: 12.8,12.8,12.8,12.8,12.8,12.8,12.8,12.8,12.8,12.8,12.8,12.8,12.8,12.8,12.8,12.8,

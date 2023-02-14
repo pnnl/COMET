@@ -50,7 +50,7 @@ class IT_Op<string mnemonic, list<OpTrait> traits = []> :
 // Index Tree Operations
 //===----------------------------------------------------------------------===//
 
-def IndexTreeComputeLHSOp : IT_Op<"itComputeLHS", [NoSideEffect]>{
+def IndexTreeComputeLHSOp : IT_Op<"ComputeLHS", [NoSideEffect]>{
   let summary = "";
   let description = [{}];
 
@@ -58,7 +58,7 @@ def IndexTreeComputeLHSOp : IT_Op<"itComputeLHS", [NoSideEffect]>{
   let results = (outs AnyType:$output);
 }
 
-def IndexTreeComputeRHSOp : IT_Op<"itComputeRHS", [NoSideEffect]>{
+def IndexTreeComputeRHSOp : IT_Op<"ComputeRHS", [NoSideEffect]>{
   let summary = "";
   let description = [{}];
 
@@ -66,7 +66,7 @@ def IndexTreeComputeRHSOp : IT_Op<"itComputeRHS", [NoSideEffect]>{
   let results = (outs AnyType:$output);
 }
 
-def IndexTreeComputeOp : IT_Op<"itCompute", [NoSideEffect]>{
+def IndexTreeComputeOp : IT_Op<"Compute", [NoSideEffect]>{
   let summary = "";
   let description = [{
   }];
@@ -81,7 +81,7 @@ def IndexTreeComputeOp : IT_Op<"itCompute", [NoSideEffect]>{
   
 }
 
-def IndexTreeIndicesOp : IT_Op<"itIndices", [NoSideEffect]>{
+def IndexTreeIndicesOp : IT_Op<"Indices", [NoSideEffect]>{
   let summary = "";
   let description = [{
   }];

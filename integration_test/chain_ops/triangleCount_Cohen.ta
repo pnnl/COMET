@@ -1,0 +1,44 @@
+# Triangle Counting Algorithm: Cohen
+# Given a symmetric graph A with no-self edges, triangleCount counts the
+# number of triangles in the graph.  A triangle is a clique of size three,
+# that is, three nodes that are all pairwise connected.
+
+# Reference for the Cohen method:  J. Cohen, "Graph twiddling in a mapreduce
+# world," Computing in Science & Engineering, vol. 11, no. 4, pp. 29–41, 2009.
+# https://doi.org/10.1109/MCSE.2009.120
+
+# Method Cohen:      ntri = sum (sum ((L * U) .* A)) / 2
+
+# L and U are the strictly lower and strictly upper triangular parts of the symmetrix matrix A,
+# respectively.
+
+# RUN: comet-opt --opt-comp-workspace --convert-ta-to-it --convert-to-loops %s &> triangleCount_Cohen.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm triangleCount_Cohen.mlir &> triangleCount_Cohen.llvm
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/tc.mtx
+# RUN: mlir-cpu-runner triangleCount_Cohen.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+def main() {
+    #IndexLabel Declarations
+    IndexLabel [i] = [?];
+    IndexLabel [j] = [?];
+    IndexLabel [k] = [?];
+
+    #Tensor Declarations
+    Tensor<double> A([i, j], {CSR});
+    Tensor<double> L([i, k], {CSR});
+    Tensor<double> U([k, j], {CSR});
+
+    #Tensor Data Initialization
+    A[i, j] = read_from_file(0);
+    L[i, k] = read_lowerTri_from_file(0);
+    U[k, j] = read_upperTri_from_file(0);
+
+    # Cohen method: ntri = sum (sum ((L * U) .* A)) / 2
+    ##
+    var ntri = SUM((L[i,k] * U[k,j]) .* A[i,j]) / 2;
+    print(ntri);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 5,
