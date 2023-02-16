@@ -261,13 +261,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Generate the index tree IR
     optPM.addPass(mlir::IndexTree::createIndexTreePass());
 
-    // Dump index tree dialect.
-    if (emitIT)
-    {
-      if (mlir::failed(pm.run(*module)))
-        return 4;
-      return 0;
-    }
+//    // Dump index tree dialect.
+//    if (emitIT)
+//    {
+//      if (mlir::failed(pm.run(*module)))
+//        return 4;
+//      return 0;
+//    }
   }
 
   if (OptKernelFusion)
@@ -280,6 +280,15 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
     // Optimized workspace transformations, reduce iteration space for nonzero elements
     optPM.addPass(mlir::IndexTree::createCompressedWorkspaceTransformsPass());
+  }
+
+  /// Added by Zhen Peng on 01/23/2023
+  // Dump index tree dialect.
+  if (emitIT)
+  {
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+    return 0;
   }
   // =============================================================================
 

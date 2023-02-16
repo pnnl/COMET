@@ -75,32 +75,17 @@ using llvm::StringRef;
 #define DEBUG_TYPE "workspace-transformations"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_WorkspaceTransformsPass
-// #define DEBUG_MODE_WorkspaceTransformsPass
-// #endif
-
-// #ifdef DEBUG_MODE_WorkspaceTransformsPass
-// #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-// #define comet_pdump(n)                                \
-//   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-//   n->dump()
-// #define comet_vdump(n)                                \
-//   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-//   n.dump()
-// #else
-// #define comet_debug() llvm::nulls()
-// #define comet_pdump(n)
-// #define comet_vdump(n)
-// #endif
+//#ifndef DEBUG_MODE_WorkspaceTransformsPass
+//#define DEBUG_MODE_WorkspaceTransformsPass
+//#endif
 
 #ifdef DEBUG_MODE_WorkspaceTransformsPass
-// #define comet_debug() llvm::errs() << " " << __LINE__ << " "
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n)                    \
-  llvm::errs() << " " << __LINE__ << " "; \
+#define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n->dump()
-#define comet_vdump(n)                    \
-  llvm::errs() << " " << __LINE__ << " "; \
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
 #define comet_debug() llvm::nulls()

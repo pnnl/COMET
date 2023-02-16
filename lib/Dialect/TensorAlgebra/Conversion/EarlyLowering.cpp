@@ -62,17 +62,17 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "early-lowering"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_EarlyLoweringPass
-// #define DEBUG_MODE_EarlyLoweringPass
-// #endif
+//#ifndef DEBUG_MODE_EarlyLoweringPass
+//#define DEBUG_MODE_EarlyLoweringPass
+//#endif
 
 #ifdef DEBUG_MODE_EarlyLoweringPass
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
 #define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n->dump()
 #define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
 #define comet_debug() llvm::nulls()
