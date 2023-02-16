@@ -554,7 +554,7 @@ void genForOps(std::vector<Value> tensors,
         comet_vdump(index_lower);
         comet_vdump(const_index_1);
         index_upper = rewriter.create<AddIOp>(loc, index_lower, const_index_1);
-        comet_debug() << " AddIOps-index_upper:";
+        comet_debug() << " AddIOps (index_upper):";
         comet_vdump(index_upper);
 
         std::vector<Value> lower_indices = {index_lower};
@@ -950,7 +950,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
       Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
       Value W_index_list_size_new = rewriter.create<mlir::AddIOp>(loc, W_index_list_size_old, const_index_1);
-      comet_debug() << " AddIOps";
+      comet_debug() << " AddIOps (W_index_list_size_new)";
       comet_vdump(W_index_list_size_new);
 
       rewriter.create<memref::StoreOp>(loc, W_index_list_size_new, tensors_lhs_Allocs[3][0], ValueRange{const_index_0});
@@ -1015,15 +1015,17 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       comet_vdump(forLoops[forLoops.size() - 1]);
       rewriter.setInsertionPoint(forLoops[forLoops.size() - 1]);
 
+
       Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
       MemRefType memTy_alloc_Cnnz = MemRefType::get({1}, indexType);
       Value alloc_Cnnz = rewriter.create<memref::AllocOp>(loc, memTy_alloc_Cnnz);
-      comet_debug() << __FILE__ << " " << __LINE__ << " AllocOp for Cnnz: ";
+      comet_debug() << " AllocOp for Cnnz: ";
       comet_vdump(alloc_Cnnz);
+
       std::vector<Value> alloc_Cnnz_insert_loc = {const_index_0};
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
       auto store_Cnnz = rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz, alloc_Cnnz_insert_loc);
-      comet_debug() << __FILE__ << " " << __LINE__ << " StoreOp: ";
+      comet_debug() << " StoreOp: ";
       comet_vdump(store_Cnnz);
 #else
       rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1037,7 +1039,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         alloc_Cnnz_row = rewriter.create<memref::AllocOp>(loc, memTy_alloc_Cnnz);
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
         auto store_Cnnz_row = rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
-        comet_debug() << __FILE__ << " " << __LINE__ << " StoreOp DCSR: ";
+        comet_debug()  << " StoreOp DCSR: ";
         comet_vdump(store_Cnnz_row);
 #else
         rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
@@ -1070,7 +1072,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
         comet_debug() << "Store product to Cval\n";
         auto store_Cval = rewriter.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], Cnnz_index);
-        comet_debug() << __FILE__ << " " << __LINE__ << " StoreOp: ";
+        comet_debug() << " StoreOp: ";
         comet_vdump(store_Cval);
 
         // Update C1crd, C2crd
@@ -1100,7 +1102,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
             Value crd = allAccessIdx[sparse_inputtensor_id][d];
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
             auto store_coo_crd = rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
-            comet_debug() << __FILE__ << " " << __LINE__ << " COO StoreOp: ";
+            comet_debug() << " COO StoreOp: ";
             comet_vdump(store_coo_crd);
 #else
             rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
@@ -1114,7 +1116,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
             Value crd = allAccessIdx[sparse_inputtensor_id][d];
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
             auto store_csr_crd = rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
-            comet_debug() << __FILE__ << " " << __LINE__ << " CSR or DCSR StoreOp: ";
+            comet_debug() << " CSR or DCSR StoreOp: ";
             comet_vdump(store_csr_crd);
 #else
             rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
@@ -1127,10 +1129,10 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
         Value new_Cnnz_index = rewriter.create<mlir::AddIOp>(loc, Cnnz_index, const_index_1);
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-        comet_debug() << __FILE__ << " " << __LINE__ << " AddIOps: ";
+        comet_debug() << "AddIOps (new_Cnnz_index): ";
         comet_vdump(new_Cnnz_index);
         auto store_updated_cnnz = rewriter.create<memref::StoreOp>(loc, new_Cnnz_index, alloc_Cnnz, alloc_Cnnz_insert_loc);
-        comet_debug() << __FILE__ << " " << __LINE__ << " StoreOp: ";
+        comet_debug() << " Update Cnnz (store new value) StoreOp: ";
         comet_vdump(store_updated_cnnz);
 #else
         rewriter.create<memref::StoreOp>(loc, new_Cnnz_index, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1141,7 +1143,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       std::vector<Value> denseAllocs = tensors_rhs_Allocs[dense_inputtensor_id];
       assert(denseAllocs.size() == 1);
 
-      comet_debug() << __FILE__ << " " << __LINE__ << " DenseAllocs: ";
+      comet_debug() << " DenseAllocs: ";
       auto inputType = denseAllocs[0].getType();
       std::vector<Value> denseDimsSize;
       for (unsigned rank = 0; rank < inputType.cast<mlir::MemRefType>().getRank(); rank++)
@@ -1150,15 +1152,15 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         Value upperBound;
         if (dimSize == ShapedType::kDynamicSize)
         {
-          comet_debug() << __FILE__ << " " << __LINE__ << " This dimension is a dynamic size:\n";
+          comet_debug() << " This dimension is a dynamic size:\n";
           unsigned dynamicDimPos = inputType.dyn_cast<MemRefType>().getDynamicDimIndex(rank);
-          comet_debug() << __FILE__ << " " << __LINE__ << " DynamicDimPos: " << dynamicDimPos << "\n";
+          comet_debug() << " DynamicDimPos: " << dynamicDimPos << "\n";
           upperBound = denseAllocs[0].getDefiningOp()->getOperand(dynamicDimPos);
           comet_vdump(upperBound);
         }
         else
         {
-          comet_debug() << __FILE__ << " " << __LINE__ << " This dimension is a static size\n";
+          comet_debug() << " This dimension is a static size\n";
           upperBound = rewriter.create<ConstantIndexOp>(loc, dimSize);
           comet_vdump(upperBound);
         }
@@ -1171,7 +1173,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         rewriter.setInsertionPointAfter(forLoops[0]);
         Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
         Value arg0_next = rewriter.create<mlir::AddIOp>(loc, forLoops[1].getInductionVar(), const_index_1);
-        comet_debug() << __FILE__ << " " << __LINE__ << "AddIOp: ";
+        comet_debug() << "AddIOp (arg0_next): ";
         comet_vdump(arg0_next);
 
         Value Cnnz_index_final = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1207,7 +1209,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
             Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
             Value arg0_next = rewriter.create<mlir::AddIOp>(loc, forLoops[1].getInductionVar(), const_index_1);
-            comet_debug() << __FILE__ << " " << __LINE__ << "AddIOp operation: ";
+            comet_debug()  << "AddIOp (arg0_next): ";
             comet_vdump(arg0_next);
 
             Value Cnnz_index_final = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1216,7 +1218,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
             Value idx_i = allAccessIdx[sparse_inputtensor_id][0];
             rewriter.create<memref::StoreOp>(loc, /*i*/ idx_i, main_tensors_all_Allocs[2][1], Cnnz_row_index); // C1crd
             Value Cnnz_row_index_new = rewriter.create<mlir::AddIOp>(loc, Cnnz_row_index, const_index_1);
-            comet_debug() << __FILE__ << " " << __LINE__ << "AddIOp operation: ";
+            comet_debug() << "AddIOp (Cnnz_row_index_new): ";
             comet_vdump(Cnnz_row_index_new);
             rewriter.create<memref::StoreOp>(loc, Cnnz_row_index_new, alloc_Cnnz_row, alloc_Cnnz_insert_loc); // Update Cnnz_row
           }
@@ -1570,7 +1572,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           comet_vdump(allLoopsArg[i][allLoopsArg[i].size() - 1]);
           comet_vdump(valueAccessIdx_part);
           valueAccessIdx_part = rewriter.create<mlir::AddIOp>(loc, allLoopsArg[i][allLoopsArg[i].size() - 1], valueAccessIdx_part);
-          comet_debug() << " AddIOps: ";
+          comet_debug() << " AddIOps (valueAccessIdx_part): ";
           comet_vdump(valueAccessIdx_part);
         }
       }
@@ -1754,7 +1756,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           comet_debug() << " ";
           comet_vdump(lhs_nnz);
           Value lhs_nnz_new = rewriter.create<AddIOp>(loc, lhs_nnz, cst_1_index);
-          comet_debug() << " AddIOps: ";
+          comet_debug() << " AddIOps (lhs_nnz_new): ";
           comet_vdump(lhs_nnz_new);
           comet_debug() << " ";
           comet_vdump(lhs_nnz_alloc);
@@ -1817,7 +1819,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           comet_debug() << " ";
           comet_vdump(c2pos_size_value);
           Value c2pos_size_value_new = rewriter.create<mlir::AddIOp>(loc, c2pos_size_value, cst_index_1);
-          comet_debug() << " AddIOps";
+          comet_debug() << " AddIOps (c2pos_size_value_new): ";
           comet_vdump(c2pos_size_value_new);
 
           rewriter.create<memref::StoreOp>(loc, c2pos_size_value_new, c2pos_size_alloc, ValueRange{cst_index_000});
@@ -1869,7 +1871,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
             comet_debug() << " ";
             comet_vdump(lhs_nnz);
             Value lhs_nnz_new = rewriter.create<AddIOp>(loc, lhs_nnz, cst_1_index);
-            comet_debug() << " AddIOps: ";
+            comet_debug() << " AddIOps: (lhs_nnz_new)";
             comet_vdump(lhs_nnz_new);
             comet_debug() << " ";
             comet_vdump(lhs_nnz_alloc);
@@ -1954,7 +1956,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           comet_debug() << " ";
           comet_vdump(c2pos_size_value);
           Value c2pos_size_value_new = rewriter.create<mlir::AddIOp>(loc, c2pos_size_value, cst_1_index);
-          comet_debug() << " AddIOps";
+          comet_debug() << " AddIOps (c2pos_size_value_new): ";
           comet_vdump(c2pos_size_value_new);
 
           rewriter.create<memref::StoreOp>(loc, c2pos_size_value_new, c2pos_size_alloc, ValueRange{cst_0_index});

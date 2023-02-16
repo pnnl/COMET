@@ -21,18 +21,17 @@ def main() {
     IndexLabel [k] = [?];
 
     #Tensor Declarations
-    Tensor<double> A([i, j], {CSR});
-    Tensor<double> B([j, k], {CSR});
-    Tensor<double> C([i, k], {CSR});
+    Tensor<double> A1([i, j], {CSR});
+    Tensor<double> A2([j, k], {CSR});
+    Tensor<double> A3([i, k], {CSR});
 
     #Tensor Data Initialization
-    A[i, j] = read_from_file(0);
-    B[j, k] = read_from_file(0);
-    C[i, k] = read_from_file(0);
+    A1[i, j] = read_from_file(0);
+    A2[j, k] = read_from_file(0);
+    A3[i, k] = read_from_file(0);
 
     # Burkhardt method: ntri = sum (sum ((A^2) .* A)) / 6
-    ##
-    var ntri = SUM((A[i,j] * B[j,k]) .* C[i,k]) / 6;
+    var ntri = SUM((A1[i,j] * A2[j,k]) .* A3[i,k]) / 6;
     print(ntri);
 }
 

@@ -33,7 +33,6 @@ def main() {
     U2[k, j] = read_upperTri_from_file(0);
 
     # Sandia_UU method: ntri = sum (sum ((U * U) .* U))
-    ## 
     var ntri = SUM((U1[i,k] * U2[k,j]) .* U0[i,j]);
     print(ntri);
 }

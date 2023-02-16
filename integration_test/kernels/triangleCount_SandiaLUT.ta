@@ -25,19 +25,18 @@ def main() {
     IndexLabel [k] = [?];
 
     #Tensor Declarations
-    Tensor<double> L([i, j], {CSR});
-    Tensor<double> A([i, k], {CSR}); #copy of L
+    Tensor<double> L1([i, j], {CSR});
+    Tensor<double> L2([i, k], {CSR}); #copy of L
     Tensor<double> U([k, j], {CSR});
 
 
     #Tensor Data Initialization
     U[k, j] = read_upperTri_from_file(0);
-    A[i, k] = read_lowerTri_from_file(0);
-    L[i, j] = read_lowerTri_from_file(0);
+    L1[i, j] = read_lowerTri_from_file(0);
+    L2[i, k] = read_lowerTri_from_file(0);
 
     # Sandia_LUT method: ntri = sum (sum ((L * U') .* L)).  Note that L=U'.
-    ## 
-    var ntri = SUM((L[i, j] * transpose(U[k, j],{j,k})) .* A[i,k]);
+    var ntri = SUM((L1[i, j] * transpose(U[k, j],{j,k})) .* L2[i,k]);
     print(ntri);
 }
 

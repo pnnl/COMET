@@ -332,10 +332,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());            // early lowering for dense input/output
     optPM.addPass(mlir::tensorAlgebra::createTempSparseOutputTensorDeclLoweringPass()); // early lowering for sparse output tensor declaration for temporaries
     optPM.addPass(mlir::tensorAlgebra::createSparseOutputTensorDeclLoweringPass());     // early lowering for sparse output
+    
     // The partial Fusion pass might add new tensor.fill operations
     optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass());
     optPM.addPass(mlir::tensorAlgebra::createPCToLoopsLoweringPass());
-    optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
 
     // =============================================================================
     // Lowering of other operations such as transpose, sum, etc. to SCF dialect
@@ -344,6 +344,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
     optPM.addPass(mlir::tensorAlgebra::createSUMLowerToSCFPass());
     optPM.addPass(mlir::tensorAlgebra::createTransposeLoweringPass());
+
+    //Finally lowering index tree to SCF dialect
+    optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
 
     //  =============================================================================
   }
