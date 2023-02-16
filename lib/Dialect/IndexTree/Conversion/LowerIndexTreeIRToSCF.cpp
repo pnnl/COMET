@@ -77,9 +77,9 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-#ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-#define DEBUG_MODE_LowerIndexTreeIRToSCFPass
-#endif
+//#ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+//#define DEBUG_MODE_LowerIndexTreeIRToSCFPass
+//#endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
