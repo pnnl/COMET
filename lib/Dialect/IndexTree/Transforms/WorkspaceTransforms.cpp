@@ -996,23 +996,6 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
 
                 std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
 
-<<<<<<< HEAD
-    if(sparseDimsOutput.size() == 0 && sparseDimsInput.size() == 0){
-      // No need to apply workspace transformation
-      comet_debug() <<  __FILE__ << __LINE__ << " No need to apply workspace transformation\n";
-      return;
-    }
-    
-    assert(sparseDimsOutput.size() == 1 && " More than one sparse index in the output, we are expecting to support it in the future\n"); 
-
-    std::vector<Value> newComputeOps;
-    // create three IndexTreeComputeOp op
-    // sparse dim in output tensor   
-    if(sparseDimsOutput.size() == 1){
-      comet_debug() << "CompressedWorkspaceOutput()\n";
-      newComputeOps = CompressedWorkspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, indexValueMap, builder, op);
-    }
-=======
                 if (sparseDimsOutput.size() == 0 && sparseDimsInput.size() == 0)
                 {
                   // No need to apply workspace transformation
@@ -1029,7 +1012,6 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
                 {
                   newComputeOps = CompressedWorkspaceOutput(sparseDimsOutput, itComputeOp, opFormats, opPerms, indexValueMap, builder, op);
                 }
->>>>>>> ae175ceb41f979184592924ab23cd606e1101ad4
     // initially here workspaceOutput content
 
 #ifdef DEBUG_MODE_WorkspaceTransformsPass

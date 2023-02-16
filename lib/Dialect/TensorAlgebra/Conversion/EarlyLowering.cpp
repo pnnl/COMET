@@ -62,9 +62,9 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "early-lowering"
 
 // *********** For debug purpose *********//
-#ifndef DEBUG_MODE_EarlyLoweringPass
-#define DEBUG_MODE_EarlyLoweringPass
-#endif
+//#ifndef DEBUG_MODE_EarlyLoweringPass
+//#define DEBUG_MODE_EarlyLoweringPass
+//#endif
 
 #ifdef DEBUG_MODE_EarlyLoweringPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
