@@ -168,15 +168,25 @@ namespace
         comet_debug() << __FILE__ << __LINE__ << "Input Tensor is sparse\n";
 
         comet_pdump(op);
+        assert(isa<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp()));
+
         int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
         comet_debug() << "Tensor to sum:\n";
         comet_pdump(op->getOperand(0).getDefiningOp());
 
+        //TODO(gkestor): need a better way to acces information from SparseTensorConstructOp
         // create the lowerBound, upperbound and step for loop
         int indexValueSize = (tensorRanks * 4) + 1; // 4 corresponding to pos, crd, crd_size, pos_size
 
-        auto upperBound = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
+        auto loadOpForNNZ = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
+        auto memAllocForNNZ = loadOpForNNZ.getDefiningOp()->getOperand(0);
+        comet_debug() << "Corresponding allocOp for NNZ:\n";
+        comet_vdump(memAllocForNNZ);
+
+        auto upperBound = rewriter.create<memref::LoadOp>(loc, memAllocForNNZ, alloc_zero_loc);
+        comet_debug() << "Upper Bound:\n";
+        comet_vdump(upperBound);
         auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
         auto step = rewriter.create<ConstantIndexOp>(loc, 1);
 
@@ -227,7 +237,6 @@ void SUMLowerToSCFPass::runOnFunction()
   OwningRewritePatternList patterns(&getContext());
   patterns.insert<SUMLowering>(&getContext());
 
-  //getFunction().dump();
   if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
   {
     llvm::errs() << "Failed to Lower SUM operation\n";

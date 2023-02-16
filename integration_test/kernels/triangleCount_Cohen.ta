@@ -34,7 +34,6 @@ def main() {
     U[k, j] = read_upperTri_from_file(0);
 
     # Cohen method: ntri = sum (sum ((L * U) .* A)) / 2
-    ##
     var ntri = SUM((L[i,k] * U[k,j]) .* A[i,j]) / 2;
     print(ntri);
 }
