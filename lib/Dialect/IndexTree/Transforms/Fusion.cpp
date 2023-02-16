@@ -85,12 +85,12 @@ using llvm::StringRef;
 //#endif
 
 #ifdef DEBUG_MODE_KernelFusionPass
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
 #define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n->dump()
 #define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
 #define comet_debug() llvm::nulls()
@@ -121,6 +121,9 @@ namespace
 
     static std::vector<mlir::Operation *> getLongestCommonPrefix(std::vector<std::vector<mlir::Operation *>> &paths);
 
+    static mlir::Value createNewTensorDecl(const mlir::Value &old_dense_tensor_decl,
+                                                      uint32_t rank_base);
+
     static void createNewTensor(const mlir::Value &old_tensor_alloc,
                                 const mlir::Value &old_tensor_load,
                                 uint32_t rank_base,
@@ -139,9 +142,12 @@ namespace
 
     static void replaceOldOperandToNew(mlir::Operation *old_operand, mlir::Value &new_val);
 
+    static void replaceOldTensorFillOp(const mlir::Value &old_dense_tensor_decl,
+                                       const mlir::Value &new_dense_tensor_decl);
+
     static void replaceOldLinalgFillOp(mlir::Value &old_tensor_alloc, mlir::Value &old_tensor_load, mlir::Value &new_tensor_load);
 
-    static mlir::Value createResetComputeRHS(const mlir::Value &new_tensor_alloc,
+    static mlir::Value createResetComputeRHS(const mlir::Value &new_dense_tensor_decl,
                                              mlir::Operation *last_common_prefix);
 
     static mlir::Value createResetComputeLHS(const mlir::Value &new_tensor_load,
@@ -151,8 +157,11 @@ namespace
 
     static void insertTensorReset(
         const std::vector<mlir::Operation *> &lcp,
-        const mlir::Value &new_tensor_alloc,
-        const mlir::Value &new_tensor_load);
+        const mlir::Value &new_dense_tensor_decl);
+//    static void insertTensorReset(
+//        const std::vector<mlir::Operation *> &lcp,
+//        const mlir::Value &new_tensor_alloc,
+//        const mlir::Value &new_tensor_load);
 
     static void doKernelFusion(std::vector<mlir::Operation *> &itrees, mlir::FuncOp &funcop);
 
@@ -289,7 +298,7 @@ std::vector<mlir::Operation *> KernelFusionPass::getPathFromRoot(mlir::Operation
   while (!llvm::isa<indexTree::IndexTreeOp>(*op))
   {
     { // test
-      comet_debug();
+      comet_debug() << "op\n";
       comet_pdump(op);
     }
     path.push_back(op);
@@ -316,7 +325,7 @@ std::vector<mlir::Operation *> KernelFusionPass::
     {
       lcp.push_back(path0[index]);
       { // test
-        comet_debug();
+//        comet_debug();
         comet_pdump(path0[index]);
       }
     }
@@ -328,6 +337,47 @@ std::vector<mlir::Operation *> KernelFusionPass::
   }
 
   return lcp;
+}
+
+mlir::Value KernelFusionPass::createNewTensorDecl(
+    const mlir::Value &old_dense_tensor_decl,
+    uint32_t rank_base)
+{
+  /// Old
+  /// %8 = "ta.dense_tensor_decl"(%0, %3) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x4xf64>
+  /// New
+  /// %8 = "ta.dense_tensor_decl"(%3) {format = "Dense"} : (!ta.range) -> tensor<4xf64>
+  mlir::Operation *old_tensor_op = old_dense_tensor_decl.getDefiningOp();
+  auto loc = old_dense_tensor_decl.getLoc();
+  OpBuilder builder(old_tensor_op);
+
+  /// Get operands
+  std::vector<mlir::Value> operands;
+  operands.insert(operands.begin(),
+                  old_tensor_op->getOperands().begin() + rank_base,
+                  old_tensor_op->getOperands().end());
+
+  /// Get format
+  std::string format;
+  {
+    mlir::tensorAlgebra::DenseTensorDeclOp old_tensor_decl_op = llvm::dyn_cast<mlir::tensorAlgebra::DenseTensorDeclOp>(
+        old_tensor_op);
+    format = std::string(old_tensor_decl_op.format());
+    assert(format == "Dense" && ("Error: only support for Dense old tensor, not " + format + ".\n").c_str());
+  }
+
+  /// Create ta.dense_tensor_decl
+  auto float_type = mlir::RankedTensorType::get({mlir::ShapedType::kDynamicSize},
+                                                builder.getF64Type());
+  mlir::Value new_dense_tensor_decl = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc,
+                                                                                   float_type,
+                                                                                   operands,
+                                                                                   format);
+
+  comet_debug() << "new_dense_tensor_decl\n";
+  comet_vdump(new_dense_tensor_decl);
+
+  return new_dense_tensor_decl;
 }
 
 void KernelFusionPass::createNewTensor(
@@ -372,8 +422,8 @@ void KernelFusionPass::createNewTensor(
                                                                                    load_op,
                                                                                    constant_one);
 
-      comet_debug();
-      comet_vdump(index_label_op);
+    comet_debug() << "index_label_op\n";
+    comet_vdump(index_label_op);
     
 
     /// Create ta.dense_tensor_decl
@@ -386,8 +436,8 @@ void KernelFusionPass::createNewTensor(
                                                                                         operands,
                                                                                         format);
 
-      comet_debug();
-      comet_vdump(dense_tensor_decl_op);
+    comet_debug() << "dense_tensor_decl_op\n";
+    comet_vdump(dense_tensor_decl_op);
     
 
     new_tensor_alloc = index_label_op;
@@ -408,7 +458,7 @@ void KernelFusionPass::createNewTensor(
     mlir::TensorType tensor_ty = old_tensor_load.getType().cast<mlir::TensorType>();
     uint32_t rank = tensor_ty.getRank();
     { // test
-      comet_debug();
+//      comet_debug();
       comet_debug() << "rank: " << rank << "\n";
       for (uint32_t r_i = 0; r_i < rank; ++r_i)
       {
@@ -594,6 +644,44 @@ void KernelFusionPass::replaceOldOperandToNew(mlir::Operation *old_operand, mlir
   old_operand->erase();
 }
 
+void KernelFusionPass::replaceOldTensorFillOp(
+    const mlir::Value &old_dense_tensor_decl,
+    const mlir::Value &new_dense_tensor_decl)
+{
+  /// Create new ta.fill and erase the old one
+  /// Old
+  /// "ta.fill"(%8) {value = 0.000000e+00 : f64} : (tensor<?x4xf64>) -> ()
+  /// New
+  /// "ta.fill"(%8) {value = 0.000000e+00 : f64} : (tensor<4xf64>) -> ()
+  for (auto user : old_dense_tensor_decl.getUsers())
+  {
+    if (mlir::isa<tensorAlgebra::TensorFillOp>(user))
+    {
+      /// Get value
+      mlir::tensorAlgebra::TensorFillOp fill_op = llvm::dyn_cast<mlir::tensorAlgebra::TensorFillOp>(user);
+      auto value_attr = fill_op.valueAttr();
+
+      OpBuilder builder(user);
+      auto new_fill_op = builder.create<tensorAlgebra::TensorFillOp>(
+          user->getLoc(),
+          new_dense_tensor_decl,
+          value_attr);
+//          builder.getF64FloatAttr(0));
+
+      comet_debug() << "new_fill_op\n";
+      comet_vdump(new_fill_op);
+
+      user->erase();
+      break;
+    }
+    else
+    {
+      comet_debug() << "Error: user's type is not supported, yet.\n";
+      continue;
+    }
+  }
+}
+
 void KernelFusionPass::replaceOldLinalgFillOp(
     mlir::Value &old_tensor_alloc,
     mlir::Value &old_tensor_load,
@@ -605,14 +693,14 @@ void KernelFusionPass::replaceOldLinalgFillOp(
     if (mlir::isa<linalg::FillOp>(user))
     {
  
-        comet_debug();
+        comet_debug() << "user\n";
         comet_pdump(user);
       
       /// Get the ConstantOp
       mlir::ConstantOp constant_op;
       for (auto op : user->getOperands())
       {
-          comet_debug();
+          comet_debug() << "op\n";
           comet_vdump(op);
         
         if (mlir::isa<mlir::ConstantOp>(op.getDefiningOp()))
@@ -622,7 +710,7 @@ void KernelFusionPass::replaceOldLinalgFillOp(
         }
       }
 
-        comet_debug();
+        comet_debug() << "constant_op\n";
         comet_vdump(constant_op);
       
       /// Create MemRef
@@ -634,7 +722,7 @@ void KernelFusionPass::replaceOldLinalgFillOp(
             new_tensor_load,
             builder.getF64FloatAttr(0));
         {
-          comet_debug();
+          comet_debug() << "new_fill_op\n";
           comet_vdump(new_fill_op);
         }
       }
@@ -647,7 +735,7 @@ void KernelFusionPass::replaceOldLinalgFillOp(
             memref,
             constant_op);
 
-        comet_debug();
+        comet_debug() << "new_fill_op\n";
         comet_pdump(new_fill_op);
       }
 
@@ -664,7 +752,7 @@ void KernelFusionPass::replaceOldLinalgFillOp(
 }
 
 mlir::Value KernelFusionPass::createResetComputeRHS(
-    const mlir::Value &new_tensor_alloc,
+    const mlir::Value &new_dense_tensor_decl,
     mlir::Operation *last_common_prefix)
 {
   auto loc = last_common_prefix->getLoc();
@@ -672,9 +760,9 @@ mlir::Value KernelFusionPass::createResetComputeRHS(
   /// Generate itComputeRHS, operand is constant 0, allFormats = [[]], allPerms = [[]]
   /// Operand is constant 0
   mlir::ConstantOp constant_zero;
-  for (mlir::Operation *user : new_tensor_alloc.getUsers())
+  for (mlir::Operation *user : new_dense_tensor_decl.getUsers())
   {
-    if (!mlir::isa<linalg::FillOp>(user))
+    if (!mlir::isa<tensorAlgebra::TensorFillOp>(user))
     {
       continue;
     }
@@ -691,13 +779,13 @@ mlir::Value KernelFusionPass::createResetComputeRHS(
   }
   if (constant_zero.getOperation() == nullptr)
   {
-    comet_debug();
+    comet_debug() << "create ConstantOp\n";
     constant_zero = builder.create<mlir::ConstantOp>(loc,
                                                      builder.getF64Type(),
                                                      builder.getF64FloatAttr(0));
   }
 
-  comet_debug();
+  comet_debug() << "constant_zero\n";
   comet_vdump(constant_zero);
 
   std::vector<mlir::Value> tensors_rhs;
@@ -723,7 +811,7 @@ mlir::Value KernelFusionPass::createResetComputeRHS(
 }
 
 mlir::Value KernelFusionPass::createResetComputeLHS(
-    const mlir::Value &new_tensor_load,
+    const mlir::Value &new_dense_tensor_decl,
     mlir::Operation *last_common_prefix,
     int &lcp_index,
     int64_t &rank)
@@ -733,10 +821,12 @@ mlir::Value KernelFusionPass::createResetComputeLHS(
   /// Generate itComputeLHS, operand is tensor_load, allFormats = [["D"]], allPerms = [[1]]
   /// Operand is tensor_load
   std::vector<mlir::Value> tensors_lhs;
-  tensors_lhs.push_back(new_tensor_load);
+  tensors_lhs.push_back(new_dense_tensor_decl);
   lcp_index = getIndicesOpsIndex(last_common_prefix);
-  mlir::TensorType tensor_ty = new_tensor_load.getType().cast<mlir::TensorType>();
+  mlir::TensorType tensor_ty = new_dense_tensor_decl.getType().cast<mlir::TensorType>();
   rank = tensor_ty.getRank();
+
+  /// Get indices [[1]]
   SmallVector<Attribute, 1> indices_lhs;
   SmallVector<int64_t, 8> one_index;
   for (uint32_t r_i = 0; r_i < rank; ++r_i)
@@ -745,6 +835,7 @@ mlir::Value KernelFusionPass::createResetComputeLHS(
   }
   indices_lhs.push_back(builder.getI64ArrayAttr(one_index));
 
+  /// Get formats [["D"]]
   SmallVector<Attribute, 1> formats_lhs;
   SmallVector<StringRef, 1> one_format(rank, "D");
   formats_lhs.push_back(builder.getStrArrayAttr(one_format));
@@ -803,34 +894,40 @@ mlir::Value createResetIndicesOps(
 
 void KernelFusionPass::insertTensorReset(
     const std::vector<mlir::Operation *> &lcp,
-    const mlir::Value &new_tensor_alloc,
-    const mlir::Value &new_tensor_load)
+    const mlir::Value &new_dense_tensor_decl)
+//void KernelFusionPass::insertTensorReset(
+//    const std::vector<mlir::Operation *> &lcp,
+//    const mlir::Value &new_tensor_alloc,
+//    const mlir::Value &new_tensor_load)
 {
   /// Generate itComputeRHS, operand is constant 0, allFormats = [[]], allPerms = [[]]
   mlir::Operation *last_common_prefix = lcp.back();
   auto loc = last_common_prefix->getLoc();
   OpBuilder builder(last_common_prefix);
   /// Operand is constant 0
-  mlir::Value compute_rhs = createResetComputeRHS(new_tensor_alloc,
+  mlir::Value compute_rhs = createResetComputeRHS(new_dense_tensor_decl,
                                                   last_common_prefix);
 
-  comet_debug();
+  comet_debug() << "compute_rhs\n";
   comet_vdump(compute_rhs);
 
   /// Generate itComputeLHS, operand is tensor_load, allFormats = [["D"]], allPerms = [[1]]
   int lcp_index;
   int64_t rank;
-  mlir::Value compute_lhs = createResetComputeLHS(new_tensor_load,
+  mlir::Value compute_lhs = createResetComputeLHS(new_dense_tensor_decl,
                                                   last_common_prefix,
                                                   lcp_index,
                                                   rank);
 
-  comet_debug();
+  comet_debug() << "compute_lhs\n";
   comet_vdump(compute_lhs);
 
   // TODO(gkestor): Currently, the default value for compressed workspace transformation is true
   // But make it parametric
-  auto comp_worksp_opt = builder.getBoolAttr(true);
+  // Changed to False by Zhen Peng on 02/15/2023.
+  // If setting true, the generated SCF dialect has a wrong for-loop range for resetting the tensor to 0.
+//  auto comp_worksp_opt = builder.getBoolAttr(true);
+  auto comp_worksp_opt = builder.getBoolAttr(false);
   mlir::StringAttr semiring = builder.getStringAttr("noop_times");
 
   // TODO(zpeng): here is I64 not F64? But it is F64 for ComputeRHS and ComputeLHS?
@@ -843,7 +940,7 @@ void KernelFusionPass::insertTensorReset(
       comp_worksp_opt,
       semiring);
   { // test
-    comet_debug();
+    comet_debug() << "compute_op\n";
     comet_vdump(compute_op);
   }
 
@@ -963,13 +1060,17 @@ void KernelFusionPass::reduceTensorDimension(std::vector<mlir::Operation *> &LHS
 {
   for (mlir::Operation *lhs_op : LHSs)
   {
+    comet_debug() << "lhs_op\n";
+    comet_pdump(lhs_op);
+
+    /// Tensor: %8 = "ta.dense_tensor_decl"(%0, %3) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x4xf64>
     mlir::Value tensor = lhs_op->getOperand(0);
-    comet_debug();
+    comet_debug() << "tensor\n";
     comet_vdump(tensor);
 
     auto users = tensor.getUsers();
 
-    comet_debug();
+    comet_debug() << "users\n";
     for (auto u : users)
     {
       comet_pdump(u);
@@ -1000,7 +1101,7 @@ void KernelFusionPass::reduceTensorDimension(std::vector<mlir::Operation *> &LHS
       continue;
     }
 
-    comet_debug();
+    comet_debug() << "rhs_op\n";
     comet_pdump(rhs_op);
 
     /// Get paths of lsh_op and rhs_op
@@ -1018,58 +1119,70 @@ void KernelFusionPass::reduceTensorDimension(std::vector<mlir::Operation *> &LHS
 
     uint32_t rank_base = lcp.size();
 
+
     /// Create new tensor, ComputeRHS, ComputeLHS
     /// Create new tensor
-    mlir::Value tensor_alloc = tensor.getDefiningOp()->getOperand(0);
-    mlir::Value new_tensor_alloc;
-    mlir::Value new_tensor_load;
-    createNewTensor(tensor_alloc,
-                    tensor,
-                    rank_base,
-                    new_tensor_alloc,
-                    new_tensor_load);
+    /// Old:
+    /// %8 = "ta.dense_tensor_decl"(%0, %3) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x4xf64>
+    /// New:
+    /// %8 = "ta.dense_tensor_decl"(%3) {format = "Dense"} : (!ta.range) -> tensor<4xf64>
+    mlir::Value new_dense_tensor_decl = createNewTensorDecl(tensor, rank_base);
 
-    comet_debug();
-    comet_vdump(new_tensor_alloc);
-    comet_vdump(new_tensor_load);
+    comet_debug() << "new_dense_tensor_decl\n";
+    comet_vdump(new_dense_tensor_decl);
 
     /// Create new ComputeLHS
+    /// Old:
+    /// %10 = "it.ComputeLHS"(%8) {allFormats = [["D", "D"]], allPerms = [[0, 2]]} : (tensor<?x4xf64>) -> tensor<*xf64>
+    /// New:
+    /// %10 = "it.ComputeLHS"(%8) {allFormats = [["D"]], allPerms = [[2]]} : (tensor<4xf64>) -> tensor<*xf64>
     mlir::Value new_compute_lhs = createReducedComputeLHS(lhs_op,
-                                                          new_tensor_load,
+                                                          new_dense_tensor_decl,
                                                           rank_base);
-
-    comet_debug();
+    comet_debug() << "new_compute_lhs\n";
     comet_vdump(new_compute_lhs);
 
     /// Create new ComputeRHS
+    /// Old:
+    /// %14 = "it.ComputeRHS"(%8, %6) {allFormats = [["D", "D"], ["D", "D"]], allPerms = [[0, 2], [2, 3]]} : (tensor<?x4xf64>, tensor<4x4xf64>) -> tensor<*xf64>
+    /// New:
+    /// %14 = "it.ComputeRHS"(%8, %6) {allFormats = [["D"], ["D", "D"]], allPerms = [[2], [2, 3]]} : (tensor<4xf64>, tensor<4x4xf64>) -> tensor<*xf64>
     mlir::Value new_compute_rhs = createReducedComputeRHS(rhs_op,
-                                                          new_tensor_load,
+                                                          new_dense_tensor_decl,
                                                           tensor,
                                                           rank_base);
 
+    comet_debug() << "new_compute_rhs\n";
+    comet_vdump(new_compute_rhs);
+
     /// Switch ComputeLHS
+    comet_debug() << "replace LHS to new LSH\n";
     replaceOldOperandToNew(lhs_op, new_compute_lhs);
 
-    // Switch ComputeRHS
+    /// Switch ComputeRHS
+    comet_debug() << "replace RHS to new RHS\n";
     replaceOldOperandToNew(rhs_op, new_compute_rhs);
 
-    // Create new and erase linalg::FillOp
-    // linalg.fill(%37, %cst_32) : memref<?x4xf64>, f64
-    replaceOldLinalgFillOp(tensor_alloc, tensor, new_tensor_load);
+    /// Create new ta.fill and erase the old one
+    /// Old
+    /// "ta.fill"(%8) {value = 0.000000e+00 : f64} : (tensor<?x4xf64>) -> ()
+    /// New
+    /// "ta.fill"(%8) {value = 0.000000e+00 : f64} : (tensor<4xf64>) -> ()
+    comet_debug() << "replace ta.fill\n";
+    replaceOldTensorFillOp(tensor, new_dense_tensor_decl);
 
-    /// Erase the old tensor_alloc
-    /// Erase tensor
+    /// Erase the old dense_tensor_decl
     tensor.getDefiningOp()->erase();
-    tensor_alloc.getDefiningOp()->erase();
 
     /// Generate T = 0 to reset the intermediate tensor. The location is under the last common prefix.
-    insertTensorReset(lcp, new_tensor_alloc, new_tensor_load);
+    insertTensorReset(lcp, new_dense_tensor_decl);
+
   }
 }
 
 void KernelFusionPass::RedundancyAwareFusion(mlir::FuncOp &funcop)
 {
-
+  comet_vdump(funcop);
   comet_debug() << "ParitalFusionIT pass\n";
 
   /// Basic partial fusion
@@ -1083,6 +1196,7 @@ void KernelFusionPass::RedundancyAwareFusion(mlir::FuncOp &funcop)
   doKernelFusion(itrees, funcop);
 
   /// Reduce tensor dimension
+  comet_vdump(funcop);
   std::vector<mlir::Operation *> LHSs = getAllComputeLHSs(funcop);
   reduceTensorDimension(LHSs, funcop);
 }
