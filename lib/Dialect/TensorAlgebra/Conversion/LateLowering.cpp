@@ -277,6 +277,7 @@ namespace
             }
 
             // SparseTensorType includes 5 metadata per dimension. Additionally, 2 elements for value array, value array size.
+            //TODO(gkestor): get tensor ranks by functions
             int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
             Type unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
 

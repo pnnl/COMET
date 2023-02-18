@@ -170,21 +170,44 @@ namespace
         comet_pdump(op);
         assert(isa<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp()));
 
+        //TODO(gkestor): get tensor ranks by functions
         int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
         comet_debug() << "Tensor to sum:\n";
         comet_pdump(op->getOperand(0).getDefiningOp());
 
-        //TODO(gkestor): need a better way to acces information from SparseTensorConstructOp
-        // create the lowerBound, upperbound and step for loop
+        // TODO(gkestor): need a better way to acces information from SparseTensorConstructOp
+        //  create the lowerBound, upperbound and step for loop
         int indexValueSize = (tensorRanks * 4) + 1; // 4 corresponding to pos, crd, crd_size, pos_size
+        comet_debug() << "indexValueSize in SparseTensorConstructOp:" << indexValueSize << "\n";
 
         auto loadOpForNNZ = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
+        comet_debug() << "Corresponding AllocOp from SparseTensorConstructOp:\n";
+        comet_vdump(loadOpForNNZ);
         auto memAllocForNNZ = loadOpForNNZ.getDefiningOp()->getOperand(0);
-        comet_debug() << "Corresponding allocOp for NNZ:\n";
+        comet_debug() << "Corresponding MemAllocOp for NNZ:\n";
         comet_vdump(memAllocForNNZ);
 
-        auto upperBound = rewriter.create<memref::LoadOp>(loc, memAllocForNNZ, alloc_zero_loc);
+        MemRefType resultMemTy = memAllocForNNZ.getDefiningOp()->getResult(0).getType().cast<MemRefType>();
+        auto memRefRank = resultMemTy.getRank();
+        comet_debug() << "memRefRank for alloc: " << memRefRank << "\n";
+        assert(memRefRank ==  1); //Memref rank should be 1
+
+        auto memRefDimSize  =  resultMemTy.getDimSize(memRefRank-1);
+        comet_debug() << "memRefDimSize for alloc: " << memRefDimSize << "\n";
+
+        Value upperBound;
+        if (memRefDimSize == 1) //size of value array comes from temporary sparse tensor and Dimsize of alloc is one
+        {
+          upperBound = rewriter.create<memref::LoadOp>(loc, memAllocForNNZ, alloc_zero_loc);
+        }
+        else
+        {
+          //size of value array comes from read_input_sizes_2D_f64, and alloc dimsize can be only expected size
+          auto expectedMemRefSize = tensorRanks * 2 + tensorRanks + 1; //"2" is corresponding the pos, crd per dimension, "1" is for value array 
+          assert(memRefDimSize == expectedMemRefSize); 
+          upperBound = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
+        }
         comet_debug() << "Upper Bound:\n";
         comet_vdump(upperBound);
         auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
