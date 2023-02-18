@@ -461,12 +461,13 @@ namespace
                       << __LINE__ << " lhs is DenseConstantOp\n";
         switch (binop.getOp())
         {
+        //TODO(gkestor): Why mulop called chainMulOp but not the others
         case '+':
           return builder.create<AddOp>(location, lhs, rhs);
         case '-':
           return builder.create<SubstractOp>(location, lhs, rhs);
         case '*':
-          return builder.create<MulOp>(location, lhs, rhs);
+          return builder.create<ChainMulOp>(location, lhs, rhs);
         case '/':
           return builder.create<DivOp>(location, lhs, rhs);
         }
@@ -482,7 +483,7 @@ namespace
         case '-':
           return builder.create<SubstractOp>(location, lhs, rhs);
         case '*':
-          return builder.create<MulOp>(location, lhs, rhs);
+          return builder.create<ChainMulOp>(location, lhs, rhs);
         case '/':
           return builder.create<DivOp>(location, lhs, rhs);
         }
@@ -499,9 +500,9 @@ namespace
           auto lhsOp = lhs.getDefiningOp();
 
           comet_pdump(lhsOp);
-          if (isa<MulOp>(lhsOp))
+          if (isa<ChainMulOp>(lhsOp))
           {
-            auto lhsMulOp = cast<MulOp>(lhsOp);
+            auto lhsMulOp = cast<ChainMulOp>(lhsOp);
             for (auto val : lhsMulOp.sum_labels())
             {
               summed_labels.insert(val.getDefiningOp());
@@ -523,9 +524,9 @@ namespace
           auto rhsOp = rhs.getDefiningOp();
 
           comet_pdump(rhsOp);
-          if (isa<MulOp>(rhsOp))
+          if (isa<ChainMulOp>(rhsOp))
           {
-            auto rhsMulOp = cast<MulOp>(rhsOp);
+            auto rhsMulOp = cast<ChainMulOp>(rhsOp);
             for (auto val : rhsMulOp.sum_labels())
             {
               summed_labels.insert(val.getDefiningOp());
@@ -1144,7 +1145,7 @@ namespace
           auto name = rhsLT->getTensorName();
           mlir::Value tensorValue = symbolTable.lookup(name);
           comet_debug() << " generate ta.sum op\n";
-          sumVal = builder.create<SUMOp>(location, builder.getF64Type(), tensorValue);
+          sumVal = builder.create<ReduceOp>(location, builder.getF64Type(), tensorValue);
         }
 
         // Case 2: SUM(A[i,j]*B[j,k])
@@ -1156,7 +1157,7 @@ namespace
           std::set<std::string> out_lbls = {};
           mlir::Value tensorValue = mlirGen(*expr, out_lbls);
           comet_debug() << " generate ta.sum op\n";
-          sumVal = builder.create<SUMOp>(location, builder.getF64Type(), tensorValue);
+          sumVal = builder.create<ReduceOp>(location, builder.getF64Type(), tensorValue);
         }
       }
 

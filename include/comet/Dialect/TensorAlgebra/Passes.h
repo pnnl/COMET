@@ -82,8 +82,8 @@ namespace mlir
         /// Create a pass for lowering tensor fill operation to linalg.fill
         std::unique_ptr<Pass> createTensorFillLoweringPass();
 
-        /// Create a pass for lowering SUM operation to SCF
-        std::unique_ptr<Pass> createSUMLowerToSCFPass();
+        /// Create a pass for lowering Reduce operation to SCF
+        std::unique_ptr<Pass> createReduceOpLowerToSCFPass();
 
         /// Create a pass for lowering transpose operations to SCF
         std::unique_ptr<Pass> createTransposeLoweringPass();

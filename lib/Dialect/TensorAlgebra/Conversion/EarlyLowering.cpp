@@ -720,9 +720,9 @@ namespace
         {
           comet_debug() << " the tensor is in PrintOp\n";
         }
-        else if (isa<tensorAlgebra::SUMOp>(u1))
+        else if (isa<tensorAlgebra::ReduceOp>(u1))
         {
-          comet_debug() << " the tensor is in SumOp\n";
+          comet_debug() << " the tensor is in ReduceOp\n";
         }
         else if (isa<tensorAlgebra::TensorElewsMultOp>(u1))
         {
@@ -779,7 +779,7 @@ namespace
         bool lowerTri = false, upperTri = false;
         for (auto u : op.getOperation()->getUsers())
         {
-          // Used in LabeledTensorOp and then the LabeledTensorOp is used in TensorChainSetOp
+          // Used in LabeledTensorOp and then the LabeledTensorOp is used in ChainSetOp
           if (isa<tensorAlgebra::LabeledTensorOp>(u))
           {
             comet_debug() << "\n";
@@ -788,11 +788,11 @@ namespace
             LLVM_DEBUG(comet_debug() << " labeled_tensor op\n");
             for (auto u1 : u->getUsers())
             {
-              if (isa<tensorAlgebra::TensorChainSetOp>(u1))
+              if (isa<tensorAlgebra::ChainSetOp>(u1))
               {
                 LLVM_DEBUG(comet_debug() << " tensor set_op\n");
 
-                auto setop = cast<tensorAlgebra::TensorChainSetOp>(u1);
+                auto setop = cast<tensorAlgebra::ChainSetOp>(u1);
 
                 auto read_from_file_operand = setop.getOperand(1).getDefiningOp(); // funccall
 
@@ -1535,7 +1535,7 @@ namespace
           comet_debug() << "The tensor is in print op,  no action taken\n";
           continue;
         }
-        else if (isa<tensorAlgebra::SUMOp>(u))
+        else if (isa<tensorAlgebra::ReduceOp>(u))
         {
           comet_debug() << "The tensor is in sum op,  no action taken\n";
           continue;
@@ -1837,7 +1837,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
   // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
-                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::ReduceOp,
                     tensorAlgebra::TransposeOp,
                     tensorAlgebra::TensorFillOp,
                     tensorAlgebra::GetTimeOp,
@@ -1886,7 +1886,7 @@ void SparseTensorDeclLoweringPass::runOnFunction()
   // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
-                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::ReduceOp,
                     tensorAlgebra::TransposeOp,
                     tensorAlgebra::TensorFillOp,
                     tensorAlgebra::GetTimeOp,
@@ -1930,7 +1930,7 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
 
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
-                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::ReduceOp,
                     tensorAlgebra::TransposeOp,
                     tensorAlgebra::TensorFillOp,
                     tensorAlgebra::GetTimeOp,
@@ -1971,7 +1971,7 @@ void TempSparseOutputTensorDeclLoweringPass::runOnFunction()
 
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
-                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::ReduceOp,
                     tensorAlgebra::TransposeOp,
                     tensorAlgebra::TensorFillOp,
                     tensorAlgebra::GetTimeOp,

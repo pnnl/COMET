@@ -2013,10 +2013,10 @@ namespace mlir
                        ConversionPatternRewriter &rewriter)
     {
       comet_pdump(op);
-      assert(isa<tensorAlgebra::MulOp>(op));
+      assert(isa<tensorAlgebra::ChainMulOp>(op));
 
       comet_debug() << "\n";
-      auto mulOp = cast<tensorAlgebra::MulOp>(op);
+      auto mulOp = cast<tensorAlgebra::ChainMulOp>(op);
 
       auto *lhsOp = mulOp.lhs().getDefiningOp();
       auto *rhsOp = mulOp.rhs().getDefiningOp();
@@ -2049,7 +2049,7 @@ namespace mlir
         }
         comet_debug() << "\n";
       }
-      else if (isa<tensorAlgebra::MulOp>(lhsOp))
+      else if (isa<tensorAlgebra::ChainMulOp>(lhsOp))
       {
         comet_debug() << "\n";
         rhs1Tensor = replaceBinop(lhsOp, loc, rewriter);
@@ -2125,7 +2125,7 @@ namespace mlir
         }
         comet_debug() << "\n";
       }
-      else if (isa<tensorAlgebra::MulOp>(rhsOp))
+      else if (isa<tensorAlgebra::ChainMulOp>(rhsOp))
       {
         comet_debug() << "\n";
         rhs2Tensor = replaceBinop(rhsOp, loc, rewriter);
@@ -2257,9 +2257,9 @@ namespace mlir
     {
       comet_debug() << " replaceSetOp begin\n";
       comet_pdump(op);
-      if (isa<tensorAlgebra::MulOp>(op))
+      if (isa<tensorAlgebra::ChainMulOp>(op))
       {
-        auto mulOp = cast<tensorAlgebra::MulOp>(op);
+        auto mulOp = cast<tensorAlgebra::ChainMulOp>(op);
 
         auto *lhsOp = mulOp.lhs().getDefiningOp();
         auto *rhsOp = mulOp.rhs().getDefiningOp();
@@ -2292,7 +2292,7 @@ namespace mlir
           }
           comet_debug() << "\n";
         }
-        else if (isa<tensorAlgebra::MulOp>(lhsOp))
+        else if (isa<tensorAlgebra::ChainMulOp>(lhsOp))
         {
           comet_debug() << "\n";
           rhs1Tensor = replaceBinop(lhsOp, loc, rewriter);
@@ -2370,7 +2370,7 @@ namespace mlir
           }
           comet_debug() << "\n";
         }
-        else if (isa<tensorAlgebra::MulOp>(rhsOp))
+        else if (isa<tensorAlgebra::ChainMulOp>(rhsOp))
         {
           comet_debug() << "\n";
           rhs2Tensor = replaceBinop(rhsOp, loc, rewriter);

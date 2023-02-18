@@ -238,15 +238,15 @@ Operation::operand_range GenericCallOp::getArgOperands() {
 }
 
 //===----------------------------------------------------------------------===//
-// MulOp
-void MulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+// chaing multiplication Op
+void ChainMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                   mlir::Value lhs, mlir::Value rhs)
 {
   state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
   state.addOperands({lhs, rhs});
 }
 
-void MulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, mlir::TensorType resultType,
+void ChainMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, mlir::TensorType resultType,
                   mlir::Value lhs, mlir::Value rhs)
 {
   state.addTypes(resultType);
