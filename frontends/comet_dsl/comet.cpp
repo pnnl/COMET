@@ -351,7 +351,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // =============================================================================
     // If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
     // If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
-    optPM.addPass(mlir::tensorAlgebra::createSUMLowerToSCFPass());
+    optPM.addPass(mlir::tensorAlgebra::createReduceOpLowerToSCFPass());
     optPM.addPass(mlir::tensorAlgebra::createTransposeLoweringPass());
 
     //Finally lowering index tree to SCF dialect

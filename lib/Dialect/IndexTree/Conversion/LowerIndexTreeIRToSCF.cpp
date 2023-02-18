@@ -2265,7 +2265,7 @@ void LowerIndexTreeIRToSCFPass::runOnFunction()
   target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
-                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::ReduceOp,
                     tensorAlgebra::TransposeOp,
                     tensorAlgebra::TensorFillOp,
                     tensorAlgebra::GetTimeOp,

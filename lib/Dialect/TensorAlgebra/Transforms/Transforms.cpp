@@ -89,38 +89,21 @@ std::vector<Value> dim_format;
 
 namespace
 {
-  // template <typename TAOp>
-  // struct RemoveTAOpLowering : public ConversionPattern
-  // {
-  //   RemoveTAOpLowering(MLIRContext *ctx)
-  //       : ConversionPattern(TAOp::getOperationName(), 1, ctx) {}
-
-  //   LogicalResult
-  //   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
-  //                   ConversionPatternRewriter &rewriter) const final
-  //   {
-  //     rewriter.eraseOp(op);
-
-  //     return success();
-  //   }
-  // };
-
-
-  // TODO: verify the use of the SetOpLowering Pass.
-  //       need to check the usage of TensorChainSetOp op.
-  struct SetOpLowering : public ConversionPattern
+  // Chain of multiplication operations produces ChainSetOp 
+  // and it needs to be lowered
+  struct ChainSetOpLowering : public ConversionPattern
   {
-    SetOpLowering(MLIRContext *ctx)
-        : ConversionPattern(tensorAlgebra::TensorChainSetOp::getOperationName(), 1,
+    ChainSetOpLowering(MLIRContext *ctx)
+        : ConversionPattern(tensorAlgebra::ChainSetOp::getOperationName(), 1,
                             ctx) {}
 
     LogicalResult
     matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                     ConversionPatternRewriter &rewriter) const final
     {
-      assert(isa<tensorAlgebra::TensorChainSetOp>(op));
+      assert(isa<tensorAlgebra::ChainSetOp>(op));
 
-      comet_debug() << "SetOpLowering begin\n";
+      comet_debug() << "ChainSetOpLowering begin\n";
       comet_pdump(op);
       auto ctx = rewriter.getContext();
       auto loc = op->getLoc();
@@ -132,10 +115,10 @@ namespace
       auto lhsLT = cast<tensorAlgebra::LabeledTensorOp>(lhs);
 
       Operation *rhsOp;
-      if (isa<tensorAlgebra::MulOp>(rhs))
+      if (isa<tensorAlgebra::ChainMulOp>(rhs))
       {
         comet_debug() << "\n";
-        rhsOp = cast<tensorAlgebra::MulOp>(rhs);
+        rhsOp = cast<tensorAlgebra::ChainMulOp>(rhs);
       }
       else if (isa<tensorAlgebra::AddOp>(rhs))
       {
@@ -183,7 +166,7 @@ namespace
         comet_debug() << "Neither MulOp, AddOp, nor LabeledTensorOp, it is: ";
         comet_pdump(rhs);
         // return failure();
-        comet_debug() << "SetOpLowering end\n";
+        comet_debug() << "ChainSetOpLowering end\n";
         return success();
       }
 
@@ -198,7 +181,7 @@ namespace
       comet_debug() << "\n";
       replaceSetOp(rhsOp, lhsTensor, lhsLabels, loc, rewriter);
       rewriter.eraseOp(op);
-      comet_debug() << "SetOpLowering end\n";
+      comet_debug() << "ChainSetOpLowering end\n";
       return success();
     }
   };
@@ -289,12 +272,12 @@ namespace
 void mlir::tensorAlgebra::populateLowerTAMulChainPatterns(
     OwningRewritePatternList &patterns, MLIRContext *context)
 {
-  patterns.insert<SetOpLowering>(context);
+  patterns.insert<ChainSetOpLowering>(context);
 }
 
 void mlir::tensorAlgebra::populateSTCRemoveDeadOpsPatterns(
     OwningRewritePatternList &patterns, MLIRContext *context)
 {
-  patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::MulOp>>(context);
+  patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::ChainMulOp>>(context);
   patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::IndexLabelDynamicOp>>(context);
 }

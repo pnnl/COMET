@@ -228,92 +228,6 @@ def TempSparseOutputTensorDeclOp : TA_Op<"temp_sparse_output_tensor_decl", [NoSi
   let verifier = ?;
 }
 
-//TODO(gkestor): need to evaluate its use cases
-def LabeledTensorOp : TA_Op<"labeled_tensor", [NoSideEffect]>{
-
-  let summary = "Produce a sliced `subview` of a base `tensor`.";
-  let description = [{
-  }];
-
-  let arguments = (ins TA_AnyTensor:$tensor, Variadic<Range>:$labels);
-  let results = (outs TA_AnyTensor);
-
-  let verifier = ?;
-}
-
-def TensorChainSetOp : TA_Op<"chain_set_op", [NoSideEffect]>{
-
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
-  let results = (outs AnyTensor);
-  
-  //let hasCanonicalizer = 1; 
-
-  let verifier = ?;
-}
-
-def TensorSetOp : TA_Op<"set_op", [NoSideEffect]>{
-
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins TA_AnyTensor:$lhs, TA_AnyTensor:$rhs);
-  
-  //let hasCanonicalizer = 1; 
-
-  let verifier = ?;
-}
-
-def TensorMultOp : TA_Op<"tc", [NoSideEffect]>{
-
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins TA_AnyTensor:$rhs1, TA_AnyTensor:$rhs2, Variadic<Range>:$index_labels, AffineMapArrayAttr:$indexing_maps, StrArrayAttr:$formats, StrAttr:$semiring);
-
-  // Return value
-  let results = (outs TA_AnyTensor);
-
-  let verifier = ?;
-  
-}
-
-def TensorElewsMultOp : TA_Op<"elews_mul", [NoSideEffect]>{
-
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins TA_AnyTensor:$rhs1, 
-                   TA_AnyTensor:$rhs2, 
-                   Variadic<Range>:$index_labels, 
-                   AffineMapArrayAttr:$indexing_maps, 
-                   StrArrayAttr:$formats, 
-                   StrAttr:$semiring); 
-  
-  let results = (outs TA_AnyTensor);
-
-  let verifier = ?;
-  
-}
-
-def TensorFillOp : TA_Op<"fill", [NoSideEffect]>{
-  
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins AnyTensor:$lhs, AnyAttr:$value);
-  let verifier = ?;
-  
-}
-
-
 // We define a ta operation by inherting from our base 'TA_Op' class above.
 // Here we provide the mnemonic and a list of traits for the operation. The
 // constant operation is marked as 'NoSideEffect' as it is a pure operation
@@ -377,6 +291,64 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [NoSideEffect]>{
   
 }
 
+def TensorFillOp : TA_Op<"fill", [NoSideEffect]>{
+  
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins AnyTensor:$lhs, AnyAttr:$value);
+  let verifier = ?;
+  
+}
+
+def TensorMultOp : TA_Op<"mul", [NoSideEffect]>{
+
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins TA_AnyTensor:$rhs1, TA_AnyTensor:$rhs2, Variadic<Range>:$index_labels, AffineMapArrayAttr:$indexing_maps, StrArrayAttr:$formats, StrAttr:$semiring);
+
+  // Return value
+  let results = (outs TA_AnyTensor);
+
+  let verifier = ?;
+  
+}
+
+def TensorElewsMultOp : TA_Op<"elews_mul", [NoSideEffect]>{
+
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins TA_AnyTensor:$rhs1, 
+                   TA_AnyTensor:$rhs2, 
+                   Variadic<Range>:$index_labels, 
+                   AffineMapArrayAttr:$indexing_maps, 
+                   StrArrayAttr:$formats, 
+                   StrAttr:$semiring); 
+  
+  let results = (outs TA_AnyTensor);
+
+  let verifier = ?;
+  
+}
+
+def TensorSetOp : TA_Op<"set_op", [NoSideEffect]>{
+
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins TA_AnyTensor:$lhs, TA_AnyTensor:$rhs);
+  
+  //let hasCanonicalizer = 1; 
+
+  let verifier = ?;
+}
+
 def TransposeOp : TA_Op<"transpose",[NoSideEffect]> {
   let summary = "transpose operation";
 
@@ -387,7 +359,7 @@ def TransposeOp : TA_Op<"transpose",[NoSideEffect]> {
   let verifier = ?;
 }
 
-def SUMOp : TA_Op<"sum",[NoSideEffect]> {
+def ReduceOp : TA_Op<"reduce",[NoSideEffect]> {
   let summary = "reduction operation";
 
   let arguments = (ins TA_AnyTensor:$rhs); 
@@ -400,90 +372,131 @@ def SUMOp : TA_Op<"sum",[NoSideEffect]> {
   let verifier = ?;
 }
 
-// The interface CallOpInterface 
-def GenericCallOp : TA_Op<"generic_call",
-    [DeclareOpInterfaceMethods<CallOpInterface>]> {
-  let summary = "generic call operation";
+def ChainMulOp : TA_Op<"chain_mul",
+    [NoSideEffect]> {
+  let summary = "";
   let description = [{
-    Generic calls represent calls to a user defined function that needs to
-    be specialized for the shape of its arguments. The callee name is attached
-    as a symbol reference via an attribute. The arguments list must match the
-    arguments expected by the callee. For example:
-
-    ```mlir
-     %4 = "ta.generic_call"(%1, %3) {callee = @my_func}
-           : (tensor<2x3xf64>, tensor<2x3xf64>) -> tensor<*xf64>
-    ```
-
-    This is only valid if a function named "my_func" exists and takes two
-    arguments.
   }];
 
-  // The generic call operation takes a symbol reference attribute as the
-  // callee, and inputs for the call.
-  let arguments = (ins SymbolRefAttr:$callee, TA_AnyTensor:$rhs);
+  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs, Variadic<Range>:$sum_labels);
+
+  let results = (outs AnyTensor);
+
+  let verifier = ?;
+  // Allow building a MulOp with from the two input operands.
+  let builders = [
+    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>,
+    OpBuilder<(ins "TensorType":$resultType, "mlir::Value":$lhs, "mlir::Value":$rhs)>,
+  ]; 
+}
+
+def ChainSetOp : TA_Op<"chain_set_op", [NoSideEffect]>{
+
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
+  let results = (outs AnyTensor);
   
+  //let hasCanonicalizer = 1; 
 
-  // The generic call operation returns a single value of TensorType.
-  let results = (outs TA_AnyTensor:$lhs);
+  let verifier = ?;
+}
 
-  let builders = [OpBuilder<(ins "StringRef":$callee,
-    "::mlir::Value":$arguments)>
+//TODO(gkestor): test
+def AddOp : TA_Op<"add",
+    [NoSideEffect]> {
+  let summary = "element-wise addition operation";
+  let description = [{
+    The "add" operation performs element-wise addition between two tensors.
+    The shapes of the tensor operands are expected to match.
+  }];
+
+  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
+  let results = (outs AnyTensor);
+
+  let builders = [
+    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
   ];
 }
 
-def PrintOp : TA_Op<"print"> {
-  let summary = "print operation";
+//TODO(gkestor): test
+def SubstractOp : TA_Op<"substract",
+    [NoSideEffect]> {
+  let summary = "element-wise substract operation";
   let description = [{
-    The "print" builtin operation prints a given input tensor, and produces
-    no results.
+    The "substract" operation performs element-wise substract between two tensors.
+    The shapes of the tensor operands are expected to match.
   }];
 
-  // The print operation takes an input tensor to print.
-  // We can extend the list of supported datatype for print with F64Tensor, I8MemRef, I64MemRef, F32MemRef, etc.
-  let arguments = (ins AnyTypeOf<[F64,
-                                  F64MemRef, 
-                                  TA_AnyTensor]>:$input);
+  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
+  let results = (outs AnyTensor);
+
+  let builders = [
+    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
+  ];
 }
 
-def GetTimeOp : TA_Op<"getTime"> {
-  let summary = "getTime operation";
+//TODO(gkestor): test
+def DivOp : TA_Op<"div",
+    [NoSideEffect]> {
+  let summary = "";
   let description = [{
-    The "getTime" builtin operation for getting the clock time
   }];
 
-  let results = (outs F64);
+  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs, Variadic<Range>:$sum_labels);
+
+  let results = (outs AnyTensor);
+
+  let verifier = ?;
+
+  let builders = [
+    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>,
+    OpBuilder<(ins "TensorType":$resultType, "mlir::Value":$lhs, "mlir::Value":$rhs)>,
+  ];
+  
 }
 
-def PrintElapsedTimeOp : TA_Op<"print_elapsed_time"> {
-  let summary = "printElapsedTime operation";
+//TODO(gkestor): test
+def CastOp : TA_Op<"cast",
+    [NoSideEffect,
+     SameOperandsAndResultShape]> {
+  let summary = "shape cast operation";
   let description = [{
-    The "print_elapsed_time" builtin operation prints the time elapsed for the start
-    and end times
+    The "cast" operation converts a tensor from one type to an equivalent type
+    without changing any data elements. The source and destination types
+    must both be tensor types with the same element type. If both are ranked
+    then the rank should be the same and static dimensions should match. The
+    operation is invalid if converting to a mismatching constant dimension.
   }];
 
-  // The print elapsed time gets two clock times as an input to compute and print
-  // elapsed time
-  let arguments = (ins F64:$start, F64:$end);
+  let arguments = (ins F64Tensor:$input);
+  let results = (outs F64Tensor:$output);
+
+  // Set the folder bit so that we can fold redundant cast operations.
+  let hasFolder = 1;
 }
 
-def ForLoopBeginOp : TA_Op<"begin_for_loop">
-{
-  let summary = "identifies the start of a for-loop body";
-  let description = [{
-    The "begin_for_loop" identifies the start of a for-loop body
-  }];
+def ScalarOp : TA_Op<"scalar",[NoSideEffect]> {
+  let summary = "scalar arithmetic operation";
 
-  // the inputs are 1) index start, 2) index end, 3) index step,
-  // and 4) string-attr with name of the iterator (this info to be used).
-  let arguments = (ins Index:$min, Index:$max, Index:$step, StrAttr:$iterator);
+  let arguments = (ins F64:$rhs, F64:$lhs, AnyAttr:$op); 
+
+  // The generic call operation returns a single value of TensorType.
+  let results = (outs F64:$res);
+
+  let verifier = ?;
 }
 
-def ForLoopEndOp : TA_Op<"end_for_loop"> {
-  let summary = "identifies the end of a for-loop body";
-  let description = [{
-    The "end_for_loop" identifies the end of a for-loop body
-  }];
+def ScalarAssignOp : TA_Op<"scalar_assign",[NoSideEffect]> {
+  let summary = "scalarAssign operation";
+
+  let arguments = (ins AnyAttr:$rhs);
+
+  let results = (outs F64:$lhs);
+
+  let verifier = ?;
 }
 
 def TAReturnOp : TA_Op<"return", [Terminator, HasParent<"FuncOp">]> {
@@ -521,7 +534,98 @@ def TAReturnOp : TA_Op<"return", [Terminator, HasParent<"FuncOp">]> {
   let verifier = [{ return ::verify(*this); }];
 }
 
-///////////
+//===----------------------------------------------------------------------===//
+// Tensor Algebra Operations for programming principles.
+// This operations might be moved to a new dialect
+//===----------------------------------------------------------------------===//
+
+def ForLoopBeginOp : TA_Op<"begin_for_loop">
+{
+  let summary = "identifies the start of a for-loop body";
+  let description = [{
+    The "begin_for_loop" identifies the start of a for-loop body
+  }];
+
+  // the inputs are 1) index start, 2) index end, 3) index step,
+  // and 4) string-attr with name of the iterator (this info to be used).
+  let arguments = (ins Index:$min, Index:$max, Index:$step, StrAttr:$iterator);
+}
+
+def ForLoopEndOp : TA_Op<"end_for_loop"> {
+  let summary = "identifies the end of a for-loop body";
+  let description = [{
+    The "end_for_loop" identifies the end of a for-loop body
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Tensor Algebra Operations for utility functions
+//===----------------------------------------------------------------------===//
+def PrintOp : TA_Op<"print"> {
+  let summary = "print operation";
+  let description = [{
+    The "print" builtin operation prints a given input tensor, and produces
+    no results.
+  }];
+
+  // The print operation takes an input tensor to print.
+  // We can extend the list of supported datatype for print with F64Tensor, I8MemRef, I64MemRef, F32MemRef, etc.
+  let arguments = (ins AnyTypeOf<[F64,
+                                  F64MemRef, 
+                                  TA_AnyTensor]>:$input);
+}
+
+def GetTimeOp : TA_Op<"getTime"> {
+  let summary = "getTime operation";
+  let description = [{
+    The "getTime" builtin operation for getting the clock time
+  }];
+
+  let results = (outs F64);
+}
+
+def PrintElapsedTimeOp : TA_Op<"print_elapsed_time"> {
+  let summary = "printElapsedTime operation";
+  let description = [{
+    The "print_elapsed_time" builtin operation prints the time elapsed for the start
+    and end times
+  }];
+
+  // The print elapsed time gets two clock times as an input to compute and print
+  // elapsed time
+  let arguments = (ins F64:$start, F64:$end);
+}
+
+def GenericCallOp : TA_Op<"generic_call",
+    [DeclareOpInterfaceMethods<CallOpInterface>]> {
+  let summary = "generic call operation";
+  let description = [{
+    Generic calls represent calls to a user defined function that needs to
+    be specialized for the shape of its arguments. The callee name is attached
+    as a symbol reference via an attribute. The arguments list must match the
+    arguments expected by the callee. For example:
+
+    ```mlir
+     %4 = "ta.generic_call"(%1, %3) {callee = @my_func}
+           : (tensor<2x3xf64>, tensor<2x3xf64>) -> tensor<*xf64>
+    ```
+
+    This is only valid if a function named "my_func" exists and takes two
+    arguments.
+  }];
+
+  // The generic call operation takes a symbol reference attribute as the
+  // callee, and inputs for the call.
+  let arguments = (ins SymbolRefAttr:$callee, TA_AnyTensor:$rhs);
+  
+
+  // The generic call operation returns a single value of TensorType.
+  let results = (outs TA_AnyTensor:$lhs);
+
+  let builders = [OpBuilder<(ins "StringRef":$callee,
+    "::mlir::Value":$arguments)>
+  ];
+}
 
 def TensorFillFromFileOp : TA_Op<"fill_from_file", [NoSideEffect]>{
   let summary = "";
@@ -555,92 +659,19 @@ def TensorUpperTriFillFromFileOp : TA_Op<"fill_upperTri_from_file", [NoSideEffec
   
 }
 
-def AddOp : TA_Op<"add",
-    [NoSideEffect]> {
-  let summary = "element-wise addition operation";
-  let description = [{
-    The "add" operation performs element-wise addition between two tensors.
-    The shapes of the tensor operands are expected to match.
-  }];
+////////////////
 
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
-  let results = (outs AnyTensor);
+//TODO(gkestor): need to evaluate its use cases
+def LabeledTensorOp : TA_Op<"labeled_tensor", [NoSideEffect]>{
 
-  let builders = [
-    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
-  ];
-}
-
-def SubstractOp : TA_Op<"substract",
-    [NoSideEffect]> {
-  let summary = "element-wise substract operation";
-  let description = [{
-    The "substract" operation performs element-wise substract between two tensors.
-    The shapes of the tensor operands are expected to match.
-  }];
-
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
-  let results = (outs AnyTensor);
-
-  let builders = [
-    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
-  ];
-}
-
-def DivOp : TA_Op<"div",
-    [NoSideEffect]> {
-  let summary = "";
+  let summary = "Produce a sliced `subview` of a base `tensor`.";
   let description = [{
   }];
 
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs, Variadic<Range>:$sum_labels);
-
-  let results = (outs AnyTensor);
+  let arguments = (ins TA_AnyTensor:$tensor, Variadic<Range>:$labels);
+  let results = (outs TA_AnyTensor);
 
   let verifier = ?;
-
-  let builders = [
-    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>,
-    OpBuilder<(ins "TensorType":$resultType, "mlir::Value":$lhs, "mlir::Value":$rhs)>,
-  ];
-  
-}
-
-def CastOp : TA_Op<"cast",
-    [NoSideEffect,
-     SameOperandsAndResultShape]> {
-  let summary = "shape cast operation";
-  let description = [{
-    The "cast" operation converts a tensor from one type to an equivalent type
-    without changing any data elements. The source and destination types
-    must both be tensor types with the same element type. If both are ranked
-    then the rank should be the same and static dimensions should match. The
-    operation is invalid if converting to a mismatching constant dimension.
-  }];
-
-  let arguments = (ins F64Tensor:$input);
-  let results = (outs F64Tensor:$output);
-
-  // Set the folder bit so that we can fold redundant cast operations.
-  let hasFolder = 1;
-}
-
-def MulOp : TA_Op<"mul",
-    [NoSideEffect]> {
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs, Variadic<Range>:$sum_labels);
-
-  let results = (outs AnyTensor);
-
-  let verifier = ?;
-  // Allow building a MulOp with from the two input operands.
-  let builders = [
-    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>,
-    OpBuilder<(ins "TensorType":$resultType, "mlir::Value":$lhs, "mlir::Value":$rhs)>,
-  ]; 
 }
 
 def TensorCopyOp : TA_Op<"copy", [NoSideEffect]>{
@@ -653,29 +684,6 @@ def TensorCopyOp : TA_Op<"copy", [NoSideEffect]>{
 
   let verifier = ?;
 }
-
-// The interface CallOpInterface is defined in mlir/Analysis/CallInterfaces.td
-def ScalarOp : TA_Op<"scalar",[NoSideEffect]> {
-  let summary = "scalar arithmetic operation";
-
-  let arguments = (ins F64:$rhs, F64:$lhs, AnyAttr:$op); 
-
-  // The generic call operation returns a single value of TensorType.
-  let results = (outs F64:$res);
-
-  let verifier = ?;
-}
-
-def ScalarAssignOp : TA_Op<"scalarAssign",[NoSideEffect]> {
-  let summary = "scalarAssign operation";
-
-  let arguments = (ins AnyAttr:$rhs);
-
-  let results = (outs F64:$lhs);
-
-  let verifier = ?;
-}
-
 
 #endif // TA_OPS
 

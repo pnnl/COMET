@@ -289,7 +289,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   std::vector<Operation *> inLTOps;
   std::map<Operation *, Value> inLTValues;
 
-  comet_debug() << "MulOpFactorization begin...\n";
+  comet_debug() << "Chain Multiplication Factorization begin...\n";
 
   // collect all operands from series of ta.tc ops
   if (isa<tensorAlgebra::TensorMultOp>(lhsOp))
@@ -566,7 +566,7 @@ void LowerTAMulChainPass::runOnFunction()
   // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
-                    tensorAlgebra::SUMOp,
+                    tensorAlgebra::ReduceOp,
                     tensorAlgebra::TransposeOp,
                     tensorAlgebra::TensorFillOp,
                     tensorAlgebra::TensorFillFromFileOp,
@@ -575,7 +575,7 @@ void LowerTAMulChainPass::runOnFunction()
                     tensorAlgebra::TensorMultOp,
                     tensorAlgebra::TensorElewsMultOp,
                     tensorAlgebra::TensorSetOp,
-                    tensorAlgebra::MulOp,
+                    tensorAlgebra::ChainMulOp,
                     tensorAlgebra::TensorCopyOp,
                     tensorAlgebra::IndexLabelDynamicOp,
                     tensorAlgebra::IndexLabelStaticOp,

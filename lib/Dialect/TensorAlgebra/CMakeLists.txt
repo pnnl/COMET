@@ -3,7 +3,7 @@ add_llvm_library(COMETTensorAlgebra
 
   Conversion/EarlyLowering.cpp
   Conversion/PreLowering.cpp
-  Conversion/SUMLowerToSCF.cpp
+  Conversion/ReduceLowerToSCF.cpp
   Conversion/TransposeLowering.cpp
   Conversion/LateLowering.cpp 
   Conversion/LowerPCToLoops.cpp

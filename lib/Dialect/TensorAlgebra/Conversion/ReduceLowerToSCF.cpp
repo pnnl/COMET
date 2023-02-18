@@ -1,4 +1,4 @@
-//===- SUMLowerToSCF.cpp - Lowering reduction operation to SCF ------===//
+//===- ReduceOpLowerToSCF.cpp - Lowering reduction operation to SCF ------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -65,14 +65,14 @@ using namespace mlir::edsc::intrinsics;
 using namespace mlir::linalg;
 using namespace mlir::tensorAlgebra;
 
-#define DEBUG_TYPE "lowering-sum-to-scf"
+#define DEBUG_TYPE "lowering-reduceop-to-scf"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_SUMLowerToSCFPass
-// #define DEBUG_MODE_SUMLowerToSCFPass
+// #ifndef DEBUG_MODE_ReduceOpLowerToSCFPass
+// #define DEBUG_MODE_ReduceOpLowerToSCFPass
 // #endif
 
-#ifdef DEBUG_MODE_SUMLowerToSCFPass
+#ifdef DEBUG_MODE_ReduceOpLowerToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
@@ -88,24 +88,24 @@ using namespace mlir::tensorAlgebra;
 // *********** For debug purpose *********//
 
 //===----------------------------------------------------------------------===//
-// SUMLowerToSCF PASS
+// ReduceOpLowerToSCF PASS
 //===----------------------------------------------------------------------===//
 
 namespace
 {
   //===----------------------------------------------------------------------===//
-  // SUMtoSCF RewritePatterns: Reduction operation lowering for sparse and dense tensors
+  // ReduceOptoSCF RewritePatterns: Reduction operation lowering for sparse and dense tensors
   //===----------------------------------------------------------------------===//
 
-  struct SUMLowering : public OpRewritePattern<tensorAlgebra::SUMOp>
+  struct ReduceOpLowering : public OpRewritePattern<tensorAlgebra::ReduceOp>
   {
-    using OpRewritePattern<tensorAlgebra::SUMOp>::OpRewritePattern;
-    LogicalResult matchAndRewrite(tensorAlgebra::SUMOp op,
+    using OpRewritePattern<tensorAlgebra::ReduceOp>::OpRewritePattern;
+    LogicalResult matchAndRewrite(tensorAlgebra::ReduceOp op,
                                   PatternRewriter &rewriter) const final
     {
 
-      assert(isa<tensorAlgebra::SUMOp>(op));
-      comet_debug() << "Lowering SUM operation to SCF\n";
+      assert(isa<tensorAlgebra::ReduceOp>(op));
+      comet_debug() << "Lowering Reduce operation to SCF\n";
 
       Location loc = op.getLoc();
       auto f64Type = rewriter.getF64Type();
@@ -159,8 +159,8 @@ namespace
         // Build loop body
         auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_op, indices);
         auto res_load = rewriter.create<memref::LoadOp>(loc, res, alloc_zero_loc);
-        auto sum = rewriter.create<mlir::AddFOp>(loc, load_rhs, res_load);
-        rewriter.create<memref::StoreOp>(loc, sum, res, alloc_zero_loc);
+        auto reduced = rewriter.create<mlir::AddFOp>(loc, load_rhs, res_load);
+        rewriter.create<memref::StoreOp>(loc, reduced, res, alloc_zero_loc);
       }
       else
       { // sparse tensor type
@@ -173,7 +173,7 @@ namespace
         //TODO(gkestor): get tensor ranks by functions
         int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
-        comet_debug() << "Tensor to sum:\n";
+        comet_debug() << "Tensor to reduce:\n";
         comet_pdump(op->getOperand(0).getDefiningOp());
 
         // TODO(gkestor): need a better way to acces information from SparseTensorConstructOp
@@ -227,8 +227,8 @@ namespace
         std::vector<Value> indices = {loop.getInductionVar()};
         auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_op, indices);
         auto res_load = rewriter.create<memref::LoadOp>(loc, res, alloc_zero_loc);
-        auto sum = rewriter.create<mlir::AddFOp>(loc, load_rhs, res_load);
-        rewriter.create<memref::StoreOp>(loc, sum, res, alloc_zero_loc);
+        auto reduce = rewriter.create<mlir::AddFOp>(loc, load_rhs, res_load);
+        rewriter.create<memref::StoreOp>(loc, reduce, res, alloc_zero_loc);
 
         // need to restore the insertion point to the previous point
         rewriter.restoreInsertionPoint(insertPt);
@@ -241,34 +241,34 @@ namespace
 
       return success();
     }
-  }; // SUMLowering
+  }; // ReduceOpLowering
 
-  struct SUMLowerToSCFPass
-      : public PassWrapper<SUMLowerToSCFPass, FunctionPass>
+  struct ReduceOpLowerToSCFPass
+      : public PassWrapper<ReduceOpLowerToSCFPass, FunctionPass>
   {
     void runOnFunction() final;
   };
 
 } // end anonymous namespace.
 
-void SUMLowerToSCFPass::runOnFunction()
+void ReduceOpLowerToSCFPass::runOnFunction()
 {
-  LLVM_DEBUG(llvm::dbgs() << "start SUMLowerToSCFPass\n");
+  LLVM_DEBUG(llvm::dbgs() << "start ReduceOpLowerToSCFPass\n");
 
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
   OwningRewritePatternList patterns(&getContext());
-  patterns.insert<SUMLowering>(&getContext());
+  patterns.insert<ReduceOpLowering>(&getContext());
 
   if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
   {
-    llvm::errs() << "Failed to Lower SUM operation\n";
+    llvm::errs() << "Failed to Lower Reduce operation\n";
     signalPassFailure();
   }
 }
 
 // Lower sparse tensor algebra operation to loops
-std::unique_ptr<Pass> mlir::tensorAlgebra::createSUMLowerToSCFPass()
+std::unique_ptr<Pass> mlir::tensorAlgebra::createReduceOpLowerToSCFPass()
 {
-  return std::make_unique<SUMLowerToSCFPass>();
+  return std::make_unique<ReduceOpLowerToSCFPass>();
 }
