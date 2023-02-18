@@ -257,6 +257,7 @@ std::vector<Value> getAllocs(Value tensor)
     comet_debug() << " getAllocs() -  it is sparse\n";
     auto defop = tensor.getDefiningOp<tensorAlgebra::SparseTensorConstructOp>();
 
+    //TODO(gkestor): get tensor ranks by functions
     unsigned int ranks = (defop.indices().size() - 2) / 5;
     for (unsigned int n = 0; n < 2 * ranks + 1; n++)
     {
@@ -1669,7 +1670,9 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       else if (lhs.getType().isa<tensorAlgebra::SparseTensorType>())
       {
 
+        //TODO(gkestor): get tensor ranks by functions
         unsigned int lhs_ranks = (lhs.getDefiningOp()->getNumOperands() - 2) / 5;
+        
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
         unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
         unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;

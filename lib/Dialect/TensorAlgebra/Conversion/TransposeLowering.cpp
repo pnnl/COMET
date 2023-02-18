@@ -221,6 +221,7 @@ namespace
 
         for (unsigned int n = 0; n < tensors_num; n++)
         {
+          //TODO(gkestor): get tensor ranks by functions
           unsigned int tensor_rank = (tensors[n].getDefiningOp()->getNumOperands() - 2) / 5;
           comet_debug() << " tensor_rank: " << tensor_rank << "\n";
           comet_debug() << " tensor[n]: "
@@ -268,7 +269,9 @@ namespace
         comet_debug() << "Sparse tensor descriptive to extract row/col values:\n";
         comet_vdump(sparse_tensor_desc);
 
+        //TODO(gkestor): get tensor ranks by functions
         auto rank_size = (tensors[0].getDefiningOp()->getNumOperands() - 2) / 5;
+        
         // dim format of input tensor
         std::vector<Value>
             dim_formatIn = mlir::tensorAlgebra::getFormatsValueInt(formats_strIn, rank_size, rewriter, loc, i32Type);
