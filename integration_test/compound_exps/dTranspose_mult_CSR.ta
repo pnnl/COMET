@@ -19,7 +19,7 @@ def main() {
 
     #Tensor Readfile Operation      
     A[i, j] = 1.7;
-	B[i, k] = read_from_file(0);
+	B[i, k] = comet_read(0);
 	C[j, k] = 0.0;
 
 	#Tensor Transpose

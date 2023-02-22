@@ -14,7 +14,7 @@ def main() {
 	Tensor<double> C([a, b], {COO});
 
     #Tensor Readfile Operation
-    A[a, b] = read_from_file(0);
+    A[a, b] = comet_read(0);
 	B[a, b] = 2.7;
 
 	#Tensor Contraction

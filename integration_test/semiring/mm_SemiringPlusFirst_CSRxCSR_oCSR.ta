@@ -18,8 +18,8 @@ def main() {
     Tensor<double> C([a, c], {CSR});
     
     #Tensor Readfile Operation
-    A[a, b] = read_from_file(0);
-    B[b, c] = read_from_file(1);
+    A[a, b] = comet_read(0);
+    B[b, c] = comet_read(1);
     
     #Tensor Contraction
     C[a, c] = A[a, b] @(+,first) B[b, c];
