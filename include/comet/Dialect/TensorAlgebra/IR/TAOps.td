@@ -308,7 +308,8 @@ def TensorMultOp : TA_Op<"mul", [NoSideEffect]>{
   let description = [{
   }];
 
-  let arguments = (ins TA_AnyTensor:$rhs1, TA_AnyTensor:$rhs2, Variadic<Range>:$index_labels, AffineMapArrayAttr:$indexing_maps, StrArrayAttr:$formats, StrAttr:$semiring);
+  let arguments = (ins TA_AnyTensor:$rhs1, TA_AnyTensor:$rhs2, Variadic<Range>:$index_labels, 
+                   AffineMapArrayAttr:$indexing_maps, StrArrayAttr:$formats, StrAttr:$semiring);
 
   // Return value
   let results = (outs TA_AnyTensor);
@@ -342,7 +343,8 @@ def TensorSetOp : TA_Op<"set_op", [NoSideEffect]>{
   let description = [{
   }];
 
-  let arguments = (ins TA_AnyTensor:$lhs, TA_AnyTensor:$rhs);
+  let arguments = (ins  AnyTypeOf<[TA_AnyTensor,F64MemRef]>:$lhs,
+                        AnyTypeOf<[TA_AnyTensor,F64MemRef]>:$rhs);
   
   //let hasCanonicalizer = 1; 
 
@@ -478,13 +480,20 @@ def CastOp : TA_Op<"cast",
   let hasFolder = 1;
 }
 
+//TODO(gkestor): support other datatypes
 def ScalarOp : TA_Op<"scalar",[NoSideEffect]> {
   let summary = "scalar arithmetic operation";
 
-  let arguments = (ins F64:$rhs, F64:$lhs, AnyAttr:$op); 
+  //let arguments = (ins F64:$rhs, F64:$lhs, StrAttr:$op); 
+  let arguments = (ins AnyTypeOf<[AnyTensor,F64]>:$rhs, AnyTypeOf<[AnyTensor,F64]>:$lhs, StrAttr:$op); 
 
-  // The generic call operation returns a single value of TensorType.
-  let results = (outs F64:$res);
+  //let results = (outs F64:$res);
+  let results = (outs AnyTypeOf<[AnyTensor,
+                                 F64]>:$res);
+
+  let builders = [
+    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
+  ];
 
   let verifier = ?;
 }

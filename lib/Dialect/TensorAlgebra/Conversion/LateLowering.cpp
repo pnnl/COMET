@@ -54,11 +54,11 @@ using namespace mlir::edsc::intrinsics;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_TALateLoweringPass
-// #define DEBUG_MODE_TALateLoweringPass
+// #ifndef DEBUG_MODE_LateLoweringPass
+// #define DEBUG_MODE_LateLoweringPass
 // #endif
 
-#ifdef DEBUG_MODE_TALateLoweringPass
+#ifdef DEBUG_MODE_LateLoweringPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
@@ -79,94 +79,6 @@ using namespace mlir::tensorAlgebra;
 
 namespace
 {
-  //===----------------------------------------------------------------------===//
-  // Late Lowering to Standard Dialect RewritePatterns: Constant operations
-  //===----------------------------------------------------------------------===//
-  struct ConstantOpLowering : public OpRewritePattern<tensorAlgebra::DenseConstantOp>
-  {
-
-    using OpRewritePattern<tensorAlgebra::DenseConstantOp>::OpRewritePattern;
-
-    LogicalResult matchAndRewrite(tensorAlgebra::DenseConstantOp op,
-                                  PatternRewriter &rewriter) const final
-    {
-      DenseElementsAttr constantValue = op.value();
-      Location loc = op.getLoc();
-
-      tensorAlgebra::TensorSetOp setnewop;
-      for (auto u : op.getOperation()->getResult(0).getUsers())
-      {
-        if (isa<tensorAlgebra::TensorSetOp>(u))
-        {
-          setnewop = cast<tensorAlgebra::TensorSetOp>(u);
-        }
-        else
-        {
-          llvm::errs() << __FILE__ << " " << __LINE__ << "Dense constant op is used in ops besides SetOp\n";
-        }
-      }
-
-      mlir::Value rhs = setnewop.rhs();
-
-      auto LabeledTensoroperands = rhs.getDefiningOp()->getOperands();
-
-      auto tensorload = cast<memref::TensorLoadOp>(LabeledTensoroperands[0].getDefiningOp());
-      auto alloc_rhs = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
-
-      // When lowering the constant operation, we allocate and assign the constant
-      // values to a corresponding memref allocation.
-      auto tensorType = op.getType().cast<TensorType>();
-      auto memRefType = convertTensorToMemRef(tensorType);
-
-      // We will be generating constant indices up-to the largest dimension.
-      // Create these constants up-front to avoid large amounts of redundant
-      // operations.
-      auto valueShape = memRefType.getShape();
-      SmallVector<Value, 8> constantIndices;
-      for (auto i : llvm::seq<int64_t>(
-               0, *std::max_element(valueShape.begin(), valueShape.end())))
-        constantIndices.push_back(rewriter.create<ConstantIndexOp>(loc, i));
-
-      // The constant operation represents a multi-dimensional constant, so we
-      // will need to generate a store for each of the elements. The following
-      // functor recursively walks the dimensions of the constant shape,
-      // generating a store when the recursion hits the base case.
-
-      SmallVector<Value, 2> indices;
-      auto valueIt = constantValue.getValues<FloatAttr>().begin();
-      std::function<void(uint64_t)> storeElements = [&](uint64_t dimension)
-      {
-        // The last dimension is the base case of the recursion, at this point
-        // we store the element at the given index.
-        if (dimension == valueShape.size())
-        {
-          rewriter.create<memref::StoreOp>(
-              loc, rewriter.create<ConstantOp>(loc, *valueIt++), alloc_rhs,
-              llvm::makeArrayRef(indices));
-
-          return;
-        }
-
-        // Otherwise, iterate over the current dimension and add the indices to
-        // the list.
-        for (uint64_t i = 0, e = valueShape[dimension]; i != e; ++i)
-        {
-          indices.push_back(constantIndices[i]);
-          storeElements(dimension + 1);
-          indices.pop_back();
-        }
-      };
-
-      // Start the element storing recursion from the first dimension.
-      storeElements(/*dimension=*/0);
-
-      // Replace this operation with the generated alloc.
-      rewriter.eraseOp(setnewop);
-      rewriter.eraseOp(op);
-
-      return success();
-    }
-  };
 
   //===----------------------------------------------------------------------===//
   // Late Lowering to Standard Dialect RewritePatterns: Return operations
@@ -277,7 +189,7 @@ namespace
             }
 
             // SparseTensorType includes 5 metadata per dimension. Additionally, 2 elements for value array, value array size.
-            //TODO(gkestor): get tensor ranks by functions
+            // TODO(gkestor): get tensor ranks by functions
             int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
             Type unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
 
@@ -308,186 +220,6 @@ namespace
       }
 
       // Notify the rewriter that this operation has been removed.
-      rewriter.eraseOp(op);
-      return success();
-    }
-  };
-
-  /*
-    Lower elementwise tensor addition.
-  */
-  struct TensorAdditionLowering : public OpRewritePattern<tensorAlgebra::AddOp>
-  {
-    using OpRewritePattern<tensorAlgebra::AddOp>::OpRewritePattern;
-
-    LogicalResult matchAndRewrite(tensorAlgebra::AddOp op,
-                                  PatternRewriter &rewriter) const final
-    {
-      Location loc = op.getLoc();
-      Value lhs = op.lhs();
-      Value rhs = op.rhs();
-
-      auto rhsTy = rhs.getType().cast<mlir::TensorType>();
-      std::vector<scf::ForOp> forloops;
-      Value upperBound;
-      std::vector<Value> InductionVars;
-      for (int i = 0; i < rhsTy.getRank(); i++)
-      {
-
-        upperBound = rewriter.create<ConstantIndexOp>(loc, rhsTy.getDimSize(i));
-        auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-        auto step = rewriter.create<ConstantIndexOp>(loc, 1);
-        auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-
-        forloops.push_back(loop);
-        InductionVars.push_back(loop.getInductionVar());
-        rewriter.setInsertionPointToStart(loop.getBody());
-      }
-      auto lhs_def_op = lhs.getDefiningOp();
-      memref::AllocOp alloc_lhs;
-      if (isa<tensorAlgebra::LabeledTensorOp>(lhs_def_op))
-      {
-
-        auto LabeledTensoroperands_lhs = lhs.getDefiningOp()->getOperands();
-        auto tensorload_lhs = cast<memref::TensorLoadOp>(LabeledTensoroperands_lhs[0].getDefiningOp());
-        alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
-      }
-      else
-      {
-        Operation *tensorload_lhs = cast<memref::TensorLoadOp>(lhs.getDefiningOp());
-        alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
-      }
-
-      Operation *tensorload_rhs = cast<memref::TensorLoadOp>(rhs.getDefiningOp());
-      auto alloc_rhs = cast<memref::AllocOp>(tensorload_rhs->getOperand(0).getDefiningOp());
-
-      auto load_lhs = rewriter.create<memref::LoadOp>(loc, alloc_lhs, InductionVars);
-      auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_rhs, InductionVars);
-      auto sum = rewriter.create<mlir::AddFOp>(loc, load_lhs, load_rhs);
-
-      tensorAlgebra::TensorSetOp setnewop;
-      for (auto u : op.getOperation()->getResult(0).getUsers())
-      {
-        if (isa<tensorAlgebra::TensorSetOp>(u))
-        {
-          setnewop = cast<tensorAlgebra::TensorSetOp>(u);
-        }
-        else
-        {
-          llvm::errs() << __FILE__ << " " << __LINE__ << "Dense constant op is used in ops besides SetOp\n";
-        }
-      }
-
-      mlir::Value setOp_rhs = setnewop.rhs();
-      auto def_setOp_rhs = setOp_rhs.getDefiningOp();
-
-      memref::AllocOp SetOp_rhs_alloc;
-
-      if (isa<tensorAlgebra::LabeledTensorOp>(def_setOp_rhs))
-      {
-        auto LTSetOp_rhs = setOp_rhs.getDefiningOp()->getOperands();
-        auto tensorload_SetOp_rhs = cast<memref::TensorLoadOp>(LTSetOp_rhs[0].getDefiningOp());
-        SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_SetOp_rhs->getOperand(0).getDefiningOp());
-      }
-      else
-      {
-        Operation *tensorload_setOp = cast<memref::TensorLoadOp>(setOp_rhs.getDefiningOp());
-        SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_setOp->getOperand(0).getDefiningOp());
-      }
-
-      rewriter.create<memref::StoreOp>(loc, sum, SetOp_rhs_alloc, InductionVars);
-      rewriter.setInsertionPointAfter(forloops[0]);
-      rewriter.eraseOp(setnewop);
-      rewriter.eraseOp(op);
-      return success();
-    }
-  };
-
-  struct TensorSubtractionLowering : public OpRewritePattern<tensorAlgebra::SubstractOp>
-  {
-    using OpRewritePattern<tensorAlgebra::SubstractOp>::OpRewritePattern;
-
-    LogicalResult matchAndRewrite(tensorAlgebra::SubstractOp op,
-                                  PatternRewriter &rewriter) const final
-    {
-
-      Location loc = op.getLoc();
-      Value lhs = op.lhs();
-      Value rhs = op.rhs();
-
-      auto rhsTy = rhs.getType().cast<mlir::TensorType>();
-      std::vector<scf::ForOp> forloops;
-      Value upperBound;
-      std::vector<Value> InductionVars;
-      for (int i = 0; i < rhsTy.getRank(); i++)
-      {
-
-        upperBound = rewriter.create<ConstantIndexOp>(loc, rhsTy.getDimSize(i));
-        auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-        auto step = rewriter.create<ConstantIndexOp>(loc, 1);
-        auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-
-        forloops.push_back(loop);
-        InductionVars.push_back(loop.getInductionVar());
-        rewriter.setInsertionPointToStart(loop.getBody());
-      }
-
-      auto lhs_def_op = lhs.getDefiningOp();
-      memref::AllocOp alloc_lhs;
-      if (isa<tensorAlgebra::LabeledTensorOp>(lhs_def_op))
-      {
-
-        auto LabeledTensoroperands_lhs = lhs.getDefiningOp()->getOperands();
-        auto tensorload_lhs = cast<memref::TensorLoadOp>(LabeledTensoroperands_lhs[0].getDefiningOp());
-        alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
-      }
-      else
-      {
-        Operation *tensorload_lhs = cast<memref::TensorLoadOp>(lhs.getDefiningOp());
-        alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
-      }
-
-      Operation *tensorload_rhs = cast<memref::TensorLoadOp>(rhs.getDefiningOp());
-      auto alloc_rhs = cast<memref::AllocOp>(tensorload_rhs->getOperand(0).getDefiningOp());
-
-      auto load_lhs = rewriter.create<memref::LoadOp>(loc, alloc_lhs, InductionVars);
-      auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_rhs, InductionVars);
-      auto subtract = rewriter.create<mlir::SubFOp>(loc, load_lhs, load_rhs);
-
-      tensorAlgebra::TensorSetOp setnewop;
-      for (auto u : op.getOperation()->getResult(0).getUsers())
-      {
-        if (isa<tensorAlgebra::TensorSetOp>(u))
-        {
-          setnewop = cast<tensorAlgebra::TensorSetOp>(u);
-        }
-        else
-        {
-          llvm::errs() << __FILE__ << " " << __LINE__ << "Dense constant op is used in ops besides SetOp\n";
-        }
-      }
-
-      mlir::Value setOp_rhs = setnewop.rhs();
-      auto def_setOp_rhs = setOp_rhs.getDefiningOp();
-
-      memref::AllocOp SetOp_rhs_alloc;
-
-      if (isa<tensorAlgebra::LabeledTensorOp>(def_setOp_rhs))
-      {
-        auto LTSetOp_rhs = setOp_rhs.getDefiningOp()->getOperands();
-        auto tensorload_SetOp_rhs = cast<memref::TensorLoadOp>(LTSetOp_rhs[0].getDefiningOp());
-        SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_SetOp_rhs->getOperand(0).getDefiningOp());
-      }
-      else
-      {
-        Operation *tensorload_setOp = cast<memref::TensorLoadOp>(setOp_rhs.getDefiningOp());
-        SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_setOp->getOperand(0).getDefiningOp());
-      }
-
-      rewriter.create<memref::StoreOp>(loc, subtract, SetOp_rhs_alloc, InductionVars);
-
-      rewriter.setInsertionPointAfter(forloops[0]);
-      rewriter.eraseOp(setnewop);
       rewriter.eraseOp(op);
       return success();
     }
@@ -565,14 +297,14 @@ namespace
 /// rest of the code in the TA dialect.
 namespace
 {
-  struct TALateLoweringPass
-      : public PassWrapper<TALateLoweringPass, FunctionPass>
+  struct LateLoweringPass
+      : public PassWrapper<LateLoweringPass, FunctionPass>
   {
     void runOnFunction() final;
   };
 } // end anonymous namespace.
 
-void TALateLoweringPass::runOnFunction()
+void LateLoweringPass::runOnFunction()
 {
 
   auto function = getFunction();
@@ -592,34 +324,32 @@ void TALateLoweringPass::runOnFunction()
   // We define the specific operations, or dialects, that are legal targets for
   // this lowering. In our case, we are lowering to a combination of the
   // `LinAlg` and `Standard` dialects.
-  target.addLegalDialect<AffineDialect, LinalgDialect, scf::SCFDialect, StandardOpsDialect, memref::MemRefDialect>();
+  target.addLegalDialect<AffineDialect,
+                         scf::SCFDialect,
+                         StandardOpsDialect,
+                         memref::MemRefDialect>();
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.
   // OwningRewritePatternList patterns;
   OwningRewritePatternList patterns(&getContext());
-  patterns.insert<ConstantOpLowering,
-                  ReturnOpLowering,
+  patterns.insert<ReturnOpLowering,
                   PrintOpLowering,
                   GetTimeLowering,
                   PrintElapsedTimeLowering>(&getContext());
 
-  patterns.insert<TensorAdditionLowering, TensorSubtractionLowering>(&getContext());
   // With the target and rewrite patterns defined, we can now attempt the
   // conversion. The conversion will signal failure if any of our `illegal`
   // operations were not converted successfully.
-
+  
   if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
   {
     signalPassFailure();
   }
-
-  // llvm::outs() << "Late lower output: \n" << function << "\n";
 }
 
-/// Create a pass for lowering operations in the `LinAlg` and `Std` dialects,
-/// for a subset of the TA IR (e.g. matmul).
+/// Create a pass for lowering utility operations in tensor algebra to lower level dialects
 std::unique_ptr<Pass> mlir::tensorAlgebra::createLateLoweringPass()
 {
-  return std::make_unique<TALateLoweringPass>();
+  return std::make_unique<LateLoweringPass>();
 }
