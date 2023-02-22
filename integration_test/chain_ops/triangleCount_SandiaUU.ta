@@ -28,9 +28,9 @@ def main() {
     Tensor<double> U2([k, j], {CSR});
 
     #Tensor Data Initialization
-    U0[i, j] = read_upperTri_from_file(0);
-    U1[i, k] = read_upperTri_from_file(0);
-    U2[k, j] = read_upperTri_from_file(0);
+    U0[i, j] = comet_read(0, 4);  # UPPER_TRI_STRICT
+    U1[i, k] = comet_read(0, 4);
+    U2[k, j] = comet_read(0, 4);
 
     # Sandia_UU method: ntri = sum (sum ((U * U) .* U))
     ## 

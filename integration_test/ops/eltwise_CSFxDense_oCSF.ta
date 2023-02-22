@@ -15,7 +15,7 @@ def main() {
 	Tensor<double> C([a, b, c], {CSF});
 
 	#Tensor Readfile Operation
-	A[a, b, c] = read_from_file(0);
+	A[a, b, c] = comet_read(0);
 
 	#Tensor Fill Operation
 	B[a, b, c] = 2.7;

@@ -28,9 +28,9 @@ def main() {
     Tensor<double> L2([k, j], {CSR});
 
     #Tensor Data Initialization
-    L0[i, j] = read_lowerTri_from_file(0);
-    L1[i, k] = read_lowerTri_from_file(0);
-    L2[k, j] = read_lowerTri_from_file(0);
+    L0[i, j] = comet_read(0, 2);  # LOWER_TRI_STRICT
+    L1[i, k] = comet_read(0, 2);
+    L2[k, j] = comet_read(0, 2);
 
     # Sandia_LL method: ntri = sum (sum ((L * L) .* L))
     ## 

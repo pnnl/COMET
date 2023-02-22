@@ -26,9 +26,9 @@ def main() {
     Tensor<double> C([i, k], {CSR});
 
     #Tensor Data Initialization
-    A[i, j] = read_from_file(0);
-    B[j, k] = read_from_file(0);
-    C[i, k] = read_from_file(0);
+    A[i, j] = comet_read(0);
+    B[j, k] = comet_read(0);
+    C[i, k] = comet_read(0);
 
     # Burkhardt method: ntri = sum (sum ((A^2) .* A)) / 6
     ##

@@ -12,7 +12,7 @@ def main() {
 	Tensor<double> A([i, j], {COO});	  
 
 	#Tensor Fill Operation
-	A[i, j] = read_from_file(0);
+	A[i, j] = comet_read(0, 1);
 	
 	print(A);
 }

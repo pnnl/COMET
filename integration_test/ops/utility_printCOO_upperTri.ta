@@ -12,7 +12,7 @@ def main() {
 	Tensor<double> A([i, j], {COO});	  
 
 	#Tensor Fill Operation
-	A[i, j] = read_upperTri_from_file(0);
+	A[i, j] = comet_read(0, 5); # UPPER_TRI
 	
 	print(A);
 }
@@ -21,12 +21,12 @@ def main() {
 # data = -1 means that no data needed for this array 
 # Look at the following paper - https://arxiv.org/pdf/2102.05187.pdf - for the internal tensor storage format details.
 # CHECK: data = 
-# CHECK-NEXT: 0,2,
+# CHECK-NEXT: 0,7,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 0,1,
+# CHECK-NEXT: 0,0,1,1,2,3,4,
 # CHECK-NEXT: data = 
 # CHECK-NEXT: -1,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 3,4,
+# CHECK-NEXT: 0,3,1,4,2,3,4,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 1.4,2.5,
+# CHECK-NEXT: 1,1.4,2,2.5,3,4,5,

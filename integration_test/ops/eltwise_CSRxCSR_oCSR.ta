@@ -16,8 +16,8 @@ def main() {
 	Tensor<double> C([i, j], {CSR});
 
     #Tensor Readfile Operation
-    A[i, j] = read_from_file(0);
-	B[i, j] = read_from_file(0);
+    A[i, j] = comet_read(0);
+	B[i, j] = comet_read(0);
 
 	#Tensor Contraction
 	C[i, j] = A[i, j] .* B[i, j];
