@@ -42,7 +42,7 @@ using namespace std;
 
 enum SortingOption
 {
-  NO_SORT = 1, // re-traverse instead of sorting
+  NO_SORT = 1, // default: re-traverse instead of sorting
   SEQ_QSORT = 2,
   PAR_QSORT = 3,
   RADIX_BUCKET = 4,
@@ -51,7 +51,7 @@ enum SortingOption
 };
 
 void getSortType(int &selected_sort_type) {
-  selected_sort_type = -1; // default
+  selected_sort_type = -1;
   if (getenv("SORT_TYPE")) {
     char *sort_type = getenv("SORT_TYPE");
     if (strcmp(sort_type, "NO_SORT") == 0) 
@@ -67,9 +67,10 @@ void getSortType(int &selected_sort_type) {
     else if (strcmp(sort_type, "COUNT_QUICK") == 0)
       selected_sort_type = COUNT_QUICK;
     else 
-      assert(selected_sort_type != -1 && "Error: SORT_TYPE environmental variable for sparse transpose is not recognized!\n");
+      assert(selected_sort_type != -1 && "\n\nError: SORT_TYPE environmental variable for sparse transpose is not recognized!\n"
+             "\tValid Options are: NO_SORT, SEQ_QSORT, PAR_QSORT, RADIX_BUCKET, COUNT_RADIX, COUNT_QUICK.\n\n\n");
   } else {
-    assert(false && "Error: SORT_TYPE environmental variable for sparse transpose is not set\n");
+    selected_sort_type = NO_SORT; // default
   }
 }
 

@@ -84,38 +84,39 @@ enum SparseFormatAttribute
 
 // Read matrices and tensors
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f32(int32_t fileID, int32_t A1format, int32_t A2format,
-                                                                 int A1pos_rank, void *A1pos_ptr);
+                                                                 int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f32(int32_t fileID, int32_t A1format, int32_t A2format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int Aval_rank, void *Aval_ptr);
+                                                           int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f64(int32_t fileID, int32_t A1format, int32_t A2format,
-                                                                 int A1pos_rank, void *A1pos_ptr, char *filename);
+//                                                                 int A1pos_rank, void *A1pos_ptr, char *filename, int32_t readMode);
+                                                                 int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f64(int32_t fileID, int32_t A1format, int32_t A2format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int Aval_rank, void *Aval_ptr);
+                                                           int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_3D_f32(int32_t fileID, int32_t A1format, int32_t A2format,
-                                                                 int32_t A3format, int A1pos_rank, void *A1pos_ptr);
+                                                                 int32_t A3format, int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_3D_f32(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
                                                            int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                           int Aval_rank, void *Aval_ptr);
+                                                           int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_3D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
-                                                                 int A1pos_rank, void *A1pos_ptr);
+                                                                 int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_3D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
                                                            int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                           int Aval_rank, void *Aval_ptr);
+                                                           int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 // Transpose operations
 extern "C" COMET_RUNNERUTILS_EXPORT void transpose_2D_f32(int32_t A1format, int32_t A2format,

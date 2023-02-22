@@ -34,6 +34,33 @@
 
 #include <random>
 
+
+enum MatrixReadOption
+{
+  DEFAULT = 1,   // standard matrix read
+  LOWER_TRI_STRICT = 2, 
+  LOWER_TRI = 3,
+  UPPER_TRI_STRICT = 4,
+  UPPER_TRI = 5
+};
+
+// helper func: inquire matrix read type 
+int getMatrixReadOption(int32_t readMode) 
+{
+  int selected_matrix_read = DEFAULT;
+
+  if (readMode == LOWER_TRI_STRICT)
+    selected_matrix_read = LOWER_TRI_STRICT;
+  else if (readMode == LOWER_TRI)
+    selected_matrix_read = LOWER_TRI;
+  else if (readMode == UPPER_TRI_STRICT)
+    selected_matrix_read = UPPER_TRI_STRICT;
+  else if (readMode == UPPER_TRI)
+    selected_matrix_read = UPPER_TRI;
+
+  return selected_matrix_read;
+}
+
 //===----------------------------------------------------------------------===//
 // Small runtime support library for sparse matrices/tensors.
 //===----------------------------------------------------------------------===//
@@ -66,8 +93,10 @@ struct CooMatrix
   int num_rows;
   int num_cols;
   int num_nonzeros;
-  int num_nonzeros_lowerTri;
+  int num_nonzeros_lowerTri;   // triangular matrix read stats
   int num_nonzeros_upperTri;
+  int num_nonzeros_lowerTri_strict;
+  int num_nonzeros_upperTri_strict;
   CooTuple<T> *coo_tuples;
 
   //---------------------------------------------------------------------
@@ -76,7 +105,9 @@ struct CooMatrix
 
   // Constructor
   CooMatrix() : num_rows(0), num_cols(0), num_nonzeros(0), 
-                num_nonzeros_lowerTri(0), num_nonzeros_upperTri(0), coo_tuples(NULL) {}
+                num_nonzeros_lowerTri(0), num_nonzeros_upperTri(0), 
+                num_nonzeros_lowerTri_strict(0), num_nonzeros_upperTri_strict(0),
+                coo_tuples(NULL) {}
 
   /**
    * Clear
@@ -91,7 +122,8 @@ struct CooMatrix
   // Destructor
   ~CooMatrix()
   {
-    Clear();
+    // do nothing. coo_tuples is now cleared from else-where.
+    //Clear();
   }
 
   // Display matrix to stdout
@@ -121,7 +153,8 @@ struct CooMatrix
 
     if (coo_tuples)
     {
-      fprintf(stderr, "Matrix already constructed\n");
+      fprintf(stderr, "ERROR: Matrix already constructed (abrupt exit)!\n");
+      // updated code should avoid coming to this path
       exit(1);
     }
 
@@ -224,9 +257,20 @@ struct CooMatrix
           coo_tuples[current_nz] = CooTuple<T>(row, col, val); // Convert indices to zero-based
 
           if (row > col)
+          {
+            num_nonzeros_lowerTri_strict++;
             num_nonzeros_lowerTri++;
+          }
           else if (row < col)
+          {
+            num_nonzeros_upperTri_strict++;
             num_nonzeros_upperTri++;
+          }
+          else // equal or diagonals
+          {
+            num_nonzeros_lowerTri++;
+            num_nonzeros_upperTri++;
+          }
 
         }
         else
@@ -262,10 +306,21 @@ struct CooMatrix
 
           coo_tuples[current_nz] = CooTuple<T>(row - 1, col - 1, val); // Convert indices to zero-based
 
-          if (row-1 > col-1)
+          if (row - 1 > col - 1)
+          {
+            num_nonzeros_lowerTri_strict++;
             num_nonzeros_lowerTri++;
-          else if (row-1 < col-1)
+          }
+          else if (row - 1 < col - 1)
+          {
+            num_nonzeros_upperTri_strict++;
             num_nonzeros_upperTri++;
+          }
+          else // equal or diagonals
+          {
+            num_nonzeros_lowerTri++;
+            num_nonzeros_upperTri++;
+          }
 
         }
 
@@ -288,6 +343,7 @@ struct CooMatrix
     { 
       // we only do one half if matrix is symmetric, so update num according to lower Triangle read.
       num_nonzeros_upperTri = num_nonzeros_lowerTri;
+      num_nonzeros_upperTri_strict = num_nonzeros_lowerTri_strict;
     }
 
     if (verbose)
@@ -334,8 +390,10 @@ struct CsrMatrix
   int num_rows;
   int num_cols;
   int num_nonzeros;
-  int num_nonzeros_lowerTri;
+  int num_nonzeros_lowerTri; // triangular matrix read stats from COO
   int num_nonzeros_upperTri;
+  int num_nonzeros_lowerTri_strict;
+  int num_nonzeros_upperTri_strict;
   int *row_offsets;
   int *column_indices;
   T *values;
@@ -345,6 +403,7 @@ struct CsrMatrix
    */
   void Init(
       CooMatrix<T> &coo_matrix,
+      int readMode, 
       bool verbose = false)
   {
     num_rows = coo_matrix.num_rows;
@@ -352,6 +411,8 @@ struct CsrMatrix
     num_nonzeros = coo_matrix.num_nonzeros;
     num_nonzeros_lowerTri = coo_matrix.num_nonzeros_lowerTri;
     num_nonzeros_upperTri = coo_matrix.num_nonzeros_upperTri;
+    num_nonzeros_lowerTri_strict = coo_matrix.num_nonzeros_lowerTri_strict;
+    num_nonzeros_upperTri_strict = coo_matrix.num_nonzeros_upperTri_strict;
 
     // Sort by rows, then columns
     if (verbose)
@@ -363,78 +424,43 @@ struct CsrMatrix
     fflush(stdout);
 
     row_offsets = new int[num_rows + 1];
-    column_indices = new int[num_nonzeros];
-    values = new T[num_nonzeros];
-
-    int prev_row = -1;
-    for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
+    
+    if (readMode == LOWER_TRI_STRICT)
     {
-      int current_row = coo_matrix.coo_tuples[current_nz].row;
-
-      // Fill in rows up to and including the current row
-      for (int row = prev_row + 1; row <= current_row; row++)
-      {
-        row_offsets[row] = current_nz;
-      }
-      prev_row = current_row;
-
-      column_indices[current_nz] = coo_matrix.coo_tuples[current_nz].col;
-      values[current_nz] = coo_matrix.coo_tuples[current_nz].val;
+      column_indices = new int[num_nonzeros_lowerTri_strict];
+      values = new T[num_nonzeros_lowerTri_strict];
     }
-
-    // Fill out any trailing edgeless vertices (and the end-of-list element)
-    for (int row = prev_row + 1; row <= num_rows; row++)
+    else if (readMode == LOWER_TRI)
     {
-      row_offsets[row] = num_nonzeros;
-    }
-  }
-
-  /**
-   * Initializer: accounts for lower/upper triangle 
-   */
-  void Init_LowerUpper(
-      CooMatrix<T> &coo_matrix,
-      bool LowerTri, bool UpperTri,
-      bool verbose = false)
-  {
-    num_rows = coo_matrix.num_rows;
-    num_cols = coo_matrix.num_cols;
-    num_nonzeros = coo_matrix.num_nonzeros;
-    num_nonzeros_lowerTri = coo_matrix.num_nonzeros_lowerTri;
-    num_nonzeros_upperTri = coo_matrix.num_nonzeros_upperTri;
-
-    //printf("COO to CSR conv: total: %d, lower: %d, upper: %d\n", num_nonzeros, num_nonzeros_lowerTri, num_nonzeros_upperTri);
-
-    // Sort by rows, then columns
-    if (verbose)
-      printf("Ordering...");
-    fflush(stdout);
-    std::stable_sort(coo_matrix.coo_tuples, coo_matrix.coo_tuples + num_nonzeros, CooComparatorRow());
-    if (verbose)
-      printf("done.");
-    fflush(stdout);
-
-    row_offsets = new int[num_rows + 1];
-    if (LowerTri && !UpperTri)
-    {
-      column_indices = new int[num_nonzeros_lowerTri];  
+      column_indices = new int[num_nonzeros_lowerTri];
       values = new T[num_nonzeros_lowerTri];
     }
-    else if (UpperTri && !LowerTri)
+    else if (readMode == UPPER_TRI_STRICT)
     {
-      column_indices = new int[num_nonzeros_upperTri];  
+      column_indices = new int[num_nonzeros_upperTri_strict];
+      values = new T[num_nonzeros_upperTri_strict];
+    }
+    else if (readMode == UPPER_TRI)
+    {
+      column_indices = new int[num_nonzeros_upperTri];
       values = new T[num_nonzeros_upperTri];
     }
+    else // DEFAULT
+    {
+      column_indices = new int[num_nonzeros];
+      values = new T[num_nonzeros];
+    }
+
 
     int prev_row = -1;
     int curr_idx = 0;
     for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
-    {
+    { 
       int current_row = coo_matrix.coo_tuples[current_nz].row;
       int current_col = coo_matrix.coo_tuples[current_nz].col;
 
-      //printf("\trow: %d, col: %d\n", current_row, current_col);
-      if ( LowerTri && (current_row > current_col) )
+      if ( ( (readMode == LOWER_TRI_STRICT) || (readMode == LOWER_TRI) ) && 
+           (current_row > current_col) )
       {
         // Fill in rows up to and including the current row
         //printf("\t\tLower> current_nz: %d, curr_idx: %d\n", current_nz, curr_idx);
@@ -447,11 +473,10 @@ struct CsrMatrix
         column_indices[curr_idx] = coo_matrix.coo_tuples[current_nz].col;
         values[curr_idx] = coo_matrix.coo_tuples[current_nz].val;
         curr_idx++;
-      } 
-      else if (UpperTri && (current_row < current_col) )
+      }
+      else if ( ( (readMode == UPPER_TRI_STRICT) || (readMode == UPPER_TRI) ) && 
+                (current_row < current_col) )
       {
-        // Fill in rows up to and including the current row
-        //printf("\t\tUpper> current_nz: %d, curr_idx: %d\n", current_nz, curr_idx);
         for (int row = prev_row + 1; row <= current_row; row++)
         {
           row_offsets[row] = curr_idx;
@@ -462,15 +487,49 @@ struct CsrMatrix
         values[curr_idx] = coo_matrix.coo_tuples[current_nz].val;
         curr_idx++;
       }
-    }
+      else if ( ( (readMode == UPPER_TRI) || (readMode == LOWER_TRI) ) &&
+                (current_row == current_col) )  // diagonals
+      {
+        for (int row = prev_row + 1; row <= current_row; row++)
+        {
+          row_offsets[row] = curr_idx;
+        }
+        prev_row = current_row;
+
+        column_indices[curr_idx] = coo_matrix.coo_tuples[current_nz].col;
+        values[curr_idx] = coo_matrix.coo_tuples[current_nz].val;
+        curr_idx++;
+      }
+      else if ( readMode == DEFAULT ) // standard matrix read
+      {
+        // Fill in rows up to and including the current row
+        //printf("\t\tLower> current_nz: %d, curr_idx: %d\n", current_nz, curr_idx);
+        for (int row = prev_row + 1; row <= current_row; row++)
+        {
+          row_offsets[row] = curr_idx;
+        }
+        prev_row = current_row;
+
+        column_indices[curr_idx] = coo_matrix.coo_tuples[current_nz].col;
+        values[curr_idx] = coo_matrix.coo_tuples[current_nz].val;
+        curr_idx++;
+      }
+
+    } // end-loop
 
     // Fill out any trailing edgeless vertices (and the end-of-list element)
     for (int row = prev_row + 1; row <= num_rows; row++)
     {
-      if (LowerTri && !UpperTri)
-        row_offsets[row] = num_nonzeros_lowerTri;
-      else if (UpperTri && !LowerTri)
+      if (readMode == LOWER_TRI_STRICT)
+        row_offsets[row] = num_nonzeros_lowerTri_strict;
+      else if (readMode == UPPER_TRI_STRICT)
+        row_offsets[row] = num_nonzeros_upperTri_strict;
+      else if (readMode == UPPER_TRI)
         row_offsets[row] = num_nonzeros_upperTri;
+      else if (readMode == LOWER_TRI)
+        row_offsets[row] = num_nonzeros_lowerTri;
+      else // DEFAULT
+        row_offsets[row] = num_nonzeros;
     }
   }
 
@@ -496,18 +555,10 @@ struct CsrMatrix
    */
   CsrMatrix(
       CooMatrix<T> &coo_matrix,
+      int readMode,
       bool verbose = false)
   {
-    Init(coo_matrix, verbose);
-  }
-
-  CsrMatrix(
-    CooMatrix<T> &coo_matrix,
-    bool LowerTri, bool UpperTri,
-    bool verbose = false
-  )
-  {
-    Init_LowerUpper(coo_matrix, LowerTri, UpperTri, verbose);
+    Init(coo_matrix, readMode, verbose);
   }
 
   /**
@@ -791,7 +842,8 @@ struct Coo3DTensor
   // Destructor
   ~Coo3DTensor()
   {
-    Clear();
+    // do nothing. coo_3dtuples is now cleared from else-where.
+    //Clear();
   }
 
   // Display matrix to stdout
@@ -821,7 +873,8 @@ struct Coo3DTensor
 
     if (coo_3dtuples)
     {
-      fprintf(stderr, "Tensor already constructed\n");
+      fprintf(stderr, "\tERROR: Tensor already constructed (abrupt exit)!\n");
+      // updated code should avoid coming to this path
       exit(1);
     }
 
@@ -1271,79 +1324,194 @@ struct Mg3DTensor
   }
 };
 
+// matrix read wrapper: initiates file read only once. 
+// assumption: read_input_sizes_2D() and read_input_2D() are called in order 
+//             and only once for each fileID/file.
+template <typename T>
+struct FileReaderWrapper
+{
+  std::string filename;
+  static CooMatrix<T> coo_matrix;
+  static Coo3DTensor<T> coo_3dtensor;
+  static bool isInitialized; 
+  bool is3D; 
+
+  bool readFileNameStr(int32_t fileID)
+  {
+    char *pSparseInput;
+    std::string envString;
+    if (fileID >= 0 && fileID < 9999)
+    {
+      envString = "SPARSE_FILE_NAME" + std::to_string(fileID);
+      pSparseInput = getenv(envString.c_str());
+    }
+    else if (fileID == 9999)
+    {
+      pSparseInput = getenv("SPARSE_FILE_NAME");
+    }
+    else
+    {
+      assert(false && "ERROR: SPARSE_FILE_NAME environmental variable is not set");
+    }
+
+    filename = pSparseInput; // update
+
+    return true;
+  }
+
+  void readMtxFile()
+  {
+    if (filename.find(".mtx") == std::string::npos)
+    {
+      assert(false && "ERROR: input file is not Market Matrix file\n");
+    }
+
+    // init matrix read
+    coo_matrix.InitMarket(filename);
+  }
+
+  void readTnsFile()
+  {
+    if (filename.find(".tns") == std::string::npos)
+    {
+      assert(false && "ERROR: input file is not TNS format\n");
+    }
+
+    // init frostt file read
+    coo_3dtensor.InitFrostt(filename);
+  }
+
+  /**
+   * Constructor
+   */
+  FileReaderWrapper(int32_t fileID, bool tnsFile = false)
+  {
+    if (!isInitialized)
+    {
+      bool done = readFileNameStr(fileID);
+      if (done && !filename.empty())
+      { // file is read here
+        if (tnsFile) {
+          readTnsFile();  // 3D
+          is3D = true;
+        }
+        else
+          readMtxFile();  // 2D
+      }
+      else
+      {
+        fprintf(stderr, "No input specified.\n");
+        assert(false);
+      }
+      isInitialized = true;
+    }
+    else
+    { // re-use the old file read
+      isInitialized = false; // for next file read.
+
+      if (tnsFile)
+        is3D = true;
+    }
+  }
+
+  /**
+   * Destructor
+   */
+  ~FileReaderWrapper()
+  {
+    // Do nothing here, this is taken care of in Finalize() method.
+  }
+
+  void FileReaderWrapperFinalize()
+  {
+    if (is3D)
+    {
+      coo_3dtensor.num_nonzeros = 0;  // reset
+      coo_3dtensor.Clear();
+    }
+    else
+    {
+      coo_matrix.num_nonzeros = 0;  // reset
+      coo_matrix.num_nonzeros_lowerTri = 0; 
+      coo_matrix.num_nonzeros_lowerTri_strict = 0;
+      coo_matrix.num_nonzeros_upperTri = 0;
+      coo_matrix.num_nonzeros_upperTri_strict = 0;
+      coo_matrix.Clear();
+    }
+  }
+  
+};
+
+// helper func: get num of nonzeros based on selected matrix read
+template <typename T>
+int getNumNonZeros (CooMatrix<T> &coo_matrix, int32_t readMode)
+{
+  int NumNonZeros = -1; 
+
+  int selected_matrix_read = getMatrixReadOption(readMode);
+
+  if (selected_matrix_read == LOWER_TRI_STRICT)
+    NumNonZeros = coo_matrix.num_nonzeros_lowerTri_strict;
+  else if (selected_matrix_read == LOWER_TRI)
+    NumNonZeros = coo_matrix.num_nonzeros_lowerTri;
+  else if (selected_matrix_read == UPPER_TRI_STRICT)
+    NumNonZeros = coo_matrix.num_nonzeros_upperTri_strict;
+  else if (selected_matrix_read == UPPER_TRI)
+    NumNonZeros = coo_matrix.num_nonzeros_upperTri;
+  else // DEFAULT 
+    NumNonZeros = coo_matrix.num_nonzeros;
+
+  return NumNonZeros;
+}
+
+// initializations
+template <typename T>
+CooMatrix<T> FileReaderWrapper<T>::coo_matrix;
+
+template <typename T>
+Coo3DTensor<T> FileReaderWrapper<T>::coo_3dtensor;
+
+template <typename T>
+bool FileReaderWrapper<T>::isInitialized = false;
+
 /***********Sparse Utility Functions*******************/
 
 // Read input matrices based on the datatype
 template <typename T>
-void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int sizes_rank, void *sizes_ptr)
+void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int sizes_rank, void *sizes_ptr, int32_t readMode)
 {
   auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
 
-  char *pSparseInput;
-  std::string envString;
-  if (fileID >= 0 && fileID < 9999)
-  {
-    // printf("DEBUG: I matched %d.\n", fileID);
-    envString = "SPARSE_FILE_NAME" + std::to_string(fileID);
-    pSparseInput = getenv(envString.c_str());
-  }
-  else if (fileID == 9999)
-  {
-    pSparseInput = getenv("SPARSE_FILE_NAME");
-  }
-  else
-  {
-    assert(false && "ERROR: SPARSE_FILE_NAME environmental variable is not set");
-  }
+  int selected_matrix_read = getMatrixReadOption(readMode);
+  FileReaderWrapper<T> FileReader (fileID);  // init of COO
 
-  std::string filename(pSparseInput);
-  if (filename.find(".mtx") == std::string::npos)
-  {
-    assert(false && "ERROR: input file is not Market Matrix file\n");
-  }
-
-  // Initialize matrix in COO form
-  CooMatrix<T> coo_matrix;
-
-  if (!filename.empty())
-  {
-    // Parse matrix market file
-    coo_matrix.InitMarket(filename, 1.0); // 3rd para: verbose = true/false
-                                          //  coo_matrix.Display();
-                                          // printf("%s, ", filename.c_str());
-  }
-  else
-  {
-    fprintf(stderr, "No input specified.\n");
-    assert(false);
-  }
-
-  // SparseFormatAttribute A1format
-  // COO.
+  // SparseFormatAttribute A1format: COO
   if (A1format == Compressed_nonunique && A2format == singleton)
   {
+    // get num-NNZs from coo_matrix struct.
+    int NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
 
     desc_sizes->data[0] = 2;
-    desc_sizes->data[1] = coo_matrix.num_nonzeros;
+    desc_sizes->data[1] = NumNonZeros;
     desc_sizes->data[2] = 1;
-    desc_sizes->data[3] = coo_matrix.num_nonzeros;
-    desc_sizes->data[4] = coo_matrix.num_nonzeros;
-    desc_sizes->data[5] = coo_matrix.num_rows;
-    desc_sizes->data[6] = coo_matrix.num_cols;
+    desc_sizes->data[3] = NumNonZeros;
+    desc_sizes->data[4] = NumNonZeros;
+    desc_sizes->data[5] = FileReader.coo_matrix.num_rows;
+    desc_sizes->data[6] = FileReader.coo_matrix.num_cols;
   }
   // CSR
   else if (A1format == Dense && A2format == Compressed_unique)
   {
-    CsrMatrix<T> csr_matrix(coo_matrix);
-    coo_matrix.Clear();
+    // get num-NNZs from coo_matrix struct.
+    int NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
 
     desc_sizes->data[0] = 1;
     desc_sizes->data[1] = 1;
-    desc_sizes->data[2] = csr_matrix.num_rows + 1;
-    desc_sizes->data[3] = csr_matrix.num_nonzeros;
-    desc_sizes->data[4] = csr_matrix.num_nonzeros;
-    desc_sizes->data[5] = csr_matrix.num_rows;
-    desc_sizes->data[6] = csr_matrix.num_cols;
+    desc_sizes->data[2] = FileReader.coo_matrix.num_rows + 1;
+    desc_sizes->data[3] = NumNonZeros;
+    desc_sizes->data[4] = NumNonZeros;
+    desc_sizes->data[5] = FileReader.coo_matrix.num_rows;
+    desc_sizes->data[6] = FileReader.coo_matrix.num_cols;
 
     /*****************DEBUG******************/
     // std::cout << "CSR detail: \n"
@@ -1359,16 +1527,19 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
   // CSC
   else if (A1format == Compressed_unique && A2format == Dense)
   {
-    CscMatrix<T> csc_matrix(coo_matrix);
-    coo_matrix.Clear();
+    int NumNonZeros = 0;
+    if (selected_matrix_read == DEFAULT)
+      NumNonZeros = FileReader.coo_matrix.num_nonzeros;
+    else
+      assert(false && "unsupported matrix format (CSC) for triangular reads.\n");
 
-    desc_sizes->data[0] = csc_matrix.num_cols + 1;
-    desc_sizes->data[1] = csc_matrix.num_nonzeros;
+    desc_sizes->data[0] = FileReader.coo_matrix.num_cols + 1;
+    desc_sizes->data[1] = NumNonZeros;
     desc_sizes->data[2] = 1;
     desc_sizes->data[3] = 1;
-    desc_sizes->data[4] = csc_matrix.num_nonzeros;
-    desc_sizes->data[5] = csc_matrix.num_rows;
-    desc_sizes->data[6] = csc_matrix.num_cols;
+    desc_sizes->data[4] = NumNonZeros;
+    desc_sizes->data[5] = FileReader.coo_matrix.num_rows;
+    desc_sizes->data[6] = FileReader.coo_matrix.num_cols;
 
     /*****************DEBUG******************/
     // std::cout << "CSC detail: \n"
@@ -1384,8 +1555,13 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
   // DCSR
   else if (A1format == Compressed_unique && A2format == Compressed_unique)
   {
-    DcsrMatrix<T> dcsr_matrix(coo_matrix);
-    coo_matrix.Clear();
+    DcsrMatrix<T> dcsr_matrix(FileReader.coo_matrix);
+    
+    int NumNonZeros = 0;
+    if (selected_matrix_read == DEFAULT)
+      NumNonZeros = dcsr_matrix.num_nonzeros;
+    else
+      assert(false && "unsupported matrix format (DCSR) for triangular reads.\n");
 
     desc_sizes->data[0] = dcsr_matrix.A1pos_size;
     desc_sizes->data[1] = dcsr_matrix.A1crd_size;
@@ -1407,7 +1583,8 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
                    int A1crd_rank, void *A1crd_ptr,
                    int A2pos_rank, void *A2pos_ptr,
                    int A2crd_rank, void *A2crd_ptr,
-                   int Aval_rank, void *Aval_ptr)
+                   int Aval_rank, void *Aval_ptr,
+                   int32_t readMode)
 {
 
   auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
@@ -1422,64 +1599,64 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
   desc_A2pos->data[0] = -1;
   desc_A2crd->data[0] = -1;
 
-  char *pSparseInput;
-  std::string envString;
-  if (fileID >= 0 && fileID < 9999)
-  {
-    envString = "SPARSE_FILE_NAME" + std::to_string(fileID);
-    pSparseInput = getenv(envString.c_str());
-  }
-  else if (fileID == 9999)
-  {
-    pSparseInput = getenv("SPARSE_FILE_NAME");
-  }
-  else
-  {
-    assert(false && "ERROR: SPARSE_FILE_NAME environmental variable is not set");
-  }
+  int selected_matrix_read = getMatrixReadOption(readMode);
+  FileReaderWrapper<T> FileReader (fileID);  // init of COO
 
-  std::string filename(pSparseInput);
-  if (filename.find(".mtx") == std::string::npos)
-  {
-    assert(false && "ERROR: input file is not Market Matrix file\n");
-  }
-
-  // Initialize matrix in COO form
-  CooMatrix<T> coo_matrix;
-
-  if (!filename.empty())
-  {
-    // Parse matrix market file
-    coo_matrix.InitMarket(filename, 1.0); // 3rd para: verbose = true/false
-    // coo_matrix.Display();
-  }
-  else
-  {
-    fprintf(stderr, "No input specified.\n");
-    exit(1);
-  }
-
-  // SparseFormatAttribute A1format
-  // COO.
+  // SparseFormatAttribute A1format: COO
   if (A1format == Compressed_nonunique && A2format == singleton)
   {
-    std::stable_sort(coo_matrix.coo_tuples, coo_matrix.coo_tuples + coo_matrix.num_nonzeros, CooComparatorRow());
-    desc_A1pos->data[0] = 0;
-    desc_A1pos->data[1] = coo_matrix.num_nonzeros;
+    std::stable_sort(FileReader.coo_matrix.coo_tuples, FileReader.coo_matrix.coo_tuples + FileReader.coo_matrix.num_nonzeros, CooComparatorRow());
 
-    for (int i = 0; i < coo_matrix.num_nonzeros; i++)
+    desc_A1pos->data[0] = 0;
+    int actual_num_nonzeros = 0;
+
+    for (int i = 0; i < FileReader.coo_matrix.num_nonzeros; i++)
     {
-      desc_A1crd->data[i] = coo_matrix.coo_tuples[i].row;
-      desc_A2crd->data[i] = coo_matrix.coo_tuples[i].col;
-      desc_Aval->data[i] = coo_matrix.coo_tuples[i].val;
-    }
+      if ( ( (selected_matrix_read == LOWER_TRI_STRICT) || (selected_matrix_read == LOWER_TRI) ) &&   // filter lower triangular vals
+                (FileReader.coo_matrix.coo_tuples[i].row > FileReader.coo_matrix.coo_tuples[i].col) )
+      {
+        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].row;
+        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].col;
+        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].val;
+        actual_num_nonzeros++;
+      }
+      else if ( ( (selected_matrix_read == UPPER_TRI_STRICT) || (selected_matrix_read == UPPER_TRI) ) &&   // filter upper triangular vals
+                (FileReader.coo_matrix.coo_tuples[i].row < FileReader.coo_matrix.coo_tuples[i].col) )
+      {
+        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].row;
+        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].col;
+        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].val;
+        actual_num_nonzeros++;
+      }
+      else if ( ( (selected_matrix_read == UPPER_TRI) || (selected_matrix_read == LOWER_TRI) ) &&  // the diagonal vals go in both UPPER_TRI and LOWER_TRI
+                (FileReader.coo_matrix.coo_tuples[i].row == FileReader.coo_matrix.coo_tuples[i].col) )
+      {
+        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].row;
+        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].col;
+        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].val;
+        actual_num_nonzeros++;
+      }
+      else if ( selected_matrix_read == DEFAULT )// standard matrix vals
+      {
+        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].row;
+        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].col;
+        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].val;
+        actual_num_nonzeros++;
+      }      
+
+    } // end-for
+    desc_A1pos->data[1] = actual_num_nonzeros;
+
+    FileReader.FileReaderWrapperFinalize(); // clear coo_matrix
   }
   // CSR
   else if (A1format == Dense && A2format == Compressed_unique)
   {
-    CsrMatrix<T> csr_matrix(coo_matrix);
-    coo_matrix.Clear();
+    CsrMatrix<T> csr_matrix(FileReader.coo_matrix, selected_matrix_read); 
 
+    int upperBound_NNZ = getNumNonZeros(FileReader.coo_matrix, readMode);
+    FileReader.FileReaderWrapperFinalize();  // clear coo_matrix
+    
     // /*****************DEBUG******************/
     // std::cout << "CSR detail: " << csr_matrix.num_cols << ", " << csr_matrix.num_rows << ", " << csr_matrix.num_nonzeros << "\n";
     // std::cout << "row_offsets: ";
@@ -1509,7 +1686,7 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
       desc_A2pos->data[i] = csr_matrix.row_offsets[i];
     }
 
-    for (int i = 0; i < csr_matrix.num_nonzeros; i++)
+    for (int i = 0; i < upperBound_NNZ; i++)
     {
       desc_A2crd->data[i] = csr_matrix.column_indices[i];
       desc_Aval->data[i] = csr_matrix.values[i];
@@ -1518,8 +1695,10 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
   // CSC
   else if (A1format == Compressed_unique && A2format == Dense)
   {
-    CscMatrix<T> csc_matrix(coo_matrix);
-    coo_matrix.Clear();
+    CscMatrix<T> csc_matrix(FileReader.coo_matrix);
+    FileReader.FileReaderWrapperFinalize();  // clear coo_matrix
+
+    // NOTE: we do not need to check readMode, since this has already been taken care of in read_sizes() call
 
     // /*****************DEBUG******************/
     // std::cout << "CSC detail: " << csc_matrix.num_rows << ", " << csc_matrix.num_cols << ", " << csc_matrix.num_nonzeros << "\n";
@@ -1559,8 +1738,10 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
   // DCSR
   else if (A1format == Compressed_unique && A2format == Compressed_unique)
   {
-    DcsrMatrix<T> dcsr_matrix(coo_matrix);
-    coo_matrix.Clear();
+    DcsrMatrix<T> dcsr_matrix(FileReader.coo_matrix);
+    FileReader.FileReaderWrapperFinalize();  // clear coo_matrix
+
+    // NOTE: we do not need to check readMode, since this has already been taken care of in read_sizes() call
 
     /*****************DEBUG******************/
     // std::cout << "DCSR detail: " << dcsr_matrix.num_cols << ", " << dcsr_matrix.num_rows << ", " << dcsr_matrix.num_nonzeros << "\n";
@@ -1625,505 +1806,33 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
   }
 }
 
-
-// Read input matrices based on the datatype -- modified for lowerTriangle
 template <typename T>
-void read_input_sizes_2D_lowerTriangle(int32_t fileID, int32_t A1format, int32_t A2format, int sizes_rank, void *sizes_ptr)
+void read_input_sizes_3D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int sizes_rank, void *sizes_ptr, int32_t readMode)
 {
+  // FIXME: readMode is for future use.
   auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
 
-  char *pSparseInput;
-  std::string envString;
-  if (fileID >= 0 && fileID < 9999)
-  {
-    // printf("DEBUG: I matched %d.\n", fileID);
-    envString = "SPARSE_FILE_NAME" + std::to_string(fileID);
-    pSparseInput = getenv(envString.c_str());
-  }
-  else if (fileID == 9999)
-  {
-    pSparseInput = getenv("SPARSE_FILE_NAME");
-  }
-  else
-  {
-    assert(false && "ERROR: SPARSE_FILE_NAME environmental variable is not set");
-  }
-
-  std::string filename(pSparseInput);
-  if (filename.find(".mtx") == std::string::npos)
-  {
-    assert(false && "ERROR: input file is not Market Matrix file\n");
-  }
-
-  // Initialize matrix in COO form
-  CooMatrix<T> coo_matrix;
-
-  if (!filename.empty())
-  {
-    // Parse matrix market file
-    coo_matrix.InitMarket(filename, 1.0); // 3rd para: verbose = true/false
-                                          //  coo_matrix.Display();
-                                          // printf("%s, ", filename.c_str());
-  }
-  else
-  {
-    fprintf(stderr, "No input specified.\n");
-    assert(false);
-  }
-
-  // SparseFormatAttribute A1format
-  // COO.
-  if (A1format == Compressed_nonunique && A2format == singleton)
-  {
-
-    desc_sizes->data[0] = 2;
-    desc_sizes->data[1] = coo_matrix.num_nonzeros_lowerTri;
-    desc_sizes->data[2] = 1;
-    desc_sizes->data[3] = coo_matrix.num_nonzeros_lowerTri;
-    desc_sizes->data[4] = coo_matrix.num_nonzeros_lowerTri;
-    desc_sizes->data[5] = coo_matrix.num_rows;
-    desc_sizes->data[6] = coo_matrix.num_cols;
-  }
-  // CSR
-  else if (A1format == Dense && A2format == Compressed_unique)
-  {
-    CsrMatrix<T> csr_matrix(coo_matrix);
-    coo_matrix.Clear();
-
-    desc_sizes->data[0] = 1;
-    desc_sizes->data[1] = 1;
-    desc_sizes->data[2] = csr_matrix.num_rows + 1;
-    desc_sizes->data[3] = csr_matrix.num_nonzeros_lowerTri;
-    desc_sizes->data[4] = csr_matrix.num_nonzeros_lowerTri;
-    desc_sizes->data[5] = csr_matrix.num_rows;
-    desc_sizes->data[6] = csr_matrix.num_cols;
-
-    /*****************DEBUG******************/
-    // std::cout << "CSR detail: \n"
-    //           << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
-    //           << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
-    //           << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
-    //           << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
-    //           << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
-    //           << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
-    //           << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
-    /*****************DEBUG******************/
-  }
-  else
-  {
-    assert(false && "unsupported matrix format\n");
-  }
-
-}
-
-// Read input matrices based on the datatype -- modified for upperTriangle
-template <typename T>
-void read_input_sizes_2D_upperTriangle(int32_t fileID, int32_t A1format, int32_t A2format, int sizes_rank, void *sizes_ptr)
-{
-  auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
-
-  char *pSparseInput;
-  std::string envString;
-  if (fileID >= 0 && fileID < 9999)
-  {
-    // printf("DEBUG: I matched %d.\n", fileID);
-    envString = "SPARSE_FILE_NAME" + std::to_string(fileID);
-    pSparseInput = getenv(envString.c_str());
-  }
-  else if (fileID == 9999)
-  {
-    pSparseInput = getenv("SPARSE_FILE_NAME");
-  }
-  else
-  {
-    assert(false && "ERROR: SPARSE_FILE_NAME environmental variable is not set");
-  }
-
-  std::string filename(pSparseInput);
-  if (filename.find(".mtx") == std::string::npos)
-  {
-    assert(false && "ERROR: input file is not Market Matrix file\n");
-  }
-
-  // Initialize matrix in COO form
-  CooMatrix<T> coo_matrix;
-
-  if (!filename.empty())
-  {
-    // Parse matrix market file
-    coo_matrix.InitMarket(filename, 1.0); // 3rd para: verbose = true/false
-                                          //  coo_matrix.Display();
-                                          // printf("%s, ", filename.c_str());
-  }
-  else
-  {
-    fprintf(stderr, "No input specified.\n");
-    assert(false);
-  }
-
-  // SparseFormatAttribute A1format
-  // COO.
-  if (A1format == Compressed_nonunique && A2format == singleton)
-  {
-
-    desc_sizes->data[0] = 2;
-    desc_sizes->data[1] = coo_matrix.num_nonzeros_upperTri;
-    desc_sizes->data[2] = 1;
-    desc_sizes->data[3] = coo_matrix.num_nonzeros_upperTri;
-    desc_sizes->data[4] = coo_matrix.num_nonzeros_upperTri;
-    desc_sizes->data[5] = coo_matrix.num_rows;
-    desc_sizes->data[6] = coo_matrix.num_cols;
-  }
-  // CSR
-  else if (A1format == Dense && A2format == Compressed_unique)
-  {
-    CsrMatrix<T> csr_matrix(coo_matrix);
-    coo_matrix.Clear();
-
-    desc_sizes->data[0] = 1;
-    desc_sizes->data[1] = 1;
-    desc_sizes->data[2] = csr_matrix.num_rows + 1;
-    desc_sizes->data[3] = csr_matrix.num_nonzeros_upperTri;
-    desc_sizes->data[4] = csr_matrix.num_nonzeros_upperTri;
-    desc_sizes->data[5] = csr_matrix.num_rows;
-    desc_sizes->data[6] = csr_matrix.num_cols;
-
-    /*****************DEBUG******************/
-    // std::cout << "CSR detail: \n"
-    //           << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
-    //           << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
-    //           << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
-    //           << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
-    //           << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
-    //           << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
-    //           << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
-    /*****************DEBUG******************/
-  }
-  else
-  {
-    assert(false && "unsupported matrix format\n");
-  }
-
-}
-
-template <typename T>
-void read_input_2D_lowerTriangle (int32_t fileID, int32_t A1format, int32_t A2format,
-                   int A1pos_rank, void *A1pos_ptr,
-                   int A1crd_rank, void *A1crd_ptr,
-                   int A2pos_rank, void *A2pos_ptr,
-                   int A2crd_rank, void *A2crd_ptr,
-                   int Aval_rank, void *Aval_ptr)
-{
-
-  auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
-  auto *desc_A1crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1crd_ptr);
-  auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
-  auto *desc_A2crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2crd_ptr);
-  auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
-
-  // For example, A2pos is not used for COO, but initialized with -1 to speficify that it is not used
-  desc_A1pos->data[0] = -1;
-  desc_A1crd->data[0] = -1;
-  desc_A2pos->data[0] = -1;
-  desc_A2crd->data[0] = -1;
-
-  char *pSparseInput;
-  std::string envString;
-  if (fileID >= 0 && fileID < 9999)
-  {
-    envString = "SPARSE_FILE_NAME" + std::to_string(fileID);
-    pSparseInput = getenv(envString.c_str());
-  }
-  else if (fileID == 9999)
-  {
-    pSparseInput = getenv("SPARSE_FILE_NAME");
-  }
-  else
-  {
-    assert(false && "ERROR: SPARSE_FILE_NAME environmental variable is not set");
-  }
-
-  std::string filename(pSparseInput);
-  if (filename.find(".mtx") == std::string::npos)
-  {
-    assert(false && "ERROR: input file is not Market Matrix file\n");
-  }
-
-  // Initialize matrix in COO form
-  CooMatrix<T> coo_matrix;
-
-  if (!filename.empty())
-  {
-    // Parse matrix market file
-    coo_matrix.InitMarket(filename, 1.0); // 3rd para: verbose = true/false
-    // coo_matrix.Display();
-  }
-  else
-  {
-    fprintf(stderr, "No input specified.\n");
-    exit(1);
-  }
-
-  // SparseFormatAttribute A1format
-  // COO.
-  if (A1format == Compressed_nonunique && A2format == singleton)
-  {
-    std::stable_sort(coo_matrix.coo_tuples, coo_matrix.coo_tuples + coo_matrix.num_nonzeros, CooComparatorRow());
-    desc_A1pos->data[0] = 0;
-    long actual_num_nonzeros = 0;
-
-    for (int i = 0; i < coo_matrix.num_nonzeros; i++)
-    {
-      // filter strictly lower triangular vals
-      if (coo_matrix.coo_tuples[i].row > coo_matrix.coo_tuples[i].col)
-      {
-        desc_A1crd->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].row;
-        desc_A2crd->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].col;
-        desc_Aval->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].val;
-        actual_num_nonzeros++;
-      }
-    }
-    desc_A1pos->data[1] = actual_num_nonzeros;
-  }
-  // CSR
-  else if (A1format == Dense && A2format == Compressed_unique)
-  {
-    CsrMatrix<T> csr_matrix(coo_matrix, true, false);
-    coo_matrix.Clear();
-
-    // /*****************DEBUG******************/
-    // std::cout << "CSR detail: " << csr_matrix.num_cols << ", " << csr_matrix.num_rows << ", " << csr_matrix.num_nonzeros << "\n";
-    // std::cout << "row_offsets: ";
-    // for (int i = 0; i < csr_matrix.num_rows + 1; i++)
-    // {
-    //   std::cout << csr_matrix.row_offsets[i] << " ";
-    // }
-    // std::cout << "\n";
-    // std::cout << "column_indices: ";
-    // for (int i = 0; i < csr_matrix.num_nonzeros; i++)
-    // {
-    //   std::cout << csr_matrix.column_indices[i] << " ";
-    // }
-    // std::cout << "\n";
-    // std::cout << "values: ";
-    // for (int i = 0; i < csr_matrix.num_nonzeros; i++)
-    // {
-    //   std::cout << csr_matrix.values[i] << " ";
-    // }
-    // std::cout << "\nfinished read_market\n";
-    // /*****************DEBUG******************/
-
-    desc_A1pos->data[0] = csr_matrix.num_rows;
-
-    for (int i = 0; i < csr_matrix.num_rows + 1; i++)
-    {
-      desc_A2pos->data[i] = csr_matrix.row_offsets[i];
-    }
-
-    for (int i = 0; i < csr_matrix.num_nonzeros_lowerTri; i++)
-    {
-      desc_A2crd->data[i] = csr_matrix.column_indices[i];
-      desc_Aval->data[i] = csr_matrix.values[i];
-    }
-  }
-  else
-  {
-    assert(false && "unsupported matrix format\n");
-  }
-}
-
-template <typename T>
-void read_input_2D_upperTriangle (int32_t fileID, int32_t A1format, int32_t A2format,
-                   int A1pos_rank, void *A1pos_ptr,
-                   int A1crd_rank, void *A1crd_ptr,
-                   int A2pos_rank, void *A2pos_ptr,
-                   int A2crd_rank, void *A2crd_ptr,
-                   int Aval_rank, void *Aval_ptr)
-{
-
-  auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
-  auto *desc_A1crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1crd_ptr);
-  auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
-  auto *desc_A2crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2crd_ptr);
-  auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
-
-  // For example, A2pos is not used for COO, but initialized with -1 to speficify that it is not used
-  desc_A1pos->data[0] = -1;
-  desc_A1crd->data[0] = -1;
-  desc_A2pos->data[0] = -1;
-  desc_A2crd->data[0] = -1;
-
-  char *pSparseInput;
-  std::string envString;
-  if (fileID >= 0 && fileID < 9999)
-  {
-    envString = "SPARSE_FILE_NAME" + std::to_string(fileID);
-    pSparseInput = getenv(envString.c_str());
-  }
-  else if (fileID == 9999)
-  {
-    pSparseInput = getenv("SPARSE_FILE_NAME");
-  }
-  else
-  {
-    assert(false && "ERROR: SPARSE_FILE_NAME environmental variable is not set");
-  }
-
-  std::string filename(pSparseInput);
-  if (filename.find(".mtx") == std::string::npos)
-  {
-    assert(false && "ERROR: input file is not Market Matrix file\n");
-  }
-
-  // Initialize matrix in COO form
-  CooMatrix<T> coo_matrix;
-
-  if (!filename.empty())
-  {
-    // Parse matrix market file
-    coo_matrix.InitMarket(filename, 1.0); // 3rd para: verbose = true/false
-    // coo_matrix.Display();
-  }
-  else
-  {
-    fprintf(stderr, "No input specified.\n");
-    exit(1);
-  }
-
-  // SparseFormatAttribute A1format
-  // COO.
-  if (A1format == Compressed_nonunique && A2format == singleton)
-  {
-    std::stable_sort(coo_matrix.coo_tuples, coo_matrix.coo_tuples + coo_matrix.num_nonzeros, CooComparatorRow());
-    desc_A1pos->data[0] = 0;
-    long actual_num_nonzeros = 0;
-
-    for (int i = 0; i < coo_matrix.num_nonzeros; i++)
-    {
-      // filter strictly upper triangular vals
-      if (coo_matrix.coo_tuples[i].row < coo_matrix.coo_tuples[i].col)
-      {
-        desc_A1crd->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].row;
-        desc_A2crd->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].col;
-        desc_Aval->data[actual_num_nonzeros] = coo_matrix.coo_tuples[i].val;
-        actual_num_nonzeros++;
-      }
-    }
-    desc_A1pos->data[1] = actual_num_nonzeros;
-  }
-  // CSR
-  else if (A1format == Dense && A2format == Compressed_unique)
-  {
-    CsrMatrix<T> csr_matrix(coo_matrix, false, true);  // filtering for upper or lower part is done,
-                                                       // during conv. from COO to CSR.
-    coo_matrix.Clear();
-
-    // /*****************DEBUG******************/
-    // std::cout << "CSR detail: " << csr_matrix.num_cols << ", " << csr_matrix.num_rows << ", " << csr_matrix.num_nonzeros << "\n";
-    // std::cout << "row_offsets: ";
-    // for (int i = 0; i < csr_matrix.num_rows + 1; i++)
-    // {
-    //   std::cout << csr_matrix.row_offsets[i] << " ";
-    // }
-    // std::cout << "\n";
-    // std::cout << "column_indices: ";
-    // for (int i = 0; i < csr_matrix.num_nonzeros; i++)
-    // {
-    //   std::cout << csr_matrix.column_indices[i] << " ";
-    // }
-    // std::cout << "\n";
-    // std::cout << "values: ";
-    // for (int i = 0; i < csr_matrix.num_nonzeros; i++)
-    // {
-    //   std::cout << csr_matrix.values[i] << " ";
-    // }
-    // std::cout << "\nfinished read_market\n";
-    // /*****************DEBUG******************/
-
-    desc_A1pos->data[0] = csr_matrix.num_rows;
-
-    for (int i = 0; i < csr_matrix.num_rows + 1; i++)
-    {
-      desc_A2pos->data[i] = csr_matrix.row_offsets[i];
-    }
-
-    for (int i = 0; i < csr_matrix.num_nonzeros_upperTri; i++)
-    {
-      desc_A2crd->data[i] = csr_matrix.column_indices[i];
-      desc_Aval->data[i] = csr_matrix.values[i];
-    }
-  }
-  else
-  {
-    assert(false && "unsupported matrix format\n");
-  }
-}
-
-
-template <typename T>
-void read_input_sizes_3D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int sizes_rank, void *sizes_ptr)
-{
-  auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
-
-  char *pSparseInput;
-  std::string envString;
-  if (fileID >= 0 && fileID < 9999)
-  {
-    envString = "SPARSE_FILE_NAME" + std::to_string(fileID);
-    pSparseInput = getenv(envString.c_str());
-  }
-  else if (fileID == 9999)
-  {
-    pSparseInput = getenv("SPARSE_FILE_NAME");
-  }
-  else
-  {
-    assert(false && "ERROR: SPARSE_FILE_NAME environmental variable is not set");
-  }
-
-  std::string filename(pSparseInput);
-
-  if (filename.find(".tns") == std::string::npos)
-  {
-    assert(false && "ERROR: input file is not TNS format\n");
-  }
-
-  // Initialize matrix in COO form
-  Coo3DTensor<T> coo_3dtensor;
-
-  if (!filename.empty())
-  {
-    // Parse matrix market file
-    coo_3dtensor.InitFrostt(filename, 1.0); // 3rd para: verbose = true/false
-                                            //  coo_3dtensor.Display();
-                                            // printf("%s, ", filename.c_str());
-  }
-  else
-  {
-    fprintf(stderr, "No input specified.\n");
-    exit(1);
-  }
+  FileReaderWrapper<T> FileReader (fileID, true);  // init of COO_3d_tensor
 
   if (A1format == Compressed_nonunique && A2format == singleton && A3format == singleton)
   {
     // A1pos, A1crd, A2pos, A2crd, A3pos, A3crd, Aval, I, J, K
     desc_sizes->data[0] = 2;
-    desc_sizes->data[1] = coo_3dtensor.num_nonzeros;
+    desc_sizes->data[1] = FileReader.coo_3dtensor.num_nonzeros;
     desc_sizes->data[2] = 1;
-    desc_sizes->data[3] = coo_3dtensor.num_nonzeros;
+    desc_sizes->data[3] = FileReader.coo_3dtensor.num_nonzeros;
     desc_sizes->data[4] = 1;
-    desc_sizes->data[5] = coo_3dtensor.num_nonzeros;
-    desc_sizes->data[6] = coo_3dtensor.num_nonzeros;
-    desc_sizes->data[7] = coo_3dtensor.num_index_i;
-    desc_sizes->data[8] = coo_3dtensor.num_index_j;
-    desc_sizes->data[9] = coo_3dtensor.num_index_k;
+    desc_sizes->data[5] = FileReader.coo_3dtensor.num_nonzeros;
+    desc_sizes->data[6] = FileReader.coo_3dtensor.num_nonzeros;
+    desc_sizes->data[7] = FileReader.coo_3dtensor.num_index_i;
+    desc_sizes->data[8] = FileReader.coo_3dtensor.num_index_j;
+    desc_sizes->data[9] = FileReader.coo_3dtensor.num_index_k;
   }
   // CSF
   else if (A1format == Compressed_unique && A2format == Compressed_unique && A3format == Compressed_unique)
   {
     // std::cout << "CSF format\n";
-    Csf3DTensor<T> csf_3dtensor(coo_3dtensor);
-    coo_3dtensor.Clear();
+    Csf3DTensor<T> csf_3dtensor(FileReader.coo_3dtensor);
 
     desc_sizes->data[0] = csf_3dtensor.A1pos_size;
     desc_sizes->data[1] = csf_3dtensor.A1crd_size;
@@ -2140,8 +1849,7 @@ void read_input_sizes_3D(int32_t fileID, int32_t A1format, int32_t A2format, int
   else if (A1format == Compressed_nonunique && A2format == singleton && A3format == Dense)
   {
     // std::cout << "Mode-Generic format\n";
-    Mg3DTensor<T> mg_3dtensor(coo_3dtensor);
-    coo_3dtensor.Clear();
+    Mg3DTensor<T> mg_3dtensor(FileReader.coo_3dtensor);
 
     desc_sizes->data[0] = mg_3dtensor.A1pos_size;
     desc_sizes->data[1] = mg_3dtensor.A1crd_size;
@@ -2164,8 +1872,10 @@ template <typename T>
 void read_input_3D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int A1pos_rank, void *A1pos_ptr,
                    int A1crd_rank, void *A1crd_ptr, int A2pos_rank, void *A2pos_ptr, int A2crd_rank,
                    void *A2crd_ptr, int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                   int Aval_rank, void *Aval_ptr)
+                   int Aval_rank, void *Aval_ptr, int32_t readMode)
 {
+  // FIXME: readMode is for future use.
+
   auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
   auto *desc_A1crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1crd_ptr);
   auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
@@ -2174,66 +1884,28 @@ void read_input_3D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A
   auto *desc_A3crd = static_cast<StridedMemRefType<int64_t, 1> *>(A3crd_ptr);
   auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
 
-  char *pSparseInput;
-  std::string envString;
-  if (fileID >= 0 && fileID < 9999)
-  {
-    envString = "SPARSE_FILE_NAME" + std::to_string(fileID);
-    pSparseInput = getenv(envString.c_str());
-  }
-  else if (fileID == 9999)
-  {
-    pSparseInput = getenv("SPARSE_FILE_NAME");
-  }
-  else
-  {
-    assert(false && "ERROR: SPARSE_FILE_NAME environmental variable is not set");
-  }
-
-  std::string filename(pSparseInput);
-
-  if (filename.find(".tns") == std::string::npos)
-  {
-    assert(false && "ERROR: input file is not TNS format\n");
-  }
-
-  // Initialize matrix in COO form
-  Coo3DTensor<T> coo_3dtensor;
-
-  if (!filename.empty())
-  {
-    // Parse matrix market file
-    coo_3dtensor.InitFrostt(filename, 1.0); // 3rd para: verbose = true/false
-                                            //  coo_3dtensor.Display();
-                                            // printf("%s, ", filename.c_str());
-  }
-  else
-  {
-    fprintf(stderr, "No input specified.\n");
-    exit(1);
-  }
+  FileReaderWrapper<T> FileReader (fileID, true);  // init of COO_3d_tensor
 
   if (A1format == Compressed_nonunique && A2format == singleton && A3format == singleton)
   {
     // std::cout << "COO detail: " << coo_3dtensor.num_index_i << ", " << coo_3dtensor.num_index_j << ", " << coo_3dtensor.num_index_k << ", " << coo_3dtensor.num_nonzeros << "\n";
-    std::stable_sort(coo_3dtensor.coo_3dtuples, coo_3dtensor.coo_3dtuples + coo_3dtensor.num_nonzeros, Coo3DTensorComparator());
+    std::stable_sort(FileReader.coo_3dtensor.coo_3dtuples, FileReader.coo_3dtensor.coo_3dtuples + FileReader.coo_3dtensor.num_nonzeros, Coo3DTensorComparator());
     desc_A1pos->data[0] = 0;
-    desc_A1pos->data[1] = coo_3dtensor.num_nonzeros;
+    desc_A1pos->data[1] = FileReader.coo_3dtensor.num_nonzeros;
 
-    for (int i = 0; i < coo_3dtensor.num_nonzeros; i++)
+    for (int i = 0; i < FileReader.coo_3dtensor.num_nonzeros; i++)
     {
-      desc_A1crd->data[i] = coo_3dtensor.coo_3dtuples[i].index_i;
-      desc_A2crd->data[i] = coo_3dtensor.coo_3dtuples[i].index_j;
-      desc_A3crd->data[i] = coo_3dtensor.coo_3dtuples[i].index_k;
-      desc_Aval->data[i] = coo_3dtensor.coo_3dtuples[i].val;
+      desc_A1crd->data[i] = FileReader.coo_3dtensor.coo_3dtuples[i].index_i;
+      desc_A2crd->data[i] = FileReader.coo_3dtensor.coo_3dtuples[i].index_j;
+      desc_A3crd->data[i] = FileReader.coo_3dtensor.coo_3dtuples[i].index_k;
+      desc_Aval->data[i] = FileReader.coo_3dtensor.coo_3dtuples[i].val;
     }
   }
   // CSF
   else if (A1format == Compressed_unique && A2format == Compressed_unique && A3format == Compressed_unique)
   {
-    // std::cout << "CSF format\n";
-    Csf3DTensor<T> csf_3dtensor(coo_3dtensor);
-    coo_3dtensor.Clear();
+    Csf3DTensor<T> csf_3dtensor(FileReader.coo_3dtensor);
+    FileReader.FileReaderWrapperFinalize();  // clear coo_3dtensor
 
     // Print
     // std::cout << "CSF detail: " << csf_3dtensor.num_index_i << ", " << csf_3dtensor.num_index_j << ", " << csf_3dtensor.num_index_k << ", " << csf_3dtensor.num_nonzeros << "\n";
@@ -2315,8 +1987,8 @@ void read_input_3D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A
   else if (A1format == Compressed_nonunique && A2format == singleton && A3format == Dense)
   {
     // std::cout << "Mode-Generic format\n";
-    Mg3DTensor<T> mg_3dtensor(coo_3dtensor);
-    coo_3dtensor.Clear();
+    Mg3DTensor<T> mg_3dtensor(FileReader.coo_3dtensor);
+    FileReader.FileReaderWrapperFinalize();  // clear coo_3dtensor
 
     // Print
     // std::cout << "ModeGeneric detail: " << mg_3dtensor.num_index_i << ", " << mg_3dtensor.num_index_j << ", " << mg_3dtensor.num_index_k << ", " << mg_3dtensor.num_nonzeros << "\n";
@@ -2382,12 +2054,13 @@ extern "C" void read_input_2D_f32(int32_t fileID, int32_t A1format, int32_t A2fo
                                   int A1crd_rank, void *A1crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr,
                                   int A2crd_rank, void *A2crd_ptr,
-                                  int Aval_rank, void *Aval_ptr)
+                                  int Aval_rank, void *Aval_ptr, 
+                                  int32_t readMode)
 {
   read_input_2D<float>(fileID, A1format, A2format,
                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                       Aval_rank, Aval_ptr);
+                       Aval_rank, Aval_ptr, readMode);
 }
 
 extern "C" void read_input_2D_f64(int32_t fileID, int32_t A1format,
@@ -2396,148 +2069,68 @@ extern "C" void read_input_2D_f64(int32_t fileID, int32_t A1format,
                                   int A1crd_rank, void *A1crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr,
                                   int A2crd_rank, void *A2crd_ptr,
-                                  int Aval_rank, void *Aval_ptr)
+                                  int Aval_rank, void *Aval_ptr,
+                                  int32_t readMode)
 {
   read_input_2D<double>(fileID, A1format, A2format,
                         A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                         A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                        Aval_rank, Aval_ptr);
-}
-
-// lower triangle part
-extern "C" void read_input_2D_lowerTriangle_f32(int32_t fileID, int32_t A1format, int32_t A2format,
-                                  int A1pos_rank, void *A1pos_ptr,
-                                  int A1crd_rank, void *A1crd_ptr,
-                                  int A2pos_rank, void *A2pos_ptr,
-                                  int A2crd_rank, void *A2crd_ptr,
-                                  int Aval_rank, void *Aval_ptr)
-{
-  read_input_2D_lowerTriangle<float>(fileID, A1format, A2format,
-                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
-                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                       Aval_rank, Aval_ptr);
-}
-
-extern "C" void read_input_2D_lowerTriangle_f64(int32_t fileID, int32_t A1format,
-                                  int32_t A2format,
-                                  int A1pos_rank, void *A1pos_ptr,
-                                  int A1crd_rank, void *A1crd_ptr,
-                                  int A2pos_rank, void *A2pos_ptr,
-                                  int A2crd_rank, void *A2crd_ptr,
-                                  int Aval_rank, void *Aval_ptr)
-{
-  read_input_2D_lowerTriangle<double>(fileID, A1format, A2format,
-                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
-                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                        Aval_rank, Aval_ptr);
-}
-
-// upper triangle part
-extern "C" void read_input_2D_upperTriangle_f32(int32_t fileID, int32_t A1format, int32_t A2format,
-                                  int A1pos_rank, void *A1pos_ptr,
-                                  int A1crd_rank, void *A1crd_ptr,
-                                  int A2pos_rank, void *A2pos_ptr,
-                                  int A2crd_rank, void *A2crd_ptr,
-                                  int Aval_rank, void *Aval_ptr)
-{
-  read_input_2D_upperTriangle<float>(fileID, A1format, A2format,
-                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
-                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                       Aval_rank, Aval_ptr);
-}
-
-extern "C" void read_input_2D_upperTriangle_f64(int32_t fileID, int32_t A1format,
-                                  int32_t A2format,
-                                  int A1pos_rank, void *A1pos_ptr,
-                                  int A1crd_rank, void *A1crd_ptr,
-                                  int A2pos_rank, void *A2pos_ptr,
-                                  int A2crd_rank, void *A2crd_ptr,
-                                  int Aval_rank, void *Aval_ptr)
-{
-  read_input_2D_upperTriangle<double>(fileID, A1format, A2format,
-                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
-                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                        Aval_rank, Aval_ptr);
+                        Aval_rank, Aval_ptr, readMode);
 }
 
 extern "C" void read_input_3D_f32(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
                                   int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
                                   int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                  int Aval_rank, void *Aval_ptr)
+                                  int Aval_rank, void *Aval_ptr, int32_t readMode)
 {
 
   read_input_3D<float>(fileID, A1format, A2format, A3format,
                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
                        A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
-                       Aval_rank, Aval_ptr);
+                       Aval_rank, Aval_ptr, readMode);
 }
 
 extern "C" void read_input_3D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
                                   int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
                                   int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                  int Aval_rank, void *Aval_ptr)
+                                  int Aval_rank, void *Aval_ptr, int32_t readMode)
 {
 
   read_input_3D<double>(fileID, A1format, A2format, A3format,
                         A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                         A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
                         A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
-                        Aval_rank, Aval_ptr);
+                        Aval_rank, Aval_ptr, readMode);
 }
 
 // Utility functions to read metadata about the input matrices, such as the size of pos and crd array
 extern "C" void read_input_sizes_2D_f32(int32_t fileID, int32_t A1format, int32_t A2format,
-                                        int A1pos_rank, void *A1pos_ptr)
+                                        int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_2D<float>(fileID, A1format, A2format, A1pos_rank, A1pos_ptr);
+  read_input_sizes_2D<float>(fileID, A1format, A2format, A1pos_rank, A1pos_ptr, readMode);
 }
 
 extern "C" void read_input_sizes_2D_f64(int32_t fileID, int32_t A1format, int32_t A2format,
-                                        int A1pos_rank, void *A1pos_ptr, char *filename)
+//                                        int A1pos_rank, void *A1pos_ptr, char *filename, int32_t readMode)
+                                        int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_2D<double>(fileID, A1format, A2format, A1pos_rank, A1pos_ptr);
-}
-
-// lower triangle part 
-extern "C" void read_input_sizes_2D_lowerTriangle_f32(int32_t fileID, int32_t A1format, int32_t A2format,
-                                        int A1pos_rank, void *A1pos_ptr)
-{
-  read_input_sizes_2D_lowerTriangle<float>(fileID, A1format, A2format, A1pos_rank, A1pos_ptr);
-}
-
-extern "C" void read_input_sizes_2D_lowerTriangle_f64(int32_t fileID, int32_t A1format, int32_t A2format,
-                                        int A1pos_rank, void *A1pos_ptr, char *filename)
-{
-  read_input_sizes_2D_lowerTriangle<double>(fileID, A1format, A2format, A1pos_rank, A1pos_ptr);
-}
-
-// upper triangle part 
-extern "C" void read_input_sizes_2D_upperTriangle_f32(int32_t fileID, int32_t A1format, int32_t A2format,
-                                        int A1pos_rank, void *A1pos_ptr)
-{
-  read_input_sizes_2D_upperTriangle<float>(fileID, A1format, A2format, A1pos_rank, A1pos_ptr);
-}
-
-extern "C" void read_input_sizes_2D_upperTriangle_f64(int32_t fileID, int32_t A1format, int32_t A2format,
-                                        int A1pos_rank, void *A1pos_ptr, char *filename)
-{
-  read_input_sizes_2D_upperTriangle<double>(fileID, A1format, A2format, A1pos_rank, A1pos_ptr);
+  read_input_sizes_2D<double>(fileID, A1format, A2format, A1pos_rank, A1pos_ptr, readMode);
 }
 
 // Read 3D tensors
 extern "C" void read_input_sizes_3D_f32(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
-                                        int A1pos_rank, void *A1pos_ptr)
+                                        int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_3D<float>(fileID, A1format, A2format, A3format, A1pos_rank, A1pos_ptr);
+  read_input_sizes_3D<float>(fileID, A1format, A2format, A3format, A1pos_rank, A1pos_ptr, readMode);
 }
 
 extern "C" void read_input_sizes_3D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
-                                        int A1pos_rank, void *A1pos_ptr)
+                                        int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_3D<double>(fileID, A1format, A2format, A3format, A1pos_rank, A1pos_ptr);
+  read_input_sizes_3D<double>(fileID, A1format, A2format, A3format, A1pos_rank, A1pos_ptr, readMode);
 }
 
 int qsort_comp(const void *a, const void *b)
