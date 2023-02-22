@@ -424,31 +424,15 @@ namespace tensorAlgebra
         return std::make_unique<PrintExprAST>(std::move(loc), std::move(args[0]));
       }
 
-      if (name == "read_from_file")
-      { // It can be a builtin call to read_from_file
-        comet_debug() << "read_from_file\n";
-        if (args.size() == 0)
+      if (name == "comet_read")
+      { // It can be a builtin call to comet_read
+        comet_debug() << "comet_read\n";
+        if (args.size() == 0 || args.size() == 1)  // comet_read(0);
         {
           args.push_back(nullptr);
         }
-      }
 
-      if (name == "read_lowerTri_from_file")
-      {
-        comet_debug() << "read_lowerTri_from_file\n";
-        if (args.size() == 0)
-        {
-          args.push_back(nullptr);
-        }
-      }
-
-      if (name == "read_upperTri_from_file")
-      {
-        comet_debug() << "read_upperTri_from_file\n";
-        if (args.size() == 0)
-        {
-          args.push_back(nullptr);
-        }
+        return std::make_unique<FileReadExprAST>(std::move(loc), name, std::move(args[0]), std::move(args[1]));
       }
 
       if (name == "random")
@@ -491,7 +475,7 @@ namespace tensorAlgebra
           CallExprAST *call = llvm::cast<CallExprAST>(lhs.get());
           llvm::StringRef callee = call->getCallee();
 
-          if (callee == "read_from_file")
+          if (callee == "comet_read")
           {
             comet_debug() << "\n";
           }
