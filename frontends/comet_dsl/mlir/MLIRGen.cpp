@@ -68,9 +68,9 @@ using llvm::Twine;
 using StringSet = std::set<std::string>;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_MLIRGEN
-// #define DEBUG_MODE_MLIRGEN
-// #endif
+#ifndef DEBUG_MODE_MLIRGEN
+#define DEBUG_MODE_MLIRGEN
+#endif
 
 #ifdef DEBUG_MODE_MLIRGEN
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -405,13 +405,13 @@ namespace
       comet_vdump(rhs);
       comet_debug() << " " << lhsAST->getKind() << " " << rhsAST->getKind() << "\n";
 
-      int op = 0;
-      if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var &&
-          rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var)
+      if ((lhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var &&
+           rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var) ||
+          rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Num)
       {
-        comet_debug() << "\n"
-                      << __LINE__ << " rhsAST and lhsAST are all Expr_Var\n";
+        comet_debug() << " rhsAST and lhsAST are all Expr_Var OR rhsAST is Expr_Num\n";
 
+        std::string op;
         switch (binop.getOp())
         {
         case '+':
@@ -429,45 +429,31 @@ namespace
         default:
           comet_debug() << "ERROR: unsupported operator type: ASCII Code(" << binop.getOp() << ")\n";
         }
-        mlir::IntegerAttr opAttr = builder.getI32IntegerAttr(op);
-        return builder.create<ScalarOp>(location, builder.getF64Type(), rhs, lhs, opAttr);
+        mlir::StringAttr opAttr = builder.getStringAttr(op);
+        mlir::Type elementType = builder.getF64Type();
+        auto returnDataType = mlir::RankedTensorType::get(1, elementType);
+        comet_vdump(rhs);
+        comet_vdump(lhs);
+        return builder.create<ScalarOp>(location, returnDataType, rhs, lhs, opAttr);
+        //auto scalarOp = builder.create<ScalarOp>(location, returnDataType, rhs, lhs, opAttr);
+        //builder.create<TensorSetOp>(location, scalarOp.getOperation()->getResult(0), );
       }
-      else if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Num)
-      {
-        comet_debug() << "rhsAST is Expr_Num \n";
-        switch (binop.getOp())
-        {
-        case '+':
-          op = '+';
-          break;
-        case '-':
-          op = '-';
-          break;
-        case '*':
-          op = '*';
-          break;
-        case '/':
-          op = '/';
-          break;
-        default:
-          comet_debug() << "ERROR: unsupported operator type: ASCII Code(" << binop.getOp() << ")\n";
-        }
-        mlir::IntegerAttr opAttr = builder.getI32IntegerAttr(op);
-        return builder.create<ScalarOp>(location, builder.getF64Type(), rhs, lhs, opAttr);
-      }
+
       else if (isa<DenseConstantOp>(lhs.getDefiningOp()))
       {
         comet_debug() << "\n"
                       << __LINE__ << " lhs is DenseConstantOp\n";
         switch (binop.getOp())
         {
-        //TODO(gkestor): Why mulop called chainMulOp but not the others
+        // TODO(gkestor): Why mulop called chainMulOp but not the others
         case '+':
           return builder.create<AddOp>(location, lhs, rhs);
         case '-':
           return builder.create<SubstractOp>(location, lhs, rhs);
         case '*':
-          return builder.create<ChainMulOp>(location, lhs, rhs);
+          // TODO(gkestor): create general elementwise multiplication ops
+          // return builder.create<MulOp>(location, lhs, rhs);
+          return builder.create<AddOp>(location, lhs, rhs);
         case '/':
           return builder.create<DivOp>(location, lhs, rhs);
         }
@@ -1182,8 +1168,25 @@ namespace
     /// Emit a constant for a single number (FIXME: semantic? broadcast?)
     mlir::Value mlirGen(NumberExprAST &num)
     {
-      mlir::FloatAttr valueAttr = builder.getF64FloatAttr(num.getValue());
-      return builder.create<ScalarAssignOp>(loc(num.loc()), builder.getF64Type(), valueAttr);
+      // mlir::FloatAttr valueAttr = builder.getF64FloatAttr(num.getValue());
+      // return builder.create<ScalarAssignOp>(loc(num.loc()), builder.getF64Type(), valueAttr);
+
+      auto type = getType(1);
+      std::vector<double> data;
+      data.push_back(num.getValue());
+      // The type of this attribute is tensor of 64-bit floating-point with the
+      // shape of one.
+      mlir::Type elementType = builder.getF64Type();
+      auto dataType = mlir::RankedTensorType::get(1, elementType);
+
+      // This is the actual attribute that holds the list of values for this
+      // tensor to represent scalar op.
+      auto dataAttribute =
+          mlir::DenseElementsAttr::get(dataType, llvm::makeArrayRef(data));
+
+      // Build the MLIR op `ta.constant`. This invokes the `DenseConstantOp::build`
+      // method.
+      return builder.create<DenseConstantOp>(loc(num.loc()), type, dataAttribute);
     }
 
     /// Emit a tensor expression
@@ -1777,7 +1780,7 @@ namespace
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
 
         // no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
-        // BoolAttr is true to speficy SparseTensorDeclOp is for temporaries   
+        // BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
         lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), return_type, lhs_labels_val, formatAttr, builder.getBoolAttr(true));
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
         comet_vdump(lhs_tensor);
@@ -1800,7 +1803,7 @@ namespace
       return t;
     }
 
-        /// Codegen for-loop 
+    /// Codegen for-loop
     mlir::LogicalResult mlirGen(ForLoopExprAST &forLoop)
     {
       comet_debug() << "codegen: ForLoopExprAST \n";
@@ -1811,14 +1814,14 @@ namespace
                                                              forLoop.getEnd());
       mlir::Value step = builder.create<mlir::ConstantIndexOp>(
           loc(forLoop.loc()), forLoop.getIncrement());
-    
+
       builder.create<ForLoopBeginOp>(loc(forLoop.loc()), lo, hi, step, forLoop.getName());
 
       comet_debug() << "codegen: ForLoopExprAST done \n";
       return mlir::success();
     }
 
-    /// Codegen for-loop 
+    /// Codegen for-loop
     mlir::LogicalResult mlirGen(ForLoopEndExprAST &forLoopEnd)
     {
       comet_debug() << "codegen: ForLoopEndExprAST \n";
@@ -1957,8 +1960,7 @@ namespace
 
               // Builting calls have their custom operation, meaning this is a
               // straightforward emission.
-              if (callee == "read_from_file" || callee == "read_lowerTri_from_file"
-                    || callee == "read_upperTri_from_file")
+              if (callee == "read_from_file" || callee == "read_lowerTri_from_file" || callee == "read_upperTri_from_file")
               {
                 comet_debug() << " call read_from_file \n";
 
@@ -2010,12 +2012,12 @@ namespace
                   lower = true;
                   upper = false;
                 }
-                else if (callee == "read_upperTri_from_file") 
+                else if (callee == "read_upperTri_from_file")
                 {
                   lower = false;
                   upper = true;
                 }
-                else 
+                else
                 {
                   lower = false;
                   upper = false;
@@ -2266,7 +2268,6 @@ namespace
       std::vector<mlir::Operation *> lhsLabelOps, rhsLabelOps;
       if (binop == TensorOpKind::Tensor_Red_Add)
       {
-
         auto op = builder.create<AddOp>(loc(tensor_op.loc()), tensors[1], tensors[0]);
         builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
       }
@@ -2549,13 +2550,13 @@ namespace
     }
 
     mlir::LogicalResult mlirGenTensorFillFromFile(mlir::Location loc,
-                                                  StringRef tensor_name, StringRef filename, 
+                                                  StringRef tensor_name, StringRef filename,
                                                   bool lower, bool upper)
     {
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
       mlir::StringAttr filenameAttr = builder.getStringAttr(filename);
-        
-      if (lower && !upper) 
+
+      if (lower && !upper)
         builder.create<TensorLowerTriFillFromFileOp>(loc, tensorValue, filenameAttr);
       else if (upper && !lower)
         builder.create<TensorUpperTriFillFromFileOp>(loc, tensorValue, filenameAttr);
