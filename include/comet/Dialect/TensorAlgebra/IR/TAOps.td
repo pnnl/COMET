@@ -484,26 +484,14 @@ def CastOp : TA_Op<"cast",
 def ScalarOp : TA_Op<"scalar",[NoSideEffect]> {
   let summary = "scalar arithmetic operation";
 
-  //let arguments = (ins F64:$rhs, F64:$lhs, StrAttr:$op); 
   let arguments = (ins AnyTypeOf<[AnyTensor,F64]>:$rhs, AnyTypeOf<[AnyTensor,F64]>:$lhs, StrAttr:$op); 
 
-  //let results = (outs F64:$res);
   let results = (outs AnyTypeOf<[AnyTensor,
                                  F64]>:$res);
 
   let builders = [
     OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
   ];
-
-  let verifier = ?;
-}
-
-def ScalarAssignOp : TA_Op<"scalar_assign",[NoSideEffect]> {
-  let summary = "scalarAssign operation";
-
-  let arguments = (ins AnyAttr:$rhs);
-
-  let results = (outs F64:$lhs);
 
   let verifier = ?;
 }

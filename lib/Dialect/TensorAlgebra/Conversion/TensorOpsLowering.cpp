@@ -783,44 +783,6 @@ namespace
     }
   }; // ReduceOpLowering
 
-  struct ScalarAssignOpLowering : public OpRewritePattern<tensorAlgebra::ScalarAssignOp>
-  {
-    using OpRewritePattern<tensorAlgebra::ScalarAssignOp>::OpRewritePattern;
-    LogicalResult matchAndRewrite(tensorAlgebra::ScalarAssignOp op,
-                                  PatternRewriter &rewriter) const final
-    {
-      assert(isa<tensorAlgebra::ScalarAssignOp>(op));
-      comet_debug() << "ScalarAssignOpLowering in lowertctoscf\n";
-
-      Location loc = op.getLoc();
-      auto rhsAttr = op.rhs();
-      auto res = op.lhs();
-
-      // alloc memory for res
-      auto f64Type = rewriter.getF64Type();
-      Type unrankedMemrefType_f64 = UnrankedMemRefType::get(f64Type, 0);
-      MemRefType memTy_alloc_res = MemRefType::get(1, f64Type);
-      rewriter.create<memref::AllocOp>(loc, memTy_alloc_res);
-      res = rewriter.create<memref::AllocOp>(loc, memTy_alloc_res);
-
-      // initialize res to 0.0
-      Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
-      std::vector<Value> alloc_zero_loc = {const_index_0};
-      Value const_f64_0 = rewriter.create<mlir::ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
-      rewriter.create<memref::StoreOp>(loc, const_f64_0,
-                                       res, alloc_zero_loc);
-
-      // store rhs to res
-      Value valval = rewriter.create<mlir::ConstantOp>(loc, f64Type, rhsAttr);
-      rewriter.create<memref::StoreOp>(loc, valval, res, alloc_zero_loc);
-
-      // clean up
-      op.replaceAllUsesWith(valval);
-      rewriter.eraseOp(op);
-      return success();
-    }
-  }; // ScalarAssignOpLowering
-
   struct ScalarOpsLowering : public OpRewritePattern<tensorAlgebra::ScalarOp>
   {
     using OpRewritePattern<tensorAlgebra::ScalarOp>::OpRewritePattern;
@@ -830,17 +792,17 @@ namespace
       assert(isa<tensorAlgebra::ScalarOp>(op));
       comet_debug() << "ScalarOpsLowering starts\n";
 
+      auto module = op->getParentOfType<ModuleOp>();
+
       // Scalar operation could be between
       //  1. two tensors (size of 1) and the output with a tensor of size 1
       //  2. two F64 values and the output will be F64
       Location loc = op.getLoc();
       Value rhs = op.rhs();
       Value lhs = op.lhs();
-      Value res = op.res();
 
       comet_vdump(rhs);
       comet_vdump(lhs);
-      comet_vdump(res);
 
       auto rhsType = op->getOperand(0).getType();
       auto lhsType = op->getOperand(1).getType();
@@ -851,42 +813,39 @@ namespace
       comet_vdump(const_index_0);
       std::vector<Value> alloc_zero_loc = {const_index_0};
 
-      if (rhsType.isa<MemRefType>() && lhsType.isa<MemRefType>())
+      if (rhsType.isa<MemRefType>())
       {
-        comet_debug() << "Input operands are tensors\n";
-        // assert(isa<TensorType>(res) && "Scalar result must be AnyTensor type");
+        comet_debug() << "RHS is a tensor\n";
         rhs = rewriter.create<memref::LoadOp>(loc, rhs, alloc_zero_loc);
+        comet_vdump(rhs);
+      }
+      if (lhsType.isa<MemRefType>())
+      {
+        comet_debug() << "LHS is a tensor\n";
         lhs = rewriter.create<memref::LoadOp>(loc, lhs, alloc_zero_loc);
+      }
 
-        for (auto u : op.getOperation()->getResult(0).getUsers())
+      assert((rhsType.isF64() || rhsType.isa<MemRefType>()) && (lhsType.isF64() || lhsType.isa<MemRefType>()) && "Scalar Operands data type must be either F64 or memref");
+
+      Value res;
+      bool res_comes_from_setop = false;
+      for (auto u : op.getOperation()->getResult(0).getUsers())
+      {
+        comet_debug() << "Users:\n";
+        comet_pdump(u);
+        if (isa<tensorAlgebra::TensorSetOp>(u))
         {
-          if (isa<tensorAlgebra::TensorSetOp>(u))
-          {
-            comet_debug() << "User is setOp\n";
-            auto setnewop = cast<tensorAlgebra::TensorSetOp>(u).getOperation()->getOperand(0);
-            res = setnewop.getDefiningOp()->getOperand(1); //getOperand(1) is destination
-            comet_vdump(setnewop);
-          }
+          res = cast<tensorAlgebra::TensorSetOp>(u).getOperation()->getOperand(1);
+          comet_debug() << "Result from SetOp:\n";
+          comet_vdump(res);
+          res_comes_from_setop = true;
+          break;
         }
       }
-      else
-      {
-        // assert(isa<tensorAlgebra::F64>(rhs) && isa<tensorAlgebra::F64>(lhs) && isa<tensorAlgebra::F64>(res) && "Scalar Operands and result data type must be F64");
 
-        comet_debug() << "Input operands are F64\n";
-        // allocate memory for res
-        MemRefType memTy_alloc_res = MemRefType::get(1, f64Type);
-        rewriter.create<memref::AllocOp>(loc, memTy_alloc_res);
-        res = rewriter.create<memref::AllocOp>(loc, memTy_alloc_res);
-
-        // initialize res to 0.0
-        Value const_f64_0 = rewriter.create<mlir::ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
-        comet_vdump(const_f64_0);
-        rewriter.create<memref::StoreOp>(loc, const_f64_0, res, alloc_zero_loc);
-      }
-
+      assert(res_comes_from_setop && "SetOp is needed to assign the scalar operation result to final variable");
+ 
       comet_debug() << "Scalar lowering Final step\n";
-
       comet_debug() << "RHS, LHS and result:\n";
       comet_vdump(rhs);
       comet_vdump(lhs);
@@ -947,7 +906,6 @@ void TensorOpsLoweringPass::runOnFunction()
 {
   auto function = getFunction();
 
-  // llvm::outs() << "TensorOps lower input:\n" <<  function << "\n";
   //  Verify that the given main has no inputs and results.
   if (function.getNumArguments() || function.getType().getNumResults())
   {
@@ -976,7 +934,6 @@ void TensorOpsLoweringPass::runOnFunction()
                   TensorSubtractionLowering,
                   TensorTransposeLowering,
                   ReduceOpLowering,
-                  ScalarAssignOpLowering,
                   ScalarOpsLowering,
                   ConstantOpLowering>(&getContext());
   // With the target and rewrite patterns defined, we can now attempt the
