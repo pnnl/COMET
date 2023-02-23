@@ -68,9 +68,9 @@ using llvm::Twine;
 using StringSet = std::set<std::string>;
 
 // *********** For debug purpose *********//
-#ifndef DEBUG_MODE_MLIRGEN
-#define DEBUG_MODE_MLIRGEN
-#endif
+// #ifndef DEBUG_MODE_MLIRGEN
+// #define DEBUG_MODE_MLIRGEN
+// #endif
 
 #ifdef DEBUG_MODE_MLIRGEN
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -1168,9 +1168,6 @@ namespace
     /// Emit a constant for a single number (FIXME: semantic? broadcast?)
     mlir::Value mlirGen(NumberExprAST &num)
     {
-      // mlir::FloatAttr valueAttr = builder.getF64FloatAttr(num.getValue());
-      // return builder.create<ScalarAssignOp>(loc(num.loc()), builder.getF64Type(), valueAttr);
-
       auto type = getType(1);
       std::vector<double> data;
       data.push_back(num.getValue());
