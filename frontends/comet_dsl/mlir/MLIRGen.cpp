@@ -434,9 +434,30 @@ namespace
         auto returnDataType = mlir::RankedTensorType::get(1, elementType);
         comet_vdump(rhs);
         comet_vdump(lhs);
-        return builder.create<ScalarOp>(location, returnDataType, rhs, lhs, opAttr);
-        //auto scalarOp = builder.create<ScalarOp>(location, returnDataType, rhs, lhs, opAttr);
-        //builder.create<TensorSetOp>(location, scalarOp.getOperation()->getResult(0), );
+
+        // lookup the output of the binary operation
+        auto theOutput = symbolTable.lookup(out_format);
+        if (theOutput == nullptr)
+        { // the variable for output of binary operation was not declared by user, 
+          // we will create a new DenseConstantOp here.
+          comet_debug() << "creating a new variable declaration, since the user did not declare it\n";
+          
+          double data = 0.0;
+          auto dataAttribute = mlir::DenseElementsAttr::get(returnDataType, llvm::makeArrayRef(data));
+          auto denseConst = builder.create<DenseConstantOp>(location, returnDataType, dataAttribute);
+          
+          theOutput = denseConst;
+        }
+        comet_vdump(theOutput);
+        auto scalarOp = builder.create<ScalarOp>(location, returnDataType, rhs, lhs, opAttr);
+        comet_vdump(scalarOp);
+        builder.create<TensorSetOp>(location, scalarOp, theOutput);
+        
+        // the value returned here will be used in subsequent ops.
+        // for example, in the code below, 'g' should be returned.
+        //    $ var g = a + b;
+	      //    $ print(g);
+        return theOutput;
       }
 
       else if (isa<DenseConstantOp>(lhs.getDefiningOp()))
@@ -1391,7 +1412,11 @@ namespace
         return nullptr;
       }
 
-      mlir::Value value = mlirGen(*init);
+      std::set<std::string> out_lbls = {};
+      llvm::StringRef out_var = vardecl.getName();
+      std::string out_varStr(out_var.str());  // the info of variable on the LHS.
+      mlir::Value value = mlirGen(*init, out_lbls, out_varStr);
+
       if (!value)
         return nullptr;
 
