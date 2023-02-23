@@ -2614,6 +2614,11 @@ namespace
                                                   int readMode)
     {
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
+      if (tensorValue == nullptr)
+      {
+        // the variable was not declared by user.
+        assert (false && "please check your variable definitions!");
+      }
       mlir::StringAttr filenameAttr = builder.getStringAttr(filename); 
       mlir::IntegerAttr readModeAttr = builder.getI32IntegerAttr(readMode); 
       builder.create<TensorFillFromFileOp>(loc, tensorValue, filenameAttr, readModeAttr);

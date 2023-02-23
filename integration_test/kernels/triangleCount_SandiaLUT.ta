@@ -32,8 +32,8 @@ def main() {
 
     #Tensor Data Initialization
     U[k, j] = comet_read(0, 4);  # UPPER_TRI_STRICT
-    A[i, k] = comet_read(0, 2);  # LOWER_TRI_STRICT
-    L[i, j] = comet_read(0, 2);
+    L1[i, j] = comet_read(0, 2); # LOWER_TRI_STRICT
+    L2[i, k] = comet_read(0, 2);
 
     # Sandia_LUT method: ntri = sum (sum ((L * U') .* L)).  Note that L=U'.
     var ntri = SUM((L1[i, j] * transpose(U[k, j],{j,k})) .* L2[i,k]);
