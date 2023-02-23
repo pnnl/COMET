@@ -76,6 +76,7 @@ namespace tensorAlgebra
       Expr_Var,
       Expr_BinOp,
       Expr_Call,
+      Expr_FileRead,
       Expr_Print,
       Expr_IndexLabelDecl,
       Expr_IndexLabelDeclDynamic,
@@ -437,6 +438,25 @@ namespace tensorAlgebra
     ExprAST *getArgs() { return Arg.get(); }
     /// LLVM style RTTI
     static bool classof(const ExprAST *C) { return C->getKind() == Expr_Call; }
+  };
+
+  /// Expression class for file-read calls.
+  class FileReadExprAST : public ExprAST
+  {
+    std::string Callee;
+    std::unique_ptr<ExprAST> fileID;
+    std::unique_ptr<ExprAST> ReadMode;
+
+  public:
+    FileReadExprAST(Location loc, const std::string &Callee, std::unique_ptr<ExprAST> id, std::unique_ptr<ExprAST> mode)
+        : ExprAST(Expr_FileRead, loc), Callee(Callee), fileID(std::move(id)), ReadMode(std::move(mode)) {}
+
+    ExprAST *getFileID() { return fileID.get(); }
+    ExprAST *getReadMode() { return ReadMode.get(); }
+    llvm::StringRef getCallee() { return Callee; }
+
+    /// LLVM style RTTI
+    static bool classof(const ExprAST *C) { return C->getKind() == Expr_FileRead; }
   };
 
   /// Expression class for loops, i.e. for index in range(start, end, increment);

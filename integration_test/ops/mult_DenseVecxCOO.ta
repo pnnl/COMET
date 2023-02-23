@@ -18,7 +18,7 @@ def main() {
 
 	#Tensor Fill Operation
 	A[a] = 1.7;
-	B[a, b] = read_from_file(0);
+	B[a, b] = comet_read(0);
 	C[b] = 0.0;
 
 	C[b] = A[a] * B[a, b];

@@ -1970,7 +1970,110 @@ namespace
               continue;
             }
 
-            /// A[i,j] = read_from_file()
+            /// A[i,j] = comet_read()
+            else if (tensor_op->getRHS()->getKind() == ExprAST::ExprASTKind::Expr_FileRead)
+            {
+              comet_debug() << __LINE__ << "  in TensorOpExprAST, rhs is Expr_FileRead\n";
+              auto tensor_name =
+                  llvm::cast<LabeledTensorExprAST>(tensor_op->getLHS())
+                      ->getTensorName();
+              auto call = llvm::cast<FileReadExprAST>(tensor_op->getRHS());
+              llvm::StringRef callee = call->getCallee();
+
+              int readModeVal = 1;  // DEFAULT, standard matrix read
+
+              // Builting calls have their custom operation, meaning this is a
+              // straightforward emission.
+              if (callee == "comet_read")
+              {
+                comet_debug() << " call comet_read \n";
+
+                ExprAST *filename = call->getFileID();
+                ExprAST *readMode = call->getReadMode();
+                comet_debug() << "\n";
+
+                std::string filenamestring;
+                llvm::StringRef filenamestr;
+                if (filename == nullptr) // no argument provided
+                {
+                  comet_debug() << __LINE__ << " Empty filename\n";
+                  filenamestring = "SPARSE_FILE_NAME";
+                  filenamestr = filenamestring;
+                }
+                else if (filename != nullptr && readMode == nullptr) // only 1 arg provided
+                { // Not empty filename
+                  comet_debug() << __LINE__ << " One argument was provided in comet_read().\n";
+
+                  // User will provide num arg in comet_read()
+                  // that will be used to read file based on unique env vars.
+                  // e.g., comet_read(0) --> SPARSE_FILE_NAME0
+                  if (filename->getKind() == NumberExprAST::Expr_Num)
+                  {
+                    auto *filenameast = llvm::cast<NumberExprAST>(filename);
+
+                    // get arg val
+                    int val = (int)cast<NumberExprAST>(filenameast)->getValue();
+                    filenamestring = "SPARSE_FILE_NAME" + std::to_string(val);
+                    filenamestr = filenamestring;
+
+                    comet_debug() << " " << filenamestr << "\n";
+                  }
+                  else if (filename->getKind() == ExprAST::ExprASTKind::Expr_Var)
+                  {
+                    auto *filenameast = llvm::cast<VariableExprAST>(filename);
+
+                    filenamestr = filenameast->getName();
+                    comet_debug() << " " << filenamestr << "\n";
+                  }
+                  else
+                  {
+                    assert(false && "un-recognized args provided to comet_read!");
+                  }
+                }
+                else // 2 args provided to comet_read
+                {
+                  comet_debug() << " Two arguments were provided in comet_read().\n";  
+
+                  // check 1st arg
+                  if (filename->getKind() == NumberExprAST::Expr_Num)
+                  {
+                    auto *filenameast = llvm::cast<NumberExprAST>(filename);
+
+                    // get arg val
+                    int val = (int)cast<NumberExprAST>(filenameast)->getValue();
+                    filenamestring = "SPARSE_FILE_NAME" + std::to_string(val);
+                    filenamestr = filenamestring;
+
+                    comet_debug() << " " << filenamestr << "\n";
+                  }
+                  else
+                  {
+                    assert(false && "un-recognized args provided to comet_read!");
+                  }
+
+                  // check 2nd arg
+                  if (readMode->getKind() == NumberExprAST::Expr_Num)
+                  {
+                    auto *readModeAST = llvm::cast<NumberExprAST>(readMode);  
+                    // get arg val
+                    readModeVal = (int)cast<NumberExprAST>(readModeAST)->getValue();
+                  }
+                  else
+                  {
+                    assert(false && "un-recognized args provided to comet_read!");
+                  }
+
+                }
+
+                if (mlir::failed(mlirGenTensorFillFromFile(loc(tensor_op->loc()), tensor_name, filenamestr, readModeVal)))
+                  return mlir::success();
+              }
+              // TODO: put check here, if the user mis-spells something...
+              
+              continue;
+            }
+
+            /// A[i,j] = random()
             else if (tensor_op->getRHS()->getKind() == ExprAST::ExprASTKind::Expr_Call)
             {
               comet_debug() << __LINE__ << "  in TensorOpExprAST, rhs is Expr_Call\n";
@@ -1980,74 +2083,6 @@ namespace
               auto call = llvm::cast<CallExprAST>(tensor_op->getRHS());
               llvm::StringRef callee = call->getCallee();
 
-              // Builting calls have their custom operation, meaning this is a
-              // straightforward emission.
-              if (callee == "read_from_file" || callee == "read_lowerTri_from_file" || callee == "read_upperTri_from_file")
-              {
-                comet_debug() << " call read_from_file \n";
-
-                ExprAST *filenames = call->getArgs();
-                comet_debug() << "\n";
-                std::string filenamestring;
-                llvm::StringRef filenamestr;
-                if (filenames == nullptr)
-                {
-                  comet_debug() << __LINE__ << " Empty filename\n";
-                  filenamestring = "SPARSE_FILE_NAME";
-                  filenamestr = filenamestring;
-                }
-                else
-                { // Not empty filename
-                  comet_debug() << __LINE__ << " An argument was provided in read_from_file().\n";
-
-                  // User will provide num arg in read_from_file()
-                  // that will be used to read file based on unique env vars.
-                  // e.g., read_from_file(0) --> SPARSE_FILE_NAME0
-                  if (filenames->getKind() == NumberExprAST::Expr_Num)
-                  {
-                    comet_debug() << __LINE__ << "\n";
-                    auto *filenameast = llvm::cast<NumberExprAST>(filenames);
-                    comet_debug() << __LINE__ << "\n";
-
-                    // get arg val
-                    int val = (int)cast<NumberExprAST>(filenameast)->getValue();
-                    filenamestring = "SPARSE_FILE_NAME" + std::to_string(val);
-                    filenamestr = filenamestring;
-
-                    comet_debug() << " " << filenamestr << "\n";
-                  }
-
-                  if (filenames->getKind() == ExprAST::ExprASTKind::Expr_Var)
-                  {
-                    comet_debug() << __LINE__ << "\n";
-                    auto *filenameast = llvm::cast<VariableExprAST>(filenames);
-                    comet_debug() << __LINE__ << "\n";
-
-                    filenamestr = filenameast->getName();
-                    comet_debug() << " " << filenamestr << "\n";
-                  }
-                }
-
-                bool lower, upper;
-                if (callee == "read_lowerTri_from_file")
-                {
-                  lower = true;
-                  upper = false;
-                }
-                else if (callee == "read_upperTri_from_file")
-                {
-                  lower = false;
-                  upper = true;
-                }
-                else
-                {
-                  lower = false;
-                  upper = false;
-                }
-
-                if (mlir::failed(mlirGenTensorFillFromFile(loc(tensor_op->loc()), tensor_name, filenamestr, lower, upper)))
-                  return mlir::success();
-              }
               if (callee == "random")
               {
                 comet_debug() << " call random \n";
@@ -2059,8 +2094,11 @@ namespace
                 if (mlir::failed(mlirGenTensorFillRandom(loc(tensor_op->loc()), tensor_name)))
                   return mlir::success();
               }
+              // TODO: put check here, if the user mis-spells something...
+
               continue;
             }
+
             /// A[i,j] = transpose(B[j,i], {i,j})
             else if (tensor_op->getRHS()->getKind() == ExprAST::ExprASTKind::Expr_Transpose)
             {
@@ -2573,17 +2611,12 @@ namespace
 
     mlir::LogicalResult mlirGenTensorFillFromFile(mlir::Location loc,
                                                   StringRef tensor_name, StringRef filename,
-                                                  bool lower, bool upper)
+                                                  int readMode)
     {
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
-      mlir::StringAttr filenameAttr = builder.getStringAttr(filename);
-
-      if (lower && !upper)
-        builder.create<TensorLowerTriFillFromFileOp>(loc, tensorValue, filenameAttr);
-      else if (upper && !lower)
-        builder.create<TensorUpperTriFillFromFileOp>(loc, tensorValue, filenameAttr);
-      else // standard read_from_file
-        builder.create<TensorFillFromFileOp>(loc, tensorValue, filenameAttr);
+      mlir::StringAttr filenameAttr = builder.getStringAttr(filename); 
+      mlir::IntegerAttr readModeAttr = builder.getI32IntegerAttr(readMode); 
+      builder.create<TensorFillFromFileOp>(loc, tensorValue, filenameAttr, readModeAttr);
 
       return mlir::success();
     }

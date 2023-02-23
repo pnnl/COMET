@@ -18,8 +18,8 @@ def main() {
 	Tensor<double> B([d, e, f], CSF);
 
     #Tensor Readfile Operation      
-    A[a, b, c] = read_from_file(0);
-    B[d, e, f] = read_from_file(1);
+    A[a, b, c] = comet_read(0);
+    B[d, e, f] = comet_read(1);
 
     print(A);
 	print(B);

@@ -15,7 +15,7 @@ def main() {
 	Tensor<double> B([k, i, j], CSF);
 
     #Tensor Readfile Operation      
-    A[i, j, k] = read_from_file(0);
+    A[i, j, k] = comet_read(0);
 
 	#Tensor Transpose
 	B[k, i, j] = transpose(A[i, j, k],{k, i, j});

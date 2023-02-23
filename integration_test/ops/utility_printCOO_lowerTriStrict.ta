@@ -1,7 +1,7 @@
-# RUN: comet-opt --convert-to-loops %s &> utility_printCOO_upperTri.mlir
-# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm utility_printCOO_upperTri.mlir &> utility_printCOO_upperTri.llvm
+# RUN: comet-opt --convert-to-loops %s &> utility_printCOO_lowerTriStrict.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm utility_printCOO_lowerTriStrict.mlir &> utility_printCOO_lowerTriStrict.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
-# RUN: mlir-cpu-runner utility_printCOO_upperTri.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner utility_printCOO_lowerTriStrict.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {
 	#IndexLabel Declarations
@@ -12,7 +12,7 @@ def main() {
 	Tensor<double> A([i, j], {COO});	  
 
 	#Tensor Fill Operation
-	A[i, j] = comet_read(0, 5); # UPPER_TRI
+	A[i, j] = comet_read(0, 2);  # LOWER_TRI_STRICT
 	
 	print(A);
 }
@@ -21,12 +21,12 @@ def main() {
 # data = -1 means that no data needed for this array 
 # Look at the following paper - https://arxiv.org/pdf/2102.05187.pdf - for the internal tensor storage format details.
 # CHECK: data = 
-# CHECK-NEXT: 0,7,
+# CHECK-NEXT: 0,2,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 0,0,1,1,2,3,4,
+# CHECK-NEXT: 3,4,
 # CHECK-NEXT: data = 
 # CHECK-NEXT: -1,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 0,3,1,4,2,3,4,
+# CHECK-NEXT: 0,1,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 1,1.4,2,2.5,3,4,5,
+# CHECK-NEXT: 4.1,5.2,
