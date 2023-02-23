@@ -31,8 +31,8 @@ def main() {
 
 
     #Tensor Data Initialization
-    U[i, j] = comet_read(0, 4);  # UPPER_TRI_STRICT
-    A[i, k] = comet_read(0, 4);
+    U1[i, j] = comet_read(0, 4);  # UPPER_TRI_STRICT
+    U2[i, k] = comet_read(0, 4);
     L[k, j] = comet_read(0, 2);  # LOWER_TRI_STRICT
 
     # Sandia_ULT method: ntri = sum (sum ((U * L') .* U)).  Note that U=L'.
