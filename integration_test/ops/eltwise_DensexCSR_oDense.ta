@@ -16,7 +16,7 @@ def main() {
 
     #Tensor Readfile Operation
     A[a, b] = 2.7;
-	B[a, b] = read_from_file(0);
+	B[a, b] = comet_read(0);
 
 	#Initialize output dense tensor
 	C[a, b] = 0.0;

@@ -629,29 +629,7 @@ def TensorFillFromFileOp : TA_Op<"fill_from_file", [NoSideEffect]>{
   let description = [{
   }];
 
-  let arguments = (ins TA_AnyTensor:$lhs, AnyAttr:$filename);
-  let verifier = ?;
-  
-}
-
-// read lower triangle part from file
-def TensorLowerTriFillFromFileOp : TA_Op<"fill_lowerTri_from_file", [NoSideEffect]>{
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins TA_AnyTensor:$lhs, AnyAttr:$filename);
-  let verifier = ?;
-  
-}
-
-// read upper triangle part from file
-def TensorUpperTriFillFromFileOp : TA_Op<"fill_upperTri_from_file", [NoSideEffect]>{
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins TA_AnyTensor:$lhs, AnyAttr:$filename);
+  let arguments = (ins TA_AnyTensor:$lhs, AnyAttr:$filename, AnyAttr:$readMode);
   let verifier = ?;
   
 }
