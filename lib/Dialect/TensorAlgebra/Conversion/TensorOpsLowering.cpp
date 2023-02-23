@@ -102,7 +102,7 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
       comet_debug() << "ConstantOpLowering starts\n";
-      auto module = op->getParentOfType<ModuleOp>();
+      //auto module = op->getParentOfType<ModuleOp>();
       DenseElementsAttr constantValue = op.value();
       Location loc = op.getLoc();
 
@@ -210,7 +210,7 @@ namespace
     LogicalResult matchAndRewrite(tensorAlgebra::AddOp op,
                                   PatternRewriter &rewriter) const final
     {
-      auto module = op->getParentOfType<ModuleOp>();
+      //auto module = op->getParentOfType<ModuleOp>();
       comet_debug() << "TensorAdditionLowering starts\n";
       Location loc = op.getLoc();
       Value lhs = op.lhs();
@@ -792,7 +792,7 @@ namespace
       assert(isa<tensorAlgebra::ScalarOp>(op));
       comet_debug() << "ScalarOpsLowering starts\n";
 
-      auto module = op->getParentOfType<ModuleOp>();
+      //auto module = op->getParentOfType<ModuleOp>();
 
       // Scalar operation could be between
       //  1. two tensors (size of 1) and the output with a tensor of size 1
