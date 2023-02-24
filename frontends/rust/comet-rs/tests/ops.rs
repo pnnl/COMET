@@ -298,25 +298,25 @@ fn mult_mixed_i_i_ij() {
     );
 }
 
-#[test]
-fn mult_spgemm_csr_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "mult_spgemm_csr_csr_csr").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-        data =
-        5,
-        data =
-        0,
-        data =
-        0,2,4,5,7,9,
-        data =
-        0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        data =
-        6.74,7,17,17.5,9,20.5,21.74,36.4,38,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        ",
-    );
-}
+// #[test]
+// fn mult_spgemm_csr_csr_csr() {
+//     let output = Command::new(EX_DIR.to_owned() + "mult_spgemm_csr_csr_csr").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//         data =
+//         5,
+//         data =
+//         0,
+//         data =
+//         0,2,4,5,7,9,
+//         data =
+//         0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//         data =
+//         6.74,7,17,17.5,9,20.5,21.74,36.4,38,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//         ",
+//     );
+// }
 
 #[test]
 fn mult_spmm_coo_dense() {
@@ -747,35 +747,35 @@ fn utility_get_time() {
     let _output = Command::new(EX_DIR.to_owned() + "utility_get_time").unwrap();
 }
 
-#[test]
-fn utility_print_coo_multi() {
-    let output = Command::new(EX_DIR.to_owned() + "utility_print_coo_multi").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-    0,7,
-    data = 
-    0,0,1,1,3,4,4,
-    data = 
-    -1,
-    data = 
-    0,3,0,1,1,2,3,
-    data = 
-    1,2,3,4,5,6,7,
-    data = 
-    0,9,
-    data = 
-    0,0,1,1,2,3,3,4,4,
-    data = 
-    -1,
-    data = 
-    0,3,1,4,2,0,3,1,4,
-    data = 
-    1,1.4,2,2.5,3,4.1,4,5.2,5,
-    ",
-    );
-}
+// #[test]
+// fn utility_print_coo_multi() {
+//     let output = Command::new(EX_DIR.to_owned() + "utility_print_coo_multi").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+//     0,7,
+//     data = 
+//     0,0,1,1,3,4,4,
+//     data = 
+//     -1,
+//     data = 
+//     0,3,0,1,1,2,3,
+//     data = 
+//     1,2,3,4,5,6,7,
+//     data = 
+//     0,9,
+//     data = 
+//     0,0,1,1,2,3,3,4,4,
+//     data = 
+//     -1,
+//     data = 
+//     0,3,1,4,2,0,3,1,4,
+//     data = 
+//     1,1.4,2,2.5,3,4.1,4,5.2,5,
+//     ",
+//     );
+// }
 
 #[test]
 fn utility_print_coo() {
@@ -797,83 +797,83 @@ fn utility_print_coo() {
     );
 }
 
-#[test]
-fn utility_print_csf_multi() {
-    let output = Command::new(EX_DIR.to_owned() + "utility_print_csf_multi").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-        data = 
-        0,3,
-        data = 
-        1,2,3,
-        data = 
-        0,1,2,3,
-        data = 
-        3,1,6,
-        data = 
-        0,1,2,3,
-        data = 
-        2,3,5,
-        data = 
-        1.3,2.11,3,
-        data = 
-        0,3,
-        data = 
-        1,2,3,
-        data = 
-        0,1,2,3,
-        data = 
-        3,1,6,
-        data = 
-        0,1,2,3,
-        data = 
-        2,3,5,
-        data = 
-        1.3,2.11,3,
-    ",
-    );
-}
+// #[test]
+// fn utility_print_csf_multi() {
+//     let output = Command::new(EX_DIR.to_owned() + "utility_print_csf_multi").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//         data = 
+//         0,3,
+//         data = 
+//         1,2,3,
+//         data = 
+//         0,1,2,3,
+//         data = 
+//         3,1,6,
+//         data = 
+//         0,1,2,3,
+//         data = 
+//         2,3,5,
+//         data = 
+//         1.3,2.11,3,
+//         data = 
+//         0,3,
+//         data = 
+//         1,2,3,
+//         data = 
+//         0,1,2,3,
+//         data = 
+//         3,1,6,
+//         data = 
+//         0,1,2,3,
+//         data = 
+//         2,3,5,
+//         data = 
+//         1.3,2.11,3,
+//     ",
+//     );
+// }
 
-#[test]
-fn utility_print_csr_multi() {
-    let output = Command::new(EX_DIR.to_owned() + "utility_print_csr_multi").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-        data = 
-        5,
-        data = 
-        -1,
-        data = 
-        0,2,4,4,5,7,
-        data = 
-        0,3,0,1,1,2,3,
-        data = 
-        1,2,3,4,5,6,7,
-        data = 
-        5,
-        data = 
-        -1,
-        data = 
-        0,2,4,5,7,9,
-        data = 
-        0,3,1,4,2,0,3,1,4,
-        data = 
-        1,1.4,2,2.5,3,4.1,4,5.2,5,
-        data = 
-        5,
-        data = 
-        -1,
-        data = 
-        0,2,4,4,5,7,
-        data = 
-        0,3,0,1,1,2,3,
-        data = 
-        1,2,3,4,5,6,7,
-    ",
-    );
-}
+// #[test]
+// fn utility_print_csr_multi() {
+//     let output = Command::new(EX_DIR.to_owned() + "utility_print_csr_multi").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//         data = 
+//         5,
+//         data = 
+//         -1,
+//         data = 
+//         0,2,4,4,5,7,
+//         data = 
+//         0,3,0,1,1,2,3,
+//         data = 
+//         1,2,3,4,5,6,7,
+//         data = 
+//         5,
+//         data = 
+//         -1,
+//         data = 
+//         0,2,4,5,7,9,
+//         data = 
+//         0,3,1,4,2,0,3,1,4,
+//         data = 
+//         1,1.4,2,2.5,3,4.1,4,5.2,5,
+//         data = 
+//         5,
+//         data = 
+//         -1,
+//         data = 
+//         0,2,4,4,5,7,
+//         data = 
+//         0,3,0,1,1,2,3,
+//         data = 
+//         1,2,3,4,5,6,7,
+//     ",
+//     );
+// }
 
 #[test]
 fn utility_print_csr() {

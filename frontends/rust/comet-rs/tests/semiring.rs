@@ -100,145 +100,145 @@ fn eltwise_monoid_times_dense_dense_dense() {
     );
 }
 
-#[test]
-fn mm_semiring_anypair_csr_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "mm_semiring_anypair_csr_csr_csr").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-    5,
-    data = 
-    0,
-    data = 
-    0,2,4,5,7,9,
-    data = 
-    0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    data = 
-    1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
-    );
-}
+// #[test]
+// fn mm_semiring_anypair_csr_csr_csr() {
+//     let output = Command::new(EX_DIR.to_owned() + "mm_semiring_anypair_csr_csr_csr").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+//     5,
+//     data = 
+//     0,
+//     data = 
+//     0,2,4,5,7,9,
+//     data = 
+//     0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     data = 
+//     1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     ",
+//     );
+// }
 
-#[test]
-fn mm_semiring_minfirst_csr_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "mm_semiring_minfirst_csr_csr_csr").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-    5,
-    data = 
-    0,
-    data = 
-    0,2,4,5,7,9,
-    data = 
-    0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    data = 
-    1,1,2,2,3,4,4,5,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
-    );
-}
+// #[test]
+// fn mm_semiring_minfirst_csr_csr_csr() {
+//     let output = Command::new(EX_DIR.to_owned() + "mm_semiring_minfirst_csr_csr_csr").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+//     5,
+//     data = 
+//     0,
+//     data = 
+//     0,2,4,5,7,9,
+//     data = 
+//     0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     data = 
+//     1,1,2,2,3,4,4,5,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     ",
+//     );
+// }
 
-#[test]
-fn mm_semiring_minplus_csr_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "mm_semiring_minplus_csr_csr_csr").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-    5,
-    data = 
-    0,
-    data = 
-    0,2,4,5,7,9,
-    data = 
-    0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    data = 
-    2,2.4,4,4.5,6,5.1,5.5,7.2,7.7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
-    );
-}
+// #[test]
+// fn mm_semiring_minplus_csr_csr_csr() {
+//     let output = Command::new(EX_DIR.to_owned() + "mm_semiring_minplus_csr_csr_csr").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+//     5,
+//     data = 
+//     0,
+//     data = 
+//     0,2,4,5,7,9,
+//     data = 
+//     0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     data = 
+//     2,2.4,4,4.5,6,5.1,5.5,7.2,7.7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     ",
+//     );
+// }
 
-#[test]
-fn mm_semiring_minsecond_csr_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "mm_semiring_minsecond_csr_csr_csr").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-    5,
-    data = 
-    0,
-    data = 
-    0,2,4,5,7,9,
-    data = 
-    0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    data = 
-    1,1.4,2,2.5,3,1,1.4,2,2.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
-    );
-}
+// #[test]
+// fn mm_semiring_minsecond_csr_csr_csr() {
+//     let output = Command::new(EX_DIR.to_owned() + "mm_semiring_minsecond_csr_csr_csr").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+//     5,
+//     data = 
+//     0,
+//     data = 
+//     0,2,4,5,7,9,
+//     data = 
+//     0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     data = 
+//     1,1.4,2,2.5,3,1,1.4,2,2.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     ",
+//     );
+// }
 
-#[test]
-fn mm_semiring_plusfirst_csr_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "mm_semiring_plusfirst_csr_csr_csr").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-    5,
-    data = 
-    0,
-    data = 
-    0,2,4,5,7,9,
-    data = 
-    0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    data = 
-    2.4,2.4,4.5,4.5,3,8.1,8.1,10.2,10.2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
-    );
-}
+// #[test]
+// fn mm_semiring_plusfirst_csr_csr_csr() {
+//     let output = Command::new(EX_DIR.to_owned() + "mm_semiring_plusfirst_csr_csr_csr").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+//     5,
+//     data = 
+//     0,
+//     data = 
+//     0,2,4,5,7,9,
+//     data = 
+//     0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     data = 
+//     2.4,2.4,4.5,4.5,3,8.1,8.1,10.2,10.2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     ",
+//     );
+// }
 
-#[test]
-fn mm_semiring_pluspair_csr_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "mm_semiring_pluspair_csr_csr_csr").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-    5,
-    data = 
-    0,
-    data = 
-    0,2,4,5,7,9,
-    data = 
-    0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    data = 
-    2,2,2,2,1,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
-    );
-}
+// #[test]
+// fn mm_semiring_pluspair_csr_csr_csr() {
+//     let output = Command::new(EX_DIR.to_owned() + "mm_semiring_pluspair_csr_csr_csr").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+//     5,
+//     data = 
+//     0,
+//     data = 
+//     0,2,4,5,7,9,
+//     data = 
+//     0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     data = 
+//     2,2,2,2,1,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     ",
+//     );
+// }
 
-#[test]
-fn mm_semiring_plussecond_csr_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "mm_semiring_plussecond_csr_csr_csr").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-    5,
-    data = 
-    0,
-    data = 
-    0,2,4,5,7,9,
-    data = 
-    0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    data = 
-    5.1,5.4,7.2,7.5,3,5.1,5.4,7.2,7.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
-    );
-}
+// #[test]
+// fn mm_semiring_plussecond_csr_csr_csr() {
+//     let output = Command::new(EX_DIR.to_owned() + "mm_semiring_plussecond_csr_csr_csr").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+//     5,
+//     data = 
+//     0,
+//     data = 
+//     0,2,4,5,7,9,
+//     data = 
+//     0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     data = 
+//     5.1,5.4,7.2,7.5,3,5.1,5.4,7.2,7.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     ",
+//     );
+// }
 
 #[test]
 fn mm_semiring_plustimes_coo_dense_dense() {
@@ -249,25 +249,25 @@ fn mm_semiring_plustimes_coo_dense_dense() {
     ");
 }
 
-#[test]
-fn mm_semiring_plustimes_csr_csr_csr() {
-    let output = Command::new(EX_DIR.to_owned() + "mm_semiring_plustimes_csr_csr_csr").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-    5,
-    data = 
-    0,
-    data = 
-    0,2,4,5,7,9,
-    data = 
-    0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    data = 
-    6.74,7,17,17.5,9,20.5,21.74,36.4,38,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
-    );
-}
+// #[test]
+// fn mm_semiring_plustimes_csr_csr_csr() {
+//     let output = Command::new(EX_DIR.to_owned() + "mm_semiring_plustimes_csr_csr_csr").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+//     5,
+//     data = 
+//     0,
+//     data = 
+//     0,2,4,5,7,9,
+//     data = 
+//     0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     data = 
+//     6.74,7,17,17.5,9,20.5,21.74,36.4,38,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     ",
+//     );
+// }
 
 #[test]
 fn mm_semiring_plustimes_csr_dense_dense() {

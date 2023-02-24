@@ -7,13 +7,14 @@ use syn::parse::discouraged::Speculative;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::spanned::Spanned;
 use syn::{parenthesized, Token};
-use syn::{Error, Ident, Lit, LitStr};
+use syn::{Error, Ident, Lit, LitStr, LitInt};
 
 #[derive(Debug, Clone)]
 pub(crate) struct TensorStruct {
     pub(crate) name: Ident,
     pub(crate) ty: Ident, //we could store the Type but im not sure it actually buys us anything, and would be more complicated to work with
     pub(crate) format: TensorFormat,
+    pub(crate) temporal: bool,
     pub(crate) indices: IndicesList,
     pub(crate) fill: TensorFill,
     pub(crate) mutable: bool,
@@ -184,10 +185,11 @@ impl TensorStruct {
             }
             _ => {
                 res = format!(
-                    "%{} = \"ta.sparse_tensor_decl\"({}) {{format = \"{}\"}} : ({}) -> {}\n",
+                    "%{} = \"ta.sparse_tensor_decl\"({}) {{format = \"{}\", temporal_tensor = {}}} : ({}) -> {}\n",
                     self.mlir_id,
                     ids,
                     self.format,
+                    self.temporal,
                     &ta_range[0..ta_range.len() - 2],
                     dims
                 );
@@ -278,7 +280,7 @@ impl TensorStruct {
                     abort!(f.span(), "sparse tensors cannot be filled from a constant");
                 }
             }
-            TensorFill::FillFromFile(val,env) => {
+            TensorFill::FillFromFile(val,env,_) => {
                 if format == TensorFormat::Dense {
                     abort!(val.span(), "Dense tensors cannot be filled from file");
                 }
@@ -292,6 +294,7 @@ impl TensorStruct {
             name: name,
             ty: ty,
             format: format,
+            temporal: false,
             indices: indices,
             fill: fill,
             mutable: mutable,
@@ -311,7 +314,7 @@ impl TensorStruct {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum TensorFill {
     Fill(Lit),
-    FillFromFile(LitStr,String),
+    FillFromFile(LitStr,String,LitInt),
     None,
 }
 
@@ -335,12 +338,13 @@ impl TensorFill {
                     ty.to_string()
                 )
             }
-            TensorFill::FillFromFile(_,envar) => {
+            TensorFill::FillFromFile(_,envar,mode) => {
                 format!(
-                    "{}fill_from_file\"(%{}) {{filename = \"{}\"}}",
+                    "{}fill_from_file\"(%{}) {{filename = \"{}\", readMode = {} : i32}}",
                     res,
                     mlir_id,
-                    envar
+                    envar,
+                    mode.to_string(),
                 )
             }
             TensorFill::None => {
@@ -352,7 +356,7 @@ impl TensorFill {
     pub(crate) fn span(&self) -> Span {
         match self {
             TensorFill::Fill(lit) => lit.span(),
-            TensorFill::FillFromFile(litstr,_) => litstr.span(),
+            TensorFill::FillFromFile(litstr,_,_) => litstr.span(),
             TensorFill::None => Span::call_site(),
         }
     }
@@ -368,11 +372,19 @@ impl Parse for TensorFill {
                 input.advance_to(&fork);
                 Ok(TensorFill::Fill(content.parse::<Lit>()?))
             }
-            "fill_from_file" => {
+            "load" => {
                 let content;
                 parenthesized!(content in fork);
                 input.advance_to(&fork);
-                Ok(TensorFill::FillFromFile(content.parse::<LitStr>()?,String::new()))
+                let file = content.parse::<LitStr>()?;
+                let mode = if content.peek(Token![,]) {
+                    content.parse::<Token![,]>()?;
+                    content.parse::<LitInt>()?
+                }
+                else {
+                    syn::LitInt::new("1",file.span())
+                };
+                Ok(TensorFill::FillFromFile(file,String::new(),mode))
             }
             _ => Err(Error::new(input.span(), "invalid fill")),
         }
