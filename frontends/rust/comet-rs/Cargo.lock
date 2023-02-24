@@ -50,7 +50,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "comet-rs"
-version = "0.1.1-rc1"
+version = "0.1.1-rc2"
 dependencies = [
  "assert_cmd",
  "comet-rs-impl",
@@ -63,7 +63,7 @@ dependencies = [
 
 [[package]]
 name = "comet-rs-impl"
-version = "0.1.1-rc1"
+version = "0.1.1-rc2"
 dependencies = [
  "itertools",
  "proc-macro-error",

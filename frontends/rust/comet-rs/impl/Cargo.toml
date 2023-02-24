@@ -1,6 +1,6 @@
 [package]
 name = "comet-rs-impl"
-version = "0.1.1-rc1"
+version = "0.1.1-rc2"
 authors = ["Ryan D. Friese <ryan.friese@pnnl.gov>", "Gokcen Kestor <gokcen.kestor@pnnl.gov>"]
 edition = "2021"
 description = "Rust eDSL for COMET: domain specific COMpiler for Extreme Targets"
