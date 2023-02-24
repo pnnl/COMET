@@ -3,7 +3,7 @@ comet_rs::comet_fn! { sum_csf, {
     let j = Index::new();
     let k = Index::new();
 
-    let A = Tensor::<f64>::csf([i, j, k]).fill_from_file("../../../integration_test/data/test_rank3.tns");
+    let A = Tensor::<f64>::csf([i, j, k]).load("../../../integration_test/data/test_rank3.tns");
     let a = A.sum();
     a.print();
 }}

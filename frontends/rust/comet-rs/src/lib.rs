@@ -135,7 +135,7 @@ use comet_rs_impl;
 ///    let i = Index::new();
 ///    let j = Index::new();
 ///
-///    let A = Tensor::<f64>::coo([i, j]).fill_from_file("../../../integration_test/data/test.mtx");
+///    let A = Tensor::<f64>::coo([i, j]).load("../../../integration_test/data/test.mtx");
 ///    let a = A.sum();
 ///    a.print();
 ///}}

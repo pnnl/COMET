@@ -115,7 +115,7 @@ impl CometUnary {
             CometUnaryOp::Sum => {
                 if let Some(imm_scalar) = self.imm_expr.scalar() {
                     let res = format!(
-                        "%{} = \"ta.sum\"(%{}) : ({}) -> {}\n\n",
+                        "%{} = \"ta.reduce\"(%{}) : ({}) -> {}\n\n",
                         imm_scalar.mlir_id, tensor.mlir_id, src_dims, tensor.ty
                     );
                     Ok(res)

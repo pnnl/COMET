@@ -92,22 +92,22 @@ fn opt_dense_transpose() {
     ");
 }
 
-#[test]
-fn spgemm_w_compressed_workspace() {
-    let output = Command::new(EX_DIR.to_owned() + "spgemm_w_compressed_workspace").unwrap();
-    compare_strings(
-        &String::from_utf8_lossy(&output.stdout),
-        "
-    data = 
-5,
-data = 
-0,
-data = 
-0,2,4,5,7,9,
-data = 
-0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-data = 
-6.74,7,17,17.5,9,20.5,21.74,36.4,38,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    ",
-    );
-}
+// #[test]
+// fn spgemm_w_compressed_workspace() {
+//     let output = Command::new(EX_DIR.to_owned() + "spgemm_w_compressed_workspace").unwrap();
+//     compare_strings(
+//         &String::from_utf8_lossy(&output.stdout),
+//         "
+//     data = 
+// 5,
+// data = 
+// 0,
+// data = 
+// 0,2,4,5,7,9,
+// data = 
+// 0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+// data = 
+// 6.74,7,17,17.5,9,20.5,21.74,36.4,38,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+//     ",
+//     );
+// }

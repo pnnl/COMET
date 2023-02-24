@@ -3,15 +3,17 @@ comet_rs::comet_fn! { mult_spgemm_csr_csr_csr, {
     let b = Index::new();
     let c = Index::new();
 
-    let A = Tensor::<f64>::csr([a, b]).fill_from_file("../../../integration_test/data/test_rank2.mtx");
-    let B = Tensor::<f64>::csr([b, c]).fill_from_file("../../../integration_test/data/test_rank2.mtx");
+    let A = Tensor::<f64>::csr([a, b]).load("/home/frie869/projects/COMET/integration_test/data/test_rank2.mtx");
+    let B = Tensor::<f64>::csr([b, c]).load("/home/frie869/projects/COMET/integration_test/data/test_rank2copy.mtx"); 
     let C = Tensor::<f64>::csr([a, c]);
     C = A * B;
     C.print();
-}}
+} 
+MlirOption::[ConvertScfToStd,ConvertStdToLlvm]
+}
 
 fn main() {
-    mult_spgemm_csr_csr_csr();
+    mult_spgemm_csr_csr_csr(); 
 }
 
 

@@ -153,6 +153,7 @@ fn create_lib(func_name: &str, mlir_str: &str, comet_opts: Vec<CometOption>, mli
 
     let obj_file = base_filepath.clone().with_extension("comet.o");
     let _status = Command::new(mlir_bin.clone().join("llc"))
+        .arg("-O3")
         .arg(bc_file.to_str().unwrap())
         .arg("-o")
         .arg(obj_file.to_str().unwrap())
@@ -521,7 +522,7 @@ impl Parse for CometFn {
                 opt_comp_workspace = false;
             }
 
-            if let TensorFill::FillFromFile(val,env) = &tensor.fill {
+            if let TensorFill::FillFromFile(val,env,_) = &tensor.fill {
                 // let stmt = syn::parse_str( &format!("std::env::set_var({},{});\n",env,val.value())).unwrap();
                 let p = val.value();
                 sparse_env.extend(quote!{std::env::set_var( #env, #p );});
@@ -576,6 +577,7 @@ impl Parse for CometFn {
 #[proc_macro_error]
 #[proc_macro]
 pub fn comet_fn(input: TokenStream) -> TokenStream {
+
     let func = parse_macro_input!(input as CometFn);
 
     let name = func.name;
@@ -608,7 +610,7 @@ pub fn comet_fn(input: TokenStream) -> TokenStream {
         CometResult::Failure(msg) =>{
             quote! {
                 fn #name(){
-                    println!("ERROR: {}",#msg);
+                    println!("COMET-RS ERROR: {}",#msg);
                 }
             }
             .into()

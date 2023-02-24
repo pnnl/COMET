@@ -154,9 +154,9 @@ impl IndexStruct {
                 "{}%c{}{} = constant {}: index\n",
                 res, self.mlir_id, val, val
             );
-            format!("{}%{} = \"ta.index_label_static\"(%c{}{}, %c{}{}, %c{}{}) : (index, index, index) -> !ta.range\n\n",res, self.mlir_id, self.mlir_id, 0, self.mlir_id, val, self.mlir_id,1)
+            format!("{}%{} = \"ta.static_index_label\"(%c{}{}, %c{}{}, %c{}{}) : (index, index, index) -> !ta.range\n\n",res, self.mlir_id, self.mlir_id, 0, self.mlir_id, val, self.mlir_id,1)
         } else {
-            format!("{}%{} = \"ta.index_label_dynamic\"(%c{}{}, %c{}{}) : (index, index) -> !ta.range\n\n",
+            format!("{}%{} = \"ta.dynamic_index_label\"(%c{}{}, %c{}{}) : (index, index) -> !ta.range\n\n",
                     res, self.mlir_id, self.mlir_id, 0, self.mlir_id,1)
         }
     }
