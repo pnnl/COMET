@@ -15,7 +15,7 @@ categories = ["compilers","hardware-support","science"]
 
 [dependencies]
 num-traits = "0.2"
-comet-rs-impl = {version = "0.1.0", path="impl" }
+comet-rs-impl = {version = "0.1.1-rc", path="impl" }
 rand = "0.8.0"
 libloading = "0.7"
 inventory = "0.2"
