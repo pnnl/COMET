@@ -65,7 +65,7 @@ fn create_lib(func_name: &str, mlir_str: &str, comet_opts: Vec<CometOption>, mli
         comet_base.clone().join("llvm/build/bin")
     };
     if !mlir_bin.exists(){
-        panic!("Cannot find mlir-opt at {}\n Please set the MLIR_OPT_DIR envrionement variable to the directory containing the mlir-opt binary", mlir_bin.display())
+        panic!("Cannot find mlir-opt at {}\n Please set the MLIR_BIN_DIR envrionement variable to the directory containing the mlir-opt binary", mlir_bin.display())
     }
 
     let mlir_lib = if let Ok(dir) = env::var("MLIR_LIB_DIR"){
