@@ -153,9 +153,9 @@ struct CooMatrix
 
     if (coo_tuples)
     {
-      fprintf(stderr, "ERROR: Matrix already constructed (abrupt exit)!\n");
+      //fprintf(stderr, "ERROR: Matrix already constructed (abrupt exit)!\n");
       // updated code should avoid coming to this path
-      exit(1);
+      return;
     }
 
     std::ifstream ifs;
