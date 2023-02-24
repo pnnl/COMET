@@ -1,0 +1,29 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> mult_dense_matrix.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm mult_dense_matrix.mlir &> mult_dense_matrix.llvm
+# RUN: mlir-cpu-runner mult_dense_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+
+def main() {
+    #IndexLabel Declarations
+    IndexLabel [a] = [312];
+    IndexLabel [c] = [296];
+    IndexLabel [b] = [312];
+    IndexLabel [d] = [312];
+
+    #Tensor Declarations
+    Tensor<double> A([d, c, a], {Dense});
+    Tensor<double> B([b, d], {Dense});
+    Tensor<double> C([a, b, c], {Dense});
+
+    #Tensor Data Initialization
+    A[d, c, a] = 2.2;
+    B[b, d] = 3.4;
+    C[a, b, c] = 0.0;
+
+    #Tensor Contraction
+	var start = getTime();
+    C[a, b, c] = A[d, c, a] * B[b, d];
+	var end = getTime();
+	printElapsedTime(start, end);
+}
+
