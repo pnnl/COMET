@@ -21,9 +21,9 @@ def main() {
     C[a, b, c] = 0.0;
 
     #Tensor Contraction
-	var start = getTime();
+	var startTime = getTime();
     C[a, b, c] = A[d, c, a] * B[b, d];
-	var end = getTime();
-	printElapsedTime(start, end);
+    var endTime = getTime();
+	printElapsedTime(startTime, endTime);
 }
 
