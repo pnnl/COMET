@@ -1,0 +1,25 @@
+def main() {
+    #IndexLabel Declarations
+    IndexLabel [i] = [?];
+    IndexLabel [j] = [?];
+    IndexLabel [k] = [?];
+
+    #Tensor Declarations
+    Tensor<double> A1([i, j], {CSR});
+    Tensor<double> A2([j, k], {CSR});
+    Tensor<double> A3([i, k], {CSR});
+    Tensor<double> R([i, k], {CSR});
+
+    #Tensor Data Initialization
+    A1[i, j] = comet_read(0);
+    A2[i, k] = comet_read(0);  
+    A3[k, j] = comet_read(0); 
+
+ 
+    var startTime = getTime();
+    R[i,k] = (A1[i,j] * A2[j,k]) .* A3[i,k];
+    var endTime = getTime();
+	printElapsedTime(startTime, endTime);
+    var num = SUM(R[i,k]);
+    print(num);
+}
