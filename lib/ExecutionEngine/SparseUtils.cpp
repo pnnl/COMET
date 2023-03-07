@@ -1493,6 +1493,7 @@ struct FileReaderWrapper
       coo_3dtensor->Clear();
 
       // update the hashMap
+      delete coo_3dtensor;
       Coo3DTracking<T>.erase (ID);
     }
     else
@@ -1505,6 +1506,7 @@ struct FileReaderWrapper
       coo_matrix->Clear();
 
       // update the hashMap
+      delete coo_matrix;
       CooTracking<T>.erase (ID);
     }
   }
