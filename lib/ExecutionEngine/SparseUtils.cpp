@@ -1616,10 +1616,7 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
   {
     DcsrMatrix<T> dcsr_matrix(FileReader.coo_matrix);
     
-    int NumNonZeros = 0;
-    if (selected_matrix_read == DEFAULT)
-      NumNonZeros = dcsr_matrix.num_nonzeros;
-    else
+    if (selected_matrix_read != DEFAULT)
       assert(false && "unsupported matrix format (DCSR) for triangular reads.\n");
 
     desc_sizes->data[0] = dcsr_matrix.A1pos_size;
