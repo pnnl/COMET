@@ -33,7 +33,7 @@
 #include <iomanip>
 
 #include <random>
-
+#include <map>
 
 enum MatrixReadOption
 {
@@ -402,23 +402,23 @@ struct CsrMatrix
    * Initializer
    */
   void Init(
-      CooMatrix<T> &coo_matrix,
+      CooMatrix<T> *coo_matrix,
       int readMode, 
       bool verbose = false)
   {
-    num_rows = coo_matrix.num_rows;
-    num_cols = coo_matrix.num_cols;
-    num_nonzeros = coo_matrix.num_nonzeros;
-    num_nonzeros_lowerTri = coo_matrix.num_nonzeros_lowerTri;
-    num_nonzeros_upperTri = coo_matrix.num_nonzeros_upperTri;
-    num_nonzeros_lowerTri_strict = coo_matrix.num_nonzeros_lowerTri_strict;
-    num_nonzeros_upperTri_strict = coo_matrix.num_nonzeros_upperTri_strict;
+    num_rows = coo_matrix->num_rows;
+    num_cols = coo_matrix->num_cols;
+    num_nonzeros = coo_matrix->num_nonzeros;
+    num_nonzeros_lowerTri = coo_matrix->num_nonzeros_lowerTri;
+    num_nonzeros_upperTri = coo_matrix->num_nonzeros_upperTri;
+    num_nonzeros_lowerTri_strict = coo_matrix->num_nonzeros_lowerTri_strict;
+    num_nonzeros_upperTri_strict = coo_matrix->num_nonzeros_upperTri_strict;
 
     // Sort by rows, then columns
     if (verbose)
       printf("Ordering...");
     fflush(stdout);
-    std::stable_sort(coo_matrix.coo_tuples, coo_matrix.coo_tuples + num_nonzeros, CooComparatorRow());
+    std::stable_sort(coo_matrix->coo_tuples, coo_matrix->coo_tuples + num_nonzeros, CooComparatorRow());
     if (verbose)
       printf("done.");
     fflush(stdout);
@@ -456,8 +456,8 @@ struct CsrMatrix
     int curr_idx = 0;
     for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
     { 
-      int current_row = coo_matrix.coo_tuples[current_nz].row;
-      int current_col = coo_matrix.coo_tuples[current_nz].col;
+      int current_row = coo_matrix->coo_tuples[current_nz].row;
+      int current_col = coo_matrix->coo_tuples[current_nz].col;
 
       if ( ( (readMode == LOWER_TRI_STRICT) || (readMode == LOWER_TRI) ) && 
            (current_row > current_col) )
@@ -470,8 +470,8 @@ struct CsrMatrix
         }
         prev_row = current_row;
 
-        column_indices[curr_idx] = coo_matrix.coo_tuples[current_nz].col;
-        values[curr_idx] = coo_matrix.coo_tuples[current_nz].val;
+        column_indices[curr_idx] = coo_matrix->coo_tuples[current_nz].col;
+        values[curr_idx] = coo_matrix->coo_tuples[current_nz].val;
         curr_idx++;
       }
       else if ( ( (readMode == UPPER_TRI_STRICT) || (readMode == UPPER_TRI) ) && 
@@ -483,8 +483,8 @@ struct CsrMatrix
         }
         prev_row = current_row;
 
-        column_indices[curr_idx] = coo_matrix.coo_tuples[current_nz].col;
-        values[curr_idx] = coo_matrix.coo_tuples[current_nz].val;
+        column_indices[curr_idx] = coo_matrix->coo_tuples[current_nz].col;
+        values[curr_idx] = coo_matrix->coo_tuples[current_nz].val;
         curr_idx++;
       }
       else if ( ( (readMode == UPPER_TRI) || (readMode == LOWER_TRI) ) &&
@@ -496,8 +496,8 @@ struct CsrMatrix
         }
         prev_row = current_row;
 
-        column_indices[curr_idx] = coo_matrix.coo_tuples[current_nz].col;
-        values[curr_idx] = coo_matrix.coo_tuples[current_nz].val;
+        column_indices[curr_idx] = coo_matrix->coo_tuples[current_nz].col;
+        values[curr_idx] = coo_matrix->coo_tuples[current_nz].val;
         curr_idx++;
       }
       else if ( readMode == DEFAULT ) // standard matrix read
@@ -510,8 +510,8 @@ struct CsrMatrix
         }
         prev_row = current_row;
 
-        column_indices[curr_idx] = coo_matrix.coo_tuples[current_nz].col;
-        values[curr_idx] = coo_matrix.coo_tuples[current_nz].val;
+        column_indices[curr_idx] = coo_matrix->coo_tuples[current_nz].col;
+        values[curr_idx] = coo_matrix->coo_tuples[current_nz].val;
         curr_idx++;
       }
 
@@ -554,7 +554,7 @@ struct CsrMatrix
    * Constructor
    */
   CsrMatrix(
-      CooMatrix<T> &coo_matrix,
+      CooMatrix<T> *coo_matrix,
       int readMode,
       bool verbose = false)
   {
@@ -588,18 +588,18 @@ struct CscMatrix
    * Initializer
    */
   void Init(
-      CooMatrix<T> &coo_matrix,
+      CooMatrix<T> *coo_matrix,
       bool verbose = false)
   {
-    num_rows = coo_matrix.num_rows;
-    num_cols = coo_matrix.num_cols;
-    num_nonzeros = coo_matrix.num_nonzeros;
+    num_rows = coo_matrix->num_rows;
+    num_cols = coo_matrix->num_cols;
+    num_nonzeros = coo_matrix->num_nonzeros;
 
     // Sort by rows, then columns
     if (verbose)
       printf("Ordering...");
     fflush(stdout);
-    std::stable_sort(coo_matrix.coo_tuples, coo_matrix.coo_tuples + num_nonzeros, CooComparatorCol());
+    std::stable_sort(coo_matrix->coo_tuples, coo_matrix->coo_tuples + num_nonzeros, CooComparatorCol());
     if (verbose)
       printf("done.");
     fflush(stdout);
@@ -611,7 +611,7 @@ struct CscMatrix
     int prev_col = -1;
     for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_col = coo_matrix.coo_tuples[current_nz].col;
+      int current_col = coo_matrix->coo_tuples[current_nz].col;
 
       // Fill in cols up to and including the current col
       for (int col = prev_col + 1; col <= current_col; col++)
@@ -620,8 +620,8 @@ struct CscMatrix
       }
       prev_col = current_col;
 
-      row_indices[current_nz] = coo_matrix.coo_tuples[current_nz].row;
-      values[current_nz] = coo_matrix.coo_tuples[current_nz].val;
+      row_indices[current_nz] = coo_matrix->coo_tuples[current_nz].row;
+      values[current_nz] = coo_matrix->coo_tuples[current_nz].val;
     }
 
     // Fill out any trailing edgeless vertices (and the end-of-list element)
@@ -652,7 +652,7 @@ struct CscMatrix
    * Constructor
    */
   CscMatrix(
-      CooMatrix<T> &coo_matrix,
+      CooMatrix<T> *coo_matrix,
       bool verbose = false)
   {
     Init(coo_matrix, verbose);
@@ -695,18 +695,18 @@ struct DcsrMatrix
    * Initializer
    */
   void Init(
-      CooMatrix<T> &coo_matrix,
+      CooMatrix<T> *coo_matrix,
       bool verbose = false)
   {
-    num_rows = coo_matrix.num_rows;
-    num_cols = coo_matrix.num_cols;
-    num_nonzeros = coo_matrix.num_nonzeros;
+    num_rows = coo_matrix->num_rows;
+    num_cols = coo_matrix->num_cols;
+    num_nonzeros = coo_matrix->num_nonzeros;
 
     // Sort by rows, then columns
     if (verbose)
       printf("Ordering...");
     fflush(stdout);
-    std::stable_sort(coo_matrix.coo_tuples, coo_matrix.coo_tuples + num_nonzeros, CooComparatorRow());
+    std::stable_sort(coo_matrix->coo_tuples, coo_matrix->coo_tuples + num_nonzeros, CooComparatorRow());
     if (verbose)
       printf("done.");
     fflush(stdout);
@@ -720,7 +720,7 @@ struct DcsrMatrix
     int prev_row = -1;
     for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_row = coo_matrix.coo_tuples[current_nz].row;
+      int current_row = coo_matrix->coo_tuples[current_nz].row;
 
       // Fill in rows up to and including the current row
       if (current_row == prev_row)
@@ -736,8 +736,8 @@ struct DcsrMatrix
         prev_row = current_row;
       }
 
-      A2crd[A2crd_size++] = coo_matrix.coo_tuples[current_nz].col;
-      Aval[Aval_size++] = coo_matrix.coo_tuples[current_nz].val;
+      A2crd[A2crd_size++] = coo_matrix->coo_tuples[current_nz].col;
+      Aval[Aval_size++] = coo_matrix->coo_tuples[current_nz].val;
     }
 
     A2pos[A2pos_size++] = A2crd_size;
@@ -772,7 +772,7 @@ struct DcsrMatrix
    * Constructor
    */
   DcsrMatrix(
-      CooMatrix<T> &coo_matrix,
+      CooMatrix<T> *coo_matrix,
       bool verbose = false)
   {
     Init(coo_matrix, verbose);
@@ -1034,19 +1034,19 @@ struct Csf3DTensor
    * Initializer
    */
   void Init(
-      Coo3DTensor<T> &coo_3dtensor,
+      Coo3DTensor<T> *coo_3dtensor,
       bool verbose = false)
   {
-    num_index_i = coo_3dtensor.num_index_i;
-    num_index_j = coo_3dtensor.num_index_j;
-    num_index_k = coo_3dtensor.num_index_k;
-    num_nonzeros = coo_3dtensor.num_nonzeros;
+    num_index_i = coo_3dtensor->num_index_i;
+    num_index_j = coo_3dtensor->num_index_j;
+    num_index_k = coo_3dtensor->num_index_k;
+    num_nonzeros = coo_3dtensor->num_nonzeros;
 
     // Sort by rows, then columns
     if (verbose)
       printf("Ordering...");
     fflush(stdout);
-    std::stable_sort(coo_3dtensor.coo_3dtuples, coo_3dtensor.coo_3dtuples + num_nonzeros, Coo3DTensorComparator());
+    std::stable_sort(coo_3dtensor->coo_3dtuples, coo_3dtensor->coo_3dtuples + num_nonzeros, Coo3DTensorComparator());
     if (verbose)
       printf("done.");
     fflush(stdout);
@@ -1063,8 +1063,8 @@ struct Csf3DTensor
     int prev_index_j = -1;
     for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_index_i = coo_3dtensor.coo_3dtuples[current_nz].index_i;
-      int current_index_j = coo_3dtensor.coo_3dtuples[current_nz].index_j;
+      int current_index_i = coo_3dtensor->coo_3dtuples[current_nz].index_i;
+      int current_index_j = coo_3dtensor->coo_3dtuples[current_nz].index_j;
 
       if (current_index_j != prev_index_j)
       {
@@ -1101,8 +1101,8 @@ struct Csf3DTensor
         }
       }
 
-      A3crd[A3crd_size++] = coo_3dtensor.coo_3dtuples[current_nz].index_k;
-      Aval[Aval_size++] = coo_3dtensor.coo_3dtuples[current_nz].val;
+      A3crd[A3crd_size++] = coo_3dtensor->coo_3dtuples[current_nz].index_k;
+      Aval[Aval_size++] = coo_3dtensor->coo_3dtuples[current_nz].val;
     }
 
     A3pos[A3pos_size++] = A3crd_size;
@@ -1144,7 +1144,7 @@ struct Csf3DTensor
    * Constructor
    */
   Csf3DTensor(
-      Coo3DTensor<T> &coo_3dtensor,
+      Coo3DTensor<T> *coo_3dtensor,
       bool verbose = false)
   {
     Init(coo_3dtensor, verbose);
@@ -1192,19 +1192,19 @@ struct Mg3DTensor
    * Initializer
    */
   void Init(
-      Coo3DTensor<T> &coo_3dtensor,
+      Coo3DTensor<T> *coo_3dtensor,
       bool verbose = false)
   {
-    num_index_i = coo_3dtensor.num_index_i;
-    num_index_j = coo_3dtensor.num_index_j;
-    num_index_k = coo_3dtensor.num_index_k;
-    num_nonzeros = coo_3dtensor.num_nonzeros;
+    num_index_i = coo_3dtensor->num_index_i;
+    num_index_j = coo_3dtensor->num_index_j;
+    num_index_k = coo_3dtensor->num_index_k;
+    num_nonzeros = coo_3dtensor->num_nonzeros;
 
     // Sort by rows, then columns
     if (verbose)
       printf("Ordering...");
     fflush(stdout);
-    std::stable_sort(coo_3dtensor.coo_3dtuples, coo_3dtensor.coo_3dtuples + num_nonzeros, Coo3DTensorComparator());
+    std::stable_sort(coo_3dtensor->coo_3dtuples, coo_3dtensor->coo_3dtuples + num_nonzeros, Coo3DTensorComparator());
     if (verbose)
       printf("done.");
     fflush(stdout);
@@ -1215,8 +1215,8 @@ struct Mg3DTensor
     int alloc_prev_index_j = -1;
     for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_index_i = coo_3dtensor.coo_3dtuples[current_nz].index_i;
-      int current_index_j = coo_3dtensor.coo_3dtuples[current_nz].index_j;
+      int current_index_i = coo_3dtensor->coo_3dtuples[current_nz].index_i;
+      int current_index_j = coo_3dtensor->coo_3dtuples[current_nz].index_j;
 
       if (current_index_i != alloc_prev_index_i || current_index_j != alloc_prev_index_j)
       {
@@ -1239,10 +1239,10 @@ struct Mg3DTensor
     int prev_index_j = -1;
     for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_index_i = coo_3dtensor.coo_3dtuples[current_nz].index_i;
-      int current_index_j = coo_3dtensor.coo_3dtuples[current_nz].index_j;
-      int current_index_k = coo_3dtensor.coo_3dtuples[current_nz].index_k;
-      int current_val = coo_3dtensor.coo_3dtuples[current_nz].val;
+      int current_index_i = coo_3dtensor->coo_3dtuples[current_nz].index_i;
+      int current_index_j = coo_3dtensor->coo_3dtuples[current_nz].index_j;
+      int current_index_k = coo_3dtensor->coo_3dtuples[current_nz].index_k;
+      int current_val = coo_3dtensor->coo_3dtuples[current_nz].val;
 
       // Fill in rows up to and including the current row
       if (current_index_i != prev_index_i || current_index_j != prev_index_j)
@@ -1309,7 +1309,7 @@ struct Mg3DTensor
    * Constructor
    */
   Mg3DTensor(
-      Coo3DTensor<T> &coo_3dtensor,
+      Coo3DTensor<T> *coo_3dtensor,
       bool verbose = false)
   {
     Init(coo_3dtensor, verbose);
@@ -1324,6 +1324,12 @@ struct Mg3DTensor
   }
 };
 
+template <typename T>
+static std::map<int32_t, CooMatrix<T>*> CooTracking;
+
+template <typename T>
+static std::map<int32_t, Coo3DTensor<T>*> Coo3DTracking;
+
 // matrix read wrapper: initiates file read only once. 
 // assumption: read_input_sizes_2D() and read_input_2D() are called in order 
 //             and only once for each fileID/file.
@@ -1331,10 +1337,11 @@ template <typename T>
 struct FileReaderWrapper
 {
   std::string filename;
-  static CooMatrix<T> coo_matrix;
-  static Coo3DTensor<T> coo_3dtensor;
-  static bool isInitialized; 
+  int32_t ID; 
   bool is3D; 
+
+  CooMatrix<T> *coo_matrix;
+  Coo3DTensor<T> *coo_3dtensor;
 
   bool readFileNameStr(int32_t fileID)
   {
@@ -1363,22 +1370,22 @@ struct FileReaderWrapper
   {
     if (filename.find(".mtx") == std::string::npos)
     {
-      assert(false && "ERROR: input file is not Market Matrix file\n");
+      assert(false && "ERROR: input file is not Market Matrix file");
     }
 
     // init matrix read
-    coo_matrix.InitMarket(filename);
+    coo_matrix->InitMarket(filename);
   }
 
   void readTnsFile()
   {
     if (filename.find(".tns") == std::string::npos)
     {
-      assert(false && "ERROR: input file is not TNS format\n");
+      assert(false && "ERROR: input file is not TNS format");
     }
 
     // init frostt file read
-    coo_3dtensor.InitFrostt(filename);
+    coo_3dtensor->InitFrostt(filename);
   }
 
   /**
@@ -1386,32 +1393,60 @@ struct FileReaderWrapper
    */
   FileReaderWrapper(int32_t fileID, bool tnsFile = false)
   {
-    if (!isInitialized)
+    ID = fileID;
+
+    if (CooTracking<T>.find(fileID) == CooTracking<T>.end() && !tnsFile) // not found, read the file
     {
       bool done = readFileNameStr(fileID);
       if (done && !filename.empty())
       { // file is read here
-        if (tnsFile) {
-          readTnsFile();  // 3D
-          is3D = true;
-        }
-        else
-          readMtxFile();  // 2D
+        coo_matrix = new CooMatrix<T>();
+        readMtxFile();  // 2D
+
+        // update hash-map
+        CooTracking<T>[fileID] = coo_matrix;
       }
       else
       {
         fprintf(stderr, "No input specified.\n");
         assert(false);
       }
-      isInitialized = true;
-    }
-    else
-    { // re-use the old file read
-      isInitialized = false; // for next file read.
 
-      if (tnsFile)
-        is3D = true;
+      is3D = false;
+    } 
+    else if (CooTracking<T>.count(fileID) == 1)
+    { // re-use the old file read
+      coo_matrix = CooTracking<T>[fileID];
+
+      is3D = false;
     }
+
+    if (Coo3DTracking<T>.find(fileID) == Coo3DTracking<T>.end() && tnsFile) // not found
+    {
+      bool done = readFileNameStr(fileID);
+      if (done && !filename.empty())
+      { // file is read here
+        coo_3dtensor = new Coo3DTensor<T>();
+        readTnsFile();  // 3D
+          
+        // update hash-map
+        Coo3DTracking<T>[fileID] = coo_3dtensor;
+      }
+      else
+      {
+        fprintf(stderr, "No input specified.\n");
+        assert(false);
+      }
+
+      is3D = true;
+    }
+    else if (Coo3DTracking<T>.count(fileID) == 1 && tnsFile)
+    {
+      coo_3dtensor = Coo3DTracking<T>[fileID];
+
+      is3D = true;
+    }
+        
   }
 
   /**
@@ -1424,19 +1459,53 @@ struct FileReaderWrapper
 
   void FileReaderWrapperFinalize()
   {
+
     if (is3D)
     {
-      coo_3dtensor.num_nonzeros = 0;  // reset
-      coo_3dtensor.Clear();
+      if (Coo3DTracking<T>.count(ID) == 1)
+      {
+        coo_3dtensor = Coo3DTracking<T>[ID];
+      }
+      else
+      {
+        // not found!
+        return;
+      }
+    }
+    else
+    { // 2D
+      if (CooTracking<T>.count(ID) == 1)
+      {
+        coo_matrix = CooTracking<T>[ID];
+      }
+      else
+      {
+        // not found!
+        return;
+      }
+    }
+
+    
+
+    if (is3D)
+    {
+      coo_3dtensor->num_nonzeros = 0;  // reset
+      coo_3dtensor->Clear();
+
+      // update the hashMap
+      Coo3DTracking<T>.erase (ID);
     }
     else
     {
-      coo_matrix.num_nonzeros = 0;  // reset
-      coo_matrix.num_nonzeros_lowerTri = 0; 
-      coo_matrix.num_nonzeros_lowerTri_strict = 0;
-      coo_matrix.num_nonzeros_upperTri = 0;
-      coo_matrix.num_nonzeros_upperTri_strict = 0;
-      coo_matrix.Clear();
+      coo_matrix->num_nonzeros = 0;  // reset
+      coo_matrix->num_nonzeros_lowerTri = 0; 
+      coo_matrix->num_nonzeros_lowerTri_strict = 0;
+      coo_matrix->num_nonzeros_upperTri = 0;
+      coo_matrix->num_nonzeros_upperTri_strict = 0;
+      coo_matrix->Clear();
+
+      // update the hashMap
+      CooTracking<T>.erase (ID);
     }
   }
   
@@ -1444,35 +1513,25 @@ struct FileReaderWrapper
 
 // helper func: get num of nonzeros based on selected matrix read
 template <typename T>
-int getNumNonZeros (CooMatrix<T> &coo_matrix, int32_t readMode)
+int getNumNonZeros (CooMatrix<T> *coo_matrix, int32_t readMode)
 {
   int NumNonZeros = -1; 
 
   int selected_matrix_read = getMatrixReadOption(readMode);
 
   if (selected_matrix_read == LOWER_TRI_STRICT)
-    NumNonZeros = coo_matrix.num_nonzeros_lowerTri_strict;
+    NumNonZeros = coo_matrix->num_nonzeros_lowerTri_strict;
   else if (selected_matrix_read == LOWER_TRI)
-    NumNonZeros = coo_matrix.num_nonzeros_lowerTri;
+    NumNonZeros = coo_matrix->num_nonzeros_lowerTri;
   else if (selected_matrix_read == UPPER_TRI_STRICT)
-    NumNonZeros = coo_matrix.num_nonzeros_upperTri_strict;
+    NumNonZeros = coo_matrix->num_nonzeros_upperTri_strict;
   else if (selected_matrix_read == UPPER_TRI)
-    NumNonZeros = coo_matrix.num_nonzeros_upperTri;
+    NumNonZeros = coo_matrix->num_nonzeros_upperTri;
   else // DEFAULT 
-    NumNonZeros = coo_matrix.num_nonzeros;
+    NumNonZeros = coo_matrix->num_nonzeros;
 
   return NumNonZeros;
 }
-
-// initializations
-template <typename T>
-CooMatrix<T> FileReaderWrapper<T>::coo_matrix;
-
-template <typename T>
-Coo3DTensor<T> FileReaderWrapper<T>::coo_3dtensor;
-
-template <typename T>
-bool FileReaderWrapper<T>::isInitialized = false;
 
 /***********Sparse Utility Functions*******************/
 
@@ -1496,8 +1555,8 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     desc_sizes->data[2] = 1;
     desc_sizes->data[3] = NumNonZeros;
     desc_sizes->data[4] = NumNonZeros;
-    desc_sizes->data[5] = FileReader.coo_matrix.num_rows;
-    desc_sizes->data[6] = FileReader.coo_matrix.num_cols;
+    desc_sizes->data[5] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[6] = FileReader.coo_matrix->num_cols;
   }
   // CSR
   else if (A1format == Dense && A2format == Compressed_unique)
@@ -1507,11 +1566,11 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
 
     desc_sizes->data[0] = 1;
     desc_sizes->data[1] = 1;
-    desc_sizes->data[2] = FileReader.coo_matrix.num_rows + 1;
+    desc_sizes->data[2] = FileReader.coo_matrix->num_rows + 1;
     desc_sizes->data[3] = NumNonZeros;
     desc_sizes->data[4] = NumNonZeros;
-    desc_sizes->data[5] = FileReader.coo_matrix.num_rows;
-    desc_sizes->data[6] = FileReader.coo_matrix.num_cols;
+    desc_sizes->data[5] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[6] = FileReader.coo_matrix->num_cols;
 
     /*****************DEBUG******************/
     // std::cout << "CSR detail: \n"
@@ -1529,17 +1588,17 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
   {
     int NumNonZeros = 0;
     if (selected_matrix_read == DEFAULT)
-      NumNonZeros = FileReader.coo_matrix.num_nonzeros;
+      NumNonZeros = FileReader.coo_matrix->num_nonzeros;
     else
       assert(false && "unsupported matrix format (CSC) for triangular reads.\n");
 
-    desc_sizes->data[0] = FileReader.coo_matrix.num_cols + 1;
+    desc_sizes->data[0] = FileReader.coo_matrix->num_cols + 1;
     desc_sizes->data[1] = NumNonZeros;
     desc_sizes->data[2] = 1;
     desc_sizes->data[3] = 1;
     desc_sizes->data[4] = NumNonZeros;
-    desc_sizes->data[5] = FileReader.coo_matrix.num_rows;
-    desc_sizes->data[6] = FileReader.coo_matrix.num_cols;
+    desc_sizes->data[5] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[6] = FileReader.coo_matrix->num_cols;
 
     /*****************DEBUG******************/
     // std::cout << "CSC detail: \n"
@@ -1605,42 +1664,42 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
   // SparseFormatAttribute A1format: COO
   if (A1format == Compressed_nonunique && A2format == singleton)
   {
-    std::stable_sort(FileReader.coo_matrix.coo_tuples, FileReader.coo_matrix.coo_tuples + FileReader.coo_matrix.num_nonzeros, CooComparatorRow());
+    std::stable_sort(FileReader.coo_matrix->coo_tuples, FileReader.coo_matrix->coo_tuples + FileReader.coo_matrix->num_nonzeros, CooComparatorRow());
 
     desc_A1pos->data[0] = 0;
     int actual_num_nonzeros = 0;
 
-    for (int i = 0; i < FileReader.coo_matrix.num_nonzeros; i++)
+    for (int i = 0; i < FileReader.coo_matrix->num_nonzeros; i++)
     {
       if ( ( (selected_matrix_read == LOWER_TRI_STRICT) || (selected_matrix_read == LOWER_TRI) ) &&   // filter lower triangular vals
-                (FileReader.coo_matrix.coo_tuples[i].row > FileReader.coo_matrix.coo_tuples[i].col) )
+                (FileReader.coo_matrix->coo_tuples[i].row > FileReader.coo_matrix->coo_tuples[i].col) )
       {
-        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].row;
-        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].col;
-        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].val;
+        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].row;
+        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].col;
+        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].val;
         actual_num_nonzeros++;
       }
       else if ( ( (selected_matrix_read == UPPER_TRI_STRICT) || (selected_matrix_read == UPPER_TRI) ) &&   // filter upper triangular vals
-                (FileReader.coo_matrix.coo_tuples[i].row < FileReader.coo_matrix.coo_tuples[i].col) )
+                (FileReader.coo_matrix->coo_tuples[i].row < FileReader.coo_matrix->coo_tuples[i].col) )
       {
-        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].row;
-        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].col;
-        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].val;
+        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].row;
+        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].col;
+        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].val;
         actual_num_nonzeros++;
       }
       else if ( ( (selected_matrix_read == UPPER_TRI) || (selected_matrix_read == LOWER_TRI) ) &&  // the diagonal vals go in both UPPER_TRI and LOWER_TRI
-                (FileReader.coo_matrix.coo_tuples[i].row == FileReader.coo_matrix.coo_tuples[i].col) )
+                (FileReader.coo_matrix->coo_tuples[i].row == FileReader.coo_matrix->coo_tuples[i].col) )
       {
-        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].row;
-        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].col;
-        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].val;
+        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].row;
+        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].col;
+        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].val;
         actual_num_nonzeros++;
       }
       else if ( selected_matrix_read == DEFAULT )// standard matrix vals
       {
-        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].row;
-        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].col;
-        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix.coo_tuples[i].val;
+        desc_A1crd->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].row;
+        desc_A2crd->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].col;
+        desc_Aval->data[actual_num_nonzeros] = FileReader.coo_matrix->coo_tuples[i].val;
         actual_num_nonzeros++;
       }      
 
@@ -1818,15 +1877,15 @@ void read_input_sizes_3D(int32_t fileID, int32_t A1format, int32_t A2format, int
   {
     // A1pos, A1crd, A2pos, A2crd, A3pos, A3crd, Aval, I, J, K
     desc_sizes->data[0] = 2;
-    desc_sizes->data[1] = FileReader.coo_3dtensor.num_nonzeros;
+    desc_sizes->data[1] = FileReader.coo_3dtensor->num_nonzeros;
     desc_sizes->data[2] = 1;
-    desc_sizes->data[3] = FileReader.coo_3dtensor.num_nonzeros;
+    desc_sizes->data[3] = FileReader.coo_3dtensor->num_nonzeros;
     desc_sizes->data[4] = 1;
-    desc_sizes->data[5] = FileReader.coo_3dtensor.num_nonzeros;
-    desc_sizes->data[6] = FileReader.coo_3dtensor.num_nonzeros;
-    desc_sizes->data[7] = FileReader.coo_3dtensor.num_index_i;
-    desc_sizes->data[8] = FileReader.coo_3dtensor.num_index_j;
-    desc_sizes->data[9] = FileReader.coo_3dtensor.num_index_k;
+    desc_sizes->data[5] = FileReader.coo_3dtensor->num_nonzeros;
+    desc_sizes->data[6] = FileReader.coo_3dtensor->num_nonzeros;
+    desc_sizes->data[7] = FileReader.coo_3dtensor->num_index_i;
+    desc_sizes->data[8] = FileReader.coo_3dtensor->num_index_j;
+    desc_sizes->data[9] = FileReader.coo_3dtensor->num_index_k;
   }
   // CSF
   else if (A1format == Compressed_unique && A2format == Compressed_unique && A3format == Compressed_unique)
@@ -1889,16 +1948,16 @@ void read_input_3D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A
   if (A1format == Compressed_nonunique && A2format == singleton && A3format == singleton)
   {
     // std::cout << "COO detail: " << coo_3dtensor.num_index_i << ", " << coo_3dtensor.num_index_j << ", " << coo_3dtensor.num_index_k << ", " << coo_3dtensor.num_nonzeros << "\n";
-    std::stable_sort(FileReader.coo_3dtensor.coo_3dtuples, FileReader.coo_3dtensor.coo_3dtuples + FileReader.coo_3dtensor.num_nonzeros, Coo3DTensorComparator());
+    std::stable_sort(FileReader.coo_3dtensor->coo_3dtuples, FileReader.coo_3dtensor->coo_3dtuples + FileReader.coo_3dtensor->num_nonzeros, Coo3DTensorComparator());
     desc_A1pos->data[0] = 0;
-    desc_A1pos->data[1] = FileReader.coo_3dtensor.num_nonzeros;
+    desc_A1pos->data[1] = FileReader.coo_3dtensor->num_nonzeros;
 
-    for (int i = 0; i < FileReader.coo_3dtensor.num_nonzeros; i++)
+    for (int i = 0; i < FileReader.coo_3dtensor->num_nonzeros; i++)
     {
-      desc_A1crd->data[i] = FileReader.coo_3dtensor.coo_3dtuples[i].index_i;
-      desc_A2crd->data[i] = FileReader.coo_3dtensor.coo_3dtuples[i].index_j;
-      desc_A3crd->data[i] = FileReader.coo_3dtensor.coo_3dtuples[i].index_k;
-      desc_Aval->data[i] = FileReader.coo_3dtensor.coo_3dtuples[i].val;
+      desc_A1crd->data[i] = FileReader.coo_3dtensor->coo_3dtuples[i].index_i;
+      desc_A2crd->data[i] = FileReader.coo_3dtensor->coo_3dtuples[i].index_j;
+      desc_A3crd->data[i] = FileReader.coo_3dtensor->coo_3dtuples[i].index_k;
+      desc_Aval->data[i] = FileReader.coo_3dtensor->coo_3dtuples[i].val;
     }
   }
   // CSF
