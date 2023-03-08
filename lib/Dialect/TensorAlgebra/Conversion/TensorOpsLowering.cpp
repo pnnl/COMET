@@ -21,7 +21,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the lowering of some TA operations such as elementwise tensor addition, substract, reduce, etc.
+// This file implements the lowering of some TA operations such as elementwise tensor addition, subtract, reduce, etc.
 //===----------------------------------------------------------------------===//
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -310,13 +310,13 @@ namespace
   // };
 
   // //===----------------------------------------------------------------------===//
-  // // Lowering elementwise tensor substraction
+  // // Lowering elementwise tensor subtraction
   // //===----------------------------------------------------------------------===//
-  // struct TensorSubtractionLowering : public OpRewritePattern<tensorAlgebra::TensorSubstractOp>
+  // struct TensorSubtractionLowering : public OpRewritePattern<tensorAlgebra::TensorSubtractOp>
   // {
-  //   using OpRewritePattern<tensorAlgebra::TensorSubstractOp>::OpRewritePattern;
+  //   using OpRewritePattern<tensorAlgebra::TensorSubtractOp>::OpRewritePattern;
 
-  //   LogicalResult matchAndRewrite(tensorAlgebra::TensorSubstractOp op,
+  //   LogicalResult matchAndRewrite(tensorAlgebra::TensorSubtractOp op,
   //                                 PatternRewriter &rewriter) const final
   //   {
 
@@ -325,7 +325,7 @@ namespace
   //     Value rhs = op.rhs2();
 
   //     assert(rhs.getType().isa<mlir::TensorType> && rhs.getType().isa<mlir::TensorType> &&
-  //            "No support for mixed/sparse tensor substraction");
+  //            "No support for mixed/sparse tensor subtraction");
 
   //     auto rhsTy = rhs.getType().cast<mlir::TensorType>();
   //     std::vector<scf::ForOp> forloops;

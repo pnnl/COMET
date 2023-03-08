@@ -134,6 +134,9 @@ namespace
       opName = "second";
       break;
     case 109:
+      opName = "subtract";
+      break;
+    case 110:
       opName = "noop";
       break;
     default:
@@ -472,7 +475,7 @@ namespace
         // case '+':
         //   return builder.create<AddOp>(location, lhs, rhs);
         // case '-':
-        //   return builder.create<SubstractOp>(location, lhs, rhs);
+        //   return builder.create<SubtractOp>(location, lhs, rhs);
         // case '*':
         //   // TODO(gkestor): create general elementwise multiplication ops
         //   // return builder.create<MulOp>(location, lhs, rhs);
@@ -491,7 +494,7 @@ namespace
         // case '+':
         //   return builder.create<AddOp>(location, lhs, rhs);
         // case '-':
-        //   return builder.create<SubstractOp>(location, lhs, rhs);
+        //   return builder.create<SubtractOp>(location, lhs, rhs);
         // case '*':
         //   return builder.create<ChainMulOp>(location, lhs, rhs);
         // case '/':
@@ -1016,8 +1019,8 @@ namespace
           return builder.create<TensorAddOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                              labels, affineMapArrayAttr, strAttr, SemiringAttr);
         case '-':
-          SemiringAttr = builder.getStringAttr("eltwise_sub"); // this is for standard elementwise substraction
-          return builder.create<TensorSubstractOp>(location, ret_tensor_type, tensors[0], tensors[1],
+          SemiringAttr = builder.getStringAttr("eltwise_sub"); // this is for standard elementwise subtraction
+          return builder.create<TensorSubtractOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                                    labels, affineMapArrayAttr, strAttr, SemiringAttr);
         case '*':
         {
@@ -1096,7 +1099,7 @@ namespace
 
     mlir::Value mlirGen(LiteralExprAST &lit)
     {
-      comet_debug() << __FILE__ << " " << __LINE__ << " mlirGen for LiteralExprAST.\n";
+      comet_debug() << " mlirGen for LiteralExprAST.\n";
 
       auto type = getType(lit.getDims());
 
@@ -2349,7 +2352,7 @@ namespace
       {
         assert(false);
         // TODO(gkestor): why do we need this?
-        //  auto op = builder.create<TensorSubstractOp>(loc(tensor_op.loc()), mlir::UnrankedTensorType::get(builder.getF64Type()),
+        //  auto op = builder.create<TensorSubtractOp>(loc(tensor_op.loc()), mlir::UnrankedTensorType::get(builder.getF64Type()),
         //                                              tensors[1], tensors[0], builder.getStrArrayAttr(formats));
         //  builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
       }
@@ -2382,15 +2385,15 @@ namespace
       LabeledTensorExprAST *rhs2LT =
           llvm::cast<LabeledTensorExprAST>(rhsBinOp->getRHS());
       auto binop = rhsBinOp->getOp();
-      comet_debug() << __FILE__ << " " << __LINE__ << " binop: " << binop << "\n";
+      comet_debug() << " binop: " << binop << "\n";
 
       int SemiringOp1st = int(rhsBinOp->getSemiringOp1());
       int SemiringOp2nd = int(rhsBinOp->getSemiringOp2());
-      comet_debug() << __FILE__ << " " << __LINE__ << " semirop: 1) " << SemiringOp1st << " 2) " << SemiringOp2nd << "\n";
+      comet_debug() << " semirop: 1) " << SemiringOp1st << " 2) " << SemiringOp2nd << "\n";
       std::string SemiringOp1str = getSemiringOpName(SemiringOp1st);
-      comet_debug() << __FILE__ << " " << __LINE__ << " SemiringOp1str " << SemiringOp1str << "\n";
+      comet_debug() << " SemiringOp1str " << SemiringOp1str << "\n";
       std::string SemiringOp2str = getSemiringOpName(SemiringOp2nd);
-      comet_debug() << __FILE__ << " " << __LINE__ << " SemiringOp2str " << SemiringOp2str << "\n";
+      comet_debug() << " SemiringOp2str " << SemiringOp2str << "\n";
       std::string SemiringOperators = SemiringOp1str + "_" + SemiringOp2str;
       auto SemiringAttr = builder.getStringAttr(SemiringOperators);
 
@@ -2491,8 +2494,6 @@ namespace
 
       if (binop == '+')
       {
-        //TODO(gkestor): why cannot we build semiringAttr?
-        SemiringAttr = builder.getStringAttr("eltwise_add"); // this is for standard elementwise addition
         auto op = builder.create<TensorAddOp>(loc(tensor_op.loc()),
                                               tensors[2].getType(),
                                               tensors[0], tensors[1],
@@ -2505,9 +2506,7 @@ namespace
       }
       else if (binop == '-')
       {
-        //TODO(gkestor): why cannot we build semiringAttr?
-        SemiringAttr = builder.getStringAttr("eltwise_sub"); // this is for standard elementwise substraction
-        auto op = builder.create<TensorSubstractOp>(loc(tensor_op.loc()),
+        auto op = builder.create<TensorSubtractOp>(loc(tensor_op.loc()),
                                                     tensors[2].getType(),
                                                     tensors[0], tensors[1],
                                                     lhs_lbls_value,
@@ -2581,7 +2580,7 @@ namespace
     mlir::LogicalResult mlirGenTensorFillRandom(mlir::Location loc,
                                                 StringRef tensor_name)
     {
-      comet_debug() << __FILE__ << " " << __LINE__ << " in mlirGenTensorFillRandom\n";
+      comet_debug() << " in mlirGenTensorFillRandom\n";
 
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
       auto lhs_labeledtensor = tensorValue.getDefiningOp()->getOpResult(0);
@@ -2616,7 +2615,7 @@ namespace
       }
 
       std::vector<int64_t> result_dims = getDimSizes(lhs_lbls_value);
-      comet_debug() << __FILE__ << " " << __LINE__ << " dims size: " << result_dims.size() << "\n";
+      comet_debug() << " dims size: " << result_dims.size() << "\n";
 
       auto type = getType(result_dims);
 

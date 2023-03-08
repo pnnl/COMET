@@ -425,11 +425,11 @@ def TensorAddOp : TA_Op<"add",
 
 }
 
-def TensorSubstractOp : TA_Op<"substract",
+def TensorSubtractOp : TA_Op<"subtract",
     [NoSideEffect]> {
-  let summary = "element-wise substract operation";
+  let summary = "element-wise subtract operation";
   let description = [{
-    The "substract" operation performs element-wise substract between two tensors.
+    The "subtract" operation performs element-wise subtract between two tensors.
     The shapes of the tensor operands are expected to match.
   }];
 

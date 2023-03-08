@@ -101,8 +101,8 @@ namespace tensorAlgebra
     tok_elews = -15,
     tok_semiring = -16,
     tok_monoid = -17,
-    tok_for = -18,  // for loop
-    tok_end = -19   // for loop-body end
+    tok_for = -18, // for loop
+    tok_end = -19  // for loop-body end
   };
 
   enum SemiringOp : int
@@ -116,7 +116,8 @@ namespace tensorAlgebra
     semiring_any = 106,
     semiring_pair = 107,
     semiring_second = 108,
-    semiring_noop = 109 // for monoids
+    semiring_subtract = 109,
+    semiring_noop = 110 // for monoids
   };
 
   /// The Lexer is an abstract base class providing all the facilities that the
@@ -244,6 +245,10 @@ namespace tensorAlgebra
       {
         return semiring_plus;
       }
+      else if (semiringStr == "-")
+      {
+        return semiring_subtract;
+      }
       else if (semiringStr == "*")
       {
         return semiring_times;
@@ -349,6 +354,24 @@ namespace tensorAlgebra
 
         comet_debug() << "Identifier:" << IdentifierStr << "\n";
         return tok_identifier;
+      }
+
+      if (LastChar == '*')
+      {
+        Op1st = semiring_plus;
+        Op2nd = semiring_times;
+      }
+
+      if (LastChar == '+')
+      {
+        Op1st = semiring_noop;
+        Op2nd = semiring_plus;
+      }
+
+      if (LastChar == '-')
+      {
+        Op1st = semiring_noop;
+        Op2nd = semiring_subtract;
       }
 
       if (LastChar == '/')
@@ -506,12 +529,10 @@ namespace tensorAlgebra
     /// Buffer supplied by the derived class on calls to `readNextLine()`
     llvm::StringRef curLineBuffer = "\n";
 
-    // Ask Rizwan - why semiring_op need default value?
-    //  Default semiring ops are needed for standard matrix multiplication and element-wise ops
     /// declaration of 1st Operator for semiring
-    SemiringOp Op1st = SemiringOp(semiring_plus); // default
+    SemiringOp Op1st = SemiringOp(semiring_noop); // default (to be set properly per operand)
     /// declaration of 2nd Operator for semiring
-    SemiringOp Op2nd = SemiringOp(semiring_times); // default
+    SemiringOp Op2nd = SemiringOp(semiring_noop); // default (to be set properly per operand)
   };
 
   /// A lexer implementation operating on a buffer in memory.

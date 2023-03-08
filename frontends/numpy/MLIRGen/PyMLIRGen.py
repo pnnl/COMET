@@ -278,7 +278,7 @@ class Tensor_arithOp_builder:
 
     tensor_sub_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        + ' = "ta.substract"{{operators}}'
+        + ' = "ta.subtract"{{operators}}'
         +' : {{Tensor_types_tuple}}'
         +"-> {{outputtype}}"
         + "\n" ,

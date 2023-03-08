@@ -69,7 +69,7 @@ namespace
 
 Value getRealLhs(Operation *op)
 {
-  assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubstractOp>(op));
+  assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubtractOp>(op));
   Operation *firstUser;
   for (auto user : op->getResult(0).getUsers())
   {
@@ -325,7 +325,7 @@ void doElementWiseMultOp(T op)
 // helper for treeToDialect()
 Operation *getSetOpForTC(Operation *op)
 {
-  assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubstractOp>(op));
+  assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubtractOp>(op));
   // TODO: fix the issue with getUsers() after getRealRhs().
   comet_debug() << "The following loop may cause issue!\n";
   Operation *firstUser;
@@ -507,7 +507,7 @@ void IndexTreePass::runOnFunction()
         doElementWiseMultOp<TensorElewsMultOp>(cast<TensorElewsMultOp>(&op));
         formITDialect = true;
       }
-      else if (isa<TensorAddOp>(&op) || isa<TensorSubstractOp>(&op))
+      else if (isa<TensorAddOp>(&op) || isa<TensorSubtractOp>(&op))
       {
         // elementwise addition and subtraction
         if (isa<TensorAddOp>(&op))
@@ -515,9 +515,9 @@ void IndexTreePass::runOnFunction()
           doElementWiseMultOp<TensorAddOp>(cast<TensorAddOp>(&op));
         }
 
-        if (isa<TensorSubstractOp>(&op))
+        if (isa<TensorSubtractOp>(&op))
         {
-          doElementWiseMultOp<TensorSubstractOp>(cast<TensorSubstractOp>(&op));
+          doElementWiseMultOp<TensorSubtractOp>(cast<TensorSubtractOp>(&op));
         }
         formITDialect = true;
       }

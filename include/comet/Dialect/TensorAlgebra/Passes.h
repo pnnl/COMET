@@ -86,7 +86,7 @@ namespace mlir
         //std::unique_ptr<Pass> createReduceOpLowerToSCFPass();
 
         /// Create a pass for lowering tensor operatations to other lower level dialects
-        /// such as tensor elementwise addition, substract, transpose, etc.
+        /// such as tensor elementwise addition, subtract, transpose, etc.
         std::unique_ptr<mlir::Pass> createTensorOpsLoweringPass();
 
         /// Create a pass for lowering transpose operations to SCF
