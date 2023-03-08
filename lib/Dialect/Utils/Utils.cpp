@@ -45,9 +45,9 @@
 
 #define DEBUG_TYPE "ta-utils"
 // *********** For debug purpose *********//
-//#ifndef DEBUG_MODE_UTILS
-//#define DEBUG_MODE_UTILS
-//#endif
+// #ifndef DEBUG_MODE_UTILS
+// #define DEBUG_MODE_UTILS
+// #endif
 
 #ifdef DEBUG_MODE_UTILS
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -157,12 +157,12 @@ namespace mlir
       }
 
       // TODO(gkestor): add better initialization method based on the dimension, leverage linalg.copy or something else
-       auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-       auto upperBound = alloc_op.getDefiningOp()->getOperand(0);
-       auto step = rewriter.create<ConstantIndexOp>(loc, 1);
-       auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-       auto insertPt = rewriter.saveInsertionPoint();
-       rewriter.setInsertionPointToStart(loop.getBody());
+      auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
+      auto upperBound = alloc_op.getDefiningOp()->getOperand(0);
+      auto step = rewriter.create<ConstantIndexOp>(loc, 1);
+      auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
+      auto insertPt = rewriter.saveInsertionPoint();
+      rewriter.setInsertionPointToStart(loop.getBody());
 
       // Build loop body
       std::vector<Value> indices = {loop.getInductionVar()};
@@ -171,7 +171,7 @@ namespace mlir
       // need to restore the insertion point to the previous point
       rewriter.restoreInsertionPoint(insertPt);
       comet_debug() << " insertAllocAndInitialize loop "
-                   << "\n";
+                    << "\n";
       comet_vdump(loop);
 
       return alloc_op;
@@ -811,7 +811,7 @@ namespace mlir
 
     bool checkIsMixedMode(std::vector<std::vector<std::string>> formats)
     {
-      //TODO(gkestor): review the following code
+      // TODO(gkestor): review the following code
       comet_debug() << "how many operands format:" << formats.size() << "\n";
       if (formats.size() == 2)
       { // binary operation
@@ -2106,9 +2106,10 @@ namespace mlir
         alpha *= f64Attr.getValueAsDouble();
         is_lhs_constant = true;
       }
-      else if (isa<tensorAlgebra::AddOp>(lhsOp))
+      else if (isa<tensorAlgebra::TensorAddOp>(lhsOp))
       {
-        // Implement for AddOp support
+        // TODO(gkestor): further support needed
+        assert(false && "Not supported AddOp");
       }
 
       if (isa<tensorAlgebra::LabeledTensorOp>(rhsOp))
@@ -2183,10 +2184,10 @@ namespace mlir
         alpha *= f64Attr.getValueAsDouble();
         is_rhs_constant = true;
       }
-      else if (isa<tensorAlgebra::AddOp>(rhsOp))
+      else if (isa<tensorAlgebra::TensorAddOp>(rhsOp))
       {
-        // Implement for AddOp support
-        assert(false && "Implement for AddOp support");
+        // TODO(gkestor): further support needed
+        assert(false && "Not supported AddOp");
       }
 
       comet_debug() << "\n";
@@ -2350,9 +2351,11 @@ namespace mlir
           alpha *= f64Attr.getValueAsDouble();
           is_lhs_constant = true;
         }
-        else if (isa<tensorAlgebra::AddOp>(lhsOp))
+        else if (isa<tensorAlgebra::TensorAddOp>(lhsOp))
         {
           // Implement for AddOp support
+          // TODO(gkestor): further support needed
+          assert(false && "Not supported AddOp");
         }
 
         if (isa<tensorAlgebra::LabeledTensorOp>(rhsOp))
@@ -2432,10 +2435,10 @@ namespace mlir
           is_rhs_constant = true;
           comet_debug() << "\n";
         }
-        else if (isa<tensorAlgebra::AddOp>(rhsOp))
+        else if (isa<tensorAlgebra::TensorAddOp>(rhsOp))
         {
-          // Implement for AddOp support
-          assert(false && "Implement for AddOp support");
+          // TODO(gkestor): further support needed
+          assert(false && "Not supported AddOp");
         }
 
         if (is_rhs_constant && is_lhs_constant)
@@ -2489,10 +2492,10 @@ namespace mlir
                                 rhs2Labels, lhsTensor, lhsLabels, rewriter, beta);
         comet_debug() << "\n";
       }
-      else if (isa<tensorAlgebra::AddOp>(op))
+      else if (isa<tensorAlgebra::TensorAddOp>(op))
       {
-        // Implement for AddOp
-        assert(false && "Implement for AddOp support");
+        // TODO(gkestor): further support needed
+        assert(false && "Not supported AddOp");
       }
     }
 

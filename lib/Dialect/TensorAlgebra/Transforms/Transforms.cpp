@@ -120,10 +120,10 @@ namespace
         comet_debug() << "\n";
         rhsOp = cast<tensorAlgebra::ChainMulOp>(rhs);
       }
-      else if (isa<tensorAlgebra::AddOp>(rhs))
+      else if (isa<tensorAlgebra::TensorAddOp>(rhs))
       {
         comet_debug() << "\n";
-        rhsOp = cast<tensorAlgebra::AddOp>(rhs);
+        rhsOp = cast<tensorAlgebra::TensorAddOp>(rhs);
       }
       else if (isa<tensorAlgebra::LabeledTensorOp>(rhs))
       {

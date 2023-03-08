@@ -102,7 +102,7 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
       comet_debug() << "ConstantOpLowering starts\n";
-      //auto module = op->getParentOfType<ModuleOp>();
+      // auto module = op->getParentOfType<ModuleOp>();
       DenseElementsAttr constantValue = op.value();
       Location loc = op.getLoc();
 
@@ -200,204 +200,209 @@ namespace
     }
   };
 
-  //===----------------------------------------------------------------------===//
-  // Lowering elementwise tensor addition
-  //===----------------------------------------------------------------------===//
-  struct TensorAdditionLowering : public OpRewritePattern<tensorAlgebra::AddOp>
-  {
-    using OpRewritePattern<tensorAlgebra::AddOp>::OpRewritePattern;
+  // //===----------------------------------------------------------------------===//
+  // // Lowering elementwise tensor addition
+  // //===----------------------------------------------------------------------===//
+  // struct TensorAdditionLowering : public OpRewritePattern<tensorAlgebra::TensorAddOp>
+  // {
+  //   using OpRewritePattern<tensorAlgebra::TensorAddOp>::OpRewritePattern;
 
-    LogicalResult matchAndRewrite(tensorAlgebra::AddOp op,
-                                  PatternRewriter &rewriter) const final
-    {
-      //auto module = op->getParentOfType<ModuleOp>();
-      comet_debug() << "TensorAdditionLowering starts\n";
-      Location loc = op.getLoc();
-      Value lhs = op.lhs();
-      Value rhs = op.rhs();
+  //   LogicalResult matchAndRewrite(tensorAlgebra::TensorAddOp op,
+  //                                 PatternRewriter &rewriter) const final
+  //   {
+  //     comet_debug() << "TensorAdditionLowering starts\n";
+  //     Location loc = op.getLoc();
+  //     Value lhs = op.rhs1();
+  //     Value rhs = op.rhs2();
 
-      auto rhsTy = rhs.getType().cast<mlir::TensorType>();
-      std::vector<scf::ForOp> forloops;
-      Value upperBound;
-      std::vector<Value> InductionVars;
-      for (int i = 0; i < rhsTy.getRank(); i++)
-      {
-        upperBound = rewriter.create<ConstantIndexOp>(loc, rhsTy.getDimSize(i));
-        auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-        auto step = rewriter.create<ConstantIndexOp>(loc, 1);
-        auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
+  //     assert(rhs.getType().isa<mlir::TensorType> && rhs.getType().isa<mlir::TensorType> &&
+  //            "No support for mixed/sparse tensor addition");
 
-        comet_vdump(upperBound);
-        comet_vdump(lowerBound);
-        comet_vdump(loop);
+  //     auto rhsTy = rhs.getType().cast<mlir::TensorType>();
 
-        forloops.push_back(loop);
-        InductionVars.push_back(loop.getInductionVar());
-        rewriter.setInsertionPointToStart(loop.getBody());
-      }
+  //     std::vector<scf::ForOp> forloops;
+  //     Value upperBound;
+  //     std::vector<Value> InductionVars;
+  //     for (int i = 0; i < rhsTy.getRank(); i++)
+  //     {
+  //       upperBound = rewriter.create<ConstantIndexOp>(loc, rhsTy.getDimSize(i));
+  //       auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
+  //       auto step = rewriter.create<ConstantIndexOp>(loc, 1);
+  //       auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
-      comet_vdump(rhs);
-      comet_vdump(lhs);
-      auto lhs_def_op = lhs.getDefiningOp();
-      memref::AllocOp alloc_lhs;
-      if (isa<tensorAlgebra::LabeledTensorOp>(lhs_def_op))
-      {
-        auto LabeledTensoroperands_lhs = lhs.getDefiningOp()->getOperands();
-        auto tensorload_lhs = cast<memref::TensorLoadOp>(LabeledTensoroperands_lhs[0].getDefiningOp());
-        alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
-      }
-      else
-      {
-        Operation *tensorload_lhs = cast<memref::TensorLoadOp>(lhs.getDefiningOp());
-        comet_pdump(tensorload_lhs);
-        alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
-      }
+  //       comet_vdump(upperBound);
+  //       comet_vdump(lowerBound);
+  //       comet_vdump(loop);
 
-      comet_debug() << "LHS alloc\n";
-      comet_vdump(alloc_lhs);
+  //       forloops.push_back(loop);
+  //       InductionVars.push_back(loop.getInductionVar());
+  //       rewriter.setInsertionPointToStart(loop.getBody());
+  //     }
 
-      Operation *tensorload_rhs = cast<memref::TensorLoadOp>(rhs.getDefiningOp());
-      auto alloc_rhs = cast<memref::AllocOp>(tensorload_rhs->getOperand(0).getDefiningOp());
+  //     comet_vdump(rhs);
+  //     comet_vdump(lhs);
+  //     auto lhs_def_op = lhs.getDefiningOp();
+  //     memref::AllocOp alloc_lhs;
+  //     if (isa<tensorAlgebra::LabeledTensorOp>(lhs_def_op))
+  //     {
+  //       auto LabeledTensoroperands_lhs = lhs.getDefiningOp()->getOperands();
+  //       auto tensorload_lhs = cast<memref::TensorLoadOp>(LabeledTensoroperands_lhs[0].getDefiningOp());
+  //       alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
+  //     }
+  //     else
+  //     {
+  //       Operation *tensorload_lhs = cast<memref::TensorLoadOp>(lhs.getDefiningOp());
+  //       comet_pdump(tensorload_lhs);
+  //       alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
+  //     }
 
-      comet_debug() << "RHS alloc\n";
-      comet_vdump(alloc_rhs);
+  //     comet_debug() << "LHS alloc\n";
+  //     comet_vdump(alloc_lhs);
 
-      auto load_lhs = rewriter.create<memref::LoadOp>(loc, alloc_lhs, InductionVars);
-      auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_rhs, InductionVars);
-      auto sum = rewriter.create<mlir::AddFOp>(loc, load_lhs, load_rhs);
+  //     Operation *tensorload_rhs = cast<memref::TensorLoadOp>(rhs.getDefiningOp());
+  //     auto alloc_rhs = cast<memref::AllocOp>(tensorload_rhs->getOperand(0).getDefiningOp());
 
-      tensorAlgebra::TensorSetOp setnewop;
-      for (auto u : op.getOperation()->getResult(0).getUsers())
-      {
-        if (isa<tensorAlgebra::TensorSetOp>(u))
-        {
-          setnewop = cast<tensorAlgebra::TensorSetOp>(u);
-        }
-        else
-        {
-          llvm::errs() << __FILE__ << " " << __LINE__ << "Dense constant op is used in ops besides SetOp\n";
-        }
-      }
+  //     comet_debug() << "RHS alloc\n";
+  //     comet_vdump(alloc_rhs);
 
-      mlir::Value setOp_rhs = setnewop.rhs();
-      auto def_setOp_rhs = setOp_rhs.getDefiningOp();
+  //     auto load_lhs = rewriter.create<memref::LoadOp>(loc, alloc_lhs, InductionVars);
+  //     auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_rhs, InductionVars);
+  //     auto sum = rewriter.create<mlir::AddFOp>(loc, load_lhs, load_rhs);
 
-      memref::AllocOp SetOp_rhs_alloc;
+  //     tensorAlgebra::TensorSetOp setnewop;
+  //     for (auto u : op.getOperation()->getResult(0).getUsers())
+  //     {
+  //       if (isa<tensorAlgebra::TensorSetOp>(u))
+  //       {
+  //         setnewop = cast<tensorAlgebra::TensorSetOp>(u);
+  //       }
+  //       else
+  //       {
+  //         llvm::errs() << __FILE__ << " " << __LINE__ << "Dense constant op is used in ops besides SetOp\n";
+  //       }
+  //     }
 
-      if (isa<tensorAlgebra::LabeledTensorOp>(def_setOp_rhs))
-      {
-        auto LTSetOp_rhs = setOp_rhs.getDefiningOp()->getOperands();
-        auto tensorload_SetOp_rhs = cast<memref::TensorLoadOp>(LTSetOp_rhs[0].getDefiningOp());
-        SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_SetOp_rhs->getOperand(0).getDefiningOp());
-      }
-      else
-      {
-        Operation *tensorload_setOp = cast<memref::TensorLoadOp>(setOp_rhs.getDefiningOp());
-        SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_setOp->getOperand(0).getDefiningOp());
-      }
+  //     mlir::Value setOp_rhs = setnewop.rhs();
+  //     auto def_setOp_rhs = setOp_rhs.getDefiningOp();
 
-      rewriter.create<memref::StoreOp>(loc, sum, SetOp_rhs_alloc, InductionVars);
-      rewriter.setInsertionPointAfter(forloops[0]);
-      rewriter.eraseOp(setnewop);
-      rewriter.eraseOp(op);
+  //     memref::AllocOp SetOp_rhs_alloc;
 
-      comet_debug() << "TensorAdditionLowering ends\n";
-      return success();
-    }
-  };
+  //     if (isa<tensorAlgebra::LabeledTensorOp>(def_setOp_rhs))
+  //     {
+  //       auto LTSetOp_rhs = setOp_rhs.getDefiningOp()->getOperands();
+  //       auto tensorload_SetOp_rhs = cast<memref::TensorLoadOp>(LTSetOp_rhs[0].getDefiningOp());
+  //       SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_SetOp_rhs->getOperand(0).getDefiningOp());
+  //     }
+  //     else
+  //     {
+  //       Operation *tensorload_setOp = cast<memref::TensorLoadOp>(setOp_rhs.getDefiningOp());
+  //       SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_setOp->getOperand(0).getDefiningOp());
+  //     }
 
-  //===----------------------------------------------------------------------===//
-  // Lowering elementwise tensor substraction
-  //===----------------------------------------------------------------------===//
-  struct TensorSubtractionLowering : public OpRewritePattern<tensorAlgebra::SubstractOp>
-  {
-    using OpRewritePattern<tensorAlgebra::SubstractOp>::OpRewritePattern;
+  //     rewriter.create<memref::StoreOp>(loc, sum, SetOp_rhs_alloc, InductionVars);
+  //     rewriter.setInsertionPointAfter(forloops[0]);
+  //     rewriter.eraseOp(setnewop);
+  //     rewriter.eraseOp(op);
 
-    LogicalResult matchAndRewrite(tensorAlgebra::SubstractOp op,
-                                  PatternRewriter &rewriter) const final
-    {
+  //     comet_debug() << "TensorAdditionLowering ends\n";
+  //     return success();
+  //   }
+  // };
 
-      Location loc = op.getLoc();
-      Value lhs = op.lhs();
-      Value rhs = op.rhs();
+  // //===----------------------------------------------------------------------===//
+  // // Lowering elementwise tensor substraction
+  // //===----------------------------------------------------------------------===//
+  // struct TensorSubtractionLowering : public OpRewritePattern<tensorAlgebra::TensorSubstractOp>
+  // {
+  //   using OpRewritePattern<tensorAlgebra::TensorSubstractOp>::OpRewritePattern;
 
-      auto rhsTy = rhs.getType().cast<mlir::TensorType>();
-      std::vector<scf::ForOp> forloops;
-      Value upperBound;
-      std::vector<Value> InductionVars;
-      for (int i = 0; i < rhsTy.getRank(); i++)
-      {
+  //   LogicalResult matchAndRewrite(tensorAlgebra::TensorSubstractOp op,
+  //                                 PatternRewriter &rewriter) const final
+  //   {
 
-        upperBound = rewriter.create<ConstantIndexOp>(loc, rhsTy.getDimSize(i));
-        auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-        auto step = rewriter.create<ConstantIndexOp>(loc, 1);
-        auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
+  //     Location loc = op.getLoc();
+  //     Value lhs = op.rhs1();
+  //     Value rhs = op.rhs2();
 
-        forloops.push_back(loop);
-        InductionVars.push_back(loop.getInductionVar());
-        rewriter.setInsertionPointToStart(loop.getBody());
-      }
+  //     assert(rhs.getType().isa<mlir::TensorType> && rhs.getType().isa<mlir::TensorType> &&
+  //            "No support for mixed/sparse tensor substraction");
 
-      auto lhs_def_op = lhs.getDefiningOp();
-      memref::AllocOp alloc_lhs;
-      if (isa<tensorAlgebra::LabeledTensorOp>(lhs_def_op))
-      {
+  //     auto rhsTy = rhs.getType().cast<mlir::TensorType>();
+  //     std::vector<scf::ForOp> forloops;
+  //     Value upperBound;
+  //     std::vector<Value> InductionVars;
+  //     for (int i = 0; i < rhsTy.getRank(); i++)
+  //     {
+  //       upperBound = rewriter.create<ConstantIndexOp>(loc, rhsTy.getDimSize(i));
+  //       auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
+  //       auto step = rewriter.create<ConstantIndexOp>(loc, 1);
+  //       auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
-        auto LabeledTensoroperands_lhs = lhs.getDefiningOp()->getOperands();
-        auto tensorload_lhs = cast<memref::TensorLoadOp>(LabeledTensoroperands_lhs[0].getDefiningOp());
-        alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
-      }
-      else
-      {
-        Operation *tensorload_lhs = cast<memref::TensorLoadOp>(lhs.getDefiningOp());
-        alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
-      }
+  //       forloops.push_back(loop);
+  //       InductionVars.push_back(loop.getInductionVar());
+  //       rewriter.setInsertionPointToStart(loop.getBody());
+  //     }
 
-      Operation *tensorload_rhs = cast<memref::TensorLoadOp>(rhs.getDefiningOp());
-      auto alloc_rhs = cast<memref::AllocOp>(tensorload_rhs->getOperand(0).getDefiningOp());
+  //     auto lhs_def_op = lhs.getDefiningOp();
+  //     memref::AllocOp alloc_lhs;
+  //     if (isa<tensorAlgebra::LabeledTensorOp>(lhs_def_op))
+  //     {
 
-      auto load_lhs = rewriter.create<memref::LoadOp>(loc, alloc_lhs, InductionVars);
-      auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_rhs, InductionVars);
-      auto subtract = rewriter.create<mlir::SubFOp>(loc, load_lhs, load_rhs);
+  //       auto LabeledTensoroperands_lhs = lhs.getDefiningOp()->getOperands();
+  //       auto tensorload_lhs = cast<memref::TensorLoadOp>(LabeledTensoroperands_lhs[0].getDefiningOp());
+  //       alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
+  //     }
+  //     else
+  //     {
+  //       Operation *tensorload_lhs = cast<memref::TensorLoadOp>(lhs.getDefiningOp());
+  //       alloc_lhs = cast<memref::AllocOp>(tensorload_lhs->getOperand(0).getDefiningOp());
+  //     }
 
-      tensorAlgebra::TensorSetOp setnewop;
-      for (auto u : op.getOperation()->getResult(0).getUsers())
-      {
-        if (isa<tensorAlgebra::TensorSetOp>(u))
-        {
-          setnewop = cast<tensorAlgebra::TensorSetOp>(u);
-        }
-        else
-        {
-          llvm::errs() << __FILE__ << " " << __LINE__ << "Dense constant op is used in ops besides SetOp\n";
-        }
-      }
+  //     Operation *tensorload_rhs = cast<memref::TensorLoadOp>(rhs.getDefiningOp());
+  //     auto alloc_rhs = cast<memref::AllocOp>(tensorload_rhs->getOperand(0).getDefiningOp());
 
-      mlir::Value setOp_rhs = setnewop.rhs();
-      auto def_setOp_rhs = setOp_rhs.getDefiningOp();
+  //     auto load_lhs = rewriter.create<memref::LoadOp>(loc, alloc_lhs, InductionVars);
+  //     auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_rhs, InductionVars);
+  //     auto subtract = rewriter.create<mlir::SubFOp>(loc, load_lhs, load_rhs);
 
-      memref::AllocOp SetOp_rhs_alloc;
+  //     tensorAlgebra::TensorSetOp setnewop;
+  //     for (auto u : op.getOperation()->getResult(0).getUsers())
+  //     {
+  //       if (isa<tensorAlgebra::TensorSetOp>(u))
+  //       {
+  //         setnewop = cast<tensorAlgebra::TensorSetOp>(u);
+  //       }
+  //       else
+  //       {
+  //         llvm::errs() << __FILE__ << " " << __LINE__ << "Dense constant op is used in ops besides SetOp\n";
+  //       }
+  //     }
 
-      if (isa<tensorAlgebra::LabeledTensorOp>(def_setOp_rhs))
-      {
-        auto LTSetOp_rhs = setOp_rhs.getDefiningOp()->getOperands();
-        auto tensorload_SetOp_rhs = cast<memref::TensorLoadOp>(LTSetOp_rhs[0].getDefiningOp());
-        SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_SetOp_rhs->getOperand(0).getDefiningOp());
-      }
-      else
-      {
-        Operation *tensorload_setOp = cast<memref::TensorLoadOp>(setOp_rhs.getDefiningOp());
-        SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_setOp->getOperand(0).getDefiningOp());
-      }
+  //     mlir::Value setOp_rhs = setnewop.rhs();
+  //     auto def_setOp_rhs = setOp_rhs.getDefiningOp();
 
-      rewriter.create<memref::StoreOp>(loc, subtract, SetOp_rhs_alloc, InductionVars);
+  //     memref::AllocOp SetOp_rhs_alloc;
 
-      rewriter.setInsertionPointAfter(forloops[0]);
-      rewriter.eraseOp(setnewop);
-      rewriter.eraseOp(op);
-      return success();
-    }
-  };
+  //     if (isa<tensorAlgebra::LabeledTensorOp>(def_setOp_rhs))
+  //     {
+  //       auto LTSetOp_rhs = setOp_rhs.getDefiningOp()->getOperands();
+  //       auto tensorload_SetOp_rhs = cast<memref::TensorLoadOp>(LTSetOp_rhs[0].getDefiningOp());
+  //       SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_SetOp_rhs->getOperand(0).getDefiningOp());
+  //     }
+  //     else
+  //     {
+  //       Operation *tensorload_setOp = cast<memref::TensorLoadOp>(setOp_rhs.getDefiningOp());
+  //       SetOp_rhs_alloc = cast<memref::AllocOp>(tensorload_setOp->getOperand(0).getDefiningOp());
+  //     }
+
+  //     rewriter.create<memref::StoreOp>(loc, subtract, SetOp_rhs_alloc, InductionVars);
+
+  //     rewriter.setInsertionPointAfter(forloops[0]);
+  //     rewriter.eraseOp(setnewop);
+  //     rewriter.eraseOp(op);
+  //     return success();
+  //   }
+  // };
 
   //===----------------------------------------------------------------------===//
   // Lowering dense and sparse tensor transpose
@@ -792,7 +797,7 @@ namespace
       assert(isa<tensorAlgebra::ScalarOp>(op));
       comet_debug() << "ScalarOpsLowering starts\n";
 
-      //auto module = op->getParentOfType<ModuleOp>();
+      // auto module = op->getParentOfType<ModuleOp>();
 
       // Scalar operation could be between
       //  1. two tensors (size of 1) and the output with a tensor of size 1
@@ -844,7 +849,7 @@ namespace
       }
 
       assert(res_comes_from_setop && "SetOp is needed to assign the scalar operation result to final variable");
- 
+
       comet_debug() << "Scalar lowering Final step\n";
       comet_debug() << "RHS, LHS and result:\n";
       comet_vdump(rhs);
@@ -930,8 +935,8 @@ void TensorOpsLoweringPass::runOnFunction()
   // the set of patterns that will lower the TA operations.
 
   OwningRewritePatternList patterns(&getContext());
-  patterns.insert<TensorAdditionLowering,
-                  TensorSubtractionLowering,
+  patterns.insert<//TensorAdditionLowering,
+                  //TensorSubtractionLowering,
                   TensorTransposeLowering,
                   ReduceOpLowering,
                   ScalarOpsLowering,

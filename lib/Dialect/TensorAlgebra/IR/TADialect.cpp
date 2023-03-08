@@ -195,25 +195,6 @@ static mlir::LogicalResult verify(DenseConstantOp op)
   return mlir::success();
 }
 
-
-//===----------------------------------------------------------------------===//
-// AddOp
-void AddOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                  mlir::Value lhs, mlir::Value rhs)
-{
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
-  state.addOperands({lhs, rhs});
-}
-
-//===----------------------------------------------------------------------===//
-// SubstractOp
-void SubstractOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                        mlir::Value lhs, mlir::Value rhs)
-{
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
-  state.addOperands({lhs, rhs});
-}
-
 //===----------------------------------------------------------------------===//
 void GenericCallOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                           StringRef callee, mlir::Value arguments)

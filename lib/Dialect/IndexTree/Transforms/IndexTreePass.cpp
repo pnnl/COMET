@@ -69,7 +69,7 @@ namespace
 
 Value getRealLhs(Operation *op)
 {
-  assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op));
+  assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubstractOp>(op));
   Operation *firstUser;
   for (auto user : op->getResult(0).getUsers())
   {
@@ -201,7 +201,8 @@ void doTensorMultOp(TensorMultOp op)
   tree->addComputeNode(std::move(e), parent);
 }
 
-void doElementWiseMultOp(TensorElewsMultOp op)
+template <typename T>
+void doElementWiseMultOp(T op)
 {
   // getFunction()->dump();
   Value rhs1_tensor = getRealRhs(op.rhs1().getDefiningOp());
@@ -229,7 +230,7 @@ void doElementWiseMultOp(TensorElewsMultOp op)
   auto e = make_unique<UnitExpression>(A, B, C, "*");
 
   e->setOperation(op);
-  e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue()); // for element-wise multiplication
+  e->setSemiring(SemiringOp.template cast<mlir::StringAttr>().getValue()); // for element-wise multiplication
   buildDefUseInfo(e.get());
 
   auto inputDomains = e->computeInputIterDomains();
@@ -261,10 +262,70 @@ void doElementWiseMultOp(TensorElewsMultOp op)
   // tree->print();
 }
 
+// void doElementWiseMultOp(TensorElewsMultOp op)
+// {
+//   // getFunction()->dump();
+//   Value rhs1_tensor = getRealRhs(op.rhs1().getDefiningOp());
+//   Value rhs2_tensor = getRealRhs(op.rhs2().getDefiningOp());
+//   Value lhs_tensor = getRealLhs(op);
+
+//   comet_debug() << "IndexTreePass: doElementWiseMultOp\n";
+//   comet_debug() << "rhs1-tensor\n";
+//   comet_vdump(rhs1_tensor);
+//   comet_debug() << "rhs2-tensor\n";
+//   comet_vdump(rhs2_tensor);
+//   comet_debug() << "lhs-tensor\n";
+//   comet_vdump(lhs_tensor);
+
+//   auto allPerms = getAllPerms(op.indexing_maps());
+//   auto allFormats = getAllFormats(op.formatsAttr(), allPerms);
+//   auto SemiringOp = op.semiringAttr();
+
+//   assert(allPerms.size() == 3);
+
+//   auto B = tree->getOrCreateTensor(rhs1_tensor, allFormats[0]);
+//   auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
+//   auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
+
+//   auto e = make_unique<UnitExpression>(A, B, C, "*");
+
+//   e->setOperation(op);
+//   e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue()); // for element-wise multiplication
+//   buildDefUseInfo(e.get());
+
+//   auto inputDomains = e->computeInputIterDomains();
+//   auto outputDomains = e->computeOutputIterDomains();
+
+//   // RHS and LHS indices must be the same for elementwise multiplication
+//   IndicesType allIndices = tree->getIndices(rhs1_tensor);
+
+//   auto lhsIndices = A->getIndices();
+//   TreeNode *parent = tree->getRoot();
+//   for (unsigned long i = 0; i < allIndices.size(); i++)
+//   {
+//     int index = allIndices[i];
+//     auto &idomain = inputDomains.at(index);
+
+//     auto node = tree->addIndexNode(index, parent, idomain);
+
+//     // If this index appears on the lhs too, set output domain for the index node
+//     if (std::find(lhsIndices.begin(), lhsIndices.end(), index) != lhsIndices.end())
+//     {
+//       auto &odomain = outputDomains.at(index);
+//       node->setOutputDomain(odomain);
+//     }
+
+//     parent = node;
+//   }
+//   tree->addComputeNode(std::move(e), parent);
+//   // cout << "print tree after tc\n";
+//   // tree->print();
+// }
+
 // helper for treeToDialect()
 Operation *getSetOpForTC(Operation *op)
 {
-  assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op));
+  assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubstractOp>(op));
   // TODO: fix the issue with getUsers() after getRealRhs().
   comet_debug() << "The following loop may cause issue!\n";
   Operation *firstUser;
@@ -443,7 +504,21 @@ void IndexTreePass::runOnFunction()
       }
       else if (isa<TensorElewsMultOp>(&op))
       {
-        doElementWiseMultOp(cast<TensorElewsMultOp>(&op));
+        doElementWiseMultOp<TensorElewsMultOp>(cast<TensorElewsMultOp>(&op));
+        formITDialect = true;
+      }
+      else if (isa<TensorAddOp>(&op) || isa<TensorSubstractOp>(&op))
+      {
+        // elementwise addition and subtraction
+        if (isa<TensorAddOp>(&op))
+        {
+          doElementWiseMultOp<TensorAddOp>(cast<TensorAddOp>(&op));
+        }
+
+        if (isa<TensorSubstractOp>(&op))
+        {
+          doElementWiseMultOp<TensorSubstractOp>(cast<TensorSubstractOp>(&op));
+        }
         formITDialect = true;
       }
     }

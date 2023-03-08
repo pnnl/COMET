@@ -409,6 +409,7 @@ namespace
            rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Var) ||
           rhsAST->getKind() == ExprAST::ExprASTKind::Expr_Num)
       {
+        // Scalar operations
         comet_debug() << " rhsAST and lhsAST are all Expr_Var OR rhsAST is Expr_Num\n";
 
         std::string op;
@@ -438,62 +439,64 @@ namespace
         // lookup the output of the binary operation
         auto theOutput = symbolTable.lookup(out_format);
         if (theOutput == nullptr)
-        { // the variable for output of binary operation was not declared by user, 
+        { // the variable for output of binary operation was not declared by user,
           // we will create a new DenseConstantOp here.
           comet_debug() << "creating a new variable declaration, since the user did not declare it\n";
-          
+
           double data = 0.0;
           auto dataAttribute = mlir::DenseElementsAttr::get(returnDataType, llvm::makeArrayRef(data));
           auto denseConst = builder.create<DenseConstantOp>(location, returnDataType, dataAttribute);
-          
+
           theOutput = denseConst;
         }
         comet_vdump(theOutput);
         auto scalarOp = builder.create<ScalarOp>(location, returnDataType, rhs, lhs, opAttr);
         comet_vdump(scalarOp);
         builder.create<TensorSetOp>(location, scalarOp, theOutput);
-        
+
         // the value returned here will be used in subsequent ops.
         // for example, in the code below, 'g' should be returned.
         //    $ var g = a + b;
-	      //    $ print(g);
+        //    $ print(g);
         return theOutput;
       }
 
       else if (isa<DenseConstantOp>(lhs.getDefiningOp()))
       {
-        comet_debug() << "\n"
-                      << __LINE__ << " lhs is DenseConstantOp\n";
-        switch (binop.getOp())
-        {
-        // TODO(gkestor): Why mulop called chainMulOp but not the others
-        case '+':
-          return builder.create<AddOp>(location, lhs, rhs);
-        case '-':
-          return builder.create<SubstractOp>(location, lhs, rhs);
-        case '*':
-          // TODO(gkestor): create general elementwise multiplication ops
-          // return builder.create<MulOp>(location, lhs, rhs);
-          return builder.create<AddOp>(location, lhs, rhs);
-        case '/':
-          return builder.create<DivOp>(location, lhs, rhs);
-        }
+        assert(false);
+        // comet_debug() << "\n"
+        //               << __LINE__ << " lhs is DenseConstantOp\n";
+        // switch (binop.getOp())
+        // {
+        // // TODO(gkestor): Why mulop called chainMulOp but not the others
+        // case '+':
+        //   return builder.create<AddOp>(location, lhs, rhs);
+        // case '-':
+        //   return builder.create<SubstractOp>(location, lhs, rhs);
+        // case '*':
+        //   // TODO(gkestor): create general elementwise multiplication ops
+        //   // return builder.create<MulOp>(location, lhs, rhs);
+        //   return builder.create<AddOp>(location, lhs, rhs);
+        // case '/':
+        //   return builder.create<DivOp>(location, lhs, rhs);
+        // }
       }
       else if (isa<DenseConstantOp>(rhs.getDefiningOp()))
       {
-        comet_debug() << "\n"
-                      << __LINE__ << " rhs is DenseConstantOp\n";
-        switch (binop.getOp())
-        {
-        case '+':
-          return builder.create<AddOp>(location, lhs, rhs);
-        case '-':
-          return builder.create<SubstractOp>(location, lhs, rhs);
-        case '*':
-          return builder.create<ChainMulOp>(location, lhs, rhs);
-        case '/':
-          return builder.create<DivOp>(location, lhs, rhs);
-        }
+        assert(false);
+        // comet_debug() << "\n"
+        //               << __LINE__ << " rhs is DenseConstantOp\n";
+        // switch (binop.getOp())
+        // {
+        // case '+':
+        //   return builder.create<AddOp>(location, lhs, rhs);
+        // case '-':
+        //   return builder.create<SubstractOp>(location, lhs, rhs);
+        // case '*':
+        //   return builder.create<ChainMulOp>(location, lhs, rhs);
+        // case '/':
+        //   return builder.create<DivOp>(location, lhs, rhs);
+        // }
       }
       else
       {
@@ -515,9 +518,10 @@ namespace
               summed_labels.insert(val.getDefiningOp());
             }
           }
-          else if (isa<AddOp>(lhsOp))
+          else if (isa<TensorAddOp>(lhsOp))
           {
             // TODO(gkestor) check for AddOp
+            assert(false && "Not supported LHS operation\n");
           }
         }
         else
@@ -539,9 +543,10 @@ namespace
               summed_labels.insert(val.getDefiningOp());
             }
           }
-          else if (isa<AddOp>(rhsOp))
+          else if (isa<TensorAddOp>(rhsOp))
           {
             // TODO(gkestor) check for AddOp
+            assert(false && "Not supported RHS operation\n");
           }
           else if (isa<TransposeOp>(rhsOp))
           { // * transpose(A[i,j])
@@ -995,28 +1000,33 @@ namespace
 
         assert(tensors.size() == 2 && " less than 2 input tensors for ta.tc or ta.elews_mul\n");
 
+        std::vector<mlir::Value> labels;
+        for (auto i : ret_lbls)
+        {
+          labels.push_back(all_lbls_value[i]);
+        }
+
+        mlir::StringAttr SemiringAttr;
         // Derive the operation name from the binary operator. At the moment we
-        // only support '+' and '*'.
+        // only support '+', '-','*'.
         switch (binop.getOp())
         {
         case '+':
-          return builder.create<AddOp>(location, lhs, rhs);
+          SemiringAttr = builder.getStringAttr("eltwise_add"); // this is for standard elementwise addition
+          return builder.create<TensorAddOp>(location, ret_tensor_type, tensors[0], tensors[1],
+                                             labels, affineMapArrayAttr, strAttr, SemiringAttr);
         case '-':
-          return builder.create<SubstractOp>(location, lhs, rhs);
+          SemiringAttr = builder.getStringAttr("eltwise_sub"); // this is for standard elementwise substraction
+          return builder.create<TensorSubstractOp>(location, ret_tensor_type, tensors[0], tensors[1],
+                                                   labels, affineMapArrayAttr, strAttr, SemiringAttr);
         case '*':
         {
-          std::vector<mlir::Value> labels;
-          for (auto i : ret_lbls)
-          {
-            labels.push_back(all_lbls_value[i]);
-          }
-
           comet_vdump(lhs_tensor);
           comet_debug() << "\n";
 
           comet_vdump(rhs_tensor);
           comet_debug() << "\n";
-          auto SemiringAttr = builder.getStringAttr("plusxy_times"); // this is for standard matrix multiplication
+          SemiringAttr = builder.getStringAttr("plusxy_times"); // this is for standard matrix multiplication
           mlir::Value tcop = builder.create<TensorMultOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                                           labels, affineMapArrayAttr, strAttr, SemiringAttr);
           tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
@@ -1411,7 +1421,7 @@ namespace
 
       std::set<std::string> out_lbls = {};
       llvm::StringRef out_var = vardecl.getName();
-      std::string out_varStr(out_var.str());  // the info of variable on the LHS.
+      std::string out_varStr(out_var.str()); // the info of variable on the LHS.
       mlir::Value value = mlirGen(*init, out_lbls, out_varStr);
 
       if (!value)
@@ -1937,7 +1947,7 @@ namespace
           {
             comet_debug() << " in TensorOpExprAST, lhs is labeledTensor\n";
 
-            /// A[i,j] = B[i,k] * C[k,j]
+            /// A[i,j] = B[i,k] */+/- C[k,j]
             if (tensor_op->getRHS()->getKind() ==
                     ExprAST::ExprASTKind::Expr_BinOp &&
                 llvm::cast<BinaryExprAST>(tensor_op->getRHS())
@@ -1949,7 +1959,7 @@ namespace
             {
               comet_debug() << __LINE__ << "  in TensorOpExprAST, rhs is BinaryExprAST and its lhs and rhs are Expr_LabeledTensor\n";
 
-              if (mlir::failed(mlirGenTensorContraction(*tensor_op)))
+              if (mlir::failed(mlirGenTensorOperations(*tensor_op)))
                 return mlir::success();
               continue;
             }
@@ -1980,7 +1990,7 @@ namespace
               auto call = llvm::cast<FileReadExprAST>(tensor_op->getRHS());
               llvm::StringRef callee = call->getCallee();
 
-              int readModeVal = 1;  // DEFAULT, standard matrix read
+              int readModeVal = 1; // DEFAULT, standard matrix read
 
               // Builting calls have their custom operation, meaning this is a
               // straightforward emission.
@@ -2001,7 +2011,7 @@ namespace
                   filenamestr = filenamestring;
                 }
                 else if (filename != nullptr && readMode == nullptr) // only 1 arg provided
-                { // Not empty filename
+                {                                                    // Not empty filename
                   comet_debug() << __LINE__ << " One argument was provided in comet_read().\n";
 
                   // User will provide num arg in comet_read()
@@ -2032,7 +2042,7 @@ namespace
                 }
                 else // 2 args provided to comet_read
                 {
-                  comet_debug() << " Two arguments were provided in comet_read().\n";  
+                  comet_debug() << " Two arguments were provided in comet_read().\n";
 
                   // check 1st arg
                   if (filename->getKind() == NumberExprAST::Expr_Num)
@@ -2054,7 +2064,7 @@ namespace
                   // check 2nd arg
                   if (readMode->getKind() == NumberExprAST::Expr_Num)
                   {
-                    auto *readModeAST = llvm::cast<NumberExprAST>(readMode);  
+                    auto *readModeAST = llvm::cast<NumberExprAST>(readMode);
                     // get arg val
                     readModeVal = (int)cast<NumberExprAST>(readModeAST)->getValue();
                   }
@@ -2062,14 +2072,13 @@ namespace
                   {
                     assert(false && "un-recognized args provided to comet_read!");
                   }
-
                 }
 
                 if (mlir::failed(mlirGenTensorFillFromFile(loc(tensor_op->loc()), tensor_name, filenamestr, readModeVal)))
                   return mlir::success();
               }
               // TODO: put check here, if the user mis-spells something...
-              
+
               continue;
             }
 
@@ -2328,22 +2337,28 @@ namespace
       std::vector<mlir::Operation *> lhsLabelOps, rhsLabelOps;
       if (binop == TensorOpKind::Tensor_Red_Add)
       {
-        auto op = builder.create<AddOp>(loc(tensor_op.loc()), tensors[1], tensors[0]);
-        builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
+        assert(false);
+        // TODO(gkestor): why do we need this?
+        //  auto SemiringAttr = builder.getStringAttr("eltwise_add"); // this is for standard elementwise addition
+        //  auto op = builder.create<TensorAddOp>(loc(tensor_op.loc()), mlir::UnrankedTensorType::get(builder.getF64Type()),
+        //                                        tensors[1], tensors[0], builder.getStrArrayAttr(formats), );
+        //  builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
       }
 
       else if (binop == TensorOpKind::Tensor_Red_Sub)
       {
-
-        auto op = builder.create<SubstractOp>(loc(tensor_op.loc()), tensors[1], tensors[0]);
-        builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
+        assert(false);
+        // TODO(gkestor): why do we need this?
+        //  auto op = builder.create<TensorSubstractOp>(loc(tensor_op.loc()), mlir::UnrankedTensorType::get(builder.getF64Type()),
+        //                                              tensors[1], tensors[0], builder.getStrArrayAttr(formats));
+        //  builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
       }
 
       return mlir::success();
     }
 
-    /// handle case: Expr_LabeledTensor = Expr_LabeledTensor * Expr_LabeledTensor
-    mlir::LogicalResult mlirGenTensorContraction(TensorOpExprAST &tensor_op)
+    /// handle case: Expr_LabeledTensor = Expr_LabeledTensor */+/- Expr_LabeledTensor
+    mlir::LogicalResult mlirGenTensorOperations(TensorOpExprAST &tensor_op)
     {
       assert(tensor_op.getLHS()->getKind() ==
              ExprAST::ExprASTKind::Expr_LabeledTensor);
@@ -2465,7 +2480,8 @@ namespace
 
       assert(tensors.size() == 3 && "Not 3 tensors for ta.tc or ta.elews_mul\n");
 
-      if (binop != '*' && binop != tok_elews &&
+      if (binop != '*' && binop != '+' && binop != '-' &&
+          binop != tok_elews &&
           binop != tok_semiring && binop != tok_monoid)
       {
         emitError(loc(tensor_op.loc()),
@@ -2473,9 +2489,36 @@ namespace
                   "for tensor ops'");
       }
 
-      if (binop == '*' || binop == tok_semiring)
+      if (binop == '+')
       {
-        // auto SemiringAttr = builder.getStringAttr("plus_times");  // this is for standard matrix multiplication
+        //TODO(gkestor): why cannot we build semiringAttr?
+        SemiringAttr = builder.getStringAttr("eltwise_add"); // this is for standard elementwise addition
+        auto op = builder.create<TensorAddOp>(loc(tensor_op.loc()),
+                                              tensors[2].getType(),
+                                              tensors[0], tensors[1],
+                                              lhs_lbls_value,
+                                              affineMapArrayAttr,
+                                              strAttr, SemiringAttr);
+
+        // source is 1st parameter, dest is the second
+        auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
+      }
+      else if (binop == '-')
+      {
+        //TODO(gkestor): why cannot we build semiringAttr?
+        SemiringAttr = builder.getStringAttr("eltwise_sub"); // this is for standard elementwise substraction
+        auto op = builder.create<TensorSubstractOp>(loc(tensor_op.loc()),
+                                                    tensors[2].getType(),
+                                                    tensors[0], tensors[1],
+                                                    lhs_lbls_value,
+                                                    affineMapArrayAttr,
+                                                    strAttr, SemiringAttr);
+
+        // source is 1st parameter, dest is the second
+        auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
+      }
+      else if (binop == '*' || binop == tok_semiring)
+      {
         auto op = builder.create<TensorMultOp>(loc(tensor_op.loc()),
                                                tensors[2].getType(),
                                                tensors[0], tensors[1],
@@ -2617,10 +2660,10 @@ namespace
       if (tensorValue == nullptr)
       {
         // the variable was not declared by user.
-        assert (false && "please check your variable definitions!");
+        assert(false && "please check your variable definitions!");
       }
-      mlir::StringAttr filenameAttr = builder.getStringAttr(filename); 
-      mlir::IntegerAttr readModeAttr = builder.getI32IntegerAttr(readMode); 
+      mlir::StringAttr filenameAttr = builder.getStringAttr(filename);
+      mlir::IntegerAttr readModeAttr = builder.getI32IntegerAttr(readMode);
       builder.create<TensorFillFromFileOp>(loc, tensorValue, filenameAttr, readModeAttr);
 
       return mlir::success();

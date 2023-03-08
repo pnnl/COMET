@@ -406,8 +406,7 @@ def ChainSetOp : TA_Op<"chain_set_op", [NoSideEffect]>{
   let verifier = ?;
 }
 
-//TODO(gkestor): test
-def AddOp : TA_Op<"add",
+def TensorAddOp : TA_Op<"add",
     [NoSideEffect]> {
   let summary = "element-wise addition operation";
   let description = [{
@@ -415,16 +414,18 @@ def AddOp : TA_Op<"add",
     The shapes of the tensor operands are expected to match.
   }];
 
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
-  let results = (outs AnyTensor);
+  let arguments = (ins TA_AnyTensor:$rhs1, 
+                   TA_AnyTensor:$rhs2, 
+                   Variadic<Range>:$index_labels, 
+                   AffineMapArrayAttr:$indexing_maps, 
+                   StrArrayAttr:$formats, 
+                   StrAttr:$semiring); 
+  
+  let results = (outs TA_AnyTensor);
 
-  let builders = [
-    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
-  ];
 }
 
-//TODO(gkestor): test
-def SubstractOp : TA_Op<"substract",
+def TensorSubstractOp : TA_Op<"substract",
     [NoSideEffect]> {
   let summary = "element-wise substract operation";
   let description = [{
@@ -432,15 +433,34 @@ def SubstractOp : TA_Op<"substract",
     The shapes of the tensor operands are expected to match.
   }];
 
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
-  let results = (outs AnyTensor);
+  let arguments = (ins TA_AnyTensor:$rhs1, 
+                   TA_AnyTensor:$rhs2, 
+                   Variadic<Range>:$index_labels, 
+                   AffineMapArrayAttr:$indexing_maps, 
+                   StrArrayAttr:$formats, 
+                   StrAttr:$semiring); 
+  
+  let results = (outs TA_AnyTensor);
+
+}
+
+// //TODO(gkestor): support other datatypes
+def ScalarOp : TA_Op<"scalar",[NoSideEffect]> {
+  let summary = "scalar arithmetic operation";
+
+  let arguments = (ins AnyTypeOf<[AnyTensor,F64]>:$rhs, AnyTypeOf<[AnyTensor,F64]>:$lhs, StrAttr:$op); 
+
+  let results = (outs AnyTypeOf<[AnyTensor,
+                                 F64]>:$res);
 
   let builders = [
     OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
   ];
+
+  let verifier = ?;
 }
 
-//TODO(gkestor): test
+// //TODO(gkestor): test
 def DivOp : TA_Op<"div",
     [NoSideEffect]> {
   let summary = "";
@@ -457,7 +477,6 @@ def DivOp : TA_Op<"div",
     OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>,
     OpBuilder<(ins "TensorType":$resultType, "mlir::Value":$lhs, "mlir::Value":$rhs)>,
   ];
-  
 }
 
 //TODO(gkestor): test
@@ -480,21 +499,7 @@ def CastOp : TA_Op<"cast",
   let hasFolder = 1;
 }
 
-//TODO(gkestor): support other datatypes
-def ScalarOp : TA_Op<"scalar",[NoSideEffect]> {
-  let summary = "scalar arithmetic operation";
 
-  let arguments = (ins AnyTypeOf<[AnyTensor,F64]>:$rhs, AnyTypeOf<[AnyTensor,F64]>:$lhs, StrAttr:$op); 
-
-  let results = (outs AnyTypeOf<[AnyTensor,
-                                 F64]>:$res);
-
-  let builders = [
-    OpBuilder<(ins "mlir::Value":$lhs, "mlir::Value":$rhs)>
-  ];
-
-  let verifier = ?;
-}
 
 def TAReturnOp : TA_Op<"return", [Terminator, HasParent<"FuncOp">]> {
   let summary = "return operation";
