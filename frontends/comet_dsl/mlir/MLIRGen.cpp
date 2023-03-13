@@ -134,7 +134,7 @@ namespace
       opName = "second";
       break;
     case 109:
-      opName = "subtract";
+      opName = "minus";
       break;
     case 110:
       opName = "noop";

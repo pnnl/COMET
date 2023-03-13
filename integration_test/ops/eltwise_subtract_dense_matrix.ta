@@ -1,0 +1,27 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> eltwise_sub_dense_matrix.mlir
+# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm eltwise_sub_dense_matrix.mlir &> eltwise_sub_dense_matrix.llvm
+# RUN: mlir-cpu-runner eltwise_sub_dense_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [4];
+	IndexLabel [j] = [4];         
+
+	#Tensor Declarations
+	Tensor<double> A([i, j], {Dense});	  
+	Tensor<double> B([i, j], {Dense});
+	Tensor<double> C([i, j], {Dense});
+
+	#Tensor Fill Operation
+	A[i, j] = 3.4;
+	B[i, j] = 2.2;
+	C[i, j] = 0.0;
+
+	C[i, j] = A[i, j] - B[i, j];
+	print(C);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,

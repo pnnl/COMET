@@ -116,7 +116,7 @@ namespace tensorAlgebra
     semiring_any = 106,
     semiring_pair = 107,
     semiring_second = 108,
-    semiring_subtract = 109,
+    semiring_minus = 109,
     semiring_noop = 110 // for monoids
   };
 
@@ -247,7 +247,7 @@ namespace tensorAlgebra
       }
       else if (semiringStr == "-")
       {
-        return semiring_subtract;
+        return semiring_minus;
       }
       else if (semiringStr == "*")
       {
@@ -371,7 +371,7 @@ namespace tensorAlgebra
       if (LastChar == '-')
       {
         Op1st = semiring_noop;
-        Op2nd = semiring_subtract;
+        Op2nd = semiring_minus;
       }
 
       if (LastChar == '/')

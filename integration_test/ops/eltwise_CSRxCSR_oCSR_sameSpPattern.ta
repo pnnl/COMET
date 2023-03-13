@@ -1,4 +1,4 @@
-# Sparse matrix sparse matrix elementwise multiplication
+# Sparse matrix sparse matrix elementwise multiplication, in which both matrices have the same sparsity pattern
 # Sparse matrix is in CSR format. Currently workspace transformation on the IndexTree dialect works for only CSR format
 # In this example, workspace transformations are apply on the input sparse matrices. 
 # RUN: comet-opt --opt-comp-workspace --convert-ta-to-it --convert-to-loops %s &> eltwise_CSRxCSR_oCSR.mlir
