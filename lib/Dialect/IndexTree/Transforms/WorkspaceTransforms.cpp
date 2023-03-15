@@ -75,9 +75,9 @@ using llvm::StringRef;
 #define DEBUG_TYPE "workspace-transformations"
 
 // *********** For debug purpose *********//
-//#ifndef DEBUG_MODE_WorkspaceTransformsPass
-//#define DEBUG_MODE_WorkspaceTransformsPass
-//#endif
+// #ifndef DEBUG_MODE_WorkspaceTransformsPass
+// #define DEBUG_MODE_WorkspaceTransformsPass
+// #endif
 
 #ifdef DEBUG_MODE_WorkspaceTransformsPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -1050,6 +1050,7 @@ void CompressedWorkspaceTransformsPass::runOnFunction()
   auto function = getFunction();
   // Traverse the function, only handle ta.itree operation
   CompressedWorkspaceTransforms(function);
+  //function.dump();
   comet_debug() << __FILE__ << " " << __LINE__ << " ending CompressedWorkspaceTransforms pass \n";
 }
 

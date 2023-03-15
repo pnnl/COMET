@@ -521,11 +521,11 @@ namespace
               summed_labels.insert(val.getDefiningOp());
             }
           }
-          else if (isa<TensorAddOp>(lhsOp))
-          {
-            // TODO(gkestor) check for AddOp
-            assert(false && "Not supported LHS operation\n");
-          }
+          // else if (isa<TensorAddOp>(lhsOp))
+          // {
+          //   // TODO(gkestor) check for AddOp
+          //   assert(false && "Not supported LHS operation\n");
+          // }
         }
         else
         {
@@ -650,7 +650,7 @@ namespace
 
         comet_debug() << __LINE__ << " binop.getOp(): " << binop.getOp() << "\n";
 
-        std::map<int, mlir::Value> lblsValue_map;
+        //TODO(gkestor): urgent refactor the following code
         std::vector<mlir::Value> lhs_lbls_value;
         if (isa<SparseTensorDeclOp, DenseTensorDeclOp>(lhs_labeledtensor.getDefiningOp()))
         {
@@ -670,9 +670,12 @@ namespace
             lhs_lbls_value.push_back(lhs_labeledtensor.getDefiningOp()->getOperand(i));
           }
         }
-        else if (isa<TensorMultOp, TensorElewsMultOp>(lhs_labeledtensor.getDefiningOp()))
+        else if (isa<TensorMultOp>(lhs_labeledtensor.getDefiningOp()) ||
+                 isa<TensorElewsMultOp>(lhs_labeledtensor.getDefiningOp()) ||
+                 isa<TensorAddOp>(lhs_labeledtensor.getDefiningOp()) ||
+                 isa<TensorSubtractOp>(lhs_labeledtensor.getDefiningOp()))
         {
-          // check the output indices of ta.tc(), if it is
+          // check the output indices of ta.mul(), if it is
           for (unsigned int i = 2; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
           {
 
@@ -715,7 +718,10 @@ namespace
             rhs_lbls_value.push_back(rhs_labeledtensor.getDefiningOp()->getOperand(i));
           }
         }
-        else if (isa<TensorMultOp, TensorElewsMultOp>(rhs_labeledtensor.getDefiningOp()))
+        else if (isa<TensorMultOp>(rhs_labeledtensor.getDefiningOp()) ||
+                 isa<TensorElewsMultOp>(rhs_labeledtensor.getDefiningOp()) ||
+                 isa<TensorAddOp>(rhs_labeledtensor.getDefiningOp()) ||
+                 isa<TensorSubtractOp>(rhs_labeledtensor.getDefiningOp()))
         {
           // check the output indices of ta.tc(), if it is
           for (unsigned int i = 2; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
@@ -797,7 +803,7 @@ namespace
         {
           std::set_difference(all_lbls.begin(), all_lbls.end(), sum_lbls.begin(), sum_lbls.end(), std::back_inserter(ret_lbls));
         }
-        else if (binop.getOp() == tok_elews)
+        else if (binop.getOp() == tok_elews || binop.getOp() == '+' || binop.getOp() == '-')
         {
           std::copy(lhs_lbls.begin(), lhs_lbls.end(), std::back_inserter(ret_lbls));
         }
@@ -854,6 +860,7 @@ namespace
         SmallVector<mlir::StringRef, 8> formats;
         std::vector<mlir::Value> exprs{lhs_labeledtensor, rhs_labeledtensor};
         std::vector<mlir::Value> tensors;
+        // TODO(gkestor): URGENT refactor the following code -  too much repetition
         for (auto e : exprs)
         {
           if (isa<DenseTensorDeclOp>(e.getDefiningOp()))
@@ -960,6 +967,34 @@ namespace
 
             tensors.push_back(dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getOperation()->getResult(0));
           }
+          else if (isa<TensorAddOp>(e.getDefiningOp()))
+          {
+            comet_debug() << " is TensorMultOp\n";
+            // infer the format
+            mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorAddOp>(e.getDefiningOp()).formats();
+            unsigned int i = opFormatsArrayAttr.size() - 1;
+            std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
+
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
+            formats.push_back(lhs_format);
+
+            tensors.push_back(dyn_cast<TensorAddOp>(e.getDefiningOp()).getOperation()->getResult(0));
+          }
+          else if (isa<TensorSubtractOp>(e.getDefiningOp()))
+          {
+            comet_debug() << " is TensorMultOp\n";
+            // infer the format
+            mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorSubtractOp>(e.getDefiningOp()).formats();
+            unsigned int i = opFormatsArrayAttr.size() - 1;
+            std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
+
+            comet_debug() << " lhs_format: " << lhs_format << "\n";
+            formats.push_back(lhs_format);
+
+            tensors.push_back(dyn_cast<TensorSubtractOp>(e.getDefiningOp()).getOperation()->getResult(0));
+          }
           else if (isa<TransposeOp>(e.getDefiningOp()))
           {
             comet_debug() << " is TensorMultOp\n";
@@ -1015,13 +1050,15 @@ namespace
         switch (binop.getOp())
         {
         case '+':
-          SemiringAttr = builder.getStringAttr("eltwise_add"); // this is for standard elementwise addition
+          comet_debug() << "creating TensorAddOp\n";
+          SemiringAttr = builder.getStringAttr("noop_plusxy"); // this is for standard elementwise addition
           return builder.create<TensorAddOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                              labels, affineMapArrayAttr, strAttr, SemiringAttr);
         case '-':
-          SemiringAttr = builder.getStringAttr("eltwise_sub"); // this is for standard elementwise subtraction
+          comet_debug() << "creating TensorSubtractOp\n";
+          SemiringAttr = builder.getStringAttr("noop_minus"); // this is for standard elementwise subtraction
           return builder.create<TensorSubtractOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                                   labels, affineMapArrayAttr, strAttr, SemiringAttr);
+                                                  labels, affineMapArrayAttr, strAttr, SemiringAttr);
         case '*':
         {
           comet_vdump(lhs_tensor);
@@ -1042,11 +1079,6 @@ namespace
           return builder.create<DivOp>(location, ret_tensor_type, lhs, rhs, lbls);
 
         case tok_elews:
-          std::vector<mlir::Value> labels;
-          for (auto i : ret_lbls)
-          {
-            labels.push_back(all_lbls_value[i]);
-          }
           comet_vdump(lhs_tensor);
           comet_debug() << "\n";
 
@@ -2494,6 +2526,7 @@ namespace
 
       if (binop == '+')
       {
+        comet_debug() << "creating TensorAddOp\n";
         auto op = builder.create<TensorAddOp>(loc(tensor_op.loc()),
                                               tensors[2].getType(),
                                               tensors[0], tensors[1],
@@ -2501,18 +2534,20 @@ namespace
                                               affineMapArrayAttr,
                                               strAttr, SemiringAttr);
 
+        comet_vdump(op);
         // source is 1st parameter, dest is the second
         auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
       }
       else if (binop == '-')
       {
+        comet_debug() << "creating TensorSubtractOp\n";
         auto op = builder.create<TensorSubtractOp>(loc(tensor_op.loc()),
-                                                    tensors[2].getType(),
-                                                    tensors[0], tensors[1],
-                                                    lhs_lbls_value,
-                                                    affineMapArrayAttr,
-                                                    strAttr, SemiringAttr);
-
+                                                   tensors[2].getType(),
+                                                   tensors[0], tensors[1],
+                                                   lhs_lbls_value,
+                                                   affineMapArrayAttr,
+                                                   strAttr, SemiringAttr);
+        comet_vdump(op);
         // source is 1st parameter, dest is the second
         auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
       }
