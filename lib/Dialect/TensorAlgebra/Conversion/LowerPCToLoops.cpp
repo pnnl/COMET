@@ -29,31 +29,20 @@
 #include "comet/Dialect/IndexTree/IR/ITDialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
+
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
-
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-
-#include "mlir/EDSC/Builders.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-
 #include "llvm/Support/Debug.h"
 
 #include <queue>
 #include <vector>
 
 using namespace mlir;
-using namespace mlir::edsc;
-using namespace mlir::edsc::intrinsics;
-using namespace mlir::linalg;
-
+using namespace mlir::arith;
 using namespace mlir::tensorAlgebra;
 using namespace mlir::indexTree;
 
@@ -82,9 +71,9 @@ using namespace mlir::indexTree;
 namespace
 {
   struct PCToLoopsLoweringPass
-    : public PassWrapper<PCToLoopsLoweringPass, FunctionPass>
+    : public PassWrapper<PCToLoopsLoweringPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
     
     /// lowers ForLoopBeginOp and ForLoopEndOp to scf.for, one loop at a time.
     /// pre-condition: output from ProcessLoopOps();
@@ -115,7 +104,7 @@ std::vector<Operation *> PCToLoopsLoweringPass::ProcessLoopOps(tensorAlgebra::Fo
     if (isa<tensorAlgebra::ForLoopBeginOp>(&op))
     {
       // check for match
-      if (cast<tensorAlgebra::ForLoopBeginOp>(op).iterator() == op_start.iterator())
+      if (cast<tensorAlgebra::ForLoopBeginOp>(op).getIterator() == op_start.getIterator())
       {
         match = true;
         continue; // skip this iteration or op;
@@ -154,7 +143,7 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody (Location loc, OpBuilder &bu
     tensorAlgebra::TransposeOp ta_transpose_op = llvm::dyn_cast<tensorAlgebra::TransposeOp>(op);
     std::vector<Value> lhs_lbls_value = {ta_transpose_op.getOperand(1), ta_transpose_op.getOperand(2)};
     transpose = builder.create<tensorAlgebra::TransposeOp>(loc, ta_transpose_op.getOperand(0).getType(), ta_transpose_op.getOperand(0), 
-                                                           lhs_lbls_value, ta_transpose_op.indexing_maps(), ta_transpose_op.formats());      
+                                                           lhs_lbls_value, ta_transpose_op.getIndexingMaps(), ta_transpose_op.getFormats());      
   }
 
   // TensorSetOp goes with TransposeOp at this stage of the lowering.
@@ -169,8 +158,8 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody (Location loc, OpBuilder &bu
   if (isa<indexTree::IndexTreeComputeRHSOp>(op))
   {
     indexTree::IndexTreeComputeRHSOp it_compute_rhs_op = llvm::dyn_cast<indexTree::IndexTreeComputeRHSOp>(op);
-    ArrayAttr op_formats_ArrayAttr = it_compute_rhs_op.allFormats();
-    ArrayAttr op_perms_ArrayAttr = it_compute_rhs_op.allPerms();
+    ArrayAttr op_formats_ArrayAttr = it_compute_rhs_op.getAllFormats();
+    ArrayAttr op_perms_ArrayAttr = it_compute_rhs_op.getAllPerms();
        
     rhs = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()),
                                                            it_compute_rhs_op->getOperands(),  // tensors
@@ -181,8 +170,8 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody (Location loc, OpBuilder &bu
   if (isa<indexTree::IndexTreeComputeLHSOp>(op))
   {
     indexTree::IndexTreeComputeLHSOp it_compute_lhs_op = llvm::dyn_cast<indexTree::IndexTreeComputeLHSOp>(op);
-    ArrayAttr op_formats_ArrayAttr = it_compute_lhs_op.allFormats();
-    ArrayAttr op_perms_ArrayAttr = it_compute_lhs_op.allPerms();
+    ArrayAttr op_formats_ArrayAttr = it_compute_lhs_op.getAllFormats();
+    ArrayAttr op_perms_ArrayAttr = it_compute_lhs_op.getAllPerms();
        
     lhs = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()),
                                                            it_compute_lhs_op->getOperands(),  // tensors
@@ -194,14 +183,14 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody (Location loc, OpBuilder &bu
   {
     indexTree::IndexTreeComputeOp it_compute_op = llvm::dyn_cast<indexTree::IndexTreeComputeOp>(op);
     compute = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, rhs, lhs, 
-                                                            it_compute_op.comp_worksp_opt(), it_compute_op.semiring());
+                                                            it_compute_op.getCompWorkspOpt(), it_compute_op.getSemiring());
   }
 
   // create IndexTreeIndicesOp from existing IndexTreeIndicesOp (checks condition: indices != NULL)
   if (isa<indexTree::IndexTreeIndicesOp>(op) && indices != NULL) 
   {
     indexTree::IndexTreeIndicesOp it_indices_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(op);
-    Value indices_op_new = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, indices, it_indices_op.indices());
+    Value indices_op_new = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, indices, it_indices_op.getIndices());
     
     indices = indices_op_new; // for subsequent IndexTreeIndicesOp creation
   }
@@ -210,7 +199,7 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody (Location loc, OpBuilder &bu
   if (isa<indexTree::IndexTreeIndicesOp>(op) && compute != NULL && indices == NULL)
   {
     indexTree::IndexTreeIndicesOp it_indices_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(op);
-    indices = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, compute, it_indices_op.indices());
+    indices = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, compute, it_indices_op.getIndices());
   }
 
   if (isa<indexTree::IndexTreeOp>(op) && indices != NULL)
@@ -232,9 +221,9 @@ void PCToLoopsLoweringPass::PCToLoopsLowering(tensorAlgebra::ForLoopBeginOp op, 
   auto ForLoopStart = cast<tensorAlgebra::ForLoopBeginOp>(op);
 
   // get info of loop
-  auto upperBound = ForLoopStart.max();
-  auto lowerBound = ForLoopStart.min();
-  auto step = ForLoopStart.step();
+  auto upperBound = ForLoopStart.getMax();
+  auto lowerBound = ForLoopStart.getMin();
+  auto step = ForLoopStart.getStep();
 
   auto loop = builder.create<scf::ForOp>(op_end->getLoc(), lowerBound, upperBound, step);
   comet_vdump(loop);  
@@ -255,10 +244,10 @@ void PCToLoopsLoweringPass::PCToLoopsLowering(tensorAlgebra::ForLoopBeginOp op, 
     replicateOpsForLoopBody (loc, builder, listOps[i], new_rhs_op, new_lhs_op, new_compute_op, indices_op, transpose_op);
     
     // nested loop
-    if (isa<mlir::ConstantIndexOp>(listOps[i]))
+    if (isa<ConstantIndexOp>(listOps[i]))
     { 
-      mlir::ConstantIndexOp constant_index = llvm::dyn_cast<mlir::ConstantIndexOp>(listOps[i]);
-      loop_bounds.push_back(builder.create<mlir::ConstantIndexOp>(loc, constant_index.getValue()));
+      ConstantIndexOp constant_index = llvm::dyn_cast<ConstantIndexOp>(listOps[i]);
+      loop_bounds.push_back(builder.create<ConstantIndexOp>(loc, constant_index.value()));
     }
 
     // scf::for op
@@ -306,11 +295,11 @@ void PCToLoopsLoweringPass::PCToLoopsLowering(tensorAlgebra::ForLoopBeginOp op, 
   comet_debug() << "PCToLoopsLowering end\n";
 }
 
-void PCToLoopsLoweringPass::runOnFunction()
+void PCToLoopsLoweringPass::runOnOperation()
 {
   comet_debug() << "start PCToLoopsLoweringPass\n";
 
-  auto function = getFunction();
+  func::FuncOp function = getOperation();
 
   std::vector<tensorAlgebra::ForLoopBeginOp> startOps;
   std::vector<tensorAlgebra::ForLoopEndOp> endOps;
@@ -326,7 +315,7 @@ void PCToLoopsLoweringPass::runOnFunction()
   // vector: for-start1, for-start2 
   // vector: end2, end1
 
-  for (Block &B : function.body())
+  for (Block &B : function.getBody())
   {
     for (Operation &op : B)
     {

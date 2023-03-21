@@ -32,20 +32,17 @@
 #include "comet/Dialect/Utils/Utils.h"
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+// #include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
-
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/PatternMatch.h"
 #include "llvm/ADT/Sequence.h"
-#include "mlir/EDSC/Builders.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
+//#include "mlir/EDSC/Builders.h"
 
 #include <limits>
 #include <map>
@@ -57,9 +54,10 @@
 #define DEBUG_TYPE "comet-transforms"
 
 using namespace mlir;
-using namespace mlir::edsc;
-using namespace mlir::edsc::intrinsics;
+// using namespace mlir::edsc;
+// using namespace mlir::edsc::intrinsics;
 using namespace mlir::linalg;
+using namespace mlir::bufferization;
 
 using namespace mlir::tensorAlgebra;
 using namespace mlir::indexTree;
@@ -130,8 +128,8 @@ namespace
         comet_debug() << "\n";
         auto rhsLT = cast<tensorAlgebra::LabeledTensorOp>(rhs);
 
-        auto lhsLabels = lhsLT.labels();
-        auto rhsLabels = rhsLT.labels();
+        auto lhsLabels = lhsLT.getLabels();
+        auto rhsLabels = rhsLT.getLabels();
         std::vector<Operation *> lhsLabelOps, rhsLabelOps;
         for (const auto lbl : lhsLabels)
         {
@@ -147,7 +145,7 @@ namespace
         auto inPermAttr = AffineMapAttr::get(AffineMap::getPermutationMap(inPerm, ctx));
         auto outPermAttr = AffineMapAttr::get(AffineMap::getPermutationMap(outPerm, ctx));
 
-        auto new_op = rewriter.create<tensorAlgebra::TensorCopyOp>(loc, lhsLT.tensor(), rhsLT.tensor(), inPermAttr, outPermAttr);
+        auto new_op = rewriter.create<tensorAlgebra::TensorCopyOp>(loc, lhsLT.getTensor(), rhsLT.getTensor(), inPermAttr, outPermAttr);
         comet_debug() << "\n";
         comet_vdump(new_op);
 
@@ -171,9 +169,9 @@ namespace
       }
 
       comet_debug() << "\n";
-      auto lhsTensor = lhsLT.tensor();
+      auto lhsTensor = lhsLT.getTensor();
       comet_debug() << "\n";
-      auto labels = lhsLT.labels();
+      auto labels = lhsLT.getLabels();
       comet_debug() << "\n";
       std::vector<Value> lhsLabels(labels.begin(), labels.end());
 
@@ -202,15 +200,15 @@ namespace
       auto tensorCopyOp = cast<tensorAlgebra::TensorCopyOp>(op);
 
       auto lhsTensorOperand = operands[0];
-      auto lhsTensorLoadOp = cast<memref::TensorLoadOp>(lhsTensorOperand.getDefiningOp());
-      auto lhsMemref = lhsTensorLoadOp.memref();
+      auto lhsTensorLoadOp = cast<ToTensorOp>(lhsTensorOperand.getDefiningOp());
+      auto lhsMemref = lhsTensorLoadOp.getMemref();
 
       auto rhsTensorOperand = operands[1];
-      auto rhsTensorLoadOp = cast<memref::TensorLoadOp>(rhsTensorOperand.getDefiningOp());
-      auto rhsMemref = rhsTensorLoadOp.memref();
+      auto rhsTensorLoadOp = cast<ToTensorOp>(rhsTensorOperand.getDefiningOp());
+      auto rhsMemref = rhsTensorLoadOp.getMemref();
 
-      auto inPermMap = tensorCopyOp.inputPerm();
-      auto outPermMap = tensorCopyOp.outputPerm();
+      auto inPermMap = tensorCopyOp.getInputPerm();
+      auto outPermMap = tensorCopyOp.getOutputPerm();
 
       auto copyOp = rewriter.create<linalg::CopyOp>(loc, rhsMemref, lhsMemref, inPermMap, outPermMap);
 
@@ -270,13 +268,13 @@ namespace
 //
 //===----------------------------------------------------------------------===//
 void mlir::tensorAlgebra::populateLowerTAMulChainPatterns(
-    OwningRewritePatternList &patterns, MLIRContext *context)
+    RewritePatternSet &patterns, MLIRContext *context)
 {
   patterns.insert<ChainSetOpLowering>(context);
 }
 
 void mlir::tensorAlgebra::populateSTCRemoveDeadOpsPatterns(
-    OwningRewritePatternList &patterns, MLIRContext *context)
+    RewritePatternSet &patterns, MLIRContext *context)
 {
   patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::ChainMulOp>>(context);
   patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::IndexLabelDynamicOp>>(context);

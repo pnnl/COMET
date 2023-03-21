@@ -32,19 +32,18 @@
 #include "MLIRGen.h"
 #include "Parser.h"
 
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
-#include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVMPass.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/InitAllDialects.h"
-#include "mlir/Parser.h"
+#include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Target/LLVMIR/Export.h"
@@ -175,7 +174,8 @@ std::unique_ptr<tensorAlgebra::ModuleAST> parseInputFile(llvm::StringRef filenam
   return parser.parseModule();
 }
 
-int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module)
+int loadMLIR(mlir::MLIRContext &context,
+             mlir::OwningOpRef<mlir::ModuleOp> &module)
 {
   // Handle '.ta' input to the compiler.
   if (inputType != InputType::MLIR &&
@@ -200,7 +200,7 @@ int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module)
   // Parse the input mlir.
   llvm::SourceMgr sourceMgr;
   sourceMgr.AddNewSourceBuffer(std::move(*fileOrErr), llvm::SMLoc());
-  module = mlir::parseSourceFile(sourceMgr, &context);
+  module = mlir::parseSourceFile<mlir::ModuleOp>(sourceMgr, &context);
   if (!module)
   {
     llvm::errs() << "Error can't load file " << inputFilename << "\n";
@@ -210,16 +210,16 @@ int loadMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef &module)
 }
 
 int loadAndProcessMLIR(mlir::MLIRContext &context,
-                       mlir::OwningModuleRef &module)
-{
+                       mlir::OwningOpRef<mlir::ModuleOp> &module) {
   if (int error = loadMLIR(context, module))
     return error;
 
-  mlir::PassManager pm(&context);
+  mlir::PassManager pm(module.get()->getName());
   // Apply any generic pass manager command line options and run the pipeline.
   applyPassManagerCLOptions(pm);
 
-  mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
+
+  mlir::OpPassManager &optPM = pm.nest<mlir::tensorAlgebra::FuncOp>();
   optPM.addPass(mlir::tensorAlgebra::createRemoveLabeledTensorOpsPass());
 
   // Check to see if we are dumping to TA dialect.
@@ -301,7 +301,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (IsLoweringTCtoTTGT)
   {
     // Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
-    optPM.addPass(mlir::tensorAlgebra::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
+    // optPM.addPass(mlir::tensorAlgebra::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
   }
 
   // =============================================================================
@@ -350,7 +350,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::tensorAlgebra::createTensorOpsLoweringPass());
 
     // Finally lowering index tree to SCF dialect
-    optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
+    // optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
 
     //  =============================================================================
   }
@@ -401,12 +401,12 @@ int main(int argc, char **argv)
   // Register our Dialect with MLIR.
   context.loadDialect<mlir::tensorAlgebra::TADialect>();
   context.loadDialect<mlir::indexTree::ITDialect>();
-  context.loadDialect<mlir::StandardOpsDialect>();
+  context.loadDialect<mlir::arith::ArithDialect>();
   context.loadDialect<mlir::memref::MemRefDialect>();
   context.loadDialect<mlir::linalg::LinalgDialect>();
   context.loadDialect<mlir::scf::SCFDialect>();
 
-  mlir::OwningModuleRef module;
+  mlir::OwningOpRef<mlir::ModuleOp> module;
 
   if (int error = loadAndProcessMLIR(context, module))
     return error;

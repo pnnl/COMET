@@ -30,16 +30,30 @@
 
 #include "comet/Dialect/TensorAlgebra/IR/TATypes.h"
 
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/PatternMatch.h"
-#include "mlir/IR/AffineMap.h"
+#include "mlir/IR/FunctionInterfaces.h"
+#include "mlir/IR/SymbolTable.h"
+#include "mlir/Interfaces/CallInterfaces.h"
+#include "mlir/Interfaces/CastInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
+#include "mlir/IR/PatternMatch.h"
+
+
+/// Include the auto-generated header file containing the declaration of the Tensor Algebra
+/// dialect.
+#include "comet/Dialect/TensorAlgebra/IR/TADialect.h.inc"
+
+/// Include the auto-generated header file containing the declarations of the
+/// tensorAlgbra operations and also the operations of the Shape Inference Op Interface.
+//===----------------------------------------------------------------------===//
+#define GET_OP_CLASSES
+#include "comet/Dialect/TensorAlgebra/IR/TAOps.h.inc"
+
 namespace mlir
 {
   namespace tensorAlgebra
   {
-
     std::vector<Value> getFormatsValue(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IndexType indexType);
 
     namespace detail
@@ -48,42 +62,37 @@ namespace mlir
     } // end namespace detail
 
     void populateMultiOpFactorizationPatterns(
-        OwningRewritePatternList &patterns, MLIRContext *context);
+        RewritePatternSet &patterns, MLIRContext *context);
 
     void populateLowerTAMulChainPatterns(
-        OwningRewritePatternList &patterns, MLIRContext *context);
+        RewritePatternSet &patterns, MLIRContext *context);
 
     void populateSCFLowerToSCFParallelPatterns(
-        OwningRewritePatternList &patterns, MLIRContext *context);
+        RewritePatternSet &patterns, MLIRContext *context);
 
     void populateSTCRemoveDeadOpsPatterns(
-        OwningRewritePatternList &patterns, MLIRContext *context);
+        RewritePatternSet &patterns, MLIRContext *context);
 
-    /// This is the definition of the Tensor Algebra (TA) dialect. A dialect inherits from
-    /// mlir::Dialect and registers custom attributes, operations, and types (in its
-    /// constructor). It can also override some general behavior exposed via virtual
-    /// methods.
-    class TADialect : public mlir::Dialect
-    {
-    public:
-      explicit TADialect(mlir::MLIRContext *ctx);
+    // /// This is the definition of the Tensor Algebra (TA) dialect. A dialect inherits from
+    // /// mlir::Dialect and registers custom attributes, operations, and types (in its
+    // /// constructor). It can also override some general behavior exposed via virtual
+    // /// methods.
+    // class TADialect : public mlir::Dialect
+    // {
+    // public:
+    //   explicit TADialect(mlir::MLIRContext *ctx);
 
-      /// Provide a utility accessor to the dialect namespace. This is used by
-      /// several utilities for casting between dialects.
-      static llvm::StringRef getDialectNamespace() { return "ta"; }
+    //   /// Provide a utility accessor to the dialect namespace. This is used by
+    //   /// several utilities for casting between dialects.
+    //   static llvm::StringRef getDialectNamespace() { return "ta"; }
 
-      /// Parse a type registered to this dialect.
-      Type parseType(DialectAsmParser &parser) const override;
+    //   /// Parse a type registered to this dialect.
+    //   Type parseType(DialectAsmParser &parser) const override;
 
-      /// Print a type registered to this dialect.
-      void printType(Type type, DialectAsmPrinter &printer) const override;
-    };
+    //   /// Print a type registered to this dialect.
+    //   void printType(Type type, DialectAsmPrinter &printer) const override;
+    // };
 
-/// Include the auto-generated header file containing the declarations of the
-/// tensorAlgbra operations and also the operations of the Shape Inference Op Interface.
-//===----------------------------------------------------------------------===//
-#define GET_OP_CLASSES
-#include "comet/Dialect/TensorAlgebra/IR/TAOps.h.inc"
 
     //===----------------------------------------------------------------------===//
     // Tensor Algebra Types

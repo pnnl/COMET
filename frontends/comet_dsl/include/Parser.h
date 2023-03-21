@@ -751,7 +751,7 @@ namespace tensorAlgebra
       // For [?]
       if (lexer.getCurToken() == '?')
       {
-        end = mlir::ShapedType::kDynamicSize;
+        end = mlir::ShapedType::kDynamic;
         lexer.getNextToken(); // eat start
 
         if (lexer.getCurToken() == ']')
@@ -811,7 +811,7 @@ namespace tensorAlgebra
       {
         lexer.getNextToken(); // eat ?
         // end = -1;
-        end = mlir::ShapedType::kDynamicSize;
+        end = mlir::ShapedType::kDynamic;
       }
       else if (lexer.getCurToken() == tok_number)
       {

@@ -4,15 +4,13 @@ add_llvm_library(COMETTensorAlgebra
   Conversion/EarlyLowering.cpp
   Conversion/PreLowering.cpp
   Conversion/LowerPCToLoops.cpp
-  #Conversion/ReduceLowerToSCF.cpp
-  #Conversion/TransposeLowering.cpp
   Conversion/TensorOpsLowering.cpp
   Conversion/LateLowering.cpp 
 
 
   Transforms/Transforms.cpp
-  Transforms/LinalgTransforms.cpp
-  Transforms/TCtoTTGT.cpp
+  #Transforms/LinalgTransforms.cpp
+  #Transforms/TCtoTTGT.cpp
   Transforms/Passes.cpp
 
   ADDITIONAL_HEADER_DIRS

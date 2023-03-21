@@ -25,14 +25,10 @@
 #define TENSORALGEBRA_UTILS_H_
 
 #include "mlir/IR/PatternMatch.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/Linalg/EDSC/Builders.h"
-
-#include "mlir/Dialect/MemRef/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-
-#include "mlir/Transforms/LoopUtils.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/SetVector.h"
 
@@ -74,7 +70,7 @@ namespace mlir
     std::vector<std::string> stringSplit(std::string s, std::string delimiter);
     std::vector<unsigned> getIdentityPermutation(size_t size);
 
-    std::vector<std::vector<unsigned>> getAllPerms(ArrayAttr indexMaps);
+    std::vector<std::vector<int64_t>> getAllPerms(ArrayAttr indexMaps);
     std::vector<std::vector<int64_t>> getAllPermsWorkspace(ArrayAttr indexMaps);
 
     // Tensor algebra dialect

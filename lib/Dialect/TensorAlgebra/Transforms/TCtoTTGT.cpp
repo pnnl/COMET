@@ -28,20 +28,19 @@
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+// #include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
-
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 
-#include "mlir/EDSC/Builders.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
+//#include "mlir/EDSC/Builders.h"
+
 
 #include <limits>
 #include <map>
@@ -51,9 +50,10 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
-using namespace mlir::edsc;
-using namespace mlir::edsc::intrinsics;
+// using namespace mlir::edsc;
+// using namespace mlir::edsc::intrinsics;
 using namespace mlir::linalg;
+using namespace mlir::bufferization;
 
 using namespace mlir::tensorAlgebra;
 
@@ -208,7 +208,7 @@ computeReshapeCollapsedType(MemRefType type,
     AffineExpr stride = strides[currentDim + dim - 1];
     if (!isReshapableDimBand(currentDim, dim, sizes, strides))
     {
-      size = ShapedType::kDynamicSize;
+      size = ShapedType::kDynamic;
       stride = AffineExpr();
     }
     else
@@ -286,11 +286,11 @@ namespace
       auto f64Type = rewriter.getF64Type();
       if (printFlops)
       {
-        startTime = rewriter.create<mlir::CallOp>(
+        startTime = rewriter.create<func::CallOp>(
             op->getLoc(), getTimeStr, SmallVector<Type, 2>{f64Type});
       }
 
-      ArrayAttr indexMaps = multop.indexing_maps();
+      ArrayAttr indexMaps = multop.getIndexingMaps();
       std::vector<std::vector<unsigned>> allPerms;
       // Find summation indices
       for (const auto &map : indexMaps)
@@ -308,8 +308,8 @@ namespace
 
       comet_pdump(op);
       comet_debug() << "\n";
-      auto rhs1Tensor = cast<memref::TensorLoadOp>(operands[0].getDefiningOp());
-      auto rhs2Tensor = cast<memref::TensorLoadOp>(operands[1].getDefiningOp());
+      auto rhs1Tensor = cast<ToTensorOp>(operands[0].getDefiningOp());
+      auto rhs2Tensor = cast<ToTensorOp>(operands[1].getDefiningOp());
       comet_debug() << "\n";
       Value lhsDef;
       tensorAlgebra::TensorSetOp setnewop;
@@ -327,13 +327,13 @@ namespace
             lhsDef = dstTensor_labeledTensor.getDefiningOp()->getOperand(0);
           }
           else
-          { // if(isa<memref::TensorLoadOp>(dstTensor.getOperation())){
+          { // if(isa<ToTensorOp>(dstTensor.getOperation())){
             lhsDef = dstTensor;
           }
           comet_vdump(lhsDef);
         }
       }
-      auto lhsTensor = cast<memref::TensorLoadOp>(lhsDef.getDefiningOp());
+      auto lhsTensor = cast<ToTensorOp>(lhsDef.getDefiningOp());
 
       comet_vdump(setnewop);
       comet_debug() << "\n";
@@ -733,7 +733,7 @@ namespace
 
       if (printFlops)
       {
-        auto endTime = rewriter.create<mlir::CallOp>(
+        auto endTime = rewriter.create<func::CallOp>(
             loc, getTimeStr, SmallVector<Type, 2>{f64Type});
 
         auto start = startTime->getResult(0);
@@ -753,7 +753,7 @@ namespace
         //   call @print_flops(%flops) : (f64) -> ()
         std::string printFlopsStr = "print_flops";
         // auto printFlopsCall =
-        rewriter.create<mlir::CallOp>(
+        rewriter.create<func::CallOp>(
             loc, printFlopsStr, SmallVector<Type, 2>{}, ValueRange{flopsOp});
       }
 
@@ -769,12 +769,12 @@ namespace
   }; // namespace
 
   struct TALoweringTTGTPass
-      : public PassWrapper<TALoweringTTGTPass, FunctionPass>
+      : public PassWrapper<TALoweringTTGTPass, OperationPass<func::FuncOp>>
   {
 
     TALoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops) : 
                       isSelectBestPerm(isSelectBestPerm), whatPerm(whatPerm), printFlops{printFlops} {};
-    void runOnFunction() final;
+    void runOnOperation() override;
 
   private:
     bool isSelectBestPerm;
@@ -784,9 +784,9 @@ namespace
 
 } // end anonymous namespace.
 
-void TALoweringTTGTPass::runOnFunction()
+void TALoweringTTGTPass::runOnOperation()
 {
-  auto function = getFunction();
+  func::FuncOp function = getOperation();
   auto module = function.getOperation()->getParentOfType<ModuleOp>();
   auto *ctx = &getContext();
 
@@ -796,7 +796,7 @@ void TALoweringTTGTPass::runOnFunction()
   // func @getTime() -> f64
   if (!hasFuncDeclaration(module, "getTime"))
   {
-    FuncOp func1 = FuncOp::create(function.getLoc(), "getTime", getTimeFunc,
+    mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "getTime", getTimeFunc,
                                   ArrayRef<NamedAttribute>{});
     func1.setPrivate();
     module.push_back(func1);
@@ -805,17 +805,17 @@ void TALoweringTTGTPass::runOnFunction()
   // func @print_flops(%flops) : (f64) -> ()
   if (!hasFuncDeclaration(module, "print_flops"))
   {
-    FuncOp func1 = FuncOp::create(function.getLoc(), "print_flops",
+    mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "print_flops",
                                   printFlopFunc, ArrayRef<NamedAttribute>{});
     func1.setPrivate();
     module.push_back(func1);
   }
 
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   patterns.insert<TensorContractionOpLoweringTTGT>(&getContext(), isSelectBestPerm, whatPerm, printFlops);
 
   ConversionTarget target(getContext());
-  target.addLegalDialect<LinalgDialect, StandardOpsDialect, memref::MemRefDialect>();
+  target.addLegalDialect<LinalgDialect, ArithDialect, memref::MemRefDialect>();
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {

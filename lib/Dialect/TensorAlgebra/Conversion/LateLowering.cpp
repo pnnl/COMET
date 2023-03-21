@@ -28,19 +28,13 @@
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-
-#include "mlir/EDSC/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -48,9 +42,7 @@
 #include "mlir/IR/PatternMatch.h"
 
 using namespace mlir;
-using namespace mlir::linalg;
-using namespace mlir::edsc;
-using namespace mlir::edsc::intrinsics;
+using namespace mlir::arith;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
@@ -96,7 +88,7 @@ namespace
         return failure();
 
       // We lower "ta.return" directly to "std.return".
-      rewriter.replaceOpWithNewOp<ReturnOp>(op);
+      rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
       return success();
     }
   };
@@ -125,7 +117,7 @@ namespace
       auto printTensorIndexFunc = FunctionType::get(ctx, {mlir::UnrankedMemRefType::get(indexType, 0)}, {});
       auto printScalarFunc = FunctionType::get(ctx, {FloatType::getF64(ctx)}, {});
 
-      FuncOp print_func;
+      func::FuncOp print_func;
       auto inputType = op->getOperand(0).getType();
 
       // If the Input type is scalar (F64)
@@ -135,27 +127,27 @@ namespace
         std::string print_newline_Str = "printNewline";
         if (isFuncInMod("printF64", module) == false)
         {
-          print_func = FuncOp::create(loc, print_scalar_f64Str, printScalarFunc, ArrayRef<NamedAttribute>{});
+          print_func = func::FuncOp::create(loc, print_scalar_f64Str, printScalarFunc, ArrayRef<NamedAttribute>{});
           print_func.setPrivate();
           module.push_back(print_func);
 
           if (isFuncInMod("printNewline", module) == false)
           {
             auto printNewLineFunc = FunctionType::get(ctx, {}, {});
-            FuncOp print_newline = FuncOp::create(loc, print_newline_Str, printNewLineFunc, ArrayRef<NamedAttribute>{});
+            func::FuncOp print_newline = func::FuncOp::create(loc, print_newline_Str, printNewLineFunc, ArrayRef<NamedAttribute>{});
             print_newline.setPrivate();
             module.push_back(print_newline);
           }
         }
-        rewriter.create<mlir::CallOp>(loc, print_scalar_f64Str, SmallVector<Type, 2>{}, ValueRange{op->getOperand(0)});
-        rewriter.create<mlir::CallOp>(loc, print_newline_Str, SmallVector<Type, 2>{}, ValueRange{});
+        rewriter.create<func::CallOp>(loc, print_scalar_f64Str, SmallVector<Type, 2>{}, ValueRange{op->getOperand(0)});
+        rewriter.create<func::CallOp>(loc, print_newline_Str, SmallVector<Type, 2>{}, ValueRange{});
       }
       else
       {
         std::string comet_print_f64Str = "comet_print_memref_f64";
         if (isFuncInMod(comet_print_f64Str, module) == false)
         {
-          print_func = FuncOp::create(loc, comet_print_f64Str, printTensorF64Func, ArrayRef<NamedAttribute>{});
+          print_func = func::FuncOp::create(loc, comet_print_f64Str, printTensorF64Func, ArrayRef<NamedAttribute>{});
           print_func.setPrivate();
           module.push_back(print_func);
         }
@@ -163,8 +155,8 @@ namespace
         if (inputType.isa<MemRefType>())
         {
           auto alloc_op = cast<memref::AllocOp>(op->getOperand(0).getDefiningOp());
-          auto u = rewriter.create<memref::CastOp>(loc, alloc_op, unrankedMemrefType_f64);
-          rewriter.create<mlir::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
+          auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
+          rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
         }
         else
         {
@@ -174,8 +166,8 @@ namespace
             auto rhs = op->getOperand(0).getDefiningOp();
             auto alloc_op = cast<memref::AllocOp>(rhs->getOperand(0).getDefiningOp());
 
-            auto u = rewriter.create<memref::CastOp>(loc, alloc_op, unrankedMemrefType_f64);
-            rewriter.create<mlir::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
+            auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
+            rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
           }
           else if (inputType.isa<SparseTensorType>())
           {
@@ -183,7 +175,7 @@ namespace
 
             if (isFuncInMod(comet_print_i64Str, module) == false)
             {
-              print_func = FuncOp::create(loc, comet_print_i64Str, printTensorIndexFunc, ArrayRef<NamedAttribute>{});
+              print_func = func::FuncOp::create(loc, comet_print_i64Str, printTensorIndexFunc, ArrayRef<NamedAttribute>{});
               print_func.setPrivate();
               module.push_back(print_func);
             }
@@ -199,20 +191,20 @@ namespace
               // accessing xD_pos array and creating cast op for its alloc
               auto xD_pos = rhs->getOperand(rsize * 2).getDefiningOp();
               auto alloc_rhs = cast<memref::AllocOp>(xD_pos->getOperand(0).getDefiningOp());
-              auto u = rewriter.create<memref::CastOp>(loc, alloc_rhs, unrankedMemref_index);
-              rewriter.create<mlir::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
+              auto u = rewriter.create<memref::CastOp>(loc, unrankedMemref_index, alloc_rhs);
+              rewriter.create<func::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
 
               // accessing xD_crd array and creating cast op for its alloc
               auto xD_crd = rhs->getOperand((rsize * 2) + 1).getDefiningOp();
               alloc_rhs = cast<memref::AllocOp>(xD_crd->getOperand(0).getDefiningOp());
-              u = rewriter.create<memref::CastOp>(loc, alloc_rhs, unrankedMemref_index);
-              rewriter.create<mlir::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
+              u = rewriter.create<memref::CastOp>(loc, unrankedMemref_index, alloc_rhs);
+              rewriter.create<func::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
             }
 
             auto xD_value = rhs->getOperand(tensorRanks * 2).getDefiningOp();
             auto alloc_rhs = cast<memref::AllocOp>(xD_value->getOperand(0).getDefiningOp());
-            auto u = rewriter.create<memref::CastOp>(loc, alloc_rhs, unrankedMemrefType_f64);
-            rewriter.create<mlir::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
+            auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_rhs);
+            rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
           }
           else
             llvm::errs() << __FILE__ << " " << __LINE__ << "Unknown Data type\n";
@@ -244,13 +236,13 @@ namespace
       {
         auto getTimeFunc = FunctionType::get(ctx, {}, {FloatType::getF64(ctx)});
         // func @getTime() -> f64
-        FuncOp func1 = FuncOp::create(op->getLoc(), getTimeStr,
+        func::FuncOp func1 = func::FuncOp::create(op->getLoc(), getTimeStr,
                                       getTimeFunc, ArrayRef<NamedAttribute>{});
         func1.setPrivate();
         module.push_back(func1);
       }
 
-      rewriter.replaceOpWithNewOp<mlir::CallOp>(op, getTimeStr, SmallVector<Type, 2>{f64Type});
+      rewriter.replaceOpWithNewOp<func::CallOp>(op, getTimeStr, SmallVector<Type, 2>{f64Type});
 
       return success();
     }
@@ -278,13 +270,13 @@ namespace
       {
         auto printElapsedTimeFunc = FunctionType::get(ctx, {f64Type, f64Type}, {});
         // func @printElapsedTime(f64, f64) -> ()
-        FuncOp func1 = FuncOp::create(op->getLoc(), printElapsedTimeStr,
+        func::FuncOp func1 = func::FuncOp::create(op->getLoc(), printElapsedTimeStr,
                                       printElapsedTimeFunc, ArrayRef<NamedAttribute>{});
         func1.setPrivate();
         module.push_back(func1);
       }
 
-      rewriter.replaceOpWithNewOp<mlir::CallOp>(op, printElapsedTimeStr, SmallVector<Type, 2>{}, ValueRange{start, end});
+      rewriter.replaceOpWithNewOp<func::CallOp>(op, printElapsedTimeStr, SmallVector<Type, 2>{}, ValueRange{start, end});
 
       return success();
     }
@@ -298,20 +290,20 @@ namespace
 namespace
 {
   struct LateLoweringPass
-      : public PassWrapper<LateLoweringPass, FunctionPass>
+      : public PassWrapper<LateLoweringPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 } // end anonymous namespace.
 
-void LateLoweringPass::runOnFunction()
+void LateLoweringPass::runOnOperation()
 {
 
-  auto function = getFunction();
+  func::FuncOp function = getOperation();
 
   // llvm::outs() << "Late lower input:\n" <<  function << "\n";
   //  Verify that the given main has no inputs and results.
-  if (function.getNumArguments() || function.getType().getNumResults())
+  if (function.getNumArguments() || function.getFunctionType().getNumResults())
   {
     function.emitError("expected 'main' to have 0 inputs and 0 results");
     return signalPassFailure();
@@ -326,13 +318,12 @@ void LateLoweringPass::runOnFunction()
   // `LinAlg` and `Standard` dialects.
   target.addLegalDialect<AffineDialect,
                          scf::SCFDialect,
-                         StandardOpsDialect,
+                         ArithDialect,
                          memref::MemRefDialect>();
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.
-  // OwningRewritePatternList patterns;
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   patterns.insert<ReturnOpLowering,
                   PrintOpLowering,
                   GetTimeLowering,
@@ -342,7 +333,7 @@ void LateLoweringPass::runOnFunction()
   // conversion. The conversion will signal failure if any of our `illegal`
   // operations were not converted successfully.
   
-  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     signalPassFailure();
   }

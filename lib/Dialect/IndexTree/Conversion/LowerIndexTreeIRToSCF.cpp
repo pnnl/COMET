@@ -29,24 +29,20 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-#include "mlir/EDSC/Builders.h"
-#include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Types.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 
@@ -65,9 +61,8 @@
 #include <queue>
 
 using namespace mlir;
-using namespace mlir::edsc;
-using namespace mlir::edsc::intrinsics;
-using namespace mlir::linalg;
+using namespace mlir::arith;
+using namespace mlir::bufferization;
 using namespace mlir::indexTree;
 using namespace mlir::tensorAlgebra;
 
@@ -205,7 +200,7 @@ Value findCorrespondingAlloc(Value iOp)
   {
     if (isa<memref::AllocOp>(init_alloc.getDefiningOp()))
     {
-      if (init_alloc.getType().dyn_cast<MemRefType>().getDimSize(0) != ShapedType::kDynamicSize)
+      if (init_alloc.getType().dyn_cast<MemRefType>().getDimSize(0) != ShapedType::kDynamic)
       {
         return init_alloc;
       }
@@ -231,9 +226,9 @@ std::vector<Value> getAllocs(Value tensor)
   if (tensor.getType().isa<mlir::TensorType>())
   { // Dense tensor
     comet_debug() << " getAllocs() -  it is dense\n";
-    if (isa<memref::TensorLoadOp>(tensor.getDefiningOp()))
+    if (isa<ToTensorOp>(tensor.getDefiningOp()))
     {
-      Operation *tensorload = cast<memref::TensorLoadOp>(tensor.getDefiningOp());
+      Operation *tensorload = cast<ToTensorOp>(tensor.getDefiningOp());
       auto alloc_op = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
       comet_vdump(alloc_op);
       allocs.push_back(alloc_op);
@@ -242,9 +237,9 @@ std::vector<Value> getAllocs(Value tensor)
     {
       for (unsigned int i = 0; i < tensor.getDefiningOp()->getNumOperands(); i++)
       {
-        if (isa<memref::TensorLoadOp>(tensor.getDefiningOp()->getOperand(i).getDefiningOp()))
+        if (isa<ToTensorOp>(tensor.getDefiningOp()->getOperand(i).getDefiningOp()))
         {
-          Operation *tensorload = cast<memref::TensorLoadOp>(tensor.getDefiningOp()->getOperand(i).getDefiningOp());
+          Operation *tensorload = cast<ToTensorOp>(tensor.getDefiningOp()->getOperand(i).getDefiningOp());
           auto alloc_op = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
           comet_vdump(alloc_op);
           allocs.push_back(alloc_op);
@@ -258,17 +253,17 @@ std::vector<Value> getAllocs(Value tensor)
     auto defop = tensor.getDefiningOp<tensorAlgebra::SparseTensorConstructOp>();
 
     //TODO(gkestor): get tensor ranks by functions
-    unsigned int ranks = (defop.indices().size() - 2) / 5;
+    unsigned int ranks = (defop.getIndices().size() - 2) / 5;
     for (unsigned int n = 0; n < 2 * ranks + 1; n++)
     {
-      comet_vdump(defop.indices()[n]);
-      Operation *tensorload = defop.indices()[n].getDefiningOp<memref::TensorLoadOp>();
+      comet_vdump(defop.getIndices()[n]);
+      Operation *tensorload = defop.getIndices()[n].getDefiningOp<ToTensorOp>();
       auto alloc_op = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
       allocs.push_back(alloc_op);
       comet_vdump(alloc_op);
     }
   }
-  else if (dyn_cast<mlir::ConstantOp>(tensor.getDefiningOp()))
+  else if (dyn_cast<ConstantOp>(tensor.getDefiningOp()))
   { // ConstantOp
     allocs.push_back(tensor);
   }
@@ -409,7 +404,7 @@ void genForOps(std::vector<Value> tensors,
       // Check which tensor is sparse, which is dense;
       // Since this function only handles mixed sparse/dense, then "D" only occurs in one tensor
       // Both the dense and sparse tensor contain the dim size; But they are different. Use one.
-      int maxSize = 0;
+      int64_t maxSize = 0;
       comet_debug() << " ";
       comet_vdump(tensor);
       if (tensor.getType().isa<mlir::RankedTensorType>())
@@ -420,7 +415,7 @@ void genForOps(std::vector<Value> tensors,
 
         // Check if dynamic size
         // Check upperBoundsize
-        if (maxSize == ShapedType::kDynamicSize)
+        if (maxSize == ShapedType::kDynamic)
         {
           // Find defOp allocOp, check the parameter
           comet_debug() << " Dynamic size ";
@@ -519,7 +514,7 @@ void genForOps(std::vector<Value> tensors,
             scf::ForOp parent_forop = opstree->parent->forOps[opstree->parent->forOps.size() - 1];
             comet_debug() << " parent forop\n";
             comet_vdump(parent_forop);
-            auto parent_UpperBound = parent_forop.upperBound();
+            auto parent_UpperBound = parent_forop.getUpperBound();
             comet_debug() << " parent upperBound:\n";
             comet_vdump(parent_UpperBound);
 
@@ -670,7 +665,7 @@ Value getSemiringSecondVal(PatternRewriter &rewriter, Location loc,
   Value elementWiseResult;
   if (semiringSecond == "times")
   {
-    elementWiseResult = rewriter.create<mlir::MulFOp>(loc, Input0, Input1);
+    elementWiseResult = rewriter.create<MulFOp>(loc, Input0, Input1);
   }
   else if (semiringSecond == "first")
   {
@@ -686,27 +681,27 @@ Value getSemiringSecondVal(PatternRewriter &rewriter, Location loc,
   }
   else if (semiringSecond == "div")
   {
-    elementWiseResult = rewriter.create<mlir::DivFOp>(loc, Input0, Input1);
+    elementWiseResult = rewriter.create<DivFOp>(loc, Input0, Input1);
   }
   else if (semiringSecond == "eq")
   {
-    elementWiseResult = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::OEQ, Input0, Input1);
+    elementWiseResult = rewriter.create<CmpFOp>(loc, CmpFPredicate::OEQ, Input0, Input1);
   }
   else if (semiringSecond == "ge")
   {
-    elementWiseResult = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::OGE, Input0, Input1);
+    elementWiseResult = rewriter.create<CmpFOp>(loc, CmpFPredicate::OGE, Input0, Input1);
   }
   else if (semiringSecond == "gt")
   {
-    elementWiseResult = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::OGT, Input0, Input1);
+    elementWiseResult = rewriter.create<CmpFOp>(loc, CmpFPredicate::OGT, Input0, Input1);
   }
   else if (semiringSecond == "le")
   {
-    elementWiseResult = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::OLE, Input0, Input1);
+    elementWiseResult = rewriter.create<CmpFOp>(loc, CmpFPredicate::OLE, Input0, Input1);
   }
   else if (semiringSecond == "lt")
   {
-    elementWiseResult = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::OLT, Input0, Input1);
+    elementWiseResult = rewriter.create<CmpFOp>(loc, CmpFPredicate::OLT, Input0, Input1);
   }
   else if (semiringSecond == "land")
   {
@@ -735,29 +730,29 @@ Value getSemiringSecondVal(PatternRewriter &rewriter, Location loc,
   }
   else if (semiringSecond == "minxy")
   {
-    Value cmp = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::OLT, Input0, Input1);
+    Value cmp = rewriter.create<CmpFOp>(loc, CmpFPredicate::OLT, Input0, Input1);
     elementWiseResult = rewriter.create<SelectOp>(loc, cmp, Input0, Input1);
   }
   else if (semiringSecond == "max")
   {
-    Value cmp = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::OGT, Input0, Input1);
+    Value cmp = rewriter.create<CmpFOp>(loc, CmpFPredicate::OGT, Input0, Input1);
     elementWiseResult = rewriter.create<SelectOp>(loc, cmp, Input0, Input1);
   }
   else if (semiringSecond == "ne")
   {
-    elementWiseResult = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::ONE, Input0, Input1);
+    elementWiseResult = rewriter.create<CmpFOp>(loc, CmpFPredicate::ONE, Input0, Input1);
   }
   else if (semiringSecond == "minus")
   {
-    elementWiseResult = rewriter.create<mlir::SubFOp>(loc, Input0, Input1);
+    elementWiseResult = rewriter.create<SubFOp>(loc, Input0, Input1);
   }
   else if (semiringSecond == "plusxy")
   {
-    elementWiseResult = rewriter.create<mlir::AddFOp>(loc, Input0, Input1);
+    elementWiseResult = rewriter.create<AddFOp>(loc, Input0, Input1);
   }
   else if (semiringSecond == "pairxy")
   {
-    elementWiseResult = rewriter.create<mlir::ConstantOp>(loc, rewriter.getF64Type(), rewriter.getF64FloatAttr(1));
+    elementWiseResult = rewriter.create<ConstantOp>(loc, rewriter.getF64Type(), rewriter.getF64FloatAttr(1));
   }
   else if (semiringSecond == "pow")
   {
@@ -781,11 +776,11 @@ Value getSemiringFirstVal(PatternRewriter &rewriter, Location loc,
   Value reduceResult;
   if (semiringFirst == "times")
   {
-    reduceResult = rewriter.create<mlir::MulFOp>(loc, Input0, Input1);
+    reduceResult = rewriter.create<MulFOp>(loc, Input0, Input1);
   }
   else if (semiringFirst == "plusxy")
   {
-    reduceResult = rewriter.create<mlir::AddFOp>(loc, Input0, Input1);
+    reduceResult = rewriter.create<AddFOp>(loc, Input0, Input1);
   }
   else if (semiringFirst == "minxy")
   {
@@ -799,7 +794,7 @@ Value getSemiringFirstVal(PatternRewriter &rewriter, Location loc,
       // we should not proceed forward from this point to avoid in-correct results from generated code.
       assert(false);
     }
-    Value cmp = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::OLT, Input0, Input1);
+    Value cmp = rewriter.create<CmpFOp>(loc, CmpFPredicate::OLT, Input0, Input1);
     reduceResult = rewriter.create<SelectOp>(loc, cmp, Input0, Input1);
   }
   else if (semiringFirst == "max")
@@ -814,7 +809,7 @@ Value getSemiringFirstVal(PatternRewriter &rewriter, Location loc,
       // we should not proceed forward from this point to avoid in-correct results from generated code.
       assert(false);
     }
-    Value cmp = rewriter.create<mlir::CmpFOp>(loc, mlir::CmpFPredicate::OGT, Input0, Input1);
+    Value cmp = rewriter.create<CmpFOp>(loc, CmpFPredicate::OGT, Input0, Input1);
     reduceResult = rewriter.create<SelectOp>(loc, cmp, Input0, Input1);
   }
   else if (semiringFirst == "land")
@@ -880,11 +875,11 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
     llvm::errs() << "DEBUG ONLY: issue with main_tensor_nums size"
                  << "\n";
 
-  Value const_i1_0 = rewriter.create<mlir::ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
-  Value const_i1_1 = rewriter.create<mlir::ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(1));
+  Value const_i1_0 = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
+  Value const_i1_1 = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(1));
   Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
   auto f64Type = rewriter.getF64Type();
-  auto const_f64_0 = rewriter.create<mlir::ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
+  auto const_f64_0 = rewriter.create<ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
 
   int main_tensor_nums = main_tensors_all_Allocs.size();
   bool compressedWorkspace = false;
@@ -903,7 +898,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
     comet_debug() << " ";
     comet_vdump(const_i1_0.getType());
 
-    Value notAlreadySet = rewriter.create<mlir::CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, const_i1_0);
+    Value notAlreadySet = rewriter.create<CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, const_i1_0);
     comet_debug() << " ";
     comet_vdump(notAlreadySet);
     auto if_notAlreadySet = rewriter.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
@@ -911,10 +906,10 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
     comet_vdump(if_notAlreadySet);
 
     // if-then region corresponding to if_notAlreadySet instruction.
-    // if (&if_notAlreadySet.thenRegion())
-    if (!if_notAlreadySet.thenRegion().empty())
+    // if (&if_notAlreadySet. getThenRegion())
+    if (!if_notAlreadySet. getThenRegion().empty())
     {
-      rewriter.setInsertionPointToStart(&if_notAlreadySet.thenRegion().front());
+      rewriter.setInsertionPointToStart(&if_notAlreadySet. getThenRegion().front());
 
       // Wj = Aik * Bkj          // computation wj, outer has k, so +=/= need if/else
       // W_already_set[j] = 1
@@ -950,7 +945,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       rewriter.create<memref::StoreOp>(loc, allValueAccessIdx[lhs_loc][0], tensors_lhs_Allocs[2][0], ValueRange{W_index_list_size_old});
 
       Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
-      Value W_index_list_size_new = rewriter.create<mlir::AddIOp>(loc, W_index_list_size_old, const_index_1);
+      Value W_index_list_size_new = rewriter.create<AddIOp>(loc, W_index_list_size_old, const_index_1);
       comet_debug() << " AddIOps (W_index_list_size_new)";
       comet_vdump(W_index_list_size_new);
 
@@ -958,10 +953,10 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
     }
 
     // if-else region corresponding to if_notAlreadySet instruction.
-    // if (&if_notAlreadySet.elseRegion())
-    if (!if_notAlreadySet.elseRegion().empty())
+    // if (&if_notAlreadySet.getElseRegion())
+    if (!if_notAlreadySet.getElseRegion().empty())
     {
-      rewriter.setInsertionPointToStart(&if_notAlreadySet.elseRegion().front());
+      rewriter.setInsertionPointToStart(&if_notAlreadySet.getElseRegion().front());
 
       std::vector<Value> allLoadsElse(main_tensor_nums);
       for (auto m = 0; m < main_tensor_nums; m++)
@@ -1053,15 +1048,15 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
       comet_debug() << " dense_inputtensor_id: " << dense_inputtensor_id << "\n";
       comet_debug() << " sparse_inputtensor_id: " << sparse_inputtensor_id << "\n";
-      Value denseInput_is_nonzero = rewriter.create<mlir::CmpFOp>(loc, CmpFPredicate::ONE, allLoads[dense_inputtensor_id], const_f64_0);
+      Value denseInput_is_nonzero = rewriter.create<CmpFOp>(loc, CmpFPredicate::ONE, allLoads[dense_inputtensor_id], const_f64_0);
       auto if_nonzero = rewriter.create<scf::IfOp>(loc, denseInput_is_nonzero, /*WithElseRegion*/ false);
       comet_debug() << " If branch:\n";
       comet_vdump(if_nonzero);
 
-      if (!if_nonzero.thenRegion().empty())
+      if (!if_nonzero. getThenRegion().empty())
       {
 
-        rewriter.setInsertionPointToStart(&if_nonzero.thenRegion().front());
+        rewriter.setInsertionPointToStart(&if_nonzero. getThenRegion().front());
 
         comet_debug() << "calculate product and sum in \n";
         Value elementWiseResult = getSemiringSecondVal(rewriter, loc, semiringSecond, allLoads[0], allLoads[1], compressedWorkspace);
@@ -1128,7 +1123,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         // Update Cnnz
         comet_debug() << "Update Cnnz\n";
         Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
-        Value new_Cnnz_index = rewriter.create<mlir::AddIOp>(loc, Cnnz_index, const_index_1);
+        Value new_Cnnz_index = rewriter.create<AddIOp>(loc, Cnnz_index, const_index_1);
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
         comet_debug() << "AddIOps (new_Cnnz_index): ";
         comet_vdump(new_Cnnz_index);
@@ -1151,7 +1146,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       {
         auto dimSize = inputType.cast<mlir::MemRefType>().getDimSize(rank);
         Value upperBound;
-        if (dimSize == ShapedType::kDynamicSize)
+        if (dimSize == ShapedType::kDynamic)
         {
           comet_debug() << " This dimension is a dynamic size:\n";
           unsigned dynamicDimPos = inputType.dyn_cast<MemRefType>().getDynamicDimIndex(rank);
@@ -1173,7 +1168,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       {
         rewriter.setInsertionPointAfter(forLoops[0]);
         Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
-        Value arg0_next = rewriter.create<mlir::AddIOp>(loc, forLoops[1].getInductionVar(), const_index_1);
+        Value arg0_next = rewriter.create<AddIOp>(loc, forLoops[1].getInductionVar(), const_index_1);
         comet_debug() << "AddIOp (arg0_next): ";
         comet_vdump(arg0_next);
 
@@ -1199,17 +1194,17 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
           comet_debug() << "Update DCSR C2pos\n";
           rewriter.setInsertionPointAfter(forLoops[0]);
           auto Cnnz_index_new = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
-          auto has_nnz_row = rewriter.create<mlir::CmpIOp>(loc, CmpIPredicate::ne, Cnnz_index_new, Cnnz_index_old);
+          auto has_nnz_row = rewriter.create<CmpIOp>(loc, CmpIPredicate::ne, Cnnz_index_new, Cnnz_index_old);
           auto has_nnz_row_ifOp = rewriter.create<scf::IfOp>(loc, has_nnz_row, /*WithElseRegion*/ false);
           comet_debug() << " If branch:\n";
           comet_vdump(has_nnz_row_ifOp);
 
-          if (!has_nnz_row_ifOp.thenRegion().empty())
+          if (!has_nnz_row_ifOp. getThenRegion().empty())
           {
-            rewriter.setInsertionPointToStart(&has_nnz_row_ifOp.thenRegion().front());
+            rewriter.setInsertionPointToStart(&has_nnz_row_ifOp. getThenRegion().front());
 
             Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
-            Value arg0_next = rewriter.create<mlir::AddIOp>(loc, forLoops[1].getInductionVar(), const_index_1);
+            Value arg0_next = rewriter.create<AddIOp>(loc, forLoops[1].getInductionVar(), const_index_1);
             comet_debug()  << "AddIOp (arg0_next): ";
             comet_vdump(arg0_next);
 
@@ -1218,7 +1213,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
             Value Cnnz_row_index = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
             Value idx_i = allAccessIdx[sparse_inputtensor_id][0];
             rewriter.create<memref::StoreOp>(loc, /*i*/ idx_i, main_tensors_all_Allocs[2][1], Cnnz_row_index); // C1crd
-            Value Cnnz_row_index_new = rewriter.create<mlir::AddIOp>(loc, Cnnz_row_index, const_index_1);
+            Value Cnnz_row_index_new = rewriter.create<AddIOp>(loc, Cnnz_row_index, const_index_1);
             comet_debug() << "AddIOp (Cnnz_row_index_new): ";
             comet_vdump(Cnnz_row_index_new);
             rewriter.create<memref::StoreOp>(loc, Cnnz_row_index_new, alloc_Cnnz_row, alloc_Cnnz_insert_loc); // Update Cnnz_row
@@ -1285,7 +1280,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   comet_debug() << " Current IndexTreeComputeOp:";
   comet_vdump(cur_op);
 
-  const bool comp_worksp_opt(cur_op.comp_worksp_opt());
+  const bool comp_worksp_opt(cur_op.getCompWorkspOpt());
   comet_debug() << " comp_worksp_opt (bool: true is compressed): " << comp_worksp_opt << "\n";
 
   // Two cases:
@@ -1330,7 +1325,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
     if (indexTree::IndexTreeIndicesOp cur_op = dyn_cast<mlir::indexTree::IndexTreeIndicesOp>(ancestorsWps[i].getDefiningOp()))
     {
       // Get indices
-      ArrayAttr op_indices = cur_op.indices();
+      ArrayAttr op_indices = cur_op.getIndices();
 
       if (op_indices.size() > 0)
       { // for loops OpsTree node
@@ -1358,8 +1353,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   auto f64Type = rewriter.getF64Type();
   auto indexType = IndexType::get(rootOp.getContext());
 
-  Value const_f64_0 = rewriter.create<mlir::ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
-  Value const_i1_0 = rewriter.create<mlir::ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
+  Value const_f64_0 = rewriter.create<ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
+  Value const_i1_0 = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
   Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
 
   /// Analyze the leafop, Get the tensors, rhs, lhs, and operator_type
@@ -1368,7 +1363,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   /// Generate loadOp, compute ops, StoreOp.
   comet_debug() << " \n";
   // New version
-  Value lhs = cur_op.lhs().getDefiningOp()->getOperand(0);
+  Value lhs = cur_op.getLhs().getDefiningOp()->getOperand(0);
   comet_debug() << " ";
   comet_vdump(lhs);
 // lhs is TensorLoadOp
@@ -1381,7 +1376,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   comet_debug() << " ";
   comet_vdump(cur_op);
   std::vector<Value> tensors_rhs;
-  for (auto n : cur_op.rhs())
+  for (auto n : cur_op.getRhs())
   {
     comet_debug() << " ";
     comet_vdump(n);
@@ -1394,11 +1389,11 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   }
 
   std::vector<Value> tensors_lhs;
-  for (unsigned i = 0; i < cur_op.lhs().getDefiningOp()->getNumOperands(); i++)
+  for (unsigned i = 0; i < cur_op.getLhs().getDefiningOp()->getNumOperands(); i++)
   {
     comet_debug() << " ";
-    comet_vdump(cur_op.lhs().getDefiningOp()->getOperand(i));
-    tensors_lhs.push_back(cur_op.lhs().getDefiningOp()->getOperand(i));
+    comet_vdump(cur_op.getLhs().getDefiningOp()->getOperand(i));
+    tensors_lhs.push_back(cur_op.getLhs().getDefiningOp()->getOperand(i));
   }
 
   // Currently, only one case, the rhs is constant. Wj = 0.0;
@@ -1563,7 +1558,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
             std::vector<Value> upper_indices = {index_0};
             auto upperBound = rewriter.create<memref::LoadOp>(loc, main_tensors_all_Allocs[i][2 * d], upper_indices);
             comet_vdump(upperBound);
-            valueAccessIdx_part = rewriter.create<mlir::MulIOp>(loc, upperBound, valueAccessIdx_part);
+            valueAccessIdx_part = rewriter.create<MulIOp>(loc, upperBound, valueAccessIdx_part);
             last_d = d;
           }
         }
@@ -1572,7 +1567,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           comet_debug() << " ";
           comet_vdump(allLoopsArg[i][allLoopsArg[i].size() - 1]);
           comet_vdump(valueAccessIdx_part);
-          valueAccessIdx_part = rewriter.create<mlir::AddIOp>(loc, allLoopsArg[i][allLoopsArg[i].size() - 1], valueAccessIdx_part);
+          valueAccessIdx_part = rewriter.create<AddIOp>(loc, allLoopsArg[i][allLoopsArg[i].size() - 1], valueAccessIdx_part);
           comet_debug() << " AddIOps (valueAccessIdx_part): ";
           comet_vdump(valueAccessIdx_part);
         }
@@ -1595,7 +1590,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   int lhs_loc = main_tensors_rhs.size();
   if (main_tensors_rhs.size() == 1)
   { // Generate "a = b"
-    if (mlir::ConstantOp cstop = dyn_cast<mlir::ConstantOp>(main_tensors_rhs[0].getDefiningOp()))
+    if (ConstantOp cstop = dyn_cast<ConstantOp>(main_tensors_rhs[0].getDefiningOp()))
     { // "a = 1.0"
       comet_debug() << " ";
       comet_vdump(cstop);
@@ -1716,19 +1711,19 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           // Get the parent for op, change the upperbound as w_index_list_size
           auto last_insertionPoint = rewriter.saveInsertionPoint();
 
-          Value const_index_0 = rewriter.create<mlir::ConstantIndexOp>(loc, 0);
+          Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
           scf::ForOp theForop = dyn_cast<scf::ForOp>(const_index_0.getDefiningOp()->getParentOp());
           comet_debug() << " ";
           comet_vdump(theForop);
 
           rewriter.setInsertionPoint(theForop);
 
-          Value const_index_00 = rewriter.create<mlir::ConstantIndexOp>(loc, 0);
+          Value const_index_00 = rewriter.create<ConstantIndexOp>(loc, 0);
           Value w_index_list_size = rewriter.create<memref::LoadOp>(loc, tensors_rhs_Allocs[3][0], const_index_00);
 
           std::string quick_sort_Str = "quick_sort";
-          Value w_index_list_cast = rewriter.create<memref::CastOp>(loc, tensors_rhs_Allocs[2][0], unrankedMemrefType_index);
-          rewriter.create<mlir::CallOp>(loc, quick_sort_Str, SmallVector<Type, 2>{}, ValueRange{w_index_list_cast, w_index_list_size});
+          Value w_index_list_cast = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, tensors_rhs_Allocs[2][0]);
+          rewriter.create<func::CallOp>(loc, quick_sort_Str, SmallVector<Type, 2>{}, ValueRange{w_index_list_cast, w_index_list_size});
 
           theForop.setUpperBound(w_index_list_size);
           comet_debug() << " ";
@@ -1821,7 +1816,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           Value cst_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
           comet_debug() << " ";
           comet_vdump(c2pos_size_value);
-          Value c2pos_size_value_new = rewriter.create<mlir::AddIOp>(loc, c2pos_size_value, cst_index_1);
+          Value c2pos_size_value_new = rewriter.create<AddIOp>(loc, c2pos_size_value, cst_index_1);
           comet_debug() << " AddIOps (c2pos_size_value_new): ";
           comet_vdump(c2pos_size_value_new);
 
@@ -1840,17 +1835,17 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           Value rhs_value = rewriter.create<memref::LoadOp>(loc, main_tensors_all_Allocs[rhs_loc][main_tensors_all_Allocs[rhs_loc].size() - 1], allValueAccessIdx[rhs_loc]);
           comet_debug() << " ";
           comet_vdump(rhs_value);
-          Value isNonzero = rewriter.create<mlir::CmpFOp>(loc, CmpFPredicate::ONE, rhs_value, const_f64_0);
+          Value isNonzero = rewriter.create<CmpFOp>(loc, CmpFPredicate::ONE, rhs_value, const_f64_0);
           comet_debug() << " ";
           comet_vdump(isNonzero);
           auto if_nonzero = rewriter.create<scf::IfOp>(loc, isNonzero, /*WithElseRegion*/ false);
           comet_debug() << " If branch:\n";
           comet_vdump(if_nonzero);
 
-          if (!if_nonzero.thenRegion().empty())
+          if (!if_nonzero. getThenRegion().empty())
           {
             auto last_insertionPoint = rewriter.saveInsertionPoint();
-            rewriter.setInsertionPointToStart(&if_nonzero.thenRegion().front());
+            rewriter.setInsertionPointToStart(&if_nonzero. getThenRegion().front());
 
             rewriter.create<memref::StoreOp>(loc, rhs_value, lhs_val, lhs_accessIndex);
 
@@ -1958,7 +1953,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           Value cst_1_index = rewriter.create<ConstantIndexOp>(loc, 1);
           comet_debug() << " ";
           comet_vdump(c2pos_size_value);
-          Value c2pos_size_value_new = rewriter.create<mlir::AddIOp>(loc, c2pos_size_value, cst_1_index);
+          Value c2pos_size_value_new = rewriter.create<AddIOp>(loc, c2pos_size_value, cst_1_index);
           comet_debug() << " AddIOps (c2pos_size_value_new): ";
           comet_vdump(c2pos_size_value_new);
 
@@ -1987,7 +1982,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   else if (main_tensors_rhs.size() == 2)
   { // Generate " a = b * c" binary op
 
-    auto semiringParts = cur_op.semiring().split('_');
+    auto semiringParts = cur_op.getSemiring().split('_');
     // check validity of semiring provided by user.
     if (!Semiring_reduceOps.contains(semiringParts.first) || !Semiring_ops.contains(semiringParts.second))
     {
@@ -2043,7 +2038,7 @@ namespace
     LogicalResult matchAndRewrite(indexTree::IndexTreeOp rootOp,
                                   PatternRewriter &rewriter) const final
     {
-      auto module = rootOp->getParentOfType<ModuleOp>();
+      //auto module = rootOp->getParentOfType<ModuleOp>();
 
       assert(isa<indexTree::IndexTreeOp>(rootOp));
       comet_debug() << "\nIndexTreeIRLowering in LowerIndexTreeIRToSCF\n";
@@ -2053,7 +2048,7 @@ namespace
       // rootOp only contains one workspace child, no indices
 
       std::vector<mlir::Value> wp_ops;
-      dfsRootOpTree(rootOp.children(), wp_ops);
+      dfsRootOpTree(rootOp.getChildren(), wp_ops);
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
       comet_debug() << " wp_ops.size(): " << wp_ops.size() << "\n";
       for (auto n : wp_ops)
@@ -2145,7 +2140,7 @@ namespace
         if (indexTree::IndexTreeIndicesOp cur_op = dyn_cast<mlir::indexTree::IndexTreeIndicesOp>(wp_ops[i].getDefiningOp()))
         {
           // Get indices
-          ArrayAttr op_indices = cur_op.indices();
+          ArrayAttr op_indices = cur_op.getIndices();
           comet_debug() << "curOp is IndexTreeIndicesOp\n";
           comet_vdump(cur_op);
 
@@ -2231,17 +2226,17 @@ namespace
   }; // IndexTreeIRLowering
 
   struct LowerIndexTreeIRToSCFPass
-      : public PassWrapper<LowerIndexTreeIRToSCFPass, FunctionPass>
+      : public PassWrapper<LowerIndexTreeIRToSCFPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
 } // end anonymous namespace.
 
-void LowerIndexTreeIRToSCFPass::runOnFunction()
+void LowerIndexTreeIRToSCFPass::runOnOperation()
 {
   comet_debug() << "LowerIndexTreeIRToSCFPass\n";
-  auto function = getFunction();
+  func::FuncOp function = getOperation();
   auto module = function.getOperation()->getParentOfType<ModuleOp>();
   auto *ctx = &getContext();
 
@@ -2250,7 +2245,7 @@ void LowerIndexTreeIRToSCFPass::runOnFunction()
 
   if (isFuncInMod("quick_sort", module) == false)
   {
-    FuncOp func1 = FuncOp::create(function.getLoc(), "quick_sort",
+    mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "quick_sort",
                                   quickSortFunc, ArrayRef<NamedAttribute>{});
     func1.setPrivate();
     module.push_back(func1);
@@ -2258,7 +2253,7 @@ void LowerIndexTreeIRToSCFPass::runOnFunction()
 
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect,
-                         StandardOpsDialect,
+                         ArithDialect,
                          scf::SCFDialect,
                          memref::MemRefDialect>();
 
@@ -2275,12 +2270,12 @@ void LowerIndexTreeIRToSCFPass::runOnFunction()
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp,
                     tensorAlgebra::LabeledTensorOp,
-                    FuncOp>();
+                    func::FuncOp>();
 
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   patterns.insert<IndexTreeIRLowering>(&getContext());
 
-  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     llvm::errs() << "Failed to Lower LowerIndexTreeIRToSCFPass\n";
   }

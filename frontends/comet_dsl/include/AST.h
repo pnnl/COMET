@@ -40,6 +40,7 @@ using llvm::cast;
 
 namespace tensorAlgebra
 {
+  /// A variable type with either name or shape information.
 
   /// A variable type with shape information.
   struct VarType
@@ -154,6 +155,27 @@ namespace tensorAlgebra
     static bool classof(const ExprAST *C) { return C->getKind() == Expr_Var; }
   };
 
+  // /// Expression class for defining a variable.
+  // class VarDeclExprAST : public ExprAST
+  // {
+  //   std::string name;
+  //   VarType type;
+  //   std::unique_ptr<ExprAST> initVal;
+
+  // public:
+  //   VarDeclExprAST(Location loc, const std::string &name, VarType type,
+  //                  std::unique_ptr<ExprAST> initVal)
+  //       : ExprAST(Expr_VarDecl, loc), name(name), type(std::move(type)),
+  //         initVal(std::move(initVal)) {}
+
+  //   llvm::StringRef getName() { return name; }
+  //   ExprAST *getInitVal() { return initVal.get(); }
+  //   const VarType &getType() { return type; }
+
+  //   /// LLVM style RTTI
+  //   static bool classof(const ExprAST *C) { return C->getKind() == Expr_VarDecl; }
+  // };
+
   /// Expression class for defining a variable.
   class VarDeclExprAST : public ExprAST
   {
@@ -162,17 +184,17 @@ namespace tensorAlgebra
     std::unique_ptr<ExprAST> initVal;
 
   public:
-    VarDeclExprAST(Location loc, const std::string &name, VarType type,
-                   std::unique_ptr<ExprAST> initVal)
-        : ExprAST(Expr_VarDecl, loc), name(name), type(std::move(type)),
-          initVal(std::move(initVal)) {}
+    VarDeclExprAST(Location loc, llvm::StringRef name, VarType type,
+                   std::unique_ptr<ExprAST> initVal = nullptr)
+        : ExprAST(Expr_VarDecl, std::move(loc)), name(name),
+          type(std::move(type)), initVal(std::move(initVal)) {}
 
     llvm::StringRef getName() { return name; }
     ExprAST *getInitVal() { return initVal.get(); }
-    VarType &getType() { return type; }
+    const VarType &getType() { return type; }
 
     /// LLVM style RTTI
-    static bool classof(const ExprAST *C) { return C->getKind() == Expr_VarDecl; }
+    static bool classof(const ExprAST *c) { return c->getKind() == Expr_VarDecl; }
   };
 
   /// Expression class for an index label declaration, i.e. IndexLabel i = [0:10];
@@ -342,17 +364,17 @@ namespace tensorAlgebra
   /// Expression class for a return operator.
   class ReturnExprAST : public ExprAST
   {
-    llvm::Optional<std::unique_ptr<ExprAST>> expr;
+    std::optional<std::unique_ptr<ExprAST>> expr;
 
   public:
-    ReturnExprAST(Location loc, llvm::Optional<std::unique_ptr<ExprAST>> expr)
+    ReturnExprAST(Location loc, std::optional<std::unique_ptr<ExprAST>> expr)
         : ExprAST(Expr_Return, loc), expr(std::move(expr)) {}
 
-    llvm::Optional<ExprAST *> getExpr()
+    std::optional<ExprAST *> getExpr()
     {
-      if (expr.hasValue())
+      if (expr.has_value())
         return expr->get();
-      return llvm::NoneType();
+      return std::nullopt;
     }
 
     /// LLVM style RTTI
@@ -469,7 +491,7 @@ namespace tensorAlgebra
 
   public:
     ForLoopExprAST(Location loc, const std::string &name, int64_t begin,
-                          int64_t end, int64_t increment = 1)
+                   int64_t end, int64_t increment = 1)
         : ExprAST(Expr_ForLoop, loc), name(name), begin(begin), end(end),
           increment(increment) {}
 
@@ -488,8 +510,8 @@ namespace tensorAlgebra
   /// Expression class for end of loops, i.e. end
   class ForLoopEndExprAST : public ExprAST
   {
-    public:
-      ForLoopEndExprAST(Location loc) : ExprAST (Expr_ForEnd, loc) {}
+  public:
+    ForLoopEndExprAST(Location loc) : ExprAST(Expr_ForEnd, loc) {}
 
     static bool classof(const ExprAST *C)
     {
@@ -556,6 +578,7 @@ namespace tensorAlgebra
 
     const Location &loc() { return location; }
     const std::string &getName() const { return name; }
+    //TODO(gkestor): check VariableExprAST
     const std::vector<std::unique_ptr<VariableExprAST>> &getArgs()
     {
       return args;

@@ -29,11 +29,10 @@
 #define COMET_DSL_LEXER_H_
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <memory>
 #include <string>
-
-#include "llvm/Support/raw_ostream.h"
 
 // *********** For debug purpose *********//
 // #ifndef DEBUG_MODE_LEXER
