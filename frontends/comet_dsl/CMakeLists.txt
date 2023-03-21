@@ -16,26 +16,32 @@ llvm_update_compile_flags(comet-opt)
 
 set(LIBS
   MLIRAnalysis
+  MLIRCallInterfaces
+  MLIRCastInterfaces
   MLIRExecutionEngine
-  MLIRAffine
-  MLIRAffineToStandard
-  MLIRLinalgToLLVM
-  MLIRSCFToStandard
-  MLIREDSC
-  MLIRLinalgAnalysis  
-  MLIRLinalg
-  MLIRLinalgTransforms
-  MLIRLLVMIR
-  MLIRSCF
+  MLIRIR
+  MLIRMemRefDialect
   MLIRParser
   MLIRPass
-  MLIRStandard
-  MLIRStandardToLLVM
+  # MLIRAnalysis
+  # MLIRExecutionEngine
+  # MLIRAffineDialect
+  # MLIRAffineToStandard
+  # MLIRLinalgToLLVM
+  # MLIRSCFToStandard
+  # MLIRLinalgAnalysis  
+  # MLIRLinalg
+  # MLIRLinalgTransforms
+  # MLIRLLVMIR
+  #MLIRSCF
+  # MLIRArithDialect
+  # MLIRStandardToLLVM
+  # MLIRTransforms
+  # MLIRSupport
+  # MLIRSideEffectInterfaces
+  # MLIRVectorToLLVM
+  # MLIRVectorToSCF
   MLIRTransforms
-  MLIRSupport
-  MLIRSideEffectInterfaces
-  MLIRVectorToLLVM
-  MLIRVectorToSCF
   COMETUtils
   COMETTensorAlgebra
   COMETIndexTree

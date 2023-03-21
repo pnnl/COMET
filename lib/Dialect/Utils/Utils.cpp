@@ -30,11 +30,11 @@
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 
-#include "mlir/Transforms/Bufferize.h"
+//#include "mlir/Transforms/Bufferize.h"
 #include "mlir/IR/BuiltinDialect.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/PatternMatch.h"
@@ -68,7 +68,8 @@ std::string VALUETYPE = "f64";
 unsigned int TENSOR_NUMS = 3;
 unsigned int INPUT_TENSOR_NUMS = 2;
 
-using namespace mlir::linalg;
+// using namespace mlir::linalg;
+using namespace mlir::arith;
 using namespace mlir::indexTree;
 
 namespace mlir
@@ -94,10 +95,9 @@ namespace mlir
 
     bool hasFuncDeclaration(ModuleOp &module, std::string funcName)
     {
-      // for(auto func : module.getOps<FuncOp>()) {
-      for (auto func : module.getOps<mlir::FuncOp>())
+      for (auto func : module.getOps<FuncOp>())
       {
-        StringAttr func_name = func.sym_nameAttr();
+        StringAttr func_name = func.getSymNameAttr();
         if (funcName == func_name.getValue())
           return true;
       }
@@ -188,7 +188,7 @@ namespace mlir
       for (int i = 0; i < resultMemTy.getRank(); i++)
       {
         if (resultMemTy.isDynamicDim(i))
-          cur_memref.push_back(ShapedType::kDynamicSize);
+          cur_memref.push_back(ShapedType::kDynamic);
         else // The constant dim size must NOT comes from the sparse matrix
           cur_memref.push_back(resultMemTy.getDimSize(i));
       }
@@ -350,14 +350,14 @@ namespace mlir
       }
     }
 
-    std::vector<std::vector<unsigned int>> getAllPerms(ArrayAttr indexMaps)
+    std::vector<std::vector<int64_t>> getAllPerms(ArrayAttr indexMaps)
     {
-      std::vector<std::vector<unsigned int>> allPerms;
+      std::vector<std::vector<int64_t>> allPerms;
       // Find summation indices
       for (const auto &map : indexMaps)
       {
         auto affineMap = map.cast<AffineMapAttr>().getValue();
-        std::vector<unsigned int> perm;
+        std::vector<int64_t> perm;
         for (size_t i = 0; i < affineMap.getNumResults(); i++)
         {
           auto expr = affineMap.getResult(i);
@@ -402,7 +402,7 @@ namespace mlir
         else
         {
           llvm::errs() << __LINE__ << " Different type: ";
-          map.getType().dump();
+          //map.getType().dump();
         }
         allPerms.push_back(perm);
         comet_debug() << " ";
@@ -846,10 +846,10 @@ namespace mlir
 
     std::vector<Value> getFormatsValue(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IndexType indexType)
     {
-      Value format_dense = rewriter.create<mlir::ConstantOp>(loc, indexType, rewriter.getIndexAttr(0));
-      Value format_compressed = rewriter.create<mlir::ConstantOp>(loc, indexType, rewriter.getIndexAttr(1));
-      Value format_compressednonunique = rewriter.create<mlir::ConstantOp>(loc, indexType, rewriter.getIndexAttr(2));
-      Value format_singleton = rewriter.create<mlir::ConstantOp>(loc, indexType, rewriter.getIndexAttr(3));
+      Value format_dense = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(0));
+      Value format_compressed = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(1));
+      Value format_compressednonunique = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(2));
+      Value format_singleton = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(3));
       // read_input_sizes_2D_f64 or read_input_sizes_3D_f64
       comet_debug() << "\n";
       std::vector<Value> dim_format;
@@ -972,10 +972,10 @@ namespace mlir
 
     std::vector<Value> getFormatsValueInt(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IntegerType intType)
     {
-      Value format_dense = rewriter.create<mlir::ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 0));
-      Value format_compressed = rewriter.create<mlir::ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 1));
-      Value format_compressednonunique = rewriter.create<mlir::ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 2));
-      Value format_singleton = rewriter.create<mlir::ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 3));
+      Value format_dense = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 0));
+      Value format_compressed = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 1));
+      Value format_compressednonunique = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 2));
+      Value format_singleton = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 3));
       // read_input_sizes_2D_f64 or read_input_sizes_3D_f64
       comet_debug() << "\n";
       std::vector<Value> dim_format;
@@ -1139,7 +1139,7 @@ namespace mlir
         comet_debug() << " dfsRootOpTree\n";
         comet_vdump(workspaceop);
 
-        unsigned int sz = workspaceop.children().size();
+        unsigned int sz = workspaceop.getChildren().size();
 
         comet_debug() << " " << sz << " ";
         ret.push_back(workspaceop);
@@ -1148,7 +1148,7 @@ namespace mlir
 
         for (unsigned int i = 0; i < sz; i++)
         {
-          Value t = workspaceop.children()[i];
+          Value t = workspaceop.getChildren()[i];
           dfsRootOpTree(t, ret);
         }
       }
@@ -1325,11 +1325,11 @@ namespace mlir
                                     std::vector<std::vector<bool>> &inputOutputMapping)
     {
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
-      ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.allFormats();
-      ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.allPerms();
+      ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.getAllFormats();
+      ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.getAllPerms();
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
-      ArrayAttr opFormatsArrayAttr_lhs = itComputeOp_lhs.allFormats();
-      ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.allPerms();
+      ArrayAttr opFormatsArrayAttr_lhs = itComputeOp_lhs.getAllFormats();
+      ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.getAllPerms();
       assert(opFormatsArrayAttr_rhs.size() == opPermsArrayAttr_rhs.size() && "not equal RHS formats size with perms size\n");
       assert(opFormatsArrayAttr_lhs.size() == opPermsArrayAttr_lhs.size() && "not equal LHS formats size with perms size\n");
 
@@ -1359,9 +1359,9 @@ namespace mlir
     void getFormatsOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats)
     {
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
-      ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.allFormats();
+      ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.getAllFormats();
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
-      ArrayAttr opFormatsArrayAttr_lhs = itComputeOp_lhs.allFormats();
+      ArrayAttr opFormatsArrayAttr_lhs = itComputeOp_lhs.getAllFormats();
 
       // Get output format, vector of vector
       // Convert ArrayAttr into
@@ -1376,7 +1376,7 @@ namespace mlir
     void getRHSFormatsOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats)
     {
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
-      ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.allFormats();
+      ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.getAllFormats();
 
       // Get output format, vector of vector
       // Convert ArrayAttr into
@@ -1389,7 +1389,7 @@ namespace mlir
     void getLHSFormatsOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats)
     {
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
-      ArrayAttr opFormatsArrayAttr_lhs = itComputeOp_lhs.allFormats();
+      ArrayAttr opFormatsArrayAttr_lhs = itComputeOp_lhs.getAllFormats();
       std::vector<std::vector<std::string>> opFormats_lhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_lhs);
       opFormats = opFormats_lhs;
     }
@@ -1459,8 +1459,8 @@ namespace mlir
           if (indexTree::IndexTreeComputeOp leafop = dyn_cast<mlir::indexTree::IndexTreeComputeOp>(leafs[j].getDefiningOp()))
           {
             comet_debug() << " getFormatsInfo:leafs[" << j << "] is computeOp\n";
-            // std::vector<std::vector<int64_t>> allPerms(leafop.allPerms().size());
-            // std::vector<std::vector<std::string>> allFormats(leafop.allFormats().size());
+            // std::vector<std::vector<int64_t>> allPerms(leafop.getAllPerms().size());
+            // std::vector<std::vector<std::string>> allFormats(leafop.getAllFormats().size());
             std::vector<std::vector<std::string>> allFormats;
             std::vector<std::vector<int>> allPerms;
             std::vector<std::vector<bool>> inputOutputMapping;
@@ -1721,7 +1721,7 @@ namespace mlir
     void getRHSPermsOfComputeOp(Value computeOp, std::vector<std::vector<int>> &opPerms)
     {
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
-      ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.allPerms();
+      ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.getAllPerms();
       // Get output format, vector of vector
       // Convert ArrayAttr into
       std::vector<std::vector<int>> opPerms_rhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_rhs);
@@ -1732,7 +1732,7 @@ namespace mlir
     void getLHSPermsOfComputeOp(Value computeOp, std::vector<std::vector<int>> &opPerms)
     {
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
-      ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.allPerms();
+      ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.getAllPerms();
 
       // Get output format, vector of vector
       // Convert ArrayAttr into
@@ -1745,9 +1745,9 @@ namespace mlir
     void getPermsOfComputeOp(Value computeOp, std::vector<std::vector<int>> &opPerms)
     {
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
-      ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.allPerms();
+      ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.getAllPerms();
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
-      ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.allPerms();
+      ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.getAllPerms();
 
       // Get output format, vector of vector
       // Convert ArrayAttr into
@@ -1834,13 +1834,13 @@ namespace mlir
     int64_t labelSize(Operation *op)
     {
       auto range = cast<tensorAlgebra::IndexLabelStaticOp>(op);
-      auto min_idx = cast<mlir::ConstantIndexOp>(range.min().getDefiningOp());
-      auto max_idx = cast<mlir::ConstantIndexOp>(range.max().getDefiningOp());
-      auto step_idx = cast<mlir::ConstantIndexOp>(range.step().getDefiningOp());
+      auto min_idx = cast<ConstantIndexOp>(range.getMin().getDefiningOp());
+      auto max_idx = cast<ConstantIndexOp>(range.getMax().getDefiningOp());
+      auto step_idx = cast<ConstantIndexOp>(range.getStep().getDefiningOp());
 
-      auto min = min_idx.getValue();
-      auto max = max_idx.getValue();
-      auto step = step_idx.getValue();
+      auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();;
+      auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();;
+      auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();;
       return ((max - min) / step);
     }
 
@@ -1963,7 +1963,7 @@ namespace mlir
           comet_debug() << " is TensorDeclOp\n";
 
           // infer the format
-          auto lhs_format = dyn_cast<DenseTensorDeclOp>(defop).format();
+          auto lhs_format = dyn_cast<DenseTensorDeclOp>(defop).getFormat();
           comet_debug() << " lhs_format: " << lhs_format << "\n";
           formats.push_back(lhs_format);
         }
@@ -1972,7 +1972,7 @@ namespace mlir
           comet_debug() << " is TensorDeclOp\n";
 
           // infer the format
-          auto lhs_format = dyn_cast<SparseTensorDeclOp>(defop).format();
+          auto lhs_format = dyn_cast<SparseTensorDeclOp>(defop).getFormat();
           comet_debug() << " lhs_format: " << lhs_format << "\n";
           formats.push_back(lhs_format);
         }
@@ -2018,9 +2018,9 @@ namespace mlir
       comet_debug() << "\n";
       auto mulOp = cast<tensorAlgebra::ChainMulOp>(op);
 
-      auto *lhsOp = mulOp.lhs().getDefiningOp();
-      auto *rhsOp = mulOp.rhs().getDefiningOp();
-      auto sumLabels = mulOp.sum_labels();
+      auto *lhsOp = mulOp.getLhs().getDefiningOp();
+      auto *rhsOp = mulOp.getRhs().getDefiningOp();
+      auto sumLabels = mulOp.getSumLabels();
       double alpha = 1.0;
       bool is_lhs_constant = false;
       bool is_rhs_constant = false;
@@ -2039,10 +2039,10 @@ namespace mlir
       {
         comet_debug() << "\n";
         auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(lhsOp);
-        rhs1Tensor = ltOp.tensor();
+        rhs1Tensor = ltOp.getTensor();
         rhs1Tensor.getDefiningOp()->setAttr("__alpha__",
                                             rewriter.getF64FloatAttr(1.0));
-        auto labels = ltOp.labels();
+        auto labels = ltOp.getLabels();
         for (auto lbl : labels)
         {
           rhs1Labels.push_back(lbl);
@@ -2058,7 +2058,7 @@ namespace mlir
           comet_debug() << "\n";
           auto tensorDeclOp =
               cast<tensorAlgebra::DenseTensorDeclOp>(rhs1Tensor.getDefiningOp());
-          auto labels = tensorDeclOp.labels();
+          auto labels = tensorDeclOp.getLabels();
           for (auto lbl : labels)
           {
             rhs1Labels.push_back(lbl);
@@ -2071,7 +2071,7 @@ namespace mlir
           comet_debug() << "\n";
           auto tensorDeclOp =
               cast<tensorAlgebra::SparseTensorDeclOp>(rhs1Tensor.getDefiningOp());
-          auto labels = tensorDeclOp.labels();
+          auto labels = tensorDeclOp.getLabels();
           for (auto lbl : labels)
           {
             rhs1Labels.push_back(lbl);
@@ -2085,12 +2085,12 @@ namespace mlir
           comet_debug() << "\n";
           auto ltOp =
               cast<tensorAlgebra::LabeledTensorOp>(rhs1Tensor.getDefiningOp());
-          auto labels = ltOp.labels();
+          auto labels = ltOp.getLabels();
           for (auto lbl : labels)
           {
             rhs1Labels.push_back(lbl);
           }
-          rhs1Tensor = ltOp.tensor();
+          rhs1Tensor = ltOp.getTensor();
 
           auto rhs1AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
           rhs1Tensor.getDefiningOp()->setAttr("__alpha__", rhs1AlphaAttr);
@@ -2100,8 +2100,9 @@ namespace mlir
       else if (isa<tensorAlgebra::DenseConstantOp>(lhsOp))
       {
         auto constOp = cast<tensorAlgebra::DenseConstantOp>(lhsOp);
-        DenseElementsAttr denseAttr = constOp.value();
-        auto attr = *(denseAttr.getAttributeValues().begin());
+        //DenseElementsAttr denseAttr = constOp.getValue();
+        //auto attr = *(denseAttr.getAttributeValues().begin()); //GK changed
+        auto attr =  constOp.getValueAttrName();
         auto f64Attr = attr.cast<FloatAttr>();
         alpha *= f64Attr.getValueAsDouble();
         is_lhs_constant = true;
@@ -2116,10 +2117,10 @@ namespace mlir
       {
         comet_debug() << "\n";
         auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(rhsOp);
-        rhs2Tensor = ltOp.tensor();
+        rhs2Tensor = ltOp.getTensor();
         rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
                                             rewriter.getF64FloatAttr(1.0));
-        auto labels = ltOp.labels();
+        auto labels = ltOp.getLabels();
         for (auto lbl : labels)
         {
           rhs2Labels.push_back(lbl);
@@ -2135,7 +2136,7 @@ namespace mlir
           comet_debug() << "\n";
           auto tensorDeclOp =
               cast<tensorAlgebra::DenseTensorDeclOp>(rhs2Tensor.getDefiningOp());
-          auto labels = tensorDeclOp.labels();
+          auto labels = tensorDeclOp.getLabels();
           for (auto lbl : labels)
           {
             rhs2Labels.push_back(lbl);
@@ -2149,7 +2150,7 @@ namespace mlir
           comet_debug() << "\n";
           auto tensorDeclOp =
               cast<tensorAlgebra::SparseTensorDeclOp>(rhs2Tensor.getDefiningOp());
-          auto labels = tensorDeclOp.labels();
+          auto labels = tensorDeclOp.getLabels();
           for (auto lbl : labels)
           {
             rhs2Labels.push_back(lbl);
@@ -2164,12 +2165,12 @@ namespace mlir
           comet_debug() << "\n";
           auto ltOp =
               cast<tensorAlgebra::LabeledTensorOp>(rhs2Tensor.getDefiningOp());
-          auto labels = ltOp.labels();
+          auto labels = ltOp.getLabels();
           for (auto lbl : labels)
           {
             rhs2Labels.push_back(lbl);
           }
-          rhs2Tensor = ltOp.tensor();
+          rhs2Tensor = ltOp.getTensor();
           auto rhs2AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
           rhs2Tensor.getDefiningOp()->setAttr("__alpha__", rhs2AlphaAttr);
           comet_debug() << "\n";
@@ -2178,8 +2179,9 @@ namespace mlir
       else if (isa<tensorAlgebra::DenseConstantOp>(rhsOp))
       {
         auto constOp = cast<tensorAlgebra::DenseConstantOp>(rhsOp);
-        DenseElementsAttr denseAttr = constOp.value();
-        auto attr = *(denseAttr.getAttributeValues().begin());
+        //DenseElementsAttr denseAttr = constOp.getValue();
+        //auto attr = *(denseAttr.getAttributeValues().begin());
+        auto attr =  constOp.getValueAttrName();
         auto f64Attr = attr.cast<FloatAttr>();
         alpha *= f64Attr.getValueAsDouble();
         is_rhs_constant = true;
@@ -2235,12 +2237,12 @@ namespace mlir
       }
       else if (is_lhs_constant)
       {
-        lhsTensor = mulOp.rhs();
+        lhsTensor = mulOp.getRhs();
         rewriter.eraseOp(lhsOp);
       }
       else if (is_rhs_constant)
       {
-        lhsTensor = mulOp.lhs();
+        lhsTensor = mulOp.getLhs();
         rewriter.eraseOp(rhsOp);
       }
 
@@ -2262,9 +2264,9 @@ namespace mlir
       {
         auto mulOp = cast<tensorAlgebra::ChainMulOp>(op);
 
-        auto *lhsOp = mulOp.lhs().getDefiningOp();
-        auto *rhsOp = mulOp.rhs().getDefiningOp();
-        auto sumLabels = mulOp.sum_labels();
+        auto *lhsOp = mulOp.getLhs().getDefiningOp();
+        auto *rhsOp = mulOp.getRhs().getDefiningOp();
+        auto sumLabels = mulOp.getSumLabels();
         double alpha = 1.0;
         bool is_lhs_constant = false;
         bool is_rhs_constant = false;
@@ -2282,11 +2284,11 @@ namespace mlir
         {
           comet_debug() << "\n";
           auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(lhsOp);
-          rhs1Tensor = ltOp.tensor();
+          rhs1Tensor = ltOp.getTensor();
           rhs1Tensor.getDefiningOp()->setAttr("__alpha__",
                                               rewriter.getF64FloatAttr(1.0));
 
-          auto labels = ltOp.labels();
+          auto labels = ltOp.getLabels();
           for (auto lbl : labels)
           {
             rhs1Labels.push_back(lbl);
@@ -2301,7 +2303,7 @@ namespace mlir
           {
             auto tensorDeclOp =
                 cast<tensorAlgebra::DenseTensorDeclOp>(rhs1Tensor.getDefiningOp());
-            auto labels = tensorDeclOp.labels();
+            auto labels = tensorDeclOp.getLabels();
             for (auto lbl : labels)
             {
               rhs1Labels.push_back(lbl);
@@ -2314,7 +2316,7 @@ namespace mlir
           {
             auto tensorDeclOp =
                 cast<tensorAlgebra::SparseTensorDeclOp>(rhs1Tensor.getDefiningOp());
-            auto labels = tensorDeclOp.labels();
+            auto labels = tensorDeclOp.getLabels();
             for (auto lbl : labels)
             {
               rhs1Labels.push_back(lbl);
@@ -2329,12 +2331,12 @@ namespace mlir
             comet_debug() << "\n";
             auto ltOp =
                 cast<tensorAlgebra::LabeledTensorOp>(rhs1Tensor.getDefiningOp());
-            auto labels = ltOp.labels();
+            auto labels = ltOp.getLabels();
             for (auto lbl : labels)
             {
               rhs1Labels.push_back(lbl);
             }
-            rhs1Tensor = ltOp.tensor();
+            rhs1Tensor = ltOp.getTensor();
 
             auto rhs1AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
             rhs1Tensor.getDefiningOp()->setAttr("__alpha__", rhs1AlphaAttr);
@@ -2345,8 +2347,9 @@ namespace mlir
         {
           comet_debug() << "\n";
           auto constOp = cast<tensorAlgebra::DenseConstantOp>(lhsOp);
-          DenseElementsAttr denseAttr = constOp.value();
-          auto attr = *(denseAttr.getAttributeValues().begin());
+          //DenseElementsAttr denseAttr = constOp.getValue();
+          //auto attr = *(denseAttr.getAttributeValues().begin());
+          auto attr =  constOp.getValueAttrName();
           auto f64Attr = attr.cast<FloatAttr>();
           alpha *= f64Attr.getValueAsDouble();
           is_lhs_constant = true;
@@ -2362,11 +2365,11 @@ namespace mlir
         {
           comet_debug() << "\n";
           auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(rhsOp);
-          rhs2Tensor = ltOp.tensor();
+          rhs2Tensor = ltOp.getTensor();
           rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
                                               rewriter.getF64FloatAttr(1.0));
 
-          auto labels = ltOp.labels();
+          auto labels = ltOp.getLabels();
           for (auto lbl : labels)
           {
             rhs2Labels.push_back(lbl);
@@ -2383,7 +2386,7 @@ namespace mlir
             comet_debug() << "\n";
             auto tensorDeclOp =
                 cast<tensorAlgebra::DenseTensorDeclOp>(rhs2Tensor.getDefiningOp());
-            auto labels = tensorDeclOp.labels();
+            auto labels = tensorDeclOp.getLabels();
             for (auto lbl : labels)
             {
               rhs2Labels.push_back(lbl);
@@ -2397,7 +2400,7 @@ namespace mlir
             comet_debug() << "\n";
             auto tensorDeclOp =
                 cast<tensorAlgebra::SparseTensorDeclOp>(rhs2Tensor.getDefiningOp());
-            auto labels = tensorDeclOp.labels();
+            auto labels = tensorDeclOp.getLabels();
             for (auto lbl : labels)
             {
               rhs2Labels.push_back(lbl);
@@ -2412,12 +2415,12 @@ namespace mlir
             comet_debug() << "\n";
             auto ltOp =
                 cast<tensorAlgebra::LabeledTensorOp>(rhs2Tensor.getDefiningOp());
-            auto labels = ltOp.labels();
+            auto labels = ltOp.getLabels();
             for (auto lbl : labels)
             {
               rhs2Labels.push_back(lbl);
             }
-            rhs2Tensor = ltOp.tensor();
+            rhs2Tensor = ltOp.getTensor();
             // auto rhs2AlphaAttr = ltOp.getAttr("__alpha__");
             auto rhs2AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
             rhs2Tensor.getDefiningOp()->setAttr("__alpha__", rhs2AlphaAttr);
@@ -2428,8 +2431,9 @@ namespace mlir
         {
           comet_debug() << "\n";
           auto constOp = cast<tensorAlgebra::DenseConstantOp>(rhsOp);
-          DenseElementsAttr denseAttr = constOp.value();
-          auto attr = *(denseAttr.getAttributeValues().begin());
+          //DenseElementsAttr denseAttr = constOp.getValue();
+          //auto attr = *(denseAttr.getAttributeValues().begin());
+          auto attr =  constOp.getValueAttrName();
           auto f64Attr = attr.cast<FloatAttr>();
           alpha *= f64Attr.getValueAsDouble();
           is_rhs_constant = true;

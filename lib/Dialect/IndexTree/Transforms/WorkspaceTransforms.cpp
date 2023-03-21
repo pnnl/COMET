@@ -29,25 +29,23 @@
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
+
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-#include "mlir/EDSC/Builders.h"
-#include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Types.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 #include "llvm/Support/Debug.h"
 #include <iostream>
@@ -63,9 +61,11 @@
 #include <queue>
 
 using namespace mlir;
-using namespace mlir::edsc;
-using namespace mlir::edsc::intrinsics;
-using namespace mlir::linalg;
+using namespace mlir::bufferization;
+using namespace mlir::arith;
+// using namespace mlir::edsc;
+// using namespace mlir::edsc::intrinsics;
+// using namespace mlir::linalg;
 using namespace mlir::IndexTree;
 using namespace mlir::tensorAlgebra;
 
@@ -124,17 +124,17 @@ struct dimInTensor
 namespace
 {
   struct WorkspaceTransformsPass
-      : public PassWrapper<WorkspaceTransformsPass, FunctionPass>
+      : public PassWrapper<WorkspaceTransformsPass, OperationPass<mlir::func::FuncOp>>
   {
-    void runOnFunction() final;
-    void WorkspaceTransforms(mlir::FuncOp function);
+    void runOnOperation() override;
+    void WorkspaceTransforms(mlir::func::FuncOp function);
   };
 
   struct CompressedWorkspaceTransformsPass
-      : public PassWrapper<CompressedWorkspaceTransformsPass, FunctionPass>
+      : public PassWrapper<CompressedWorkspaceTransformsPass, OperationPass<mlir::func::FuncOp>>
   {
-    void runOnFunction() final;
-    void CompressedWorkspaceTransforms(mlir::FuncOp function);
+    void runOnOperation() override;
+    void CompressedWorkspaceTransforms(mlir::func::FuncOp function);
   };
 
 } // end anonymous namespace.
@@ -265,7 +265,7 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
 
     if (needSplitNode != denseIndicesOp.getDefiningOp())
     {
-      ArrayAttr indices = indicesOp.indices();
+      ArrayAttr indices = indicesOp.getIndices();
 
       comet_debug() << " indicesOp.getOperation()->getNumOperands(): " << indicesOp.getOperation()->getNumOperands() << "\n";
       std::vector<mlir::Value> operands;
@@ -354,7 +354,7 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
 
     comet_debug() << " current computeOp: \n";
     comet_vdump(n);
-    ArrayAttr allperms_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(n.getDefiningOp()->getOperand(0).getDefiningOp()).allPerms();
+    ArrayAttr allperms_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(n.getDefiningOp()->getOperand(0).getDefiningOp()).getAllPerms();
     std::vector<std::vector<int>> allpermsInt_rhs = convertArrayAttrIntTo2DVector(allperms_rhs);
     std::vector<int> permsInt = getUnionOf2Dvector(allpermsInt_rhs);
     comet_debug() << " print permsInt: ";
@@ -396,7 +396,7 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
         // if no, remove:
         indexTree::IndexTreeIndicesOp curIndicesOp = dyn_cast<indexTree::IndexTreeIndicesOp>(computeOpParent.getDefiningOp());
         comet_debug() << " \n";
-        ArrayAttr idsArrayAttr = curIndicesOp.indices(); // should be 1D vector
+        ArrayAttr idsArrayAttr = curIndicesOp.getIndices(); // should be 1D vector
         std::vector<int> idsVec;
         for (auto n : idsArrayAttr)
         {
@@ -526,23 +526,23 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
   comet_vdump(outputItComputeOp.getDefiningOp()->getOperand(sparseDimOrderInOutput));
   std::string w_format = "Dense"; // tensor<?xf64>
-  auto w_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getF64Type());
+  auto w_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getF64Type());
 
   Operation *itComputeOpFirstUsers = *(itComputeOp.getOperation()->getUsers().begin());
   builder.setInsertionPoint(itComputeOpFirstUsers); // Insert before itree Op
 
   mlir::Value w = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_type, w_lbls_value, w_format);
   comet_vdump(w);
-  auto w_already_set_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getI1Type()); // tensor<?xi1>
+  auto w_already_set_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getI1Type()); // tensor<?xi1>
   mlir::Value w_already_set = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_already_set_type, w_lbls_value, w_format);
   comet_vdump(w_already_set);
-  auto w_index_list_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getIndexType()); // tensor<?xindex>
+  auto w_index_list_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getIndexType()); // tensor<?xindex>
   mlir::Value w_index_list = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_index_list_type, w_lbls_value, w_format);
   comet_vdump(w_index_list);
 
   MemRefType w_index_list_size_type = MemRefType::get({1}, builder.getIndexType());                   // tensor<1xindex>
   mlir::Value w_index_list_size_alloc = builder.create<memref::AllocOp>(loc, w_index_list_size_type); // tensor<1xindex>
-  Value w_index_list_size = builder.create<memref::TensorLoadOp>(loc, w_index_list_size_alloc);
+  Value w_index_list_size = builder.create<ToTensorOp>(loc, w_index_list_size_alloc);
 
   std::vector<Value> workspaceTensors = {w, w_already_set, w_index_list, w_index_list_size};
   tensors.push_back(w); // {A, B, C, W}
@@ -561,7 +561,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
   std::vector<mlir::Value> c1_rhs = {const_index_0};
   mlir::Value c1_lhs = {w_index_list_size};
-  std::string semiringName(itComputeOp.semiring().data());
+  std::string semiringName(itComputeOp.getSemiring().data());
   auto c1_semiring = builder.getStringAttr(semiringName);
 
   // for c1_rhs
@@ -686,7 +686,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
     std::vector<Value> ancestors;
     std::vector<mlir::Value> dfsOps;
-    dfsRootOpTree(op.children(), dfsOps);
+    dfsRootOpTree(op.getChildren(), dfsOps);
     getAncestorsWp(n, ancestors, dfsOps);
     comet_debug() << " print ancestors \n";
     print_vector_value(ancestors);
@@ -701,7 +701,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
       {
         indexTree::IndexTreeIndicesOp indicesOp = dyn_cast<indexTree::IndexTreeIndicesOp>(ancestor.getDefiningOp());
 
-        ArrayAttr idsArrayAttr = indicesOp.indices(); // should be 1D vector
+        ArrayAttr idsArrayAttr = indicesOp.getIndices(); // should be 1D vector
         // actually only one index for the indicesOp in our implementation
         for (auto m : idsArrayAttr)
         {
@@ -763,7 +763,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
     comet_debug() << " tensors_lhs.size(): " << tensors_lhs.size() << "\n";
 
     indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
-    std::string semiringName(itComputeOp.semiring().data());
+    std::string semiringName(itComputeOp.getSemiring().data());
 
     std::vector<int> sparseDimsOutput = getSparseDimsOutput(opFormats, opPerms);
     std::vector<struct dimInTensor> sparseDimsInput = getSparseDimsInput(opFormats, opPerms);
@@ -788,7 +788,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       comet_debug() << "Done\n";
       comet_vdump(sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder));
       std::string v_format = "Dense"; // tensor<?xf64>
-      auto v_type = RankedTensorType::get({mlir::ShapedType::kDynamicSize}, builder.getF64Type());
+      auto v_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getF64Type());
 
       builder.setInsertionPoint(computeOp.getDefiningOp());
       mlir::Value v = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, v_type, v_lbls_value, v_format);
@@ -807,7 +807,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0.0));
       std::vector<mlir::Value> c1_rhs = {const_f64_0};
       mlir::Value c1_lhs = {v};
-      std::string semiringName(itComputeOp.semiring().data());
+      std::string semiringName(itComputeOp.getSemiring().data());
       auto c1_semiring = builder.getStringAttr(semiringName);
 
       // for c1_rhs
@@ -927,7 +927,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
   }
 }
 
-void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::FuncOp funcop)
+void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::func::FuncOp funcop)
 {
   funcop.walk([](indexTree::IndexTreeOp op)
               {
@@ -953,7 +953,7 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
                   if (isa<indexTree::IndexTreeIndicesOp>(computeOp.getDefiningOp()))
                   {
                     auto indicesop = dyn_cast<indexTree::IndexTreeIndicesOp>(computeOp.getDefiningOp());
-                    ArrayAttr idsArrayAttr = indicesop.indices();
+                    ArrayAttr idsArrayAttr = indicesop.getIndices();
                     for (auto n : idsArrayAttr)
                     {
                       int ids = n.cast<mlir::IntegerAttr>().getInt();
@@ -1044,10 +1044,10 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::Func
   comet_debug() << __FILE__ << " " << __LINE__ << "CompressedWorkspaceTransforms pass is done\n";
 }
 
-void CompressedWorkspaceTransformsPass::runOnFunction()
+void CompressedWorkspaceTransformsPass::runOnOperation()
 {
   comet_debug() << __FILE__ << " " << __LINE__ << " starting CompressedWorkspaceTransforms pass \n";
-  auto function = getFunction();
+  func::FuncOp function = getOperation();
   // Traverse the function, only handle ta.itree operation
   CompressedWorkspaceTransforms(function);
   //function.dump();

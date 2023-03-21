@@ -26,6 +26,7 @@
 #include "comet/Dialect/IndexTree/IR/ITDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Operation.h"
@@ -61,9 +62,9 @@ namespace
 {
 
   struct IndexTreePass
-      : public PassWrapper<IndexTreePass, FunctionPass>
+      : public PassWrapper<IndexTreePass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 } // namespace
 
@@ -144,8 +145,8 @@ IndicesType getUnion(IndicesType indices1, IndicesType indices2)
 
 void doTensorMultOp(TensorMultOp op)
 {
-  Value rhs1_tensor = getRealRhs(op.rhs1().getDefiningOp());
-  Value rhs2_tensor = getRealRhs(op.rhs2().getDefiningOp());
+  Value rhs1_tensor = getRealRhs(op.getRhs1().getDefiningOp());
+  Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
   Value lhs_tensor = getRealLhs(op);
 
   comet_debug() << "IndexTreePass: doTensorMultOp\n";
@@ -156,9 +157,9 @@ void doTensorMultOp(TensorMultOp op)
   comet_debug() << "lhs-tensor\n";
   comet_vdump(lhs_tensor);
 
-  auto allPerms = getAllPerms(op.indexing_maps());
-  auto allFormats = getAllFormats(op.formatsAttr(), allPerms);
-  auto SemiringOp = op.semiringAttr();
+  auto allPerms = getAllPerms(op.getIndexingMaps());
+  auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
+  auto SemiringOp = op.getSemiringAttr();
 
   assert(allPerms.size() == 3);
 
@@ -205,9 +206,8 @@ void doTensorMultOp(TensorMultOp op)
 template <typename T>
 void doElementWiseOp(T op)
 {
-  // getFunction()->dump();
-  Value rhs1_tensor = getRealRhs(op.rhs1().getDefiningOp());
-  Value rhs2_tensor = getRealRhs(op.rhs2().getDefiningOp());
+  Value rhs1_tensor = getRealRhs(op.getRhs1().getDefiningOp());
+  Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
   Value lhs_tensor = getRealLhs(op);
 
   comet_debug() << "IndexTreePass: doElementWiseMultOp\n";
@@ -218,9 +218,9 @@ void doElementWiseOp(T op)
   comet_debug() << "lhs-tensor\n";
   comet_vdump(lhs_tensor);
 
-  auto allPerms = getAllPerms(op.indexing_maps());
-  auto allFormats = getAllFormats(op.formatsAttr(), allPerms);
-  auto SemiringOp = op.semiringAttr();
+  auto allPerms = getAllPerms(op.getIndexingMaps());
+  auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
+  auto SemiringOp = op.getSemiringAttr();
 
   assert(allPerms.size() == 3);
 
@@ -425,16 +425,16 @@ void treeToDialect(Index_Tree *tree)
   }
 }
 
-void IndexTreePass::runOnFunction()
+void IndexTreePass::runOnOperation()
 {
   assert(tree == nullptr);
-  auto func = getFunction();
+  func::FuncOp func = getOperation();
 
   tree = Index_Tree::createTreeWithRoot();
   bool formITDialect = false;
 
   comet_debug() << "IndexTree pass running on Function\n";
-  for (Block &B : func.body())
+  for (Block &B : func.getBody())
   {
     for (Operation &op : B)
     {

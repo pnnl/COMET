@@ -29,20 +29,16 @@
 #include "comet/Dialect/IndexTree/IR/ITDialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
-#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-
-#include "mlir/EDSC/Builders.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
 
 #include <limits>
 #include <map>
@@ -52,9 +48,8 @@
 #include "llvm/Support/Debug.h"
 
 using namespace mlir;
-using namespace mlir::edsc;
-using namespace mlir::edsc::intrinsics;
-using namespace mlir::linalg;
+using namespace mlir::arith;
+using namespace mlir::bufferization;
 
 using namespace mlir::tensorAlgebra;
 using namespace mlir::indexTree;
@@ -97,8 +92,8 @@ namespace
 
     IndexType indexType = IndexType::get(computeOp.getContext());
     FloatType f64Type = FloatType::getF64(computeOp.getContext());
-    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
-    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
+    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); // memref<?xindex>
+    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, f64Type);     // memref<?xf64>
 
     comet_debug() << "mixModeEltWiseMultSparseTensorOutputLowering computeOp\n";
     comet_vdump(computeOp);
@@ -131,7 +126,7 @@ namespace
     for (unsigned int i = 0; i < 2 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
     {
       comet_debug() << " in for loop\n";
-      Value intput_tensorload_op = cast<memref::TensorLoadOp>(sptensor_construct_op.getOperand(i).getDefiningOp());
+      Value intput_tensorload_op = cast<ToTensorOp>(sptensor_construct_op.getOperand(i).getDefiningOp());
       Value input_alloc_op = cast<memref::AllocOp>(intput_tensorload_op.getDefiningOp()->getOperand(0).getDefiningOp());
       comet_debug() << " AllocOp: ";
       comet_vdump(input_alloc_op);
@@ -154,7 +149,7 @@ namespace
         comet_vdump(output_alloc_op);
       }
 
-      Value output_tensorload_op = rewriter.create<memref::TensorLoadOp>(loc, output_alloc_op);
+      Value output_tensorload_op = rewriter.create<ToTensorOp>(loc, output_alloc_op);
       tensorload_sizes_vec.push_back(output_tensorload_op);
     }
     comet_debug() << " ";
@@ -201,12 +196,12 @@ namespace
 
     IndexType indexType = IndexType::get(op.getContext());
     FloatType f64Type = FloatType::getF64(op.getContext());
-    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
-    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
+    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); // memref<?xindex>
+    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, f64Type);     // memref<?xf64>
 
-    Value cst_index_0 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(0));
+    Value cst_index_0 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(0));
     comet_vdump(cst_index_0);
-    Value cst_index_1 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
+    Value cst_index_1 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
     comet_vdump(cst_index_1);
 
     unsigned int tensor_rank = op.getOperation()->getNumOperands();
@@ -235,12 +230,12 @@ namespace
         }
       }
       // The dim size is the second parameter of the
-      Value dim2_posSize = rewriter.create<mlir::AddIOp>(loc, dimSizes[0], cst_index_1);
+      Value dim2_posSize = rewriter.create<AddIOp>(loc, dimSizes[0], cst_index_1);
       comet_debug() << "AddIOp generated for dim2_posSize:\n";
       comet_vdump(dim2_posSize);
       initial_array_sizes.push_back(dim2_posSize);
 
-      Value dim2_crdSize = rewriter.create<mlir::MulIOp>(loc, dimSizes[0], dimSizes[1]);
+      Value dim2_crdSize = rewriter.create<MulIOp>(loc, dimSizes[0], dimSizes[1]);
       initial_array_sizes.push_back(dim2_crdSize);
       initial_array_sizes.push_back(dim2_crdSize);
       comet_debug() << " ";
@@ -271,7 +266,7 @@ namespace
         comet_debug() << " AllocOp: ";
         comet_vdump(alloc_sizes);
       }
-      Value tensorload_sizes = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes);
+      Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes);
       tensorload_sizes_vec.push_back(tensorload_sizes);
       array_alloc_vec.push_back(alloc_sizes);
     }
@@ -324,15 +319,15 @@ namespace
       for (int i = 0; i < resultMemTy.getRank(); i++)
       {
         if (resultMemTy.isDynamicDim(i))
-          cur_memref.push_back(ShapedType::kDynamicSize);
+          cur_memref.push_back(ShapedType::kDynamic);
         else // The constant dim size must NOT comes from the sparse matrix
           cur_memref.push_back(resultMemTy.getDimSize(i));
 
-        if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp()))
+        if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
         {
-          comet_vdump(tensor_decl_value.labels()[i]);
-          auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp());
-          auto hi = label_decl_value.max();
+          comet_vdump(tensor_decl_value.getLabels()[i]);
+          auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
+          auto hi = label_decl_value.getMax();
           if (resultMemTy.isDynamicDim(i))
             cur_indices.push_back(hi); // IndexCastOp
         }
@@ -348,6 +343,7 @@ namespace
 
       comet_debug() << " AllocOp for initialization";
       Value init_alloc;
+      //memref::AllocOp init_alloc;
       if (is_filled)
       {
         // if is_filled is true, only allocate memory and let ta.fill initializes tensors
@@ -360,7 +356,7 @@ namespace
       }
       init_alloc.getDefiningOp()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
 
-      Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, init_alloc);
+      Value tensorLoad = rewriter.create<ToTensorOp>(loc, init_alloc);
       comet_debug() << " TensorLoad:";
       comet_vdump(tensorLoad);
 
@@ -371,7 +367,7 @@ namespace
     }
   };
 
-  void insertReadFileLibCall(int rank_size, MLIRContext *ctx, ModuleOp &module, FuncOp function)
+  void insertReadFileLibCall(int rank_size, MLIRContext *ctx, ModuleOp &module, func::FuncOp function)
   {
     comet_debug() << "Inserting insertReadFileLibCall\n";
     FloatType f32Type, f64Type;
@@ -401,7 +397,7 @@ namespace
       {
         if (isFuncInMod("read_input_2D_f32", module) == false)
         {
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_2D_f32",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_2D_f32",
                                         readInput2DF32Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -411,7 +407,7 @@ namespace
       {
         if (isFuncInMod("read_input_2D_f64", module) == false)
         {
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_2D_f64",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_2D_f64",
                                         readInput2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -424,7 +420,7 @@ namespace
       {
         if (isFuncInMod("read_input_sizes_2D_f32", module) == false)
         {
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_sizes_2D_f32",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_2D_f32",
                                         readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -435,7 +431,7 @@ namespace
         if (isFuncInMod("read_input_sizes_2D_f64", module) == false)
         {
           comet_debug() << " Inserting read_input_sizes_2D_f64\n";
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_sizes_2D_f64",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_2D_f64",
                                         readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -453,7 +449,7 @@ namespace
       {
         if (isFuncInMod("read_input_3D_f32", module) == false)
         {
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_3D_f32",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_3D_f32",
                                         readInput3DF32Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -464,7 +460,7 @@ namespace
         if (isFuncInMod("read_input_3D_f64", module) == false)
         {
           comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_3D_f64",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_3D_f64",
                                         readInput3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -477,7 +473,7 @@ namespace
       {
         if (isFuncInMod("read_input_sizes_3D_f32", module) == false)
         {
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_sizes_3D_f32",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_3D_f32",
                                         readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -488,7 +484,7 @@ namespace
         if (isFuncInMod("read_input_sizes_3D_f64", module) == false)
         {
           comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
-          FuncOp func1 = FuncOp::create(function.getLoc(), "read_input_sizes_3D_f64",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_3D_f64",
                                         readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -517,7 +513,7 @@ namespace
       comet_debug() << " SparseTensorDeclOpLowering in format begin\n";
       comet_vdump(op);
       mlir::MLIRContext *ctx = rewriter.getContext();
-      auto function = cast<FuncOp>(op->getParentOp());
+      auto function = cast<func::FuncOp>(op->getParentOp());
       // comet_vdump(function);
 
       auto module = function.getOperation()->getParentOfType<ModuleOp>();
@@ -650,7 +646,7 @@ namespace
       comet_debug() << " isOutputTensor: " << isOutputTensor << "\n";
 
       auto loc = op.getLoc();
-      StringRef formatsAttr = op.format();
+      StringRef formatsAttr = op.getFormat();
       std::string formats_str(formatsAttr.data());
       comet_debug() << " --- " << formats_str << "\n";
 
@@ -663,8 +659,8 @@ namespace
         f64Type = FloatType::getF32(op.getContext());
 
       // A1_pos ... A_value
-      auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
-      auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
+      auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); // memref<?xindex>
+      auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, f64Type);     // memref<?xf64>
 
       Type unrankedMemTy_index = UnrankedMemRefType::get(indexType, 0);
       Type unrankedMemTy_f64 = UnrankedMemRefType::get(f64Type, 0);
@@ -703,7 +699,7 @@ namespace
                   auto genericcallop = cast<tensorAlgebra::GenericCallOp>(read_from_file_operand);
                   // comet_vdump(genericcallop);
                   LLVM_DEBUG(comet_debug() << " read_from_file op\n");
-                  std::string read_ref(genericcallop.callee().getLeafReference());
+                  std::string read_ref(genericcallop.getCallee().getLeafReference());
                   LLVM_DEBUG(comet_debug() << " read_ref: " << read_ref << "\n");
                   if (read_ref.compare(0, 14, "read_from_file") == 0)
                   {
@@ -726,8 +722,8 @@ namespace
             // comet_pdump(u);
             auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
             // Can get filename, from "filename" attribute of fillfromfileop
-            StringAttr filename = fillfromfileop.filename().cast<StringAttr>();
-            IntegerAttr readModeAttr = fillfromfileop.readMode().cast<IntegerAttr>();
+            StringAttr filename = fillfromfileop.getFilename().cast<StringAttr>();
+            IntegerAttr readModeAttr = fillfromfileop.getReadMode().cast<IntegerAttr>();
             rewriter.eraseOp(fillfromfileop);
             
             comet_debug() << " filename: " << filename.getValue() << "\n";
@@ -746,7 +742,7 @@ namespace
         comet_debug() << " ";
         comet_vdump(alloc_sizes);
 
-        Value alloc_sizes_cast = rewriter.create<memref::CastOp>(loc, alloc_sizes, unrankedMemTy_index);
+        Value alloc_sizes_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_index, alloc_sizes);
 
         std::vector<Value> dim_format = mlir::tensorAlgebra::getFormatsValue(formats_str, rank_size, rewriter, loc, indexType);
         comet_debug() << " Get the dim_format\n";
@@ -758,29 +754,29 @@ namespace
         if (pos == std::string::npos) // not found
         {
           // currently, reading of file when path of file is provided as arg is not supported at runtime.
-          sparseFileID = rewriter.create<mlir::ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, -1));
+          sparseFileID = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, -1));
         }
         // 16 is the length of SPARSE_FILE_NAME
         std::string fileID = input_filename.substr(pos + 16, 1); // this will only catch 0..9
         if (fileID.empty())
         { // SPARSE_FILE_NAME
-          sparseFileID = rewriter.create<mlir::ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, 9999));
+          sparseFileID = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, 9999));
         }
         else
         { // SPARSE_FILE_NAME{int}
           comet_debug() << " Parsed fileID: " << fileID << "\n";
           int intFileID = std::stoi(fileID);
-          sparseFileID = rewriter.create<mlir::ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, intFileID));
+          sparseFileID = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, intFileID));
         }
 
         Value readModeConst;
         if (readModeVal == -1) // none specified
         { // 1, Default: standard matrix read
-          readModeConst = rewriter.create<mlir::ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, 1));
+          readModeConst = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, 1));
         }
         else
         { // readMode specified by user
-          readModeConst = rewriter.create<mlir::ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, readModeVal));
+          readModeConst = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, readModeVal));
         }
 
         // Now, setup the runtime calls
@@ -798,7 +794,7 @@ namespace
           {
             read_input_sizes_str = "read_input_sizes_2D_f64";
           }
-          auto read_input_sizes_Call = rewriter.create<mlir::CallOp>(
+          auto read_input_sizes_Call = rewriter.create<func::CallOp>(
                 loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], alloc_sizes_cast, readModeConst});
           read_input_sizes_Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
 
@@ -818,7 +814,7 @@ namespace
           { // default f64
             read_input_sizes_str = "read_input_sizes_3D_f64";
           }
-          auto read_input_sizes_3D_Call = rewriter.create<mlir::CallOp>(
+          auto read_input_sizes_3D_Call = rewriter.create<func::CallOp>(
                 loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], dim_format[2], alloc_sizes_cast, readModeConst});
           read_input_sizes_3D_Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
           comet_debug() << "\n";
@@ -851,7 +847,7 @@ namespace
           comet_vdump(alloc_size);
 
           alloc_sizes_vec.push_back(alloc_size);
-          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, alloc_size, unrankedMemTy_index);
+          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_index, alloc_size);
           alloc_sizes_cast_vec.push_back(alloc_size_cast);
         }
 
@@ -863,7 +859,7 @@ namespace
           comet_debug() << " ";
           comet_vdump(alloc_size);
           alloc_sizes_vec.push_back(alloc_size);
-          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, alloc_size, unrankedMemTy_f64);
+          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_f64, alloc_size);
           alloc_sizes_cast_vec.push_back(alloc_size_cast);
         }
 
@@ -878,7 +874,7 @@ namespace
           {
             read_input_str = "read_input_2D_f64";
           }
-          auto read_input_f64Call = rewriter.create<mlir::CallOp>(
+          auto read_input_f64Call = rewriter.create<func::CallOp>(
               loc, read_input_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1], alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3], alloc_sizes_cast_vec[4], readModeConst});
           read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
         }
@@ -893,7 +889,7 @@ namespace
           {
             read_input_str = "read_input_3D_f64";
           }
-          auto read_input_f64Call = rewriter.create<mlir::CallOp>(
+          auto read_input_f64Call = rewriter.create<func::CallOp>(
               loc, read_input_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], dim_format[2], alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1], alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3], alloc_sizes_cast_vec[4], alloc_sizes_cast_vec[5], alloc_sizes_cast_vec[6], readModeConst});
           read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
         }
@@ -906,7 +902,7 @@ namespace
         std::vector<Value> alloc_tensor_vec;
         for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
         {
-          Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes_vec[i]);
+          Value tensorLoad = rewriter.create<ToTensorOp>(loc, alloc_sizes_vec[i]);
           alloc_tensor_vec.push_back(tensorLoad);
         }
 
@@ -949,23 +945,23 @@ namespace
         comet_vdump(op);
 
         auto tensor_decl_value = cast<tensorAlgebra::SparseTensorDeclOp>(op);
-        LLVM_DEBUG(comet_debug() << " " << tensor_decl_value.labels().size() << "\n");
-        for (unsigned int i = 0; i < tensor_decl_value.labels().size(); i++)
+        LLVM_DEBUG(comet_debug() << " " << tensor_decl_value.getLabels().size() << "\n");
+        for (unsigned int i = 0; i < tensor_decl_value.getLabels().size(); i++)
         {
-          comet_vdump(tensor_decl_value.labels()[i]);
-          comet_pdump(tensor_decl_value.labels()[i].getDefiningOp());
-          if (isa<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.labels()[i].getDefiningOp()))
+          comet_vdump(tensor_decl_value.getLabels()[i]);
+          comet_pdump(tensor_decl_value.getLabels()[i].getDefiningOp());
+          if (isa<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
           {
-            // comet_vdump(tensor_decl_value.labels()[i]);
-            auto label_decl_value = cast<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.labels()[i].getDefiningOp());
-            auto lo = label_decl_value.min();
-            auto step = label_decl_value.step();
+            // comet_vdump(tensor_decl_value.getLabels()[i]);
+            auto label_decl_value = cast<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
+            auto lo = label_decl_value.getMin();
+            auto step = label_decl_value.getStep();
             auto hi = array_sizes[2 * rank_size + 1 + i];
             // mlir::Value value =
             Value new_index = rewriter.create<IndexLabelStaticOp>(loc, lo, hi, step);
             label_decl_value.replaceAllUsesWith(new_index);
           }
-          else if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.labels()[i].getDefiningOp()))
+          else if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
           {
             comet_debug() << " isa<tensorAlgebra::IndexLabelStaticOp\n";
           }
@@ -979,10 +975,10 @@ namespace
       {
         // Is sparse output ,lower to ta.output_tensor_decl
         auto tensor_decl_value = cast<tensorAlgebra::SparseTensorDeclOp>(op);
-        auto labels = tensor_decl_value.labels();
-        auto tensor_format = tensor_decl_value.format();
+        auto labels = tensor_decl_value.getLabels();
+        auto tensor_format = tensor_decl_value.getFormat();
         auto tensor_type = tensor_decl_value.getType();
-        auto is_temporal_tensor = tensor_decl_value.temporal_tensor();
+        auto is_temporal_tensor = tensor_decl_value.getTemporalTensor();
 
         mlir::Value outputtensordecl;
         if (is_temporal_tensor)
@@ -1028,7 +1024,7 @@ namespace
 
     comet_vdump(op);
     auto loc = op.getLoc();
-    StringRef formatsAttr = op.format();
+    StringRef formatsAttr = op.getFormat();
     std::string formats_str(formatsAttr.data());
     comet_debug() << " --- " << formats_str << "\n";
 
@@ -1041,8 +1037,8 @@ namespace
       f64Type = FloatType::getF32(op.getContext());
 
     // A1_pos ... A_value
-    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamicSize}, indexType); // memref<?xindex>
-    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamicSize}, f64Type);     // memref<?xf64>
+    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); // memref<?xindex>
+    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, f64Type);     // memref<?xf64>
 
     comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
@@ -1059,7 +1055,7 @@ namespace
       // We need to fill this tensorload_sizes_vec operations with new ones.....
       // Some should get from sparse input, some are dense
       std::string input_filename;
-      std::vector<std::vector<unsigned>> allPerms;
+      std::vector<std::vector<int64_t>> allPerms;
 
       std::vector<Value> dimSizes; // for dimSizes in sptensor_construct
 
@@ -1099,14 +1095,14 @@ namespace
             transpose_op = cast<tensorAlgebra::TransposeOp>(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp());
           }
 
-          ArrayAttr indexMaps = transpose_op.indexing_maps();
+          ArrayAttr indexMaps = transpose_op.getIndexingMaps();
           comet_debug() << " we get the indexMaps\n";
           allPerms = getAllPerms(indexMaps);
           comet_debug() << " we get the permutations\n";
 
           // mlir::Value src_input = getOperand(0);
           // mlir::Value dst_input = transpose_op.getOperand(0);
-          mlir::Value src_input = transpose_op.rhs();
+          mlir::Value src_input = transpose_op.getRhs();
           comet_debug() << " ";
           comet_vdump(src_input);
           mlir::Value dst_input;
@@ -1130,7 +1126,7 @@ namespace
             dstIndexLocInSrcVec.push_back(dstIndexLocInSrc);
           }
 
-          ArrayAttr allFormats = transpose_op.formats();
+          ArrayAttr allFormats = transpose_op.getFormats();
           std::vector<std::string> allFormatsStr;
           for (unsigned int i = 0; i < allFormats.size(); i++)
           {
@@ -1156,9 +1152,9 @@ namespace
             dimSizes.push_back(src_input.getDefiningOp()->getOperand(4 * dst_rank + 2 + dstIndexLocInSrcVec[i]));
           }
 
-          Value cst_index_1 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
+          Value cst_index_1 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
           comet_vdump(cst_index_1);
-          Value cst_index_2 = rewriter.create<mlir::ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(2));
+          Value cst_index_2 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(2));
           comet_vdump(cst_index_2);
 
           /// For COO format, 2D and 3D are the same
@@ -1200,7 +1196,7 @@ namespace
               comet_debug() << " 2D CSR transpose to 2D CSR\n";
               array_sizes_vec.push_back(cst_index_1);
               array_sizes_vec.push_back(cst_index_1);
-              mlir::Value crd_size = rewriter.create<mlir::AddIOp>(loc, dimSizes[0], cst_index_1);
+              mlir::Value crd_size = rewriter.create<AddIOp>(loc, dimSizes[0], cst_index_1);
               comet_debug() << "AddIOp generated for crd_size for CSR:\n";
               comet_vdump(crd_size);
               array_sizes_vec.push_back(crd_size);
@@ -1217,7 +1213,7 @@ namespace
               comet_debug() << " 3D CSF transpose to 3D CSF\n";
               array_sizes_vec.push_back(cst_index_2);
               mlir::Value src_nnz = src_input.getDefiningOp()->getOperand(13);
-              mlir::Value src_nnz_add1 = rewriter.create<mlir::AddIOp>(loc, src_nnz, cst_index_1);
+              mlir::Value src_nnz_add1 = rewriter.create<AddIOp>(loc, src_nnz, cst_index_1);
               comet_debug() << "AddIOp generated for nnz for CSF:\n";
               comet_vdump(src_nnz_add1);
               array_sizes_vec.push_back(src_nnz);
@@ -1246,7 +1242,7 @@ namespace
               comet_debug() << " AllocOp: ";
               comet_vdump(alloc_sizes);
             }
-            Value tensorload_sizes = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes);
+            Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes);
             tensorload_sizes_vec.push_back(tensorload_sizes);
           }
         }
@@ -1491,14 +1487,14 @@ namespace
       for (int i = 0; i < resultMemTy.getRank(); i++)
       {
         if (resultMemTy.isDynamicDim(i))
-          cur_memref.push_back(ShapedType::kDynamicSize);
+          cur_memref.push_back(ShapedType::kDynamic);
         else // The constant dim size must NOT comes from the sparse matrix
           cur_memref.push_back(resultMemTy.getDimSize(i));
 
-        if (isa<tensorAlgebra::IndexLabelStaticOp>(op.labels()[i].getDefiningOp()))
+        if (isa<tensorAlgebra::IndexLabelStaticOp>(op.getLabels()[i].getDefiningOp()))
         {
-          auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(op.labels()[i].getDefiningOp());
-          auto hi = label_decl_value.max();
+          auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(op.getLabels()[i].getDefiningOp());
+          auto hi = label_decl_value.getMax();
           if (resultMemTy.isDynamicDim(i))
             cur_indices.push_back(hi); // IndexCastOp
         }
@@ -1510,7 +1506,7 @@ namespace
       comet_debug() << " AllocOp: ";
       comet_vdump(alloc_sizes1);
 
-      Value tensorLoad = rewriter.create<memref::TensorLoadOp>(loc, alloc_sizes1);
+      Value tensorLoad = rewriter.create<ToTensorOp>(loc, alloc_sizes1);
       comet_vdump(tensorLoad);
 
       op.replaceAllUsesWith(tensorLoad);
@@ -1580,20 +1576,20 @@ namespace
       auto tensorFillOp = cast<tensorAlgebra::TensorFillOp>(op);
 
       auto tensorOperand = operands[0];
-      mlir::memref::TensorLoadOp tensorLoadOp;
-      if (!isa<memref::TensorLoadOp>(tensorOperand.getDefiningOp()))
+      ToTensorOp tensorLoadOp;
+      if (!isa<ToTensorOp>(tensorOperand.getDefiningOp()))
       {
         // TODO: may need to re-visit when doing reduction support.
         // the user declared output to have zeros.
         rewriter.eraseOp(op);
         return success();
       }
-      tensorLoadOp = cast<memref::TensorLoadOp>(tensorOperand.getDefiningOp());
-      auto memref = tensorLoadOp.memref();
-      auto valueAttr = tensorFillOp.value();
-      auto constantOp = rewriter.create<ConstantOp>(loc, valueAttr);
+      tensorLoadOp = cast<ToTensorOp>(tensorOperand.getDefiningOp());
+      auto memref = tensorLoadOp.getMemref();
+      auto valueAttr = tensorFillOp.getValue();
+      Value constantOp = rewriter.create<ConstantOp>(loc, valueAttr);
 
-      rewriter.create<linalg::FillOp>(loc, memref, constantOp);
+      rewriter.create<linalg::FillOp>(loc, constantOp, memref);
       rewriter.eraseOp(op);
 
       return success();
@@ -1624,56 +1620,56 @@ namespace
 namespace
 {
   struct DenseTensorDeclLoweringPass
-      : public PassWrapper<DenseTensorDeclLoweringPass, FunctionPass>
+      : public PassWrapper<DenseTensorDeclLoweringPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
   struct SparseTensorDeclLoweringPass
-      : public PassWrapper<SparseTensorDeclLoweringPass, FunctionPass>
+      : public PassWrapper<SparseTensorDeclLoweringPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
   struct SparseOutputTensorDeclLoweringPass
-      : public PassWrapper<SparseOutputTensorDeclLoweringPass, FunctionPass>
+      : public PassWrapper<SparseOutputTensorDeclLoweringPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
   struct TempSparseOutputTensorDeclLoweringPass
-      : public PassWrapper<TempSparseOutputTensorDeclLoweringPass, FunctionPass>
+      : public PassWrapper<TempSparseOutputTensorDeclLoweringPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
   struct TensorFillLoweringPass
-      : public PassWrapper<TensorFillLoweringPass, FunctionPass>
+      : public PassWrapper<TensorFillLoweringPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
   struct RemoveLabeledTensorOpPass
-      : public PassWrapper<RemoveLabeledTensorOpPass, FunctionPass>
+      : public PassWrapper<RemoveLabeledTensorOpPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
 } // end anonymous namespace.
 
 /// Dense tensor declaration lowering
-void DenseTensorDeclLoweringPass::runOnFunction()
+void DenseTensorDeclLoweringPass::runOnOperation()
 {
   // a pass on DenseTensorDeclOp.
   // if fill already there, then alloc and load op,
   //    otherwise, allocAndInitialize and load.
   // At end of the pass, load op replaces DenseTensorDeclOp.
   comet_debug() << "---------------DenseTensorDeclLoweringPass begin\n";
-  auto function = getFunction();
+  func::FuncOp function = getOperation();
 
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect, scf::SCFDialect,
-                         StandardOpsDialect, memref::MemRefDialect,
+                         ArithDialect, memref::MemRefDialect,
                          ITDialect>();
 
   // target.addIllegalDialect<tensorAlgebra::TADialect>();
@@ -1693,7 +1689,7 @@ void DenseTensorDeclLoweringPass::runOnFunction()
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::SparseTensorConstructOp>();
 
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   patterns.insert<DenseTensorDeclOpLowering>(&getContext());
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
@@ -1712,15 +1708,16 @@ void DenseTensorDeclLoweringPass::runOnFunction()
 // it should be apply after high-level optimization such multi operations
 // optimization
 //===----------------------------------------------------------------===//
-void SparseTensorDeclLoweringPass::runOnFunction()
+void SparseTensorDeclLoweringPass::runOnOperation()
 {
   comet_debug() << "---------------SparseTensorDeclLoweringPass begin\n";
   // this pass will determine if sparse tensor is output and input.
   // if input, replace with runtime calls to read_from_file...
   // if output, replace with sp-tensor-output
   ConversionTarget target(getContext());
+  func::FuncOp func = getOperation();
 
-  target.addLegalDialect<LinalgDialect, StandardOpsDialect,
+  target.addLegalDialect<LinalgDialect, ArithDialect,
                          scf::SCFDialect,
                          mlir::memref::MemRefDialect,
                          ITDialect>();
@@ -1743,10 +1740,10 @@ void SparseTensorDeclLoweringPass::runOnFunction()
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp>();
 
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   patterns.insert<SparseTensorDeclOpLowering>(&getContext());
 
-  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  if (failed(applyPartialConversion(func, target, std::move(patterns))))
   {
     llvm::errs() << "Failed to Lower SparseTensorDeclLoweringPass\n";
     signalPassFailure();
@@ -1757,15 +1754,16 @@ void SparseTensorDeclLoweringPass::runOnFunction()
 /***********************************************************************************************/
 /********** SparseTCOutputLowering pass: sparse output tensor declararion lowering************/
 /************************************************************************************************/
-void SparseOutputTensorDeclLoweringPass::runOnFunction()
+void SparseOutputTensorDeclLoweringPass::runOnOperation()
 {
   // Sparse output tensor declaration happens after lowering to index tree dialect
   // this pass takes SparseOutputTensorDeclOp that was produced during SparseTensorDeclLoweringPass
   comet_debug() << "---------------SparseOutputTensorDeclLoweringPass begin\n";
+  func::FuncOp func = getOperation();
   ConversionTarget target(getContext());
 
   target.addLegalDialect<LinalgDialect,
-                         StandardOpsDialect,
+                         ArithDialect,
                          scf::SCFDialect,
                          memref::MemRefDialect,
                          ITDialect>();
@@ -1784,10 +1782,10 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp>();
 
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   patterns.insert<SparseOutputTensorDeclOpLowering>(&getContext());
 
-  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  if (failed(applyPartialConversion(func, target, std::move(patterns))))
   {
     llvm::errs() << "Failed to Lower STCOutputLowering\n";
     signalPassFailure();
@@ -1798,15 +1796,16 @@ void SparseOutputTensorDeclLoweringPass::runOnFunction()
 /******************************************************************************************************************/
 /********** TempSparseTCOutputLowering pass: sparse output tensor declaration lowering for temporaries ************/
 /*******************************************************************************************************************/
-void TempSparseOutputTensorDeclLoweringPass::runOnFunction()
+void TempSparseOutputTensorDeclLoweringPass::runOnOperation()
 {
   // Sparse output tensor declaration generated for temporaris in compound expressions
   // this pass takes TempSparseOutputTensorDeclOp that was produced during SparseTensorDeclLoweringPass
   comet_debug() << "---------------SparseOutputTensorDeclLoweringPass begin\n";
+  func::FuncOp func = getOperation();
   ConversionTarget target(getContext());
 
   target.addLegalDialect<LinalgDialect,
-                         StandardOpsDialect,
+                         ArithDialect,
                          scf::SCFDialect,
                          memref::MemRefDialect,
                          ITDialect>();
@@ -1825,10 +1824,10 @@ void TempSparseOutputTensorDeclLoweringPass::runOnFunction()
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp>();
 
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   patterns.insert<TempSparseOutputTensorDeclOpLowering>(&getContext());
 
-  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  if (failed(applyPartialConversion(func, target, std::move(patterns))))
   {
     llvm::errs() << "Failed to Lower STCOutputLowering\n";
     signalPassFailure();
@@ -1836,17 +1835,17 @@ void TempSparseOutputTensorDeclLoweringPass::runOnFunction()
   comet_debug() << "---------------SparseOutputTensorDeclLoweringPass end\n";
 }
 
-void TensorFillLoweringPass::runOnFunction()
+void TensorFillLoweringPass::runOnOperation()
 {
   comet_debug() << "---------------TensorFillLoweringPass start\n";
   // this is a simple pass that replaces tensor decl with linalg.fill
-
+  func::FuncOp func = getOperation();
   ConversionTarget target(getContext());
-  target.addLegalDialect<LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
-  OwningRewritePatternList patterns(&getContext());
+  target.addLegalDialect<LinalgDialect, ArithDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
+  RewritePatternSet patterns(&getContext());
   patterns.insert<TensorFillLowering>(&getContext());
 
-  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  if (failed(applyPartialConversion(func, target, std::move(patterns))))
   {
     llvm::errs() << "Failed to Lower STCOutputLowering\n";
     signalPassFailure();
@@ -1854,19 +1853,20 @@ void TensorFillLoweringPass::runOnFunction()
   comet_debug() << "---------------TensorFillLoweringPass end\n";
 }
 
-void RemoveLabeledTensorOpPass::runOnFunction()
+void RemoveLabeledTensorOpPass::runOnOperation()
 {
+  func::FuncOp func = getOperation();
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect,
-                         StandardOpsDialect,
+                         ArithDialect,
                          scf::SCFDialect,
                          AffineDialect,
                          memref::MemRefDialect>();
 
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   patterns.insert<RemoveLabeledTensorOp>(&getContext());
 
-  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  if (failed(applyPartialConversion(func, target, std::move(patterns))))
   {
     signalPassFailure();
   }

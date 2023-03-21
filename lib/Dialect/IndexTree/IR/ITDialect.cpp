@@ -31,10 +31,8 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Operation.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Transforms/InliningUtils.h"
-
-#include "mlir/Parser.h"
 
 using namespace mlir;
 using namespace mlir::indexTree;

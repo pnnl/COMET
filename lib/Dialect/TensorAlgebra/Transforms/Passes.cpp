@@ -20,6 +20,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
+//TODO(gkestor): check these header files
 #include "mlir/Pass/Pass.h"
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -27,15 +28,14 @@
 #include "comet/Dialect/Utils/Utils.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-#include "mlir/IR/BlockAndValueMapping.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
-#include "mlir/Analysis/AffineAnalysis.h"
+//#include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/Support/Debug.h"
@@ -47,32 +47,28 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 
 #include <algorithm>
 #include <map>
 #include <set>
 #include <stack>
 
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+// #include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
-
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-
-#include "mlir/EDSC/Builders.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
-
+//#include "mlir/EDSC/Builders.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 #define DEBUG_TYPE "comet-passes"
 
 using namespace mlir;
+using namespace mlir::arith;
 using namespace tensorAlgebra;
 
 // *********** For debug purpose *********//
@@ -94,20 +90,20 @@ using namespace tensorAlgebra;
 #define comet_vdump(n)
 #endif
 
-/// Fold simple cast operations that return the same type as the input.
-OpFoldResult CastOp::fold(ArrayRef<Attribute> operands)
-{
-  return mlir::impl::foldCastOp(*this);
-}
+// /// Fold simple cast operations that return the same type as the input.
+// OpFoldResult CastOp::fold(ArrayRef<Attribute> operands)
+// {
+//   return mlir::impl::foldCastOp(*this);
+// }
 
 namespace
 {
   class FindOptimalTCFactorizationPass
-      : public mlir::PassWrapper<FindOptimalTCFactorizationPass, mlir::FunctionPass>
+      : public mlir::PassWrapper<FindOptimalTCFactorizationPass, OperationPass<func::FuncOp>>
   {
 
   public:
-    void runOnFunction() final;
+    void runOnOperation() override;
 
     void FindOptimalTCFactorization(tensorAlgebra::TensorSetOp op);
   }; // class FindOptimalTCFactorizationPass
@@ -117,21 +113,21 @@ namespace
 {
 
   struct LowerTAMulChainPass
-      : public PassWrapper<LowerTAMulChainPass, FunctionPass>
+      : public PassWrapper<LowerTAMulChainPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
   struct OptDenseTransposePass
-      : public PassWrapper<OptDenseTransposePass, FunctionPass>
+      : public PassWrapper<OptDenseTransposePass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
   struct STCRemoveDeadOpsPass
-      : public PassWrapper<STCRemoveDeadOpsPass, FunctionPass>
+      : public PassWrapper<STCRemoveDeadOpsPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 
 } // end anonymous namespace.
@@ -328,7 +324,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
 
   for (auto op : inLTOps)
   {
-    auto labels = cast<tensorAlgebra::DenseTensorDeclOp>(op).labels();
+    auto labels = cast<tensorAlgebra::DenseTensorDeclOp>(op).getLabels();
     std::vector<Operation *> labelVec;
     for (auto lbl : labels)
     {
@@ -343,7 +339,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
     lblMaps[op] = labelVec;
   }
 
-  auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).labels();
+  auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getLabels();
   LTOpsToRemove.push_back(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
   std::vector<Operation *> outLabelVec;
   for (auto lbl : outLabels)
@@ -440,24 +436,23 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       SmallVector<mlir::StringRef, 8> formats;
       if (isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()))
       {
-        auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).format();
-        // auto lhs_lbls = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).labels();
+        auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).getFormat();
         formats.push_back(lhs_format);
       }
       if (isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()))
       {
-        auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).format();
+        auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).getFormat();
         formats.push_back(rhs_format);
       }
       if (isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()) &&
           isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()))
       {
-        auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).format();
+        auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).getFormat();
         formats.push_back(rhs_format);
       }
       if (isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
       { // for series of ta.tc case
-        auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).format();
+        auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).getFormat();
         formats.push_back(lhs_format);
         formats.push_back(lhs_format);
       }
@@ -544,24 +539,24 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   return;
 }
 
-void FindOptimalTCFactorizationPass::runOnFunction()
+void FindOptimalTCFactorizationPass::runOnOperation()
 {
   comet_debug() << " start FindOptimalTCFactorizationPass pass \n";
-  auto function = getFunction();
+  func::FuncOp func = getOperation();
 
-  function.walk([&](tensorAlgebra::TensorSetOp op)
+  func.walk([&](tensorAlgebra::TensorSetOp op)
               { FindOptimalTCFactorization(op); });
 }
 
 
-void LowerTAMulChainPass::runOnFunction()
+void LowerTAMulChainPass::runOnOperation()
 {
-  auto function = getFunction();
-  OwningRewritePatternList patterns(&getContext());
+  func::FuncOp function = getOperation();
+  RewritePatternSet patterns(&getContext());
   populateLowerTAMulChainPatterns(patterns, &getContext());
 
   ConversionTarget target(getContext());
-  target.addLegalDialect<StandardOpsDialect>();
+  target.addLegalDialect<ArithDialect>();
 
   // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
@@ -590,16 +585,17 @@ void LowerTAMulChainPass::runOnFunction()
   }
 }
 
-void STCRemoveDeadOpsPass::runOnFunction()
+void STCRemoveDeadOpsPass::runOnOperation()
 {
   comet_debug() << " start STCRemoveDeadOpsPass \n";
   ConversionTarget target(getContext());
 
-  target.addLegalDialect<mlir::linalg::LinalgDialect, StandardOpsDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
+  func::FuncOp func = getOperation();
+  target.addLegalDialect<mlir::linalg::LinalgDialect, ArithDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
   target.addLegalOp<tensorAlgebra::TensorMultOp>();
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   populateSTCRemoveDeadOpsPatterns(patterns, &getContext());
-  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  if (failed(applyPartialConversion(func, target, std::move(patterns))))
   {
     signalPassFailure();
   }
