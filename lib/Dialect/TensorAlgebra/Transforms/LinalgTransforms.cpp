@@ -29,7 +29,7 @@
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Conversion/LinalgToStandard/LinalgToStandard.h"
 #include "mlir/Dialect/Linalg/Analysis/DependenceAnalysis.h"
@@ -38,6 +38,7 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 using namespace mlir;
 using namespace mlir::edsc;
@@ -67,17 +68,15 @@ using namespace mlir::tensorAlgebra;
 
 namespace
 {
-  class LinAlgMatmulTilingPass : public PassWrapper<LinAlgMatmulTilingPass, FunctionPass>
+  class LinAlgMatmulTilingPass : public PassWrapper<LinAlgMatmulTilingPass, OperationPass<func::FuncOp>>
   {
   public:
-    void runOnFunction() override
+    void runOnOperation() override
     {
-      // OwningRewritePatternList patterns;
-
-      auto funcOp = getFunction();
+      func::FuncOp func = getOperation();
       MLIRContext *ctx = funcOp.getContext();
 
-      OwningRewritePatternList patterns(&getContext());
+      RewritePatternSet patterns(&getContext());
 
       // Add the matmul tiling patterns to the list.
       //===----------------------------------------------------------------------===//
@@ -108,7 +107,7 @@ namespace
           LinalgTransformationFilter(Identifier::get("L2__with_tiling__", ctx),
                                      Identifier::get("__micro_kernel__", ctx)));
 
-      (void)applyPatternsAndFoldGreedily(funcOp, std::move(patterns));
+      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   };
 } // end anonymous namespace
@@ -226,7 +225,7 @@ LogicalResult LinalgMatMulOpToLibraryCallRewrite::matchAndRewrite(
 
   // TODO(gkestor): Add support for more complex library call signatures that include
   // indices or captured values.
-  rewriter.replaceOpWithNewOp<mlir::CallOp>(
+  rewriter.replaceOpWithNewOp<func::CallOp>(
       op, libraryCallName.getValue(), TypeRange(),
       createTypeCanonicalizedMemRefOperands(rewriter, op->getLoc(),
                                             op->getOperands()));
@@ -235,19 +234,19 @@ LogicalResult LinalgMatMulOpToLibraryCallRewrite::matchAndRewrite(
 
 namespace
 {
-  class LinAlgMatmulMicroKernelPass : public PassWrapper<LinAlgMatmulMicroKernelPass, FunctionPass>
+  class LinAlgMatmulMicroKernelPass : public PassWrapper<LinAlgMatmulMicroKernelPass, OperationPass<func::FuncOp>>
   {
   public:
-    void runOnFunction() override
+    void runOnOperation() override
     {
-      auto funcOp = getFunction();
+      func::FuncOp func = getOperation();
       MLIRContext *ctx = funcOp.getContext();
 
-      OwningRewritePatternList patterns(&getContext());
+      RewritePatternSet patterns(&getContext());
 
       // Replace the inner linalg.matmul with the blis microkernel
       patterns.insert<LinalgMatMulOpToLibraryCallRewrite>(ctx);
-      (void)applyPatternsAndFoldGreedily(funcOp, std::move(patterns));
+      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   };
 } // end anonymous namespace
@@ -288,7 +287,7 @@ struct OptDenseTranspose : public ConversionPattern
     {
       indexIterateOrder.push_back(rank);
       auto upperBound = inputType.cast<mlir::MemRefType>().getDimSize(rank);
-      if (upperBound == ShapedType::kDynamicSize)
+      if (upperBound == ShapedType::kDynamic)
       {
         assert(false && "TODO: This dimension is a dynamic size");
       }
@@ -438,19 +437,20 @@ private:
 
 namespace
 {
-  class OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, FunctionPass>
+  class OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, OperationPass<func::FuncOp>>
   {
   public:
     OptDenseTransposePass(uint64_t tile_size, bool seperate_tiles) : tile_size(tile_size), seperate_tiles(seperate_tiles){};
-    void runOnFunction() final
+    void runOnOperation() override
     {
       comet_debug() << "OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, FunctionPass>\n";
+      func::FuncOp func = getOperation();
       ConversionTarget target(getContext());
-      target.addLegalDialect<StandardOpsDialect, AffineDialect, memref::MemRefDialect>();
-      OwningRewritePatternList patterns(&getContext());
+      target.addLegalDialect<ArithDialect, AffineDialect, memref::MemRefDialect>();
+      RewritePatternSet patterns(&getContext());
       patterns.insert<OptDenseTranspose>(&getContext(), tile_size, seperate_tiles);
 
-      if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+      if (failed(applyPartialConversion(func, target, std::move(patterns))))
       {
         llvm::errs() << "Failed to Lower dense transpose operation\n";
         signalPassFailure();
@@ -466,19 +466,19 @@ namespace
 
 namespace
 {
-  class LowerLinAlgFillOpPass : public PassWrapper<LowerLinAlgFillOpPass, FunctionPass>
+  class LowerLinAlgFillOpPass : public PassWrapper<LowerLinAlgFillOpPass, OperationPass<func::FuncOp>>
   {
   public:
-    void runOnFunction() override
+    void runOnOperation() override
     {
-      auto funcOp = getFunction();
+      func::FuncOp func = getOperation();
       MLIRContext *ctx = funcOp.getContext();
 
-      OwningRewritePatternList patterns(&getContext());
+      RewritePatternSet patterns(&getContext());
 
       // Add the patterns to the list lower linalg fill operation
       patterns.insert<LinalgLoweringPattern<FillOp>>(ctx, LinalgLoweringType::Loops);
-      (void)applyPatternsAndFoldGreedily(funcOp, std::move(patterns));
+      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   };
 } // end anonymous namespace

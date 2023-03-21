@@ -29,29 +29,30 @@
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-#include "mlir/Dialect/Linalg/IR/LinalgOps.h"
-#include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
-#include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
-#include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
+// #include "mlir/Dialect/Linalg/IR/Linalg.h"
+// #include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
 
-#include "mlir/EDSC/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/PatternMatch.h"
 
 using namespace mlir;
-using namespace mlir::linalg;
-using namespace mlir::edsc;
-using namespace mlir::edsc::intrinsics;
+using namespace mlir::arith;
+using namespace mlir::bufferization;
+// using namespace mlir::linalg;
+// using namespace mlir::edsc;
+// using namespace mlir::edsc::intrinsics;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
@@ -74,11 +75,11 @@ using namespace mlir::tensorAlgebra;
 #endif
 // *********** For debug purpose *********//
 
-unsigned perm2num(std::vector<unsigned> vec)
+int64_t perm2num(std::vector<int64_t> vec)
 {
-  unsigned psum = 0;
-  unsigned sz = vec.size();
-  unsigned decimal = pow(10, (sz - 1));
+  int64_t psum = 0;
+  int64_t sz = vec.size();
+  int64_t decimal = pow(10, (sz - 1));
 
   for (auto n : vec)
   {
@@ -103,7 +104,7 @@ namespace
     {
       comet_debug() << "ConstantOpLowering starts\n";
       // auto module = op->getParentOfType<ModuleOp>();
-      DenseElementsAttr constantValue = op.value();
+      DenseElementsAttr constantValue = op.getValue();
       Location loc = op.getLoc();
 
       tensorAlgebra::TensorSetOp setnewop;
@@ -127,13 +128,13 @@ namespace
       // TODO(gkestor): the following code should be checked with tensor operations
       //  if (user_setOp)
       //  {
-      //    mlir::Value rhs = setnewop.rhs();
+      //    mlir::Value rhs = setnewop.getRhs();
       //    comet_debug() << "RHS:";
       //    comet_vdump(rhs);
       //    auto LabeledTensoroperands = rhs.getDefiningOp()->getOperands();
       //    comet_vdump(LabeledTensoroperands[0]);
 
-      //   auto tensorload = cast<memref::TensorLoadOp>(LabeledTensoroperands[0].getDefiningOp());
+      //   auto tensorload = cast<ToTensorOp>(LabeledTensoroperands[0].getDefiningOp());
       //   alloc = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
       // }
       // else
@@ -173,7 +174,7 @@ namespace
         {
           rewriter.create<memref::StoreOp>(
               loc, rewriter.create<ConstantOp>(loc, *valueIt++), alloc,
-              llvm::makeArrayRef(indices));
+              llvm::ArrayRef(indices));
           return;
         }
 
@@ -227,8 +228,8 @@ namespace
       auto inputType = op->getOperand(0).getType();
 
       // Get tensor contraction expression through analyzing the index map
-      ArrayAttr indexMaps = op.indexing_maps();
-      std::vector<std::vector<unsigned int>> allPerms = getAllPerms(indexMaps);
+      ArrayAttr indexMaps = op.getIndexingMaps();
+      std::vector<std::vector<int64_t>> allPerms = getAllPerms(indexMaps);
 
       // There are tensors for transpose operation: input and output tensors
       unsigned int tensors_num = 2;
@@ -238,11 +239,11 @@ namespace
       if (inputType.isa<TensorType>())
       { // for dense
         comet_debug() << "Dense transpose\n";
-        AffineMap inputPermuation = AffineMap::getPermutationMap(allPerms[0], ctx);
-        AffineMap outputPermuation = AffineMap::getPermutationMap(allPerms[1], ctx);
+        //AffineMap inputPermuation = AffineMap::getPermutationMap(allPerms[0], ctx);
+        //AffineMap outputPermuation = AffineMap::getPermutationMap(allPerms[1], ctx);
 
-        auto inputTensorLoadOp = cast<memref::TensorLoadOp>(op->getOperand(0).getDefiningOp());
-        auto inputMemref = inputTensorLoadOp.memref();
+        auto inputTensorLoadOp = cast<ToTensorOp>(op->getOperand(0).getDefiningOp());
+        auto inputMemref = inputTensorLoadOp.getMemref();
 
         for (auto u : op.getOperation()->getResult(0).getUsers())
         {
@@ -265,9 +266,11 @@ namespace
 
         comet_vdump(lhs);
         auto outputMemref = lhs.getDefiningOp()->getOperand(0);
-        auto copyOp = rewriter.create<linalg::CopyOp>(loc, inputMemref, outputMemref, inputPermuation, outputPermuation);
+        //TODO(gkestor): linalg::CopyOp is not avaliable any longer
+        //auto copyOp = rewriter.create<linalg::CopyOp>(loc, inputMemref, outputMemref, inputPermuation, outputPermuation);
+        auto copyOp = rewriter.create<linalg::TransposeOp>(loc, inputMemref, outputMemref, llvm::ArrayRef<int64_t>(allPerms[1]));
         comet_vdump(copyOp);
-        Value res_value = rewriter.create<memref::TensorLoadOp>(loc, outputMemref);
+        Value res_value = rewriter.create<ToTensorOp>(loc, outputMemref);
 
         op.replaceAllUsesWith(res_value);
         rewriter.eraseOp(op);
@@ -276,7 +279,7 @@ namespace
       }
       else
       { // for sparse tensors
-        unsigned pnum[2];
+        int64_t pnum[2];
         // print allPerms
         int i = 0;
         for (auto perm : allPerms)
@@ -285,20 +288,20 @@ namespace
           i++;
         }
 
-        ArrayAttr opFormatsArrayAttr = op.formats();
+        ArrayAttr opFormatsArrayAttr = op.getFormats();
         std::string formats_strIn(opFormatsArrayAttr[0].cast<mlir::StringAttr>().getValue());
         std::string formats_strOut(opFormatsArrayAttr[1].cast<mlir::StringAttr>().getValue());
         IntegerType i32Type = IntegerType::get(ctx, 32);
         IndexType indexType = IndexType::get(ctx);
         FloatType f64Type = FloatType::getF64(ctx);
 
-        Value input_perm_num = rewriter.create<mlir::ConstantOp>(loc, i32Type, rewriter.getI32IntegerAttr(pnum[0]));
-        Value output_perm_num = rewriter.create<mlir::ConstantOp>(loc, i32Type, rewriter.getI32IntegerAttr(pnum[1]));
+        Value input_perm_num = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getI32IntegerAttr(pnum[0]));
+        Value output_perm_num = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getI32IntegerAttr(pnum[1]));
 
         Type unrankedMemrefType_f64 = UnrankedMemRefType::get(f64Type, 0);
         Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
 
-        FuncOp transpose_func; // runtime call
+        mlir::func::FuncOp transpose_func; // runtime call
 
         std::vector<std::vector<mlir::Value>> alloc_sizes_cast_vecs{tensors_num};
         std::vector<std::vector<mlir::Value>> allocs_for_sparse_tensors{tensors_num};
@@ -338,13 +341,13 @@ namespace
             if (i < 2 * tensor_rank)
             {
               // indexes crd's
-              mlir::Value v = rewriter.create<memref::CastOp>(loc, alloc_op, unrankedMemrefType_index);
+              mlir::Value v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, alloc_op);
               alloc_sizes_cast_vecs[n].push_back(v);
             }
             else
             {
               // NNZ vals
-              mlir::Value v = rewriter.create<memref::CastOp>(loc, alloc_op, unrankedMemrefType_f64);
+              mlir::Value v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
               alloc_sizes_cast_vecs[n].push_back(v);
             }
           }
@@ -360,7 +363,7 @@ namespace
         comet_debug() << "Alloc for last dim size:\n";
         comet_vdump(last_dim_size_alloc);
 
-        mlir::Value sparse_tensor_desc = rewriter.create<memref::CastOp>(loc, last_dim_size_alloc, unrankedMemrefType_index);
+        mlir::Value sparse_tensor_desc = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, last_dim_size_alloc);
         comet_debug() << "Sparse tensor descriptive to extract row/col values:\n";
         comet_vdump(sparse_tensor_desc);
 
@@ -384,12 +387,12 @@ namespace
 
           if (isFuncInMod(print_transpose_2D_f64Str, module) == false)
           {
-            transpose_func = FuncOp::create(loc, print_transpose_2D_f64Str, transpose2DF64Func, ArrayRef<NamedAttribute>{});
+            transpose_func = mlir::func::FuncOp::create(loc, print_transpose_2D_f64Str, transpose2DF64Func, ArrayRef<NamedAttribute>{});
             transpose_func.setPrivate();
             module.push_back(transpose_func);
           }
 
-          rewriter.create<mlir::CallOp>(loc, print_transpose_2D_f64Str, SmallVector<Type, 2>{},
+          rewriter.create<func::CallOp>(loc, print_transpose_2D_f64Str, SmallVector<Type, 2>{},
                                         ValueRange{dim_formatIn[0], dim_formatIn[1], alloc_sizes_cast_vecs[0][0],
                                                    alloc_sizes_cast_vecs[0][1], alloc_sizes_cast_vecs[0][2],
                                                    alloc_sizes_cast_vecs[0][3], alloc_sizes_cast_vecs[0][4],
@@ -406,12 +409,12 @@ namespace
           std::string print_transpose_3D_f64Str = "transpose_3D_f64";
           if (isFuncInMod(print_transpose_3D_f64Str, module) == false)
           {
-            transpose_func = FuncOp::create(loc, print_transpose_3D_f64Str, transpose3DF64Func, ArrayRef<NamedAttribute>{});
+            transpose_func = mlir::func::FuncOp::create(loc, print_transpose_3D_f64Str, transpose3DF64Func, ArrayRef<NamedAttribute>{});
             transpose_func.setPrivate();
             module.push_back(transpose_func);
           }
 
-          rewriter.create<mlir::CallOp>(loc, print_transpose_3D_f64Str, SmallVector<Type, 2>{},
+          rewriter.create<func::CallOp>(loc, print_transpose_3D_f64Str, SmallVector<Type, 2>{},
                                         ValueRange{input_perm_num, output_perm_num, dim_formatIn[0], dim_formatIn[1], dim_formatIn[2],
                                                    alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
                                                    alloc_sizes_cast_vecs[0][2], alloc_sizes_cast_vecs[0][3],
@@ -456,7 +459,7 @@ namespace
       auto cst_zero = rewriter.create<ConstantIndexOp>(loc, 0); // need to access res alloc
       MemRefType memTy_alloc_res = MemRefType::get({1}, f64Type);
       Value res = rewriter.create<memref::AllocOp>(loc, memTy_alloc_res);
-      Value const_f64_0 = rewriter.create<mlir::ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
+      Value const_f64_0 = rewriter.create<ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
       std::vector<Value> alloc_zero_loc = {cst_zero};
       rewriter.create<memref::StoreOp>(loc, const_f64_0,
                                        res, alloc_zero_loc);
@@ -475,7 +478,7 @@ namespace
         {
           auto dimSize = inputType.cast<mlir::TensorType>().getDimSize(rank);
           Value upperBound;
-          if (dimSize == ShapedType::kDynamicSize)
+          if (dimSize == ShapedType::kDynamic)
           {
             comet_debug() << " This dimension is a dynamic size\n";
 
@@ -500,7 +503,7 @@ namespace
         // Build loop body
         auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_op, indices);
         auto res_load = rewriter.create<memref::LoadOp>(loc, res, alloc_zero_loc);
-        auto reduced = rewriter.create<mlir::AddFOp>(loc, load_rhs, res_load);
+        auto reduced = rewriter.create<AddFOp>(loc, load_rhs, res_load);
         rewriter.create<memref::StoreOp>(loc, reduced, res, alloc_zero_loc);
       }
       else
@@ -568,7 +571,7 @@ namespace
         std::vector<Value> indices = {loop.getInductionVar()};
         auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_op, indices);
         auto res_load = rewriter.create<memref::LoadOp>(loc, res, alloc_zero_loc);
-        auto reduce = rewriter.create<mlir::AddFOp>(loc, load_rhs, res_load);
+        auto reduce = rewriter.create<AddFOp>(loc, load_rhs, res_load);
         rewriter.create<memref::StoreOp>(loc, reduce, res, alloc_zero_loc);
 
         // need to restore the insertion point to the previous point
@@ -599,8 +602,8 @@ namespace
       //  1. two tensors (size of 1) and the output with a tensor of size 1
       //  2. two F64 values and the output will be F64
       Location loc = op.getLoc();
-      Value rhs = op.rhs();
-      Value lhs = op.lhs();
+      Value rhs = op.getRhs();
+      Value lhs = op.getLhs();
 
       comet_vdump(rhs);
       comet_vdump(lhs);
@@ -653,25 +656,25 @@ namespace
       comet_vdump(res);
 
       // Op rhs and lhs
-      auto arith_op_attr = op.opAttr();
+      auto arith_op_attr = op.getOpAttr();
       std::string op_attr(arith_op_attr.getValue());
       comet_debug() << "aritmetic op: " << op_attr << "\n";
       Value res_val;
       if (op_attr.compare("+") == 0)
       {
-        res_val = rewriter.create<mlir::AddFOp>(loc, rhs, lhs);
+        res_val = rewriter.create<AddFOp>(loc, rhs, lhs);
       }
       else if (op_attr.compare("-") == 0)
       {
-        res_val = rewriter.create<mlir::SubFOp>(loc, lhs, rhs);
+        res_val = rewriter.create<SubFOp>(loc, lhs, rhs);
       }
       else if (op_attr.compare("*") == 0)
       {
-        res_val = rewriter.create<mlir::MulFOp>(loc, rhs, lhs);
+        res_val = rewriter.create<MulFOp>(loc, rhs, lhs);
       }
       else if (op_attr.compare("/") == 0)
       {
-        res_val = rewriter.create<mlir::DivFOp>(loc, lhs, rhs);
+        res_val = rewriter.create<DivFOp>(loc, lhs, rhs);
       }
       else
       {
@@ -697,18 +700,18 @@ namespace
 namespace
 {
   struct TensorOpsLoweringPass
-      : public PassWrapper<TensorOpsLoweringPass, FunctionPass>
+      : public PassWrapper<TensorOpsLoweringPass, OperationPass<func::FuncOp>>
   {
-    void runOnFunction() final;
+    void runOnOperation() override;
   };
 } // end anonymous namespace.
 
-void TensorOpsLoweringPass::runOnFunction()
+void TensorOpsLoweringPass::runOnOperation()
 {
-  auto function = getFunction();
+  mlir::func::FuncOp function = getOperation();
 
   //  Verify that the given main has no inputs and results.
-  if (function.getNumArguments() || function.getType().getNumResults())
+  if (function.getNumArguments() || function.getFunctionType().getNumResults())
   {
     function.emitError("expected 'main' to have 0 inputs and 0 results");
     return signalPassFailure();
@@ -724,13 +727,13 @@ void TensorOpsLoweringPass::runOnFunction()
   target.addLegalDialect<LinalgDialect,
                          AffineDialect,
                          scf::SCFDialect,
-                         StandardOpsDialect,
+                         ArithDialect,
                          memref::MemRefDialect>();
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.
 
-  OwningRewritePatternList patterns(&getContext());
+  RewritePatternSet patterns(&getContext());
   patterns.insert<TensorTransposeLowering,
                   ReduceOpLowering,
                   ScalarOpsLowering,
@@ -739,7 +742,7 @@ void TensorOpsLoweringPass::runOnFunction()
   // conversion. The conversion will signal failure if any of our `illegal`
   // operations were not converted successfully.
 
-  if (failed(applyPartialConversion(getFunction(), target, std::move(patterns))))
+  if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     signalPassFailure();
   }

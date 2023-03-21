@@ -28,6 +28,7 @@
 #include "AST.h"
 
 #include "llvm/ADT/Twine.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace tensorAlgebra;
@@ -52,7 +53,7 @@ namespace
     void dump(ModuleAST *Node);
 
   private:
-    void dump(VarType &type);
+    void dump(const VarType &type);
     void dump(VarDeclExprAST *varDecl);
     void dump(ExprAST *expr);
     void dump(ExprASTList *exprList);
@@ -132,13 +133,13 @@ void ASTDumper::dump(ExprAST *expr)
 
 /// A variable declaration is printing the variable name, the type, and then
 /// recurse in the initializer value.
-void ASTDumper::dump(VarDeclExprAST *varDecl)
-{
+void ASTDumper::dump(VarDeclExprAST *varDecl) {
   INDENT();
   llvm::errs() << "VarDecl " << varDecl->getName();
   dump(varDecl->getType());
   llvm::errs() << " " << loc(varDecl) << "\n";
-  dump(varDecl->getInitVal());
+  if (auto *initVal = varDecl->getInitVal())
+    dump(initVal);
 }
 
 /// A "block", or a list of expression
@@ -218,7 +219,7 @@ void ASTDumper::dump(ReturnExprAST *Node)
 {
   INDENT();
   llvm::errs() << "Return\n";
-  if (Node->getExpr().hasValue())
+  if (Node->getExpr().has_value())
     return dump(*Node->getExpr());
   {
     INDENT();
@@ -264,7 +265,7 @@ void ASTDumper::dump(PrintExprAST *Node)
 }
 
 /// Print type: only the shape is printed in between '<' and '>'
-void ASTDumper::dump(VarType &type)
+void ASTDumper::dump(const VarType &type)
 {
   llvm::errs() << "<";
   if (type.elt_ty == VarType::TY_DOUBLE)
@@ -318,7 +319,6 @@ void ASTDumper::dump(ModuleAST *Node)
     dump(&F);
 }
 
-// PNNL
 void ASTDumper::dump(IndexLabelDeclExprAST *node)
 {
   INDENT();

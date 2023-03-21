@@ -34,7 +34,9 @@
 namespace mlir
 {
     class MLIRContext;
-    class OwningModuleRef;
+    template <typename OpTy>
+    class OwningOpRef;
+    class ModuleOp;
 } // namespace mlir
 
 namespace tensorAlgebra
@@ -43,7 +45,8 @@ namespace tensorAlgebra
 
     /// Emit IR for the given Tensor Algebra moduleAST, returns a newly created MLIR module
     /// or nullptr on failure.
-    mlir::OwningModuleRef mlirGen(mlir::MLIRContext &context, ModuleAST &moduleAST);
+    mlir::OwningOpRef<mlir::ModuleOp> mlirGen(mlir::MLIRContext &context,
+                                              ModuleAST &moduleAST);
 } // namespace tensorAlgebra
 
 #endif // COMET_DSL_MLIRGEN_H_

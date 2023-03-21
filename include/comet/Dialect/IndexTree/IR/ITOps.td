@@ -28,14 +28,31 @@
 #ifndef IT_OPS
 #define IT_OPS
 
-include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/OpBase.td" 
+include "mlir/IR/FunctionInterfaces.td"
+include "mlir/IR/SymbolInterfaces.td"
+include "mlir/Interfaces/CallInterfaces.td"
+include "mlir/Interfaces/CastInterfaces.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
 
-// Provide a definition of the 'TA' dialect in the ODS framework so that we
+// // Provide a definition of the 'TA' dialect in the ODS framework so that we
+// // can define our operations.
+// def IT_Dialect : Dialect {
+//   let name = "it";
+//   let cppNamespace = ""; 
+// }
+
+
+// Provide a definition of the 'it' dialect in the ODS framework so that we
 // can define our operations.
 def IT_Dialect : Dialect {
   let name = "it";
-  let cppNamespace = ""; 
+  let cppNamespace = "::mlir::indexTree"; 
+
+  // We set this bit to generate the declarations for the dialect's type parsing
+  // and printing hooks.
+  let useDefaultTypePrinterParser = 1;
+  
 }
 
 // Base class for ta dialect operations. This operation inherits from the base
@@ -43,14 +60,14 @@ def IT_Dialect : Dialect {
 //   * The parent dialect of the operation.
 //   * The mnemonic for the operation, or the name without the dialect prefix.
 //   * A list of traits for the operation.
-class IT_Op<string mnemonic, list<OpTrait> traits = []> :
+class IT_Op<string mnemonic, list<Trait> traits = []> :
     Op<IT_Dialect, mnemonic, traits>;
             
 //===----------------------------------------------------------------------===//
 // Index Tree Operations
 //===----------------------------------------------------------------------===//
 
-def IndexTreeComputeLHSOp : IT_Op<"ComputeLHS", [NoSideEffect]>{
+def IndexTreeComputeLHSOp : IT_Op<"ComputeLHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
@@ -58,7 +75,7 @@ def IndexTreeComputeLHSOp : IT_Op<"ComputeLHS", [NoSideEffect]>{
   let results = (outs AnyType:$output);
 }
 
-def IndexTreeComputeRHSOp : IT_Op<"ComputeRHS", [NoSideEffect]>{
+def IndexTreeComputeRHSOp : IT_Op<"ComputeRHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
@@ -66,7 +83,7 @@ def IndexTreeComputeRHSOp : IT_Op<"ComputeRHS", [NoSideEffect]>{
   let results = (outs AnyType:$output);
 }
 
-def IndexTreeComputeOp : IT_Op<"Compute", [NoSideEffect]>{
+def IndexTreeComputeOp : IT_Op<"Compute", [Pure]>{
   let summary = "";
   let description = [{
   }];
@@ -77,11 +94,12 @@ def IndexTreeComputeOp : IT_Op<"Compute", [NoSideEffect]>{
 
   let results = (outs I64:$output);
 
-  let verifier = ?;
+   //TODO(gkestor): add verifier
+  //let hasVerifier = 1;
   
 }
 
-def IndexTreeIndicesOp : IT_Op<"Indices", [NoSideEffect]>{
+def IndexTreeIndicesOp : IT_Op<"Indices", [Pure]>{
   let summary = "";
   let description = [{
   }];
@@ -89,10 +107,11 @@ def IndexTreeIndicesOp : IT_Op<"Indices", [NoSideEffect]>{
   let arguments = (ins Variadic<AnyType>:$children, ArrayAttr:$indices);
   let results = (outs I64:$output);
 
-  let verifier = ?;  
+   //TODO(gkestor): add verifier
+  //let hasVerifier = 1; 
 }
 
-def IndexTreeOp : IT_Op<"itree", [NoSideEffect]>{
+def IndexTreeOp : IT_Op<"itree", [Pure]>{
   let summary = "";
   let description = [{
   }];
@@ -100,7 +119,8 @@ def IndexTreeOp : IT_Op<"itree", [NoSideEffect]>{
   let arguments = (ins AnyType:$children);
   let results = (outs I64:$output);
 
-  let verifier = ?;  
+   //TODO(gkestor): add verifier
+  //let hasVerifier = 1; 
 }
 
 #endif // IT_OPS
