@@ -33,7 +33,7 @@
 #include "mlir/IR/Operation.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Transforms/InliningUtils.h"
-//#include "mlir/Support/TypeID.h"
+#include "mlir/IR/BuiltinTypes.h"
 
 using namespace mlir;
 using namespace mlir::indexTree;
@@ -67,10 +67,13 @@ Type mlir::indexTree::ITDialect::parseType(DialectAsmParser &parser) const
   return Type();
 }
 
-// //TODO(gkestor): do we need this placeholder function?
-// void printType(Type type, DialectAsmPrinter &os) const{
-//     return;
-// }
+// Print an instance of a type registered to the index tree dialect.
+// No type definition yet
+void mlir::indexTree::ITDialect::printType(mlir::Type type,
+                           mlir::DialectAsmPrinter &printer) const {
+    return;
+}
+
 
 #define GET_OP_CLASSES
 #include "comet/Dialect/IndexTree/IR/ITOps.cpp.inc"

@@ -126,6 +126,7 @@ namespace
   struct WorkspaceTransformsPass
       : public PassWrapper<WorkspaceTransformsPass, OperationPass<mlir::func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(WorkspaceTransformsPass)
     void runOnOperation() override;
     void WorkspaceTransforms(mlir::func::FuncOp function);
   };
@@ -133,6 +134,7 @@ namespace
   struct CompressedWorkspaceTransformsPass
       : public PassWrapper<CompressedWorkspaceTransformsPass, OperationPass<mlir::func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(CompressedWorkspaceTransformsPass)
     void runOnOperation() override;
     void CompressedWorkspaceTransforms(mlir::func::FuncOp function);
   };

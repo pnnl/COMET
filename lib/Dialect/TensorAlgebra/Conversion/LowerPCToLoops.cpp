@@ -73,6 +73,7 @@ namespace
   struct PCToLoopsLoweringPass
     : public PassWrapper<PCToLoopsLoweringPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PCToLoopsLoweringPass)
     void runOnOperation() override;
     
     /// lowers ForLoopBeginOp and ForLoopEndOp to scf.for, one loop at a time.

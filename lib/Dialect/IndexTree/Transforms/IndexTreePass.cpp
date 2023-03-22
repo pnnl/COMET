@@ -64,6 +64,7 @@ namespace
   struct IndexTreePass
       : public PassWrapper<IndexTreePass, OperationPass<func::FuncOp>>
   {
+     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(IndexTreePass)
     void runOnOperation() override;
   };
 } // namespace

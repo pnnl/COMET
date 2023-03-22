@@ -211,7 +211,8 @@ int loadMLIR(mlir::MLIRContext &context,
 }
 
 int loadAndProcessMLIR(mlir::MLIRContext &context,
-                       mlir::OwningOpRef<mlir::ModuleOp> &module) {
+                       mlir::OwningOpRef<mlir::ModuleOp> &module)
+{
   if (int error = loadMLIR(context, module))
     return error;
 
@@ -219,8 +220,11 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // Apply any generic pass manager command line options and run the pipeline.
   applyPassManagerCLOptions(pm);
 
+  // Lower tensorAlgebra:FuncOp to func::FuncOp
+  //mlir::OpPassManager &PM = pm.nest<mlir::tensorAlgebra::FuncOp>();
+  pm.addPass(mlir::tensorAlgebra::createFuncOpLoweringPass());
 
-  mlir::OpPassManager &optPM = pm.nest<mlir::tensorAlgebra::FuncOp>();
+  mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
   optPM.addPass(mlir::tensorAlgebra::createRemoveLabeledTensorOpsPass());
 
   // Check to see if we are dumping to TA dialect.
@@ -315,7 +319,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// HPTT: A High-Performance Tensor Transposition C++ Library
     /// https://arxiv.org/abs/1704.04374
     optPM.addPass(mlir::tensorAlgebra::createTensorOpsLoweringPass());
-    //optPM.addPass(mlir::tensorAlgebra::createOptDenseTransposePass());
+    // optPM.addPass(mlir::tensorAlgebra::createOptDenseTransposePass());
   }
 
   // if (OptMatmulTiling)
@@ -351,7 +355,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::tensorAlgebra::createTensorOpsLoweringPass());
 
     // Finally lowering index tree to SCF dialect
-    // optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
+    optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
 
     //  =============================================================================
   }
@@ -361,7 +365,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // =============================================================================
   optPM.addPass(mlir::tensorAlgebra::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::tensorAlgebra::createLateLoweringPass());
-  //optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
+  //// optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================
 
@@ -406,6 +410,7 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::memref::MemRefDialect>();
   context.loadDialect<mlir::linalg::LinalgDialect>();
   context.loadDialect<mlir::scf::SCFDialect>();
+  context.loadDialect<mlir::bufferization::BufferizationDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
 
