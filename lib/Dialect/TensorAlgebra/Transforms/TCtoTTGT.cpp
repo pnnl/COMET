@@ -37,7 +37,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
+//#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 //#include "mlir/EDSC/Builders.h"
 
@@ -771,7 +771,7 @@ namespace
   struct TALoweringTTGTPass
       : public PassWrapper<TALoweringTTGTPass, OperationPass<func::FuncOp>>
   {
-
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TALoweringTTGTPass)
     TALoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops) : 
                       isSelectBestPerm(isSelectBestPerm), whatPerm(whatPerm), printFlops{printFlops} {};
     void runOnOperation() override;

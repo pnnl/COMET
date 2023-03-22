@@ -2228,6 +2228,7 @@ namespace
   struct LowerIndexTreeIRToSCFPass
       : public PassWrapper<LowerIndexTreeIRToSCFPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerIndexTreeIRToSCFPass)
     void runOnOperation() override;
   };
 
@@ -2255,7 +2256,8 @@ void LowerIndexTreeIRToSCFPass::runOnOperation()
   target.addLegalDialect<LinalgDialect,
                          ArithDialect,
                          scf::SCFDialect,
-                         memref::MemRefDialect>();
+                         memref::MemRefDialect,
+                         bufferization::BufferizationDialect>();
 
   target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,

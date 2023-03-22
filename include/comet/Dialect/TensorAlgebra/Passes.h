@@ -83,14 +83,14 @@ namespace mlir
         std::unique_ptr<Pass> createTensorFillLoweringPass();
 
         /// Create a pass for lowering Reduce operation to SCF
-        //std::unique_ptr<Pass> createReduceOpLowerToSCFPass();
+        // std::unique_ptr<Pass> createReduceOpLowerToSCFPass();
 
         /// Create a pass for lowering tensor operatations to other lower level dialects
         /// such as tensor elementwise addition, subtract, transpose, etc.
         std::unique_ptr<mlir::Pass> createTensorOpsLoweringPass();
 
         /// Create a pass for lowering transpose operations to SCF
-        //std::unique_ptr<Pass> createTransposeLoweringPass();
+        // std::unique_ptr<Pass> createTransposeLoweringPass();
 
         /// Create a pass for lowering sparse TA operations to SCFDimAttr
         std::unique_ptr<Pass> createSTCRemoveDeadOpsPass();
@@ -100,9 +100,11 @@ namespace mlir
 
         /// Create a pass for lowering programming constructs to SCF ops
         std::unique_ptr<Pass> createPCToLoopsLoweringPass();
-        
-        //TODO(gkestor): this pass is a workout to handle redundant LabeledTensor operations
+
+        // TODO(gkestor): this pass is a workout to handle redundant LabeledTensor operations
         std::unique_ptr<Pass> createRemoveLabeledTensorOpsPass();
+
+        std::unique_ptr<Pass> createFuncOpLoweringPass();
 
     } // end namespace tensorAlgebra
 } // end namespace mlir

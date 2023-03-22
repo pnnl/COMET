@@ -29,7 +29,6 @@
 #include "comet/Dialect/IndexTree/IR/ITDialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -343,7 +342,7 @@ namespace
 
       comet_debug() << " AllocOp for initialization";
       Value init_alloc;
-      //memref::AllocOp init_alloc;
+      // memref::AllocOp init_alloc;
       if (is_filled)
       {
         // if is_filled is true, only allocate memory and let ta.fill initializes tensors
@@ -354,8 +353,8 @@ namespace
         // if is_filled is false, allocate memory and initialize it
         init_alloc = insertAllocAndInitialize(loc, resultMemTy, ValueRange(cur_indices), rewriter);
       }
-      
-      //init_alloc.getDefiningOp()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
+
+      // init_alloc.getDefiningOp()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
       cast<memref::AllocOp>(init_alloc.getDefiningOp()).setAlignmentAttr(rewriter.getI64IntegerAttr(32));
 
       Value tensorLoad = rewriter.create<ToTensorOp>(loc, init_alloc);
@@ -392,7 +391,7 @@ namespace
     if (rank_size == 2)
     {
       comet_debug() << " Rank Size is 2\n";
-      auto readInput2DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f32, i32Type}, {});  // last arg (i32Type): readMode
+      auto readInput2DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
       auto readInput2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f64, i32Type}, {});
 
       if (VALUETYPE.compare("f32") == 0)
@@ -400,7 +399,7 @@ namespace
         if (isFuncInMod("read_input_2D_f32", module) == false)
         {
           func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_2D_f32",
-                                        readInput2DF32Func, ArrayRef<NamedAttribute>{});
+                                                    readInput2DF32Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
@@ -410,20 +409,20 @@ namespace
         if (isFuncInMod("read_input_2D_f64", module) == false)
         {
           func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_2D_f64",
-                                        readInput2DF64Func, ArrayRef<NamedAttribute>{});
+                                                    readInput2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
       }
 
-      auto readInputSizes2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, unrankedMemref_index, i32Type}, {});  // last arg (i32Type): readMode
+      auto readInputSizes2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, unrankedMemref_index, i32Type}, {}); // last arg (i32Type): readMode
 
       if (VALUETYPE.compare("f32") == 0)
       {
         if (isFuncInMod("read_input_sizes_2D_f32", module) == false)
         {
           func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_2D_f32",
-                                        readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
+                                                    readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
@@ -434,7 +433,7 @@ namespace
         {
           comet_debug() << " Inserting read_input_sizes_2D_f64\n";
           func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_2D_f64",
-                                        readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
+                                                    readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
@@ -444,7 +443,7 @@ namespace
     // 3D tensor
     else if (rank_size == 3)
     {
-      auto readInput3DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f32, i32Type}, {});  // last arg (i32Type): readMode
+      auto readInput3DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
       auto readInput3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f64, i32Type}, {});
 
       if (VALUETYPE.compare("f32") == 0)
@@ -452,7 +451,7 @@ namespace
         if (isFuncInMod("read_input_3D_f32", module) == false)
         {
           func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_3D_f32",
-                                        readInput3DF32Func, ArrayRef<NamedAttribute>{});
+                                                    readInput3DF32Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
@@ -463,20 +462,20 @@ namespace
         {
           comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
           func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_3D_f64",
-                                        readInput3DF64Func, ArrayRef<NamedAttribute>{});
+                                                    readInput3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
       }
 
-      auto readInputSizes3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {});  // last arg (i32Type): readMode
+      auto readInputSizes3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {}); // last arg (i32Type): readMode
 
       if (VALUETYPE.compare("f32") == 0)
       {
         if (isFuncInMod("read_input_sizes_3D_f32", module) == false)
         {
           func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_3D_f32",
-                                        readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
+                                                    readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
@@ -487,7 +486,7 @@ namespace
         {
           comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
           func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_3D_f64",
-                                        readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
+                                                    readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
@@ -726,7 +725,7 @@ namespace
             StringAttr filename = fillfromfileop.getFilename().cast<StringAttr>();
             IntegerAttr readModeAttr = fillfromfileop.getReadMode().cast<IntegerAttr>();
             rewriter.eraseOp(fillfromfileop);
-            
+
             comet_debug() << " filename: " << filename.getValue() << "\n";
 
             std::string filename_str(filename.getValue());
@@ -772,7 +771,7 @@ namespace
 
         Value readModeConst;
         if (readModeVal == -1) // none specified
-        { // 1, Default: standard matrix read
+        {                      // 1, Default: standard matrix read
           readModeConst = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, 1));
         }
         else
@@ -796,9 +795,8 @@ namespace
             read_input_sizes_str = "read_input_sizes_2D_f64";
           }
           auto read_input_sizes_Call = rewriter.create<func::CallOp>(
-                loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], alloc_sizes_cast, readModeConst});
+              loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], alloc_sizes_cast, readModeConst});
           read_input_sizes_Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
-
         }
         else if (rank_size == 3)
         { // 3D
@@ -816,7 +814,7 @@ namespace
             read_input_sizes_str = "read_input_sizes_3D_f64";
           }
           auto read_input_sizes_3D_Call = rewriter.create<func::CallOp>(
-                loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], dim_format[2], alloc_sizes_cast, readModeConst});
+              loc, read_input_sizes_str, SmallVector<Type, 2>{}, ValueRange{sparseFileID, dim_format[0], dim_format[1], dim_format[2], alloc_sizes_cast, readModeConst});
           read_input_sizes_3D_Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
           comet_debug() << "\n";
         }
@@ -1561,6 +1559,7 @@ namespace
       return success();
     }
   };
+
   struct TensorFillLowering : public ConversionPattern
   {
     TensorFillLowering(MLIRContext *ctx)
@@ -1613,6 +1612,36 @@ namespace
       return success();
     }
   };
+
+  struct FuncOpLowering : public OpConversionPattern<tensorAlgebra::FuncOp>
+  {
+    using OpConversionPattern<tensorAlgebra::FuncOp>::OpConversionPattern;
+
+    LogicalResult
+    matchAndRewrite(tensorAlgebra::FuncOp op, OpAdaptor adaptor,
+                    ConversionPatternRewriter &rewriter) const final
+    {
+      // We only lower the main function as we expect that all other functions
+      // have been inlined.
+      if (op.getName() != "main")
+        return failure();
+
+      // Verify that the given main has no inputs and results.
+      if (op.getNumArguments() || op.getFunctionType().getNumResults())
+      {
+        return rewriter.notifyMatchFailure(op, [](Diagnostic &diag)
+                                           { diag << "expected 'main' to have 0 inputs and 0 results"; });
+      }
+
+      // Create a new non-toy function, with the same region.
+      auto func = rewriter.create<mlir::func::FuncOp>(op.getLoc(), op.getName(),
+                                                      op.getFunctionType());
+      rewriter.inlineRegionBefore(op.getRegion(), func.getBody(), func.end());
+      rewriter.eraseOp(op);
+      return success();
+    }
+  };
+
 }
 //===----------------------------------------------------------------------===//
 /// Early Lowering Passes end
@@ -1623,36 +1652,42 @@ namespace
   struct DenseTensorDeclLoweringPass
       : public PassWrapper<DenseTensorDeclLoweringPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(DenseTensorDeclLoweringPass)
     void runOnOperation() override;
   };
 
   struct SparseTensorDeclLoweringPass
       : public PassWrapper<SparseTensorDeclLoweringPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(SparseTensorDeclLoweringPass)
     void runOnOperation() override;
   };
 
   struct SparseOutputTensorDeclLoweringPass
       : public PassWrapper<SparseOutputTensorDeclLoweringPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(SparseOutputTensorDeclLoweringPass)
     void runOnOperation() override;
   };
 
   struct TempSparseOutputTensorDeclLoweringPass
       : public PassWrapper<TempSparseOutputTensorDeclLoweringPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TempSparseOutputTensorDeclLoweringPass)
     void runOnOperation() override;
   };
 
   struct TensorFillLoweringPass
       : public PassWrapper<TensorFillLoweringPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TensorFillLoweringPass)
     void runOnOperation() override;
   };
 
   struct RemoveLabeledTensorOpPass
       : public PassWrapper<RemoveLabeledTensorOpPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RemoveLabeledTensorOpPass)
     void runOnOperation() override;
   };
 
@@ -1671,11 +1706,12 @@ void DenseTensorDeclLoweringPass::runOnOperation()
   ConversionTarget target(getContext());
   target.addLegalDialect<LinalgDialect, scf::SCFDialect,
                          ArithDialect, memref::MemRefDialect,
+                         bufferization::BufferizationDialect,
                          ITDialect>();
 
   // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
-                    tensorAlgebra::TAReturnOp,
+                    //tensorAlgebra::TAReturnOp,
                     tensorAlgebra::ReduceOp,
                     tensorAlgebra::TransposeOp,
                     tensorAlgebra::TensorFillOp,
@@ -1767,6 +1803,7 @@ void SparseOutputTensorDeclLoweringPass::runOnOperation()
                          ArithDialect,
                          scf::SCFDialect,
                          memref::MemRefDialect,
+                         bufferization::BufferizationDialect,
                          ITDialect>();
 
   target.addLegalOp<tensorAlgebra::PrintOp,
@@ -1842,7 +1879,14 @@ void TensorFillLoweringPass::runOnOperation()
   // this is a simple pass that replaces tensor decl with linalg.fill
   func::FuncOp func = getOperation();
   ConversionTarget target(getContext());
-  target.addLegalDialect<LinalgDialect, ArithDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
+  target.addLegalDialect<LinalgDialect, 
+                        ArithDialect, 
+                        scf::SCFDialect, 
+                        AffineDialect, 
+                        memref::MemRefDialect,
+                        bufferization::BufferizationDialect
+                        >();
+  
   RewritePatternSet patterns(&getContext());
   patterns.insert<TensorFillLowering>(&getContext());
 
@@ -1865,7 +1909,7 @@ void RemoveLabeledTensorOpPass::runOnOperation()
                          memref::MemRefDialect>();
 
   RewritePatternSet patterns(&getContext());
-  patterns.insert<RemoveLabeledTensorOp>(&getContext());
+  patterns.insert<RemoveLabeledTensorOp, FuncOpLowering>(&getContext());
 
   if (failed(applyPartialConversion(func, target, std::move(patterns))))
   {

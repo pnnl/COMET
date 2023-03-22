@@ -702,6 +702,7 @@ namespace
   struct TensorOpsLoweringPass
       : public PassWrapper<TensorOpsLoweringPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TensorOpsLoweringPass)
     void runOnOperation() override;
   };
 } // end anonymous namespace.
@@ -728,7 +729,8 @@ void TensorOpsLoweringPass::runOnOperation()
                          AffineDialect,
                          scf::SCFDialect,
                          ArithDialect,
-                         memref::MemRefDialect>();
+                         memref::MemRefDialect,
+                         bufferization::BufferizationDialect>();
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.
