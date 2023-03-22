@@ -35,13 +35,9 @@
 #include "mlir/IR/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Transforms/InliningUtils.h"
-//#include "mlir/IR/BuiltinOps.h"
-//#include "mlir/IR/Operation.h"
-//#include "mlir/Dialect/Arith/IR/Arith.h"
-
-
-
-
+// #include "mlir/IR/BuiltinOps.h"
+// #include "mlir/IR/Operation.h"
+// #include "mlir/Dialect/Arith/IR/Arith.h"
 
 // #include "mlir/IR/BuiltinTypes.h"
 // #include "mlir/IR/DialectImplementation.h"
@@ -137,7 +133,6 @@ static void print(RangeType type, DialectAsmPrinter &printer)
 void mlir::tensorAlgebra::TADialect::printType(
     Type type, DialectAsmPrinter &printer) const
 {
-
   if (type.isa<RangeType>())
   {
     print(type.cast<RangeType>(), printer);
@@ -180,7 +175,8 @@ void DenseConstantOp::build(mlir::OpBuilder &builder, mlir::OperationState &stat
 /// parser rules. These rules are used to populate an `mlir::OperationState`
 /// similarly to the `build` methods described above.
 mlir::ParseResult DenseConstantOp::parse(mlir::OpAsmParser &parser,
-                                    mlir::OperationState &result) {
+                                         mlir::OperationState &result)
+{
   mlir::DenseElementsAttr value;
   if (parser.parseOptionalAttrDict(result.attributes) ||
       parser.parseAttribute(value, "value", result.attributes))
@@ -192,7 +188,8 @@ mlir::ParseResult DenseConstantOp::parse(mlir::OpAsmParser &parser,
 
 /// The 'OpAsmPrinter' class is a stream that allows for formatting
 /// strings, attributes, operands, types, etc.
-void DenseConstantOp::print(mlir::OpAsmPrinter &printer) {
+void DenseConstantOp::print(mlir::OpAsmPrinter &printer)
+{
   printer << " ";
   printer.printOptionalAttrDict((*this)->getAttrs(), /*elidedAttrs=*/{"value"});
   printer << getValue();
@@ -200,7 +197,8 @@ void DenseConstantOp::print(mlir::OpAsmPrinter &printer) {
 
 /// Verifier for the constant operation. This corresponds to the
 /// `let hasVerifier = 1` in the op definition.
-mlir::LogicalResult DenseConstantOp::verify() {
+mlir::LogicalResult DenseConstantOp::verify()
+{
   // If the return type of the constant is not an unranked tensor, the shape
   // must match the shape of the attribute holding the data.
   auto resultType = getResult().getType().dyn_cast<mlir::RankedTensorType>();
@@ -210,15 +208,18 @@ mlir::LogicalResult DenseConstantOp::verify() {
   // Check that the rank of the attribute type matches the rank of the constant
   // result type.
   auto attrType = getValue().getType().cast<mlir::TensorType>();
-  if (attrType.getRank() != resultType.getRank()) {
+  if (attrType.getRank() != resultType.getRank())
+  {
     return emitOpError("return type must match the one of the attached value "
                        "attribute: ")
            << attrType.getRank() << " != " << resultType.getRank();
   }
 
   // Check that each of the dimensions match between the two types.
-  for (int dim = 0, dimE = attrType.getRank(); dim < dimE; ++dim) {
-    if (attrType.getShape()[dim] != resultType.getShape()[dim]) {
+  for (int dim = 0, dimE = attrType.getRank(); dim < dimE; ++dim)
+  {
+    if (attrType.getShape()[dim] != resultType.getShape()[dim])
+    {
       return emitOpError(
                  "return type shape mismatches its attribute at dimension ")
              << dim << ": " << attrType.getShape()[dim]
@@ -231,7 +232,8 @@ mlir::LogicalResult DenseConstantOp::verify() {
 // GenericCallOp
 //===----------------------------------------------------------------------===//
 void GenericCallOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                          StringRef callee, ArrayRef<mlir::Value> arguments) {
+                          StringRef callee, ArrayRef<mlir::Value> arguments)
+{
   // Generic call always returns an unranked Tensor initially.
   state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
   state.addOperands(arguments);
@@ -241,7 +243,8 @@ void GenericCallOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
 
 /// Return the callee of the generic call operation, this is required by the
 /// call interface.
-CallInterfaceCallable GenericCallOp::getCallableForCallee() {
+CallInterfaceCallable GenericCallOp::getCallableForCallee()
+{
   return (*this)->getAttrOfType<SymbolRefAttr>("callee");
 }
 
@@ -255,21 +258,24 @@ Operation::operand_range GenericCallOp::getArgOperands() { return getInputs(); }
 
 void FuncOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                    llvm::StringRef name, mlir::FunctionType type,
-                   llvm::ArrayRef<mlir::NamedAttribute> attrs) {
+                   llvm::ArrayRef<mlir::NamedAttribute> attrs)
+{
   // FunctionOpInterface provides a convenient `build` method that will populate
   // the state of our FuncOp, and create an entry block.
   buildWithEntryBlock(builder, state, name, type, attrs, type.getInputs());
 }
 
 mlir::ParseResult FuncOp::parse(mlir::OpAsmParser &parser,
-                                mlir::OperationState &result) {
+                                mlir::OperationState &result)
+{
   // Dispatch to the FunctionOpInterface provided utility method that parses the
   // function operation.
   auto buildFuncType =
       [](mlir::Builder &builder, llvm::ArrayRef<mlir::Type> argTypes,
          llvm::ArrayRef<mlir::Type> results,
          mlir::function_interface_impl::VariadicFlag,
-         std::string &) { return builder.getFunctionType(argTypes, results); };
+         std::string &)
+  { return builder.getFunctionType(argTypes, results); };
 
   return mlir::function_interface_impl::parseFunctionOp(
       parser, result, /*allowVariadic=*/false,
@@ -277,7 +283,8 @@ mlir::ParseResult FuncOp::parse(mlir::OpAsmParser &parser,
       getArgAttrsAttrName(result.name), getResAttrsAttrName(result.name));
 }
 
-void FuncOp::print(mlir::OpAsmPrinter &p) {
+void FuncOp::print(mlir::OpAsmPrinter &p)
+{
   // Dispatch to the FunctionOpInterface provided utility method that prints the
   // function operation.
   mlir::function_interface_impl::printFunctionOp(
@@ -288,14 +295,14 @@ void FuncOp::print(mlir::OpAsmPrinter &p) {
 //===----------------------------------------------------------------------===//
 // chaing multiplication Op
 void ChainMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                  mlir::Value lhs, mlir::Value rhs)
+                       mlir::Value lhs, mlir::Value rhs)
 {
   state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
   state.addOperands({lhs, rhs});
 }
 
 void ChainMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, mlir::TensorType resultType,
-                  mlir::Value lhs, mlir::Value rhs)
+                       mlir::Value lhs, mlir::Value rhs)
 {
   state.addTypes(resultType);
   state.addOperands({lhs, rhs});
@@ -316,7 +323,6 @@ void DivOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, mlir::T
   state.addTypes(resultType);
   state.addOperands({lhs, rhs});
 }
-
 
 //===----------------------------------------------------------------------===//
 // ReturnOp
@@ -356,7 +362,8 @@ void DivOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, mlir::T
 //                         << results.front() << ")";
 // }
 
-mlir::LogicalResult TAReturnOp::verify() {
+mlir::LogicalResult TAReturnOp::verify()
+{
   // We know that the parent operation is a function, because of the 'HasParent'
   // trait attached to the operation definition.
   auto function = cast<FuncOp>((*this)->getParentOp());
@@ -488,20 +495,19 @@ llvm::ArrayRef<mlir::Type> SparseTensorType::getElementTypes()
 #include "comet/Dialect/TensorAlgebra/IR/TAOps.cpp.inc"
 
 //===----------------------------------------------------------------------===//
-// ToyDialect
+// Tensor Algebra Dialect
 //===----------------------------------------------------------------------===//
 
 /// Dialect initialization, the instance will be owned by the context. This is
 /// the point of registration of types and operations for the dialect.
-void TADialect::initialize() {
+void TADialect::initialize()
+{
   addOperations<
 #define GET_OP_LIST
 #include "comet/Dialect/TensorAlgebra/IR/TAOps.cpp.inc"
       >();
   addTypes<RangeType, SparseTensorType>();
 }
-
-
 
 // /// Dialect creation, the instance will be owned by the context. This is the
 // /// point of registration of custom types and operations for the dialect.

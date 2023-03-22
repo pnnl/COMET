@@ -510,25 +510,25 @@ def DivOp : TA_Op<"div",
   ];
 }
 
-//TODO(gkestor): test
-def CastOp : TA_Op<"cast",
-    [Pure,
-     SameOperandsAndResultShape]> {
-  let summary = "shape cast operation";
-  let description = [{
-    The "cast" operation converts a tensor from one type to an equivalent type
-    without changing any data elements. The source and destination types
-    must both be tensor types with the same element type. If both are ranked
-    then the rank should be the same and static dimensions should match. The
-    operation is invalid if converting to a mismatching constant dimension.
-  }];
+// //TODO(gkestor): test
+// def CastOp : TA_Op<"cast",
+//     [Pure,
+//      SameOperandsAndResultShape]> {
+//   let summary = "shape cast operation";
+//   let description = [{
+//     The "cast" operation converts a tensor from one type to an equivalent type
+//     without changing any data elements. The source and destination types
+//     must both be tensor types with the same element type. If both are ranked
+//     then the rank should be the same and static dimensions should match. The
+//     operation is invalid if converting to a mismatching constant dimension.
+//   }];
 
-  let arguments = (ins F64Tensor:$input);
-  let results = (outs F64Tensor:$output);
+//   let arguments = (ins F64Tensor:$input);
+//   let results = (outs F64Tensor:$output);
 
-  // Set the folder bit so that we can fold redundant cast operations.
-  let hasFolder = 1;
-}
+//   // Set the folder bit so that we can fold redundant cast operations.
+//   let hasFolder = 1;
+// }
 
 // def TAReturnOp : TA_Op<"return", [Pure, HasParent<"FuncOp">,
 //                                  Terminator]> {

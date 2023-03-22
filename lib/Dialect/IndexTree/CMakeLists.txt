@@ -20,6 +20,7 @@ add_llvm_library(COMETIndexTree
 add_dependencies(
   COMETIndexTree
   COMETITOpsIncGen
+  MLIRSupport
   )
 
 target_link_libraries(COMETIndexTree MLIRIR)

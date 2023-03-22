@@ -32,6 +32,7 @@
 #include "MLIRGen.h"
 #include "Parser.h"
 
+#include "mlir/Support/TypeID.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
@@ -314,18 +315,18 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// HPTT: A High-Performance Tensor Transposition C++ Library
     /// https://arxiv.org/abs/1704.04374
     optPM.addPass(mlir::tensorAlgebra::createTensorOpsLoweringPass());
-    optPM.addPass(mlir::tensorAlgebra::createOptDenseTransposePass());
+    //optPM.addPass(mlir::tensorAlgebra::createOptDenseTransposePass());
   }
 
-  if (OptMatmulTiling)
-  {
-    optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulTilingPass());
-  }
+  // if (OptMatmulTiling)
+  // {
+  //   optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulTilingPass());
+  // }
 
-  if (OptCallToMatMulMicroKernel)
-  {
-    optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulMicroKernelPass());
-  }
+  // if (OptCallToMatMulMicroKernel)
+  // {
+  //   optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulMicroKernelPass());
+  // }
 
   // =============================================================================
   // Lowering all the operations to loops
@@ -360,7 +361,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // =============================================================================
   optPM.addPass(mlir::tensorAlgebra::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::tensorAlgebra::createLateLoweringPass());
-  optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
+  //optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================
 
