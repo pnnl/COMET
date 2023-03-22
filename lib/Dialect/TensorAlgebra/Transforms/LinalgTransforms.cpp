@@ -32,17 +32,14 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Conversion/LinalgToStandard/LinalgToStandard.h"
-#include "mlir/Dialect/Linalg/Analysis/DependenceAnalysis.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
-#include "mlir/Transforms/LoopUtils.h"
+//#include "mlir/Dialect/Affine/LoopUtils.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 
 using namespace mlir;
-using namespace mlir::edsc;
-using namespace mlir::edsc::intrinsics;
 using namespace mlir::linalg;
 using namespace mlir::tensorAlgebra;
 
@@ -74,7 +71,7 @@ namespace
     void runOnOperation() override
     {
       func::FuncOp func = getOperation();
-      MLIRContext *ctx = funcOp.getContext();
+      MLIRContext *ctx = func.getContext();
 
       RewritePatternSet patterns(&getContext());
 
@@ -89,23 +86,24 @@ namespace
       //#define BLIS_DEFAULT_MR_D          8
       //#define BLIS_DEFAULT_NR_D          6
 
-      patterns.insert<LinalgTilingPattern<MatmulOp>>(
-          ctx,
-          LinalgTilingOptions()
-              .setTileSizes({72, 4080, 256})
-              .setInterchange({1, 2, 0})
-              .setLoopType(LinalgTilingLoopType::Loops),
-          LinalgTransformationFilter(Identifier::get("__with_tiling__", ctx),
-                                     Identifier::get("L2__with_tiling__", ctx)));
+      //TODO(gkestor): leverage exisiting tiling pass in linalg
+      // patterns.insert<LinalgTilingPattern<MatmulOp>>(
+      //     ctx,
+      //     LinalgTilingOptions()
+      //         .setTileSizes({72, 4080, 256})
+      //         .setInterchange({1, 2, 0})
+      //         .setLoopType(LinalgTilingLoopType::Loops),
+      //     LinalgTransformationFilter(Identifier::get("__with_tiling__", ctx),
+      //                                Identifier::get("L2__with_tiling__", ctx)));
 
-      patterns.insert<LinalgTilingPattern<MatmulOp>>(
-          ctx,
-          LinalgTilingOptions()
-              .setTileSizes({6, 8, 256})
-              .setInterchange({1, 0, 2})
-              .setLoopType(LinalgTilingLoopType::Loops),
-          LinalgTransformationFilter(Identifier::get("L2__with_tiling__", ctx),
-                                     Identifier::get("__micro_kernel__", ctx)));
+      // patterns.insert<LinalgTilingPattern<MatmulOp>>(
+      //     ctx,
+      //     LinalgTilingOptions()
+      //         .setTileSizes({6, 8, 256})
+      //         .setInterchange({1, 0, 2})
+      //         .setLoopType(LinalgTilingLoopType::Loops),
+      //     LinalgTransformationFilter(Identifier::get("L2__with_tiling__", ctx),
+      //                                Identifier::get("__micro_kernel__", ctx)));
 
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }

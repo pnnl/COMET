@@ -33,7 +33,6 @@
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
-// #include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
@@ -42,7 +41,6 @@
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/PatternMatch.h"
 #include "llvm/ADT/Sequence.h"
-//#include "mlir/EDSC/Builders.h"
 
 #include <limits>
 #include <map>
@@ -204,13 +202,13 @@ namespace
       auto lhsMemref = lhsTensorLoadOp.getMemref();
 
       auto rhsTensorOperand = operands[1];
-      auto rhsTensorLoadOp = cast<ToTensorOp>(rhsTensorOperand.getDefiningOp());
+      auto rhsTensorLoadOp = cast<ToTensorOp>(rhsTensorOperand.getDefiningOp());;
       auto rhsMemref = rhsTensorLoadOp.getMemref();
 
-      auto inPermMap = tensorCopyOp.getInputPerm();
-      auto outPermMap = tensorCopyOp.getOutputPerm();
-
-      auto copyOp = rewriter.create<linalg::CopyOp>(loc, rhsMemref, lhsMemref, inPermMap, outPermMap);
+      //TODO(gkestor): better way to cast AffineMap to ArrayRef<int64_t>
+      auto outPermMap = tensorCopyOp.getOutputPermAttr();
+      std::vector<std::vector<int64_t>> allPerms = getAllPerms(dyn_cast<ArrayAttr>(outPermMap));
+      auto copyOp = rewriter.create<linalg::TransposeOp>(loc, rhsMemref, lhsMemref, llvm::ArrayRef<int64_t>(allPerms[0]));
 
       auto alphaAttr = tensorCopyOp.getOperation()->getAttr("__alpha__");
       auto betaAttr = tensorCopyOp.getOperation()->getAttr("__beta__");
