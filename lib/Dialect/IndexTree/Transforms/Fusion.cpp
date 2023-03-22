@@ -161,6 +161,7 @@ namespace
     static void reduceTensorDimension(std::vector<mlir::Operation *> &LHSs, mlir::func::FuncOp &funcop);
 
   public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(KernelFusionPass)
     void runOnOperation() override;
 
     void RedundancyAwareFusion(mlir::func::FuncOp &funcop);

@@ -75,6 +75,7 @@ namespace
   struct PreLoweringPass
       : public PassWrapper<PreLoweringPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreLoweringPass)
     void runOnOperation() override;
   };
 } // namespace

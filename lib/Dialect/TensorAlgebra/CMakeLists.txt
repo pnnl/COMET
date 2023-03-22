@@ -6,7 +6,7 @@ add_llvm_library(COMETTensorAlgebra
   Conversion/LowerPCToLoops.cpp
   Conversion/TensorOpsLowering.cpp
   Conversion/LateLowering.cpp 
-
+  Conversion/LowerFunc.cpp 
 
   Transforms/Transforms.cpp
   #Transforms/LinalgTransforms.cpp

@@ -38,11 +38,13 @@
 #include "mlir/IR/BuiltinOps.h"
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/PatternMatch.h"
 
 using namespace mlir;
 using namespace mlir::arith;
+using namespace mlir::bufferization;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
@@ -75,23 +77,23 @@ namespace
   //===----------------------------------------------------------------------===//
   // Late Lowering to Standard Dialect RewritePatterns: Return operations
   //===----------------------------------------------------------------------===//
-  struct ReturnOpLowering : public OpRewritePattern<tensorAlgebra::TAReturnOp>
-  {
-    using OpRewritePattern<tensorAlgebra::TAReturnOp>::OpRewritePattern;
+  // struct ReturnOpLowering : public OpRewritePattern<tensorAlgebra::TAReturnOp>
+  // {
+  //   using OpRewritePattern<tensorAlgebra::TAReturnOp>::OpRewritePattern;
 
-    LogicalResult matchAndRewrite(tensorAlgebra::TAReturnOp op,
-                                  PatternRewriter &rewriter) const final
-    {
-      // During this lowering, we expect that all function calls have been
-      // inlined.
-      if (op.hasOperand())
-        return failure();
+  //   LogicalResult matchAndRewrite(tensorAlgebra::TAReturnOp op,
+  //                                 PatternRewriter &rewriter) const final
+  //   {
+  //     // During this lowering, we expect that all function calls have been
+  //     // inlined.
+  //     if (op.hasOperand())
+  //       return failure();
 
-      // We lower "ta.return" directly to "std.return".
-      rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
-      return success();
-    }
-  };
+  //     // We lower "ta.return" directly to "std.return".
+  //     rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
+  //     return success();
+  //   }
+  // };
 
   /// Lowers `ta.print` to a loop nest calling `printf` on each of the individual
   /// elements of the array.
@@ -292,13 +294,13 @@ namespace
   struct LateLoweringPass
       : public PassWrapper<LateLoweringPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LateLoweringPass)
     void runOnOperation() override;
   };
 } // end anonymous namespace.
 
 void LateLoweringPass::runOnOperation()
 {
-
   func::FuncOp function = getOperation();
 
   // llvm::outs() << "Late lower input:\n" <<  function << "\n";
@@ -319,12 +321,13 @@ void LateLoweringPass::runOnOperation()
   target.addLegalDialect<AffineDialect,
                          scf::SCFDialect,
                          ArithDialect,
-                         memref::MemRefDialect>();
+                         memref::MemRefDialect,
+                         bufferization::BufferizationDialect>();
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.
   RewritePatternSet patterns(&getContext());
-  patterns.insert<ReturnOpLowering,
+  patterns.insert<//ReturnOpLowering,
                   PrintOpLowering,
                   GetTimeLowering,
                   PrintElapsedTimeLowering>(&getContext());

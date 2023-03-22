@@ -37,7 +37,7 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
+//#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 using namespace mlir;
 using namespace mlir::linalg;
@@ -67,6 +67,7 @@ namespace
 {
   class LinAlgMatmulTilingPass : public PassWrapper<LinAlgMatmulTilingPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LinAlgMatmulTilingPass)
   public:
     void runOnOperation() override
     {
@@ -234,6 +235,7 @@ namespace
 {
   class LinAlgMatmulMicroKernelPass : public PassWrapper<LinAlgMatmulMicroKernelPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LinAlgMatmulMicroKernelPass)
   public:
     void runOnOperation() override
     {
@@ -437,6 +439,7 @@ namespace
 {
   class OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(OptDenseTransposePass)
   public:
     OptDenseTransposePass(uint64_t tile_size, bool seperate_tiles) : tile_size(tile_size), seperate_tiles(seperate_tiles){};
     void runOnOperation() override
@@ -466,6 +469,7 @@ namespace
 {
   class LowerLinAlgFillOpPass : public PassWrapper<LowerLinAlgFillOpPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerLinAlgFillOpPass)
   public:
     void runOnOperation() override
     {

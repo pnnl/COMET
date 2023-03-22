@@ -20,7 +20,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-//TODO(gkestor): check these header files
+// TODO(gkestor): check these header files
 #include "mlir/Pass/Pass.h"
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -35,7 +35,6 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
-//#include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/Support/Debug.h"
@@ -56,25 +55,25 @@
 #include <stack>
 
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
-// #include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-//#include "mlir/EDSC/Builders.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
 #define DEBUG_TYPE "comet-passes"
 
 using namespace mlir;
 using namespace mlir::arith;
+using namespace mlir::bufferization;
 using namespace tensorAlgebra;
 
 // *********** For debug purpose *********//
-//#ifndef DEBUG_MODE_PASSES
-//#define DEBUG_MODE_PASSES
-//#endif
+// #ifndef DEBUG_MODE_PASSES
+// #define DEBUG_MODE_PASSES
+// #endif
 
 #ifdef DEBUG_MODE_PASSES
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -101,8 +100,8 @@ namespace
   class FindOptimalTCFactorizationPass
       : public mlir::PassWrapper<FindOptimalTCFactorizationPass, OperationPass<func::FuncOp>>
   {
-
   public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(FindOptimalTCFactorizationPass)
     void runOnOperation() override;
 
     void FindOptimalTCFactorization(tensorAlgebra::TensorSetOp op);
@@ -115,18 +114,21 @@ namespace
   struct LowerTAMulChainPass
       : public PassWrapper<LowerTAMulChainPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTAMulChainPass)
     void runOnOperation() override;
   };
 
   struct OptDenseTransposePass
       : public PassWrapper<OptDenseTransposePass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(OptDenseTransposePass)
     void runOnOperation() override;
   };
 
   struct STCRemoveDeadOpsPass
       : public PassWrapper<STCRemoveDeadOpsPass, OperationPass<func::FuncOp>>
   {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(STCRemoveDeadOpsPass)
     void runOnOperation() override;
   };
 
@@ -147,7 +149,7 @@ void removeAllUsers(Operation *op)
 }
 
 std::vector<int64_t> getTensorShape(const std::vector<Operation *> &labels,
-                                             const std::map<Operation *, int64_t> &lblSizes)
+                                    const std::map<Operation *, int64_t> &lblSizes)
 {
   std::vector<int64_t> result;
 
@@ -160,7 +162,7 @@ std::vector<int64_t> getTensorShape(const std::vector<Operation *> &labels,
 }
 
 IndexVector getLabelPerm(const std::vector<Operation *> &labels,
-                                           const std::map<Operation *, unsigned> &labelIdMap)
+                         const std::map<Operation *, unsigned> &labelIdMap)
 {
   IndexVector result;
   for (auto lbl : labels)
@@ -171,8 +173,8 @@ IndexVector getLabelPerm(const std::vector<Operation *> &labels,
 }
 
 std::vector<Operation *> findOutput(const std::vector<Operation *> &rhs1Labels,
-                                         const std::vector<Operation *> &rhs2Labels,
-                                         const std::set<Operation *> &outLabels)
+                                    const std::vector<Operation *> &rhs2Labels,
+                                    const std::set<Operation *> &outLabels)
 {
   std::vector<Operation *> result_labels;
 
@@ -274,7 +276,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   OpBuilder builder(op);
   comet_pdump(op);
   auto operands = op->getOperands();
-  //auto module = op->getParentOfType<ModuleOp>();
+  // auto module = op->getParentOfType<ModuleOp>();
   auto loc = op->getLoc();
   auto lhsOp = operands[0].getDefiningOp(); // TensorMultOp
   auto rhsOp = operands[1].getDefiningOp();
@@ -523,9 +525,8 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       newRhs1 = tcop;
     }
 
-    mlir::tensorAlgebra::TensorSetOp newSetOp = builder.create<tensorAlgebra::TensorSetOp>(loc, newRhs1, operands[1].getDefiningOp()->getOperand(0)); 
+    mlir::tensorAlgebra::TensorSetOp newSetOp = builder.create<tensorAlgebra::TensorSetOp>(loc, newRhs1, operands[1].getDefiningOp()->getOperand(0));
     newSetOp->setAttr("__beta__", builder.getF64FloatAttr(0.0));
-
 
     comet_debug() << "are they previous multop\n";
     for (auto oldTcOp : MultOpsToRemove)
@@ -533,7 +534,6 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       comet_debug() << "Calling removeAllUsers\n";
       removeAllUsers(oldTcOp);
     }
-
   }
   comet_debug() << "MulOpFactorization end\n";
   return;
@@ -545,9 +545,8 @@ void FindOptimalTCFactorizationPass::runOnOperation()
   func::FuncOp func = getOperation();
 
   func.walk([&](tensorAlgebra::TensorSetOp op)
-              { FindOptimalTCFactorization(op); });
+            { FindOptimalTCFactorization(op); });
 }
-
 
 void LowerTAMulChainPass::runOnOperation()
 {
@@ -591,7 +590,7 @@ void STCRemoveDeadOpsPass::runOnOperation()
   ConversionTarget target(getContext());
 
   func::FuncOp func = getOperation();
-  target.addLegalDialect<mlir::linalg::LinalgDialect, ArithDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
+  target.addLegalDialect<mlir::linalg::LinalgDialect, ArithDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect, bufferization::BufferizationDialect>();
   target.addLegalOp<tensorAlgebra::TensorMultOp>();
   RewritePatternSet patterns(&getContext());
   populateSTCRemoveDeadOpsPatterns(patterns, &getContext());

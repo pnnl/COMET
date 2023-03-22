@@ -34,7 +34,7 @@
 
 #include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
+// #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
@@ -163,25 +163,63 @@ namespace
   public:
     MLIRGenImpl(mlir::MLIRContext &context) : builder(&context) {}
 
-    /// Public API: convert the AST for a Tensor Algebra module (source file) to
-    /// an MLIR Module operation.
+    // /// Public API: convert the AST for a Tensor Algebra module (source file) to
+    // /// an MLIR Module operation.
+    // mlir::ModuleOp mlirGen(ModuleAST &moduleAST)
+    // {
+    //   // We create an empty MLIR module and codegen functions one at a time and
+    //   // add them to the module.
+    //   theModule = mlir::ModuleOp::create(builder.getUnknownLoc());
+
+    //   for (FunctionAST &F : moduleAST)
+    //   {
+    //     auto func = mlirGen(F);
+    //     if (!func)
+    //       return nullptr;
+    //     theModule.push_back(func);
+    //   }
+
+    //   // Verify the module after we have finished constructing it, this will check
+    //   // the structural properties of the IR and invoke any specific verifiers we
+    //   // have on the Tensor Algebra operations.
+    //   if (failed(mlir::verify(theModule)))
+    //   {
+    //     theModule.emitError("module verification error");
+    //     return nullptr;
+    //   }
+
+    //   return theModule;
+    // }
+
+    /// Public API: convert the AST for a Toy module (source file) to an MLIR
+    /// Module operation.
     mlir::ModuleOp mlirGen(ModuleAST &moduleAST)
     {
       // We create an empty MLIR module and codegen functions one at a time and
       // add them to the module.
       theModule = mlir::ModuleOp::create(builder.getUnknownLoc());
 
-      for (FunctionAST &F : moduleAST)
+      for (FunctionAST &funcAST : moduleAST)
       {
-        auto func = mlirGen(F);
-        if (!func)
-          return nullptr;
-        theModule.push_back(func);
+        //if (FunctionAST *funcAST = llvm::dyn_cast<FunctionAST>(record.get()))
+        //{
+          mlir::tensorAlgebra::FuncOp func = mlirGen(funcAST);
+          if (!func)
+            return nullptr;
+          functionMap.insert({func.getName(), func});
+          // } else if (StructAST *str = llvm::dyn_cast<StructAST>(record.get())) {
+          //   if (failed(mlirGen(*str)))
+          //     return nullptr;
+        //}
+        //else
+       // {
+        //  llvm_unreachable("unknown record type");
+       // }
       }
 
       // Verify the module after we have finished constructing it, this will check
       // the structural properties of the IR and invoke any specific verifiers we
-      // have on the Tensor Algebra operations.
+      // have on the Toy operations.
       if (failed(mlir::verify(theModule)))
       {
         theModule.emitError("module verification error");
@@ -206,6 +244,9 @@ namespace
     /// added to the mapping. When the processing of a function is terminated, the
     /// scope is destroyed and the mappings created in this scope are dropped.
     llvm::ScopedHashTable<StringRef, mlir::Value> symbolTable;
+
+    /// A mapping for the functions that have been code generated to MLIR.
+    llvm::StringMap<mlir::tensorAlgebra::FuncOp> functionMap;
 
     /// Helper conversion for a Tensor Algebra AST location to an MLIR location.
     mlir::Location loc(const Location &loc)
@@ -232,29 +273,7 @@ namespace
 
     /// Create the prototype for an MLIR function with as many arguments as the
     /// provided Tensor Algebra AST prototype.
-    // mlir::tensorAlgebra::FuncOp mlirGen(PrototypeAST &proto)
-    // {
-    //   auto location = loc(proto.loc());
-
-    //   // This is a generic function, the return type will be inferred later.
-    //   llvm::SmallVector<mlir::Type, 4> argTypes;
-    //   argTypes.reserve(proto.getArgs().size());
-    //   for (auto &arg : proto.getArgs())
-    //   {
-    //     VarType argType = arg->getType();
-    //     mlir::Type type = getType(argType, arg->loc());
-    //     if (!type)
-    //       return nullptr;
-    //     argTypes.push_back(type);
-    //   }
-    //   auto funcType = builder.getFunctionType(argTypes, std::nullopt);
-    //   return builder.create<mlir::tensorAlgebra::FuncOp>(location, proto.getName(),
-    //                                            funcType);
-    // }
-
-    /// Create the prototype for an MLIR function with as many arguments as the
-    /// provided Tensor Algebra AST prototype.
-    mlir::func::FuncOp mlirGen(PrototypeAST &proto)
+    mlir::tensorAlgebra::FuncOp mlirGen(PrototypeAST &proto)
     {
       auto location = loc(proto.loc());
 
@@ -263,33 +282,100 @@ namespace
       llvm::SmallVector<mlir::Type, 4> arg_types(proto.getArgs().size(),
                                                  getType(VarType{}));
       auto func_type = builder.getFunctionType(arg_types, llvm::None);
-      return builder.create<mlir::func::FuncOp>(location, proto.getName(),
-                                                 func_type);
+      return builder.create<mlir::tensorAlgebra::FuncOp>(location, proto.getName(),
+                                                         func_type);
     }
 
+    // /// Emit a new function and add it to the MLIR module.
+    // mlir::tensorAlgebra::FuncOp mlirGen(FunctionAST &funcAST)
+    // {
+    //   // Create a scope in the symbol table to hold variable declarations.
+    //   ScopedHashTableScope<llvm::StringRef, mlir::Value> var_scope(symbolTable);
+
+    //   // Create an MLIR function for the given prototype.
+    //   mlir::tensorAlgebra::FuncOp function(mlirGen(*funcAST.getProto()));
+    //   if (!function)
+    //     return nullptr;
+
+    //   // Let's start the body of the function now!
+    //   // In MLIR the entry block of the function is special: it must have the same
+    //   // argument list as the function itself.
+    //   auto &entryBlock = *function.addEntryBlock();
+    //   auto &protoArgs = funcAST.getProto()->getArgs();
+
+    //   // Declare all the function arguments in the symbol table.
+    //   for (const auto name_value :
+    //        llvm::zip(protoArgs, entryBlock.getArguments()))
+    //   {
+    //     if (failed(declare(std::get<0>(name_value)->getName(),
+    //                        std::get<1>(name_value))))
+    //       return nullptr;
+    //   }
+
+    //   // Set the insertion point in the builder to the beginning of the function
+    //   // body, it will be used throughout the codegen to create operations in this
+    //   // function.
+    //   builder.setInsertionPointToStart(&entryBlock);
+
+    //   // Emit the body of the function.
+    //   if (mlir::failed(mlirGen(*funcAST.getBody())))
+    //   {
+    //     function.erase();
+    //     return nullptr;
+    //   }
+
+    //   // Implicitly return void if no return statement was emitted.
+    //   // FIXME: we may fix the parser instead to always return the last expression
+    //   // (this would possibly help the REPL case later)
+    //   TAReturnOp returnOp;
+    //   if (!entryBlock.empty())
+    //     returnOp = dyn_cast<TAReturnOp>(entryBlock.back());
+    //   if (!returnOp)
+    //   {
+    //     builder.create<TAReturnOp>(loc(funcAST.getProto()->loc()));
+    //   }
+    //   else if (returnOp.hasOperand())
+    //   {
+    //     // Otherwise, if this return operation has an operand then add a result to
+    //     // the function.
+    //     function.setType(builder.getFunctionType(function.getFunctionType().getInputs(),
+    //                                              *returnOp.operand_type_begin()));
+    //   }
+
+    //   return function;
+    // }
+
     /// Emit a new function and add it to the MLIR module.
-    FuncOp mlirGen(FunctionAST &funcAST)
+    mlir::tensorAlgebra::FuncOp mlirGen(FunctionAST &funcAST)
     {
       // Create a scope in the symbol table to hold variable declarations.
-      ScopedHashTableScope<llvm::StringRef, mlir::Value> var_scope(symbolTable);
+      // SymbolTableScopeT varScope(symbolTable);
+      //   // Create a scope in the symbol table to hold variable declarations.
+      ScopedHashTableScope<llvm::StringRef, mlir::Value> varScope(symbolTable);
 
       // Create an MLIR function for the given prototype.
-      FuncOp function(mlirGen(*funcAST.getProto()));
+      builder.setInsertionPointToEnd(theModule.getBody());
+      mlir::tensorAlgebra::FuncOp function = mlirGen(*funcAST.getProto());
       if (!function)
         return nullptr;
 
       // Let's start the body of the function now!
-      // In MLIR the entry block of the function is special: it must have the same
-      // argument list as the function itself.
-      auto &entryBlock = *function.addEntryBlock();
+      mlir::Block &entryBlock = function.front();
       auto &protoArgs = funcAST.getProto()->getArgs();
 
       // Declare all the function arguments in the symbol table.
-      for (const auto name_value :
+      // for (const auto nameValue :
+      //      llvm::zip(protoArgs, entryBlock.getArguments())) {
+      //   if (failed(declare(*std::get<0>(nameValue), std::get<1>(nameValue))))
+      //     return nullptr;
+      // }
+
+      //   // Declare all the function arguments in the symbol table.
+      for (const auto nameValue :
            llvm::zip(protoArgs, entryBlock.getArguments()))
       {
-        if (failed(declare(std::get<0>(name_value)->getName(),
-                           std::get<1>(name_value))))
+        if (failed(declare(std::get<0>(nameValue)->getName(),
+                           std::get<1>(nameValue))))
           return nullptr;
       }
 
@@ -319,9 +405,14 @@ namespace
       {
         // Otherwise, if this return operation has an operand then add a result to
         // the function.
-        function.setType(builder.getFunctionType(function.getFunctionType().getInputs(),
-                                                 *returnOp.operand_type_begin()));
+        function.setType(
+            builder.getFunctionType(function.getFunctionType().getInputs(),
+                                    *returnOp.operand_type_begin()));
       }
+
+      // If this function isn't main, then set the visibility to private.
+      if (funcAST.getProto()->getName() != "main")
+        function.setPrivate();
 
       return function;
     }
