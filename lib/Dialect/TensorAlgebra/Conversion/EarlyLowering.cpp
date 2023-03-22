@@ -354,7 +354,9 @@ namespace
         // if is_filled is false, allocate memory and initialize it
         init_alloc = insertAllocAndInitialize(loc, resultMemTy, ValueRange(cur_indices), rewriter);
       }
-      init_alloc.getDefiningOp()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
+      
+      //init_alloc.getDefiningOp()->setAttr(memref::AllocOp::getAlignmentAttrName(), rewriter.getI64IntegerAttr(32));
+      cast<memref::AllocOp>(init_alloc.getDefiningOp()).setAlignmentAttr(rewriter.getI64IntegerAttr(32));
 
       Value tensorLoad = rewriter.create<ToTensorOp>(loc, init_alloc);
       comet_debug() << " TensorLoad:";
@@ -697,9 +699,8 @@ namespace
                 if (isa<tensorAlgebra::GenericCallOp>(read_from_file_operand))
                 {
                   auto genericcallop = cast<tensorAlgebra::GenericCallOp>(read_from_file_operand);
-                  // comet_vdump(genericcallop);
                   LLVM_DEBUG(comet_debug() << " read_from_file op\n");
-                  std::string read_ref(genericcallop.getCallee().getLeafReference());
+                  std::string read_ref(genericcallop.getCalleeAttr().getLeafReference().getValue());
                   LLVM_DEBUG(comet_debug() << " read_ref: " << read_ref << "\n");
                   if (read_ref.compare(0, 14, "read_from_file") == 0)
                   {

@@ -23,8 +23,6 @@ set(LIBS
   MLIRMemRefDialect
   MLIRParser
   MLIRPass
-  # MLIRAnalysis
-  # MLIRExecutionEngine
   # MLIRAffineDialect
   # MLIRAffineToStandard
   # MLIRLinalgToLLVM
@@ -36,8 +34,6 @@ set(LIBS
   #MLIRSCF
   # MLIRArithDialect
   # MLIRStandardToLLVM
-  # MLIRTransforms
-  # MLIRSupport
   # MLIRSideEffectInterfaces
   # MLIRVectorToLLVM
   # MLIRVectorToSCF
@@ -45,6 +41,7 @@ set(LIBS
   COMETUtils
   COMETTensorAlgebra
   COMETIndexTree
+  MLIRSupport
 )
 
 target_link_libraries(comet-opt 

@@ -562,7 +562,7 @@ namespace mlir
       return res;
     }
 
-    std::vector<std::vector<std::string>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<unsigned int>> allPerms)
+    std::vector<std::vector<std::string>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms)
     {
       std::vector<std::vector<std::string>> allFormats(TENSOR_NUMS);
 

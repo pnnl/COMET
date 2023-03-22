@@ -33,6 +33,7 @@
 #include "mlir/IR/Operation.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Transforms/InliningUtils.h"
+//#include "mlir/Support/TypeID.h"
 
 using namespace mlir;
 using namespace mlir::indexTree;
@@ -41,15 +42,17 @@ using namespace mlir::indexTree;
 // ITDialect
 //===----------------------------------------------------------------------===//
 
+#include "comet/Dialect/IndexTree/IR/ITDialect.cpp.inc"
+
 /// Dialect creation, the instance will be owned by the context. This is the
 /// point of registration of custom types and operations for the dialect.
-ITDialect::ITDialect(mlir::MLIRContext *ctx) : mlir::Dialect("it", ctx, mlir::TypeID::get<ITDialect>())
-{
-  addOperations<
-#define GET_OP_LIST
-#include "comet/Dialect/IndexTree/IR/ITOps.cpp.inc"
-      >();
-}
+// ITDialect::ITDialect(mlir::MLIRContext *ctx) : mlir::Dialect("it", ctx, mlir::TypeID::get<ITDialect>())
+// {
+//   addOperations<
+// #define GET_OP_LIST
+// #include "comet/Dialect/IndexTree/IR/ITOps.cpp.inc"
+//       >();
+// }
 
 Type mlir::indexTree::ITDialect::parseType(DialectAsmParser &parser) const
 {
@@ -64,5 +67,19 @@ Type mlir::indexTree::ITDialect::parseType(DialectAsmParser &parser) const
   return Type();
 }
 
+// //TODO(gkestor): do we need this placeholder function?
+// void printType(Type type, DialectAsmPrinter &os) const{
+//     return;
+// }
+
 #define GET_OP_CLASSES
 #include "comet/Dialect/IndexTree/IR/ITOps.cpp.inc"
+
+/// Dialect initialization, the instance will be owned by the context. This is
+/// the point of registration of types and operations for the dialect.
+void ITDialect::initialize() {
+  addOperations<
+#define GET_OP_LIST
+#include "comet/Dialect/IndexTree/IR/ITOps.cpp.inc"
+      >();
+}

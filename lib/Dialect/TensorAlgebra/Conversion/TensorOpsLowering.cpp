@@ -266,7 +266,7 @@ namespace
 
         comet_vdump(lhs);
         auto outputMemref = lhs.getDefiningOp()->getOperand(0);
-        //TODO(gkestor): linalg::CopyOp is not avaliable any longer
+        //TODO(gkestor): linalg::CopyOp is deprecated
         //auto copyOp = rewriter.create<linalg::CopyOp>(loc, inputMemref, outputMemref, inputPermuation, outputPermuation);
         auto copyOp = rewriter.create<linalg::TransposeOp>(loc, inputMemref, outputMemref, llvm::ArrayRef<int64_t>(allPerms[1]));
         comet_vdump(copyOp);
