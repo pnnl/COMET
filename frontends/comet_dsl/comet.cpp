@@ -261,13 +261,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Generate the index tree IR
     optPM.addPass(mlir::IndexTree::createIndexTreePass());
 
-    //    // Dump index tree dialect.
-    //    if (emitIT)
-    //    {
-    //      if (mlir::failed(pm.run(*module)))
-    //        return 4;
-    //      return 0;
-    //    }
+    // Dump index tree dialect.
+    if (emitIT)
+    {
+      if (mlir::failed(pm.run(*module)))
+        return 4;
+      return 0;
+    }
   }
 
   if (OptKernelFusion)
@@ -282,14 +282,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::IndexTree::createCompressedWorkspaceTransformsPass());
   }
 
-  /// Added by Zhen Peng on 01/23/2023
-  // Dump index tree dialect.
-  if (emitIT)
-  {
-    if (mlir::failed(pm.run(*module)))
-      return 4;
-    return 0;
-  }
   // =============================================================================
 
   // =============================================================================
@@ -354,9 +346,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // =============================================================================
     // If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
     // If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
-    //optPM.addPass(mlir::tensorAlgebra::createReduceOpLowerToSCFPass());
+    // optPM.addPass(mlir::tensorAlgebra::createReduceOpLowerToSCFPass());
     optPM.addPass(mlir::tensorAlgebra::createTensorOpsLoweringPass());
-    
+
     // Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
 
