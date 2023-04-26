@@ -72,9 +72,9 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-//#ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-//#define DEBUG_MODE_LowerIndexTreeIRToSCFPass
-//#endif
+// #ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+// #define DEBUG_MODE_LowerIndexTreeIRToSCFPass
+// #endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -252,7 +252,7 @@ std::vector<Value> getAllocs(Value tensor)
     comet_debug() << " getAllocs() -  it is sparse\n";
     auto defop = tensor.getDefiningOp<tensorAlgebra::SparseTensorConstructOp>();
 
-    //TODO(gkestor): get tensor ranks by functions
+    // TODO(gkestor): get tensor ranks by functions
     unsigned int ranks = (defop.getIndices().size() - 2) / 5;
     for (unsigned int n = 0; n < 2 * ranks + 1; n++)
     {
@@ -907,9 +907,9 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
     // if-then region corresponding to if_notAlreadySet instruction.
     // if (&if_notAlreadySet. getThenRegion())
-    if (!if_notAlreadySet. getThenRegion().empty())
+    if (!if_notAlreadySet.getThenRegion().empty())
     {
-      rewriter.setInsertionPointToStart(&if_notAlreadySet. getThenRegion().front());
+      rewriter.setInsertionPointToStart(&if_notAlreadySet.getThenRegion().front());
 
       // Wj = Aik * Bkj          // computation wj, outer has k, so +=/= need if/else
       // W_already_set[j] = 1
@@ -1011,7 +1011,6 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       comet_vdump(forLoops[forLoops.size() - 1]);
       rewriter.setInsertionPoint(forLoops[forLoops.size() - 1]);
 
-
       Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
       MemRefType memTy_alloc_Cnnz = MemRefType::get({1}, indexType);
       Value alloc_Cnnz = rewriter.create<memref::AllocOp>(loc, memTy_alloc_Cnnz);
@@ -1035,7 +1034,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         alloc_Cnnz_row = rewriter.create<memref::AllocOp>(loc, memTy_alloc_Cnnz);
 #ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
         auto store_Cnnz_row = rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
-        comet_debug()  << " StoreOp DCSR: ";
+        comet_debug() << " StoreOp DCSR: ";
         comet_vdump(store_Cnnz_row);
 #else
         rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
@@ -1053,10 +1052,10 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       comet_debug() << " If branch:\n";
       comet_vdump(if_nonzero);
 
-      if (!if_nonzero. getThenRegion().empty())
+      if (!if_nonzero.getThenRegion().empty())
       {
 
-        rewriter.setInsertionPointToStart(&if_nonzero. getThenRegion().front());
+        rewriter.setInsertionPointToStart(&if_nonzero.getThenRegion().front());
 
         comet_debug() << "calculate product and sum in \n";
         Value elementWiseResult = getSemiringSecondVal(rewriter, loc, semiringSecond, allLoads[0], allLoads[1], compressedWorkspace);
@@ -1199,13 +1198,13 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
           comet_debug() << " If branch:\n";
           comet_vdump(has_nnz_row_ifOp);
 
-          if (!has_nnz_row_ifOp. getThenRegion().empty())
+          if (!has_nnz_row_ifOp.getThenRegion().empty())
           {
-            rewriter.setInsertionPointToStart(&has_nnz_row_ifOp. getThenRegion().front());
+            rewriter.setInsertionPointToStart(&has_nnz_row_ifOp.getThenRegion().front());
 
             Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
             Value arg0_next = rewriter.create<AddIOp>(loc, forLoops[1].getInductionVar(), const_index_1);
-            comet_debug()  << "AddIOp (arg0_next): ";
+            comet_debug() << "AddIOp (arg0_next): ";
             comet_vdump(arg0_next);
 
             Value Cnnz_index_final = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1665,9 +1664,9 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       else if (lhs.getType().isa<tensorAlgebra::SparseTensorType>())
       {
 
-        //TODO(gkestor): get tensor ranks by functions
+        // TODO(gkestor): get tensor ranks by functions
         unsigned int lhs_ranks = (lhs.getDefiningOp()->getNumOperands() - 2) / 5;
-        
+
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
         unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
         unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;
@@ -1842,10 +1841,10 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           comet_debug() << " If branch:\n";
           comet_vdump(if_nonzero);
 
-          if (!if_nonzero. getThenRegion().empty())
+          if (!if_nonzero.getThenRegion().empty())
           {
             auto last_insertionPoint = rewriter.saveInsertionPoint();
-            rewriter.setInsertionPointToStart(&if_nonzero. getThenRegion().front());
+            rewriter.setInsertionPointToStart(&if_nonzero.getThenRegion().front());
 
             rewriter.create<memref::StoreOp>(loc, rhs_value, lhs_val, lhs_accessIndex);
 
@@ -2038,7 +2037,7 @@ namespace
     LogicalResult matchAndRewrite(indexTree::IndexTreeOp rootOp,
                                   PatternRewriter &rewriter) const final
     {
-      //auto module = rootOp->getParentOfType<ModuleOp>();
+      // auto module = rootOp->getParentOfType<ModuleOp>();
 
       assert(isa<indexTree::IndexTreeOp>(rootOp));
       comet_debug() << "\nIndexTreeIRLowering in LowerIndexTreeIRToSCF\n";
@@ -2219,8 +2218,19 @@ namespace
         }
       }
 
+      comet_debug() << "Cleaning up IndexTree Operations\n";
+      comet_vdump(rootOp);
       rewriter.eraseOp(rootOp);
-      comet_debug() << " \n";
+      for (auto itOp : wp_ops)
+      {
+        if (indexTree::IndexTreeComputeOp cur_op = dyn_cast<mlir::indexTree::IndexTreeComputeOp>(itOp.getDefiningOp()))
+        {
+          rewriter.eraseOp(itOp.getDefiningOp()->getOperand(0).getDefiningOp()); //RHS
+          rewriter.eraseOp(itOp.getDefiningOp()->getOperand(1).getDefiningOp()); //LHS
+        }
+        rewriter.eraseOp(itOp.getDefiningOp());
+      }
+
       return success();
     }
   }; // IndexTreeIRLowering
@@ -2247,7 +2257,7 @@ void LowerIndexTreeIRToSCFPass::runOnOperation()
   if (isFuncInMod("quick_sort", module) == false)
   {
     mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "quick_sort",
-                                  quickSortFunc, ArrayRef<NamedAttribute>{});
+                                                          quickSortFunc, ArrayRef<NamedAttribute>{});
     func1.setPrivate();
     module.push_back(func1);
   }
@@ -2279,6 +2289,7 @@ void LowerIndexTreeIRToSCFPass::runOnOperation()
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
+    function.dump();
     llvm::errs() << "Failed to Lower LowerIndexTreeIRToSCFPass\n";
   }
 }

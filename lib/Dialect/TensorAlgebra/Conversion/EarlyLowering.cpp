@@ -225,7 +225,6 @@ namespace
         {
           Value indexlabelop = dyn_cast<tensorAlgebra::IndexLabelStaticOp>(op.getOperation()->getOperand(i).getDefiningOp());
           dimSizes.push_back(indexlabelop.getDefiningOp()->getOperand(1));
-          ;
         }
       }
       // The dim size is the second parameter of the
@@ -951,12 +950,11 @@ namespace
           comet_pdump(tensor_decl_value.getLabels()[i].getDefiningOp());
           if (isa<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
           {
-            // comet_vdump(tensor_decl_value.getLabels()[i]);
             auto label_decl_value = cast<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
             auto lo = label_decl_value.getMin();
             auto step = label_decl_value.getStep();
             auto hi = array_sizes[2 * rank_size + 1 + i];
-            // mlir::Value value =
+
             Value new_index = rewriter.create<IndexLabelStaticOp>(loc, lo, hi, step);
             label_decl_value.replaceAllUsesWith(new_index);
           }
@@ -1711,7 +1709,6 @@ void DenseTensorDeclLoweringPass::runOnOperation()
 
   // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
-                    //tensorAlgebra::TAReturnOp,
                     tensorAlgebra::ReduceOp,
                     tensorAlgebra::TransposeOp,
                     tensorAlgebra::TensorFillOp,

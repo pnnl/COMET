@@ -89,11 +89,6 @@ using namespace tensorAlgebra;
 #define comet_vdump(n)
 #endif
 
-// /// Fold simple cast operations that return the same type as the input.
-// OpFoldResult CastOp::fold(ArrayRef<Attribute> operands)
-// {
-//   return mlir::impl::foldCastOp(*this);
-// }
 
 namespace
 {
@@ -590,7 +585,12 @@ void STCRemoveDeadOpsPass::runOnOperation()
   ConversionTarget target(getContext());
 
   func::FuncOp func = getOperation();
-  target.addLegalDialect<mlir::linalg::LinalgDialect, ArithDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect, bufferization::BufferizationDialect>();
+  target.addLegalDialect<mlir::linalg::LinalgDialect, 
+                          ArithDialect, 
+                          scf::SCFDialect, 
+                          AffineDialect, memref::MemRefDialect, 
+                          bufferization::BufferizationDialect>();
+  
   target.addLegalOp<tensorAlgebra::TensorMultOp>();
   RewritePatternSet patterns(&getContext());
   populateSTCRemoveDeadOpsPatterns(patterns, &getContext());

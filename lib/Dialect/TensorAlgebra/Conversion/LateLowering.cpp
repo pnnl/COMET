@@ -73,28 +73,6 @@ using namespace mlir::tensorAlgebra;
 
 namespace
 {
-
-  //===----------------------------------------------------------------------===//
-  // Late Lowering to Standard Dialect RewritePatterns: Return operations
-  //===----------------------------------------------------------------------===//
-  // struct ReturnOpLowering : public OpRewritePattern<tensorAlgebra::TAReturnOp>
-  // {
-  //   using OpRewritePattern<tensorAlgebra::TAReturnOp>::OpRewritePattern;
-
-  //   LogicalResult matchAndRewrite(tensorAlgebra::TAReturnOp op,
-  //                                 PatternRewriter &rewriter) const final
-  //   {
-  //     // During this lowering, we expect that all function calls have been
-  //     // inlined.
-  //     if (op.hasOperand())
-  //       return failure();
-
-  //     // We lower "ta.return" directly to "std.return".
-  //     rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
-  //     return success();
-  //   }
-  // };
-
   /// Lowers `ta.print` to a loop nest calling `printf` on each of the individual
   /// elements of the array.
   class PrintOpLowering : public ConversionPattern
@@ -107,7 +85,7 @@ namespace
     matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                     ConversionPatternRewriter &rewriter) const override
     {
-
+      comet_debug() << "PrintOpLowering starts\n";
       Location loc = op->getLoc();
       auto module = op->getParentOfType<ModuleOp>();
       auto *ctx = op->getContext();
@@ -157,6 +135,7 @@ namespace
         if (inputType.isa<MemRefType>())
         {
           auto alloc_op = cast<memref::AllocOp>(op->getOperand(0).getDefiningOp());
+          comet_vdump(alloc_op);
           auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
           rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
         }
@@ -167,14 +146,13 @@ namespace
           {
             auto rhs = op->getOperand(0).getDefiningOp();
             auto alloc_op = cast<memref::AllocOp>(rhs->getOperand(0).getDefiningOp());
-
+            comet_vdump(alloc_op);
             auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
             rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
           }
           else if (inputType.isa<SparseTensorType>())
           {
             std::string comet_print_i64Str = "comet_print_memref_i64";
-
             if (isFuncInMod(comet_print_i64Str, module) == false)
             {
               print_func = func::FuncOp::create(loc, comet_print_i64Str, printTensorIndexFunc, ArrayRef<NamedAttribute>{});
@@ -214,6 +192,7 @@ namespace
       }
 
       // Notify the rewriter that this operation has been removed.
+      comet_pdump(op);
       rewriter.eraseOp(op);
       return success();
     }
@@ -239,7 +218,7 @@ namespace
         auto getTimeFunc = FunctionType::get(ctx, {}, {FloatType::getF64(ctx)});
         // func @getTime() -> f64
         func::FuncOp func1 = func::FuncOp::create(op->getLoc(), getTimeStr,
-                                      getTimeFunc, ArrayRef<NamedAttribute>{});
+                                                  getTimeFunc, ArrayRef<NamedAttribute>{});
         func1.setPrivate();
         module.push_back(func1);
       }
@@ -273,7 +252,7 @@ namespace
         auto printElapsedTimeFunc = FunctionType::get(ctx, {f64Type, f64Type}, {});
         // func @printElapsedTime(f64, f64) -> ()
         func::FuncOp func1 = func::FuncOp::create(op->getLoc(), printElapsedTimeStr,
-                                      printElapsedTimeFunc, ArrayRef<NamedAttribute>{});
+                                                  printElapsedTimeFunc, ArrayRef<NamedAttribute>{});
         func1.setPrivate();
         module.push_back(func1);
       }
@@ -303,7 +282,6 @@ void LateLoweringPass::runOnOperation()
 {
   func::FuncOp function = getOperation();
 
-  // llvm::outs() << "Late lower input:\n" <<  function << "\n";
   //  Verify that the given main has no inputs and results.
   if (function.getNumArguments() || function.getFunctionType().getNumResults())
   {
@@ -315,27 +293,29 @@ void LateLoweringPass::runOnOperation()
   // final target for this lowering.
   ConversionTarget target(getContext());
 
+  target.addIllegalDialect<tensorAlgebra::TADialect>();
+
   // We define the specific operations, or dialects, that are legal targets for
-  // this lowering. In our case, we are lowering to a combination of the
-  // `LinAlg` and `Standard` dialects.
+  // this lowering.
   target.addLegalDialect<AffineDialect,
                          scf::SCFDialect,
                          ArithDialect,
                          memref::MemRefDialect,
                          bufferization::BufferizationDialect>();
 
+  // PrintOp Lowering insert function call, so mark func::CallOp as a legal Operation
+  target.addLegalOp<func::CallOp>();
+
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.
   RewritePatternSet patterns(&getContext());
-  patterns.insert<//ReturnOpLowering,
-                  PrintOpLowering,
+  patterns.insert<PrintOpLowering,
                   GetTimeLowering,
                   PrintElapsedTimeLowering>(&getContext());
 
   // With the target and rewrite patterns defined, we can now attempt the
   // conversion. The conversion will signal failure if any of our `illegal`
   // operations were not converted successfully.
-  
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     signalPassFailure();
