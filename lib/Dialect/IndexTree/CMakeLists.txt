@@ -1,14 +1,13 @@
-add_llvm_library(COMETIndexTree
+add_llvm_library(COMETIndexTreeDialect
   IR/ITDialect.cpp
   IR/IndexTree.cpp
 
-  Conversion/LowerIndexTreeIRToSCF.cpp
+  # Conversion/LowerIndexTreeIRToSCF.cpp
 
-  Transforms/IndexTreePass.cpp
+  #Transforms/IndexTreePass.cpp
   Transforms/IterationDomain.cpp
   Transforms/Tensor.cpp
   Transforms/UnitExpression.cpp
-  Transforms/WorkspaceTransforms.cpp 
   Transforms/WorkspaceTransforms.cpp 
   Transforms/Fusion.cpp
 
@@ -18,10 +17,10 @@ add_llvm_library(COMETIndexTree
 
 
 add_dependencies(
-  COMETIndexTree
-  COMETITOpsIncGen
+  COMETIndexTreeDialect
+  COMETIndexTreeOpsIncGen
   MLIRSupport
   )
 
-target_link_libraries(COMETIndexTree MLIRIR)
+target_link_libraries(COMETIndexTreeDialect MLIRIR)
 

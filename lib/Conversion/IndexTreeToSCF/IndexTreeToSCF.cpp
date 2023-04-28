@@ -91,6 +91,11 @@ using llvm::StringRef;
 #endif
 // *********** For debug purpose *********//
 
+namespace mlir {
+#define GEN_PASS_DEF_CONVERTINDEXTREETOSCF
+#include "comet/Conversion/Passes.h.inc"
+} // namespace mlir
+
 #define TENSOR_NUMS 3
 #define INPUT_TENSOR_NUMS 2
 

@@ -38,10 +38,11 @@ set(LIBS
   # MLIRVectorToLLVM
   # MLIRVectorToSCF
   MLIRTransforms
-  COMETUtils
-  COMETTensorAlgebra
-  COMETIndexTree
   MLIRSupport
+  COMETUtils
+  COMETTensorAlgebraDialect
+  COMETIndexTreeDialect
+  COMETIndexTreeToSCF
 )
 
 target_link_libraries(comet-opt 
