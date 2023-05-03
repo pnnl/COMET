@@ -26,7 +26,7 @@
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
-#include "comet/Dialect/IndexTree/IR/ITDialect.h"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
 
@@ -356,7 +356,7 @@ void PCToLoopsLoweringPass::runOnOperation()
 }
 
 // Create a pass for lowering programming constructs
-std::unique_ptr<Pass> mlir::tensorAlgebra::createPCToLoopsLoweringPass()
+std::unique_ptr<Pass> mlir::comet::createPCToLoopsLoweringPass()
 {
   return std::make_unique<PCToLoopsLoweringPass>();
 }

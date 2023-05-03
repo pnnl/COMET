@@ -3,8 +3,7 @@
 # B[i,k] is sparse, the rest is dense
 
 # --opt-fusion pass performs the redundancy-aware fusion on GNN kernels
-# RUN: comet-opt --convert-ta-to-it --opt-fusion --convert-to-loops  %s &> fusion_loops.mlir
-# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm fusion_loops.mlir &> fusion_loops.llvm
+# RUN: comet-opt --convert-ta-to-it --opt-fusion --convert-to-loops  --convert-to-llvm %s &> fusion_loops.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2_small.mtx
 # RUN: mlir-cpu-runner fusion_loops.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 

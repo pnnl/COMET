@@ -25,7 +25,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include <iostream>
-#include "comet/Dialect/IndexTree/IR/ITDialect.h"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
@@ -39,14 +39,14 @@ using namespace mlir;
 using namespace mlir::indexTree;
 
 //===----------------------------------------------------------------------===//
-// ITDialect
+// IndexTreeDialect
 //===----------------------------------------------------------------------===//
 
-#include "comet/Dialect/IndexTree/IR/ITDialect.cpp.inc"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.cpp.inc"
 
 /// Dialect creation, the instance will be owned by the context. This is the
 /// point of registration of custom types and operations for the dialect.
-// ITDialect::ITDialect(mlir::MLIRContext *ctx) : mlir::Dialect("it", ctx, mlir::TypeID::get<ITDialect>())
+// IndexTreeDialect::IndexTreeDialect(mlir::MLIRContext *ctx) : mlir::Dialect("it", ctx, mlir::TypeID::get<IndexTreeDialect>())
 // {
 //   addOperations<
 // #define GET_OP_LIST
@@ -54,7 +54,7 @@ using namespace mlir::indexTree;
 //       >();
 // }
 
-Type mlir::indexTree::ITDialect::parseType(DialectAsmParser &parser) const
+Type mlir::indexTree::IndexTreeDialect::parseType(DialectAsmParser &parser) const
 {
   // Parse the main keyword for the type.
   StringRef keyword;
@@ -69,7 +69,7 @@ Type mlir::indexTree::ITDialect::parseType(DialectAsmParser &parser) const
 
 // Print an instance of a type registered to the index tree dialect.
 // No type definition yet
-void mlir::indexTree::ITDialect::printType(mlir::Type type,
+void mlir::indexTree::IndexTreeDialect::printType(mlir::Type type,
                            mlir::DialectAsmPrinter &printer) const {
     return;
 }
@@ -80,7 +80,7 @@ void mlir::indexTree::ITDialect::printType(mlir::Type type,
 
 /// Dialect initialization, the instance will be owned by the context. This is
 /// the point of registration of types and operations for the dialect.
-void ITDialect::initialize() {
+void IndexTreeDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
 #include "comet/Dialect/IndexTree/IR/ITOps.cpp.inc"

@@ -1,5 +1,4 @@
-# RUN: comet-opt --convert-to-loops %s &> transpose_dense_tensor.mlir
-# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-std-to-llvm transpose_dense_tensor.mlir &> transpose_dense_tensor.llvm
+# RUN: comet-opt --convert-to-loops --convert-to-llvm %s &> transpose_dense_tensor.llvm
 # RUN: mlir-cpu-runner transpose_dense_tensor.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 #TODO(gkestor): read dense input from file

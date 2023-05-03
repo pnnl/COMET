@@ -24,8 +24,10 @@
 // This file implements a lowering of index tree dialect to SCF dialect
 //===----------------------------------------------------------------------===//
 
-#include "comet/Dialect/IndexTree/IR/ITDialect.h"
-#include "comet/Dialect/IndexTree/Passes.h"
+#include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
+
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
+// #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 
@@ -72,11 +74,11 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LowerIndexTreeIRToSCFPass
-// #define DEBUG_MODE_LowerIndexTreeIRToSCFPass
+// #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
+// #define DEBUG_MODE_LowerIndexTreeToSCFPass
 // #endif
 
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
@@ -91,10 +93,10 @@ using llvm::StringRef;
 #endif
 // *********** For debug purpose *********//
 
-namespace mlir {
+namespace comet {
 #define GEN_PASS_DEF_CONVERTINDEXTREETOSCF
 #include "comet/Conversion/Passes.h.inc"
-} // namespace mlir
+} // namespace comet
 
 #define TENSOR_NUMS 3
 #define INPUT_TENSOR_NUMS 2
@@ -933,7 +935,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
       comet_debug() << "calculate elementWise operation only\n";
       Value elementWiseResult = getSemiringSecondVal(rewriter, loc, semiringSecond, allLoadsIf[0], allLoadsIf[1], compressedWorkspace);
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
       auto store_sum = rewriter.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
       comet_debug() << " ";
       comet_vdump(elementWiseResult);
@@ -1023,7 +1025,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       comet_vdump(alloc_Cnnz);
 
       std::vector<Value> alloc_Cnnz_insert_loc = {const_index_0};
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
       auto store_Cnnz = rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz, alloc_Cnnz_insert_loc);
       comet_debug() << " StoreOp: ";
       comet_vdump(store_Cnnz);
@@ -1037,7 +1039,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       if (sparse_format.compare("DCSR") == 0)
       {
         alloc_Cnnz_row = rewriter.create<memref::AllocOp>(loc, memTy_alloc_Cnnz);
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
         auto store_Cnnz_row = rewriter.create<memref::StoreOp>(loc, const_index_0, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
         comet_debug() << " StoreOp DCSR: ";
         comet_vdump(store_Cnnz_row);
@@ -1069,7 +1071,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         Value Cnnz_index = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
 
 // Store product to Cval
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
         comet_debug() << "Store product to Cval\n";
         auto store_Cval = rewriter.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], Cnnz_index);
         comet_debug() << " StoreOp: ";
@@ -1100,7 +1102,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
           for (unsigned d = 0; d < rhsPerms[sparse_inputtensor_id].size(); d++)
           {
             Value crd = allAccessIdx[sparse_inputtensor_id][d];
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
             auto store_coo_crd = rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
             comet_debug() << " COO StoreOp: ";
             comet_vdump(store_coo_crd);
@@ -1114,7 +1116,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
           for (unsigned int d = forLoops.size() - 1; d < rhsPerms[sparse_inputtensor_id].size(); d++)
           {
             Value crd = allAccessIdx[sparse_inputtensor_id][d];
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
             auto store_csr_crd = rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
             comet_debug() << " CSR or DCSR StoreOp: ";
             comet_vdump(store_csr_crd);
@@ -1128,7 +1130,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         comet_debug() << "Update Cnnz\n";
         Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
         Value new_Cnnz_index = rewriter.create<AddIOp>(loc, Cnnz_index, const_index_1);
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
         comet_debug() << "AddIOps (new_Cnnz_index): ";
         comet_vdump(new_Cnnz_index);
         auto store_updated_cnnz = rewriter.create<memref::StoreOp>(loc, new_Cnnz_index, alloc_Cnnz, alloc_Cnnz_insert_loc);
@@ -1371,7 +1373,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   comet_debug() << " ";
   comet_vdump(lhs);
 // lhs is TensorLoadOp
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   Value lhs_alloc = (lhs.getDefiningOp())->getOperand(0);
   comet_debug() << " ";
   comet_vdump(lhs_alloc);
@@ -1410,7 +1412,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   std::vector<std::vector<Value>> tensors_rhs_Allocs = getAllAllocs(tensors_rhs);
   comet_debug() << " tensors_rhs_Allocs.size(): " << tensors_rhs_Allocs.size() << "\n";
 
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   comet_debug() << " tensors_rhs_Allocs: \n";
   for (auto m : tensors_rhs_Allocs)
   {
@@ -1657,7 +1659,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
         comet_debug() << " ";
         comet_vdump(main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1]);
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
         auto s1 = rewriter.create<memref::StoreOp>(loc, rhs_value, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1], allValueAccessIdx[lhs_loc]);
         comet_debug() << " ";
         comet_vdump(s1);
@@ -2053,7 +2055,7 @@ namespace
 
       std::vector<mlir::Value> wp_ops;
       dfsRootOpTree(rootOp.getChildren(), wp_ops);
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
       comet_debug() << " wp_ops.size(): " << wp_ops.size() << "\n";
       for (auto n : wp_ops)
       {
@@ -2092,7 +2094,7 @@ namespace
         }
       }
 
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
       comet_debug() << " parent_idx: " << parent_idx.size() << "\n";
       for (auto n : parent_idx)
       {
@@ -2123,7 +2125,7 @@ namespace
         opstree_vec.push_back(ops);
       }
 
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
       // Check the parent node
       for (auto n : opstree_vec)
       {
@@ -2159,7 +2161,7 @@ namespace
 
           std::vector<Value> leafs;
           findLeafs(cur_op, indices, wp_ops, leafs);
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
           comet_debug() << " leafs.size(): " << leafs.size() << "\n";
           for (auto n : leafs)
           {
@@ -2187,7 +2189,7 @@ namespace
           /// Generate loops
           std::vector<Value> ancestors_wp; // workspace tree ancestor
           getAncestorsWp(cur_op, ancestors_wp, wp_ops);
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
           comet_debug() << " Current Op (IndexTreeIndicesOp): ";
           comet_vdump(cur_op);
           for (auto n : ancestors_wp)
@@ -2206,7 +2208,7 @@ namespace
           // Generate computation ops.
           std::vector<Value> ancestors_wp; // workspace tree ancestor
           getAncestorsWp(cur_op, ancestors_wp, wp_ops);
-#ifdef DEBUG_MODE_LowerIndexTreeIRToSCFPass
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
           comet_debug() << " Current Op (IndexTreeComputeOp):";
           comet_vdump(cur_op);
           for (auto n : ancestors_wp)
@@ -2240,18 +2242,18 @@ namespace
     }
   }; // IndexTreeIRLowering
 
-  struct LowerIndexTreeIRToSCFPass
-      : public PassWrapper<LowerIndexTreeIRToSCFPass, OperationPass<func::FuncOp>>
+  struct LowerIndexTreeToSCFPass
+      : public PassWrapper<LowerIndexTreeToSCFPass, OperationPass<func::FuncOp>>
   {
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerIndexTreeIRToSCFPass)
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerIndexTreeToSCFPass)
     void runOnOperation() override;
   };
 
 } // end anonymous namespace.
 
-void LowerIndexTreeIRToSCFPass::runOnOperation()
+void LowerIndexTreeToSCFPass::runOnOperation()
 {
-  comet_debug() << "LowerIndexTreeIRToSCFPass\n";
+  comet_debug() << "LowerIndexTreeToSCFPass\n";
   func::FuncOp function = getOperation();
   auto module = function.getOperation()->getParentOfType<ModuleOp>();
   auto *ctx = &getContext();
@@ -2294,13 +2296,12 @@ void LowerIndexTreeIRToSCFPass::runOnOperation()
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
-    function.dump();
-    llvm::errs() << "Failed to Lower LowerIndexTreeIRToSCFPass\n";
+    llvm::errs() << "Failed to Lower LowerIndexTreeToSCFPass\n";
   }
 }
 
 // Lower sparse tensor algebra operation to loops
-std::unique_ptr<Pass> mlir::IndexTree::createLowerIndexTreeIRToSCFPass()
+std::unique_ptr<Pass> mlir::comet::createLowerIndexTreeToSCFPass()
 {
-  return std::make_unique<LowerIndexTreeIRToSCFPass>();
+  return std::make_unique<LowerIndexTreeToSCFPass>();
 }

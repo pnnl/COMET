@@ -1,4 +1,4 @@
-//===- TAPasses.h - Passes Definition implemented in Tensor Algebra-----------------------------------===//
+//===- Passes.h - Conversion Pass Construction and Registration -----------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -19,46 +19,43 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// =============================================================================
-//
-// This file exposes the entry points to create compiler passes for TensorAlgebra.
-//
 //===----------------------------------------------------------------------===//
 
-#ifndef TENSORALGEBRA_PASSES_H
-#define TENSORALGEBRA_PASSES_H
+#ifndef COMET_DIALECT_TENSORALGEBRA_PASSES_H
+#define COMET_DIALECT_TENSORALGEBRA_PASSES_H
 
 #include "mlir/Pass/Pass.h"
-#include <memory>
 
 namespace mlir
 {
-    class Pass;
-
-    namespace tensorAlgebra
+    namespace comet
     {
-        std::unique_ptr<Pass> createLinAlgMatmulTilingPass();
+/// Generate the code for registering conversion passes.
+#define GEN_PASS_DECL
+#include "comet/Dialect/TensorAlgebra/Passes.h.inc"
 
+        /// Check if it is needed to add tensor declarations introduced by compound expressions
+        std::unique_ptr<Pass> createTensorAlgebraCheckImplicitTensorDeclPass();
+
+        void populateDenseTensorDeclLoweringPatterns(RewritePatternSet &patterns);
+        void populateSparseTensorDeclLoweringPatterns(RewritePatternSet &patterns);
+
+        /// Create a pass to lower dense input and output tensor declarations
+        std::unique_ptr<Pass> createDenseTensorDeclLoweringPass();
+
+        /// Create a pass to lower sparse input and output tensor declarations
+        std::unique_ptr<Pass> createSparseTensorDeclLoweringPass();
+
+        ////////////////////////////////////
+        ////////////////////////////////////
+        ////////////////////////////////////
         // Optimize dense transpose (linalg.copy) based on the following paper:
         // HPTT: A High-Performance Tensor Transposition C++ Library
         // https://arxiv.org/abs/1704.04374
         std::unique_ptr<Pass> createOptDenseTransposePass(uint64_t tile_size = 1,
                                                           bool seperate_tiles = false);
-
-        std::unique_ptr<Pass> createLinAlgMatmulMicroKernelPass();
-
-        std::unique_ptr<Pass> createLowerLinAlgFillPass();
-
         std::unique_ptr<Pass> createFindOptimalTCFactorizationPass();
-
         std::unique_ptr<Pass> createLowerTAMulChainPass();
-
-        /// Create a pass for pre lowering
-        std::unique_ptr<Pass> createPreLoweringPass();
-
-        /// Create a pass for lowering to the rest of the operations in `Std` dialects,
-        /// such as printOp, constantOp, ReturnOp..
-        std::unique_ptr<mlir::Pass> createLateLoweringPass();
 
         /// Create a pass for lowering TA operations to TTGT
         /// This pass selects either the best permutation among all
@@ -67,30 +64,28 @@ namespace mlir
                                                      int whatPermID = 1,
                                                      bool printFlops = false);
 
-        /// Create a pass to lower dense input/output tensor declarations
-        std::unique_ptr<Pass> createDenseTensorDeclLoweringPass();
-
-        /// Create a pass to lower sparse input tensor declarations
-        std::unique_ptr<Pass> createSparseTensorDeclLoweringPass();
-
-        /// Create a pass for lowering sparse tensor output tensor decl operations
-        std::unique_ptr<Pass> createSparseOutputTensorDeclLoweringPass();
-
-        /// Create a pass for lowering temporal sparse tensor output tensor decl operations generated for compound expressions
-        std::unique_ptr<Pass> createTempSparseOutputTensorDeclLoweringPass();
+        std::unique_ptr<Pass> createLinAlgMatmulMicroKernelPass();
+        std::unique_ptr<Pass> createLowerLinAlgFillPass();
+        std::unique_ptr<Pass> createLinAlgMatmulTilingPass();
 
         /// Create a pass for lowering tensor fill operation to linalg.fill
         std::unique_ptr<Pass> createTensorFillLoweringPass();
 
-        /// Create a pass for lowering Reduce operation to SCF
-        // std::unique_ptr<Pass> createReduceOpLowerToSCFPass();
+        /// Create a pass for lowering to the rest of the operations in `Std` dialects,
+        /// such as printOp, constantOp, ReturnOp..
+        std::unique_ptr<mlir::Pass> createLateLoweringPass();
 
-        /// Create a pass for lowering tensor operatations to other lower level dialects
-        /// such as tensor elementwise addition, subtract, transpose, etc.
-        std::unique_ptr<mlir::Pass> createTensorOpsLoweringPass();
+        // /// Create a pass to lower dense input/output tensor declarations
+        // std::unique_ptr<Pass> createDenseTensorDeclLoweringPass();
 
-        /// Create a pass for lowering transpose operations to SCF
-        // std::unique_ptr<Pass> createTransposeLoweringPass();
+        // /// Create a pass to lower sparse input tensor declarations
+        // std::unique_ptr<Pass> createSparseTensorDeclLoweringPass();
+
+        // /// Create a pass for lowering sparse tensor output tensor decl operations
+        // std::unique_ptr<Pass> createSparseOutputTensorDeclLoweringPass();
+
+        // /// Create a pass for lowering temporal sparse tensor output tensor decl operations generated for compound expressions
+        // std::unique_ptr<Pass> createTempSparseOutputTensorDeclLoweringPass();
 
         /// Create a pass for lowering sparse TA operations to SCFDimAttr
         std::unique_ptr<Pass> createSTCRemoveDeadOpsPass();
@@ -99,14 +94,14 @@ namespace mlir
         std::unique_ptr<Pass> createSCFToSCFParallelPass();
 
         /// Create a pass for lowering programming constructs to SCF ops
-        std::unique_ptr<Pass> createPCToLoopsLoweringPass();
+        std::unique_ptr<Pass> createPCToLoopsLoweringPass(); // Conversion
 
         // TODO(gkestor): this pass is a workout to handle redundant LabeledTensor operations
         std::unique_ptr<Pass> createRemoveLabeledTensorOpsPass();
 
-        std::unique_ptr<Pass> createFuncOpLoweringPass();
+        std::unique_ptr<Pass> createFuncOpLoweringPass(); // Conversion
+    }
 
-    } // end namespace tensorAlgebra
-} // end namespace mlir
+}
 
-#endif // TENSORALGEBRA_PASSES_H
+#endif // COMET_DIALECT_TENSORALGEBRA_PASSES_H

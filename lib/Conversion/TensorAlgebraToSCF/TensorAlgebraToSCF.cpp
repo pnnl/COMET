@@ -26,11 +26,10 @@
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TATypes.h"
-#include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
+#include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
+#include "comet/Dialect/TensorAlgebra/Passes.h"
 
-// #include "mlir/Dialect/Linalg/IR/Linalg.h"
-// #include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -50,17 +49,14 @@
 using namespace mlir;
 using namespace mlir::arith;
 using namespace mlir::bufferization;
-// using namespace mlir::linalg;
-// using namespace mlir::edsc;
-// using namespace mlir::edsc::intrinsics;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_TensorOpsLoweringPass
-// #define DEBUG_MODE_TensorOpsLoweringPass
+// #ifndef DEBUG_MODE_LowerTensorAlgebraToSCFPass
+// #define DEBUG_MODE_LowerTensorAlgebraToSCFPass
 // #endif
 
-#ifdef DEBUG_MODE_TensorOpsLoweringPass
+#ifdef DEBUG_MODE_LowerTensorAlgebraToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
@@ -699,15 +695,15 @@ namespace
 /// rest of the code in the TA dialect.
 namespace
 {
-  struct TensorOpsLoweringPass
-      : public PassWrapper<TensorOpsLoweringPass, OperationPass<func::FuncOp>>
+  struct LowerTensorAlgebraToSCFPass
+      : public PassWrapper<LowerTensorAlgebraToSCFPass, OperationPass<func::FuncOp>>
   {
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TensorOpsLoweringPass)
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTensorAlgebraToSCFPass)
     void runOnOperation() override;
   };
 } // end anonymous namespace.
 
-void TensorOpsLoweringPass::runOnOperation()
+void LowerTensorAlgebraToSCFPass::runOnOperation()
 {
   mlir::func::FuncOp function = getOperation();
 
@@ -751,7 +747,7 @@ void TensorOpsLoweringPass::runOnOperation()
 }
 
 /// Create a pass for lowering tensor operations in the TensorAlgebra dialect to other lower level dialects
-std::unique_ptr<Pass> mlir::tensorAlgebra::createTensorOpsLoweringPass()
+std::unique_ptr<Pass> mlir::comet::createLowerTensorAlgebraToSCFPass()
 {
-  return std::make_unique<TensorOpsLoweringPass>();
+  return std::make_unique<LowerTensorAlgebraToSCFPass>();
 }
