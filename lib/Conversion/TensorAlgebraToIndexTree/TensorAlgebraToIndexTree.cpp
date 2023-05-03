@@ -20,10 +20,13 @@
 //
 
 #include <cassert>
+
+#include "comet/Conversion/TensorAlgebraToIndexTree/TensorAlgebraToIndexTree.h"
+
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/IndexTree/Transforms/UnitExpression.h"
 #include "comet/Dialect/IndexTree/IR/IndexTree.h"
-#include "comet/Dialect/IndexTree/IR/ITDialect.h"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -36,11 +39,11 @@ using namespace mlir::indexTree;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_IndexTreePass
-// #define DEBUG_MODE_IndexTreePass
+// #ifndef DEBUG_MODE_LowerTensorAlgebraToIndexTreePass
+// #define DEBUG_MODE_LowerTensorAlgebraToIndexTreePass
 // #endif
 
-#ifdef DEBUG_MODE_IndexTreePass
+#ifdef DEBUG_MODE_LowerTensorAlgebraToIndexTreePass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
@@ -61,10 +64,10 @@ unique_ptr<Index_Tree> tree;
 namespace
 {
 
-  struct IndexTreePass
-      : public PassWrapper<IndexTreePass, OperationPass<func::FuncOp>>
+  struct LowerTensorAlgebraToIndexTreePass
+      : public PassWrapper<LowerTensorAlgebraToIndexTreePass, OperationPass<func::FuncOp>>
   {
-     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(IndexTreePass)
+     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTensorAlgebraToIndexTreePass)
     void runOnOperation() override;
   };
 } // namespace
@@ -150,7 +153,7 @@ void doTensorMultOp(TensorMultOp op)
   Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
   Value lhs_tensor = getRealLhs(op);
 
-  comet_debug() << "IndexTreePass: doTensorMultOp\n";
+  comet_debug() << "LowerTensorAlgebraToIndexTreePass: doTensorMultOp\n";
   comet_debug() << "rhs1-tensor\n";
   comet_vdump(rhs1_tensor);
   comet_debug() << "rhs2-tensor\n";
@@ -211,7 +214,7 @@ void doElementWiseOp(T op)
   Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
   Value lhs_tensor = getRealLhs(op);
 
-  comet_debug() << "IndexTreePass: doElementWiseMultOp\n";
+  comet_debug() << "LowerTensorAlgebraToIndexTreePass: doElementWiseMultOp\n";
   comet_debug() << "rhs1-tensor\n";
   comet_vdump(rhs1_tensor);
   comet_debug() << "rhs2-tensor\n";
@@ -408,7 +411,7 @@ void treeToDialect(Index_Tree *tree)
 
       if (node->getParent() != nullptr && node->getParent()->isFillerIndexNode())
       {
-#ifdef DEBUG_MODE_IndexTreePass
+#ifdef DEBUG_MODE_LowerTensorAlgebraToIndexTreePass
         Value op = builder.create<indexTree::IndexTreeOp>(loc, i64Type, indexNodeOp);
         comet_vdump(op);
 #else
@@ -426,13 +429,13 @@ void treeToDialect(Index_Tree *tree)
   }
 }
 
-void IndexTreePass::runOnOperation()
+void LowerTensorAlgebraToIndexTreePass::runOnOperation()
 {
   assert(tree == nullptr);
   func::FuncOp func = getOperation();
 
   tree = Index_Tree::createTreeWithRoot();
-  bool formITDialect = false;
+  bool formIndexTreeDialect = false;
 
   comet_debug() << "IndexTree pass running on Function\n";
   for (Block &B : func.getBody())
@@ -442,12 +445,12 @@ void IndexTreePass::runOnOperation()
       if (isa<TensorMultOp>(&op))
       {
         doTensorMultOp(cast<TensorMultOp>(&op));
-        formITDialect = true;
+        formIndexTreeDialect = true;
       }
       else if (isa<TensorElewsMultOp>(&op))
       {
         doElementWiseOp<TensorElewsMultOp>(cast<TensorElewsMultOp>(&op));
-        formITDialect = true;
+        formIndexTreeDialect = true;
       }
       else if (isa<TensorAddOp>(&op) || isa<TensorSubtractOp>(&op))
       {
@@ -461,12 +464,12 @@ void IndexTreePass::runOnOperation()
         {
           doElementWiseOp<TensorSubtractOp>(cast<TensorSubtractOp>(&op));
         }
-        formITDialect = true;
+        formIndexTreeDialect = true;
       }
     }
   }
 
-  if (formITDialect)
+  if (formIndexTreeDialect)
   {
     comet_debug() << " Dumping Index tree IR\n";
     // only do this for TensorMultOp or TensorElewsMultOp
@@ -476,8 +479,8 @@ void IndexTreePass::runOnOperation()
 
 // create all the passes.
 //
-std::unique_ptr<Pass> mlir::IndexTree::createIndexTreePass()
+std::unique_ptr<Pass> mlir::comet::createLowerTensorAlgebraToIndexTreePass()
 {
-  comet_debug() << " Calling createIndexTreePass\n";
-  return std::make_unique<IndexTreePass>();
+  comet_debug() << " Calling createLowerTensorAlgebraToIndexTreePass\n";
+  return std::make_unique<LowerTensorAlgebraToIndexTreePass>();
 }

@@ -24,7 +24,7 @@
 // This pass performs workspace transformations on index tree dialect for sparse-sparse computation
 //===----------------------------------------------------------------------===//
 
-#include "comet/Dialect/IndexTree/IR/ITDialect.h"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/Utils/Utils.h"
@@ -63,10 +63,7 @@
 using namespace mlir;
 using namespace mlir::bufferization;
 using namespace mlir::arith;
-// using namespace mlir::edsc;
-// using namespace mlir::edsc::intrinsics;
-// using namespace mlir::linalg;
-using namespace mlir::IndexTree;
+using namespace mlir::indexTree;
 using namespace mlir::tensorAlgebra;
 
 using llvm::SmallVector;
@@ -131,10 +128,10 @@ namespace
     void WorkspaceTransforms(mlir::func::FuncOp function);
   };
 
-  struct CompressedWorkspaceTransformsPass
-      : public PassWrapper<CompressedWorkspaceTransformsPass, OperationPass<mlir::func::FuncOp>>
+  struct IndexTreeWorkspaceTransformationsPass
+      : public PassWrapper<IndexTreeWorkspaceTransformationsPass, OperationPass<mlir::func::FuncOp>>
   {
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(CompressedWorkspaceTransformsPass)
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(IndexTreeWorkspaceTransformationsPass)
     void runOnOperation() override;
     void CompressedWorkspaceTransforms(mlir::func::FuncOp function);
   };
@@ -929,7 +926,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
   }
 }
 
-void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::func::FuncOp funcop)
+void IndexTreeWorkspaceTransformationsPass::CompressedWorkspaceTransforms(mlir::func::FuncOp funcop)
 {
   funcop.walk([](indexTree::IndexTreeOp op)
               {
@@ -1046,7 +1043,7 @@ void CompressedWorkspaceTransformsPass::CompressedWorkspaceTransforms(mlir::func
   comet_debug() << __FILE__ << " " << __LINE__ << "CompressedWorkspaceTransforms pass is done\n";
 }
 
-void CompressedWorkspaceTransformsPass::runOnOperation()
+void IndexTreeWorkspaceTransformationsPass::runOnOperation()
 {
   comet_debug() << __FILE__ << " " << __LINE__ << " starting CompressedWorkspaceTransforms pass \n";
   func::FuncOp function = getOperation();
@@ -1057,7 +1054,7 @@ void CompressedWorkspaceTransformsPass::runOnOperation()
 }
 
 // Apply the compressed workspace transformations on the index tree IR
-std::unique_ptr<Pass> mlir::IndexTree::createCompressedWorkspaceTransformsPass()
+std::unique_ptr<Pass> mlir::comet::createIndexTreeWorkspaceTransformationsPass()
 {
-  return std::make_unique<CompressedWorkspaceTransformsPass>();
+  return std::make_unique<IndexTreeWorkspaceTransformationsPass>();
 }

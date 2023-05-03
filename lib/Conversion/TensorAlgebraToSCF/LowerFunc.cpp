@@ -124,6 +124,6 @@ void FuncOpLoweringPass::runOnOperation() {
 
 /// Create a pass for lowering operations in the `Affine` and `Std` dialects,
 /// for a subset of the Toy IR (e.g. matmul).
-std::unique_ptr<Pass> mlir::tensorAlgebra::createFuncOpLoweringPass() {
+std::unique_ptr<Pass> mlir::comet::createFuncOpLoweringPass() {
   return std::make_unique<FuncOpLoweringPass>();
 }

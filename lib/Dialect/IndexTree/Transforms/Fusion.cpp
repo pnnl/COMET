@@ -28,14 +28,13 @@
 // 2022 31st International Conference on Parallel Architectures and Compilation Techniques (PACT). October 2022.
 //===----------------------------------------------------------------------===//
 
-#include "comet/Dialect/IndexTree/IR/ITDialect.h"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Dialect/IndexTree/Transforms/UnitExpression.h"
 
-// #include "mlir/Dialect/Linalg/IR/Linalg.h"
-// #include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
+
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
@@ -69,7 +68,7 @@
 using namespace mlir;
 using namespace mlir::arith;
 using namespace mlir::bufferization;
-using namespace mlir::IndexTree;
+using namespace mlir::indexTree;
 using namespace mlir::tensorAlgebra;
 
 using llvm::SmallVector;
@@ -78,11 +77,11 @@ using llvm::StringRef;
 #define DEBUG_TYPE "partial-fusion"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_KernelFusionPass
-// #define DEBUG_MODE_KernelFusionPass
+// #ifndef DEBUG_MODE_IndexTreeKernelFusionPass
+// #define DEBUG_MODE_IndexTreeKernelFusionPass
 // #endif
 
-#ifdef DEBUG_MODE_KernelFusionPass
+#ifdef DEBUG_MODE_IndexTreeKernelFusionPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
@@ -103,8 +102,8 @@ using llvm::StringRef;
 
 namespace
 {
-  class KernelFusionPass
-      : public mlir::PassWrapper<KernelFusionPass, OperationPass<mlir::func::FuncOp>>
+  class IndexTreeKernelFusionPass
+      : public mlir::PassWrapper<IndexTreeKernelFusionPass, OperationPass<mlir::func::FuncOp>>
   {
   private:
     static void test(mlir::func::FuncOp &funcop);
@@ -161,14 +160,14 @@ namespace
     static void reduceTensorDimension(std::vector<mlir::Operation *> &LHSs, mlir::func::FuncOp &funcop);
 
   public:
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(KernelFusionPass)
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(IndexTreeKernelFusionPass)
     void runOnOperation() override;
 
     void RedundancyAwareFusion(mlir::func::FuncOp &funcop);
-  }; // class KernelFusionPass
+  }; // class IndexTreeKernelFusionPass
 } // End anonymous namespace
 
-void KernelFusionPass::test(mlir::func::FuncOp &funcop)
+void IndexTreeKernelFusionPass::test(mlir::func::FuncOp &funcop)
 {
   int level = 0;
   funcop.walk([&](mlir::Operation *op)
@@ -258,7 +257,7 @@ void KernelFusionPass::test(mlir::func::FuncOp &funcop)
                 } });
 }
 
-std::vector<mlir::Operation *> KernelFusionPass::getAllItrees(mlir::func::FuncOp &funcop)
+std::vector<mlir::Operation *> IndexTreeKernelFusionPass::getAllItrees(mlir::func::FuncOp &funcop)
 {
   std::vector<mlir::Operation *> itrees;
   funcop.walk([&](indexTree::IndexTreeOp op)
@@ -267,7 +266,7 @@ std::vector<mlir::Operation *> KernelFusionPass::getAllItrees(mlir::func::FuncOp
   return itrees;
 }
 
-std::vector<mlir::Operation *> KernelFusionPass::getAllComputeLHSs(mlir::func::FuncOp &funcop)
+std::vector<mlir::Operation *> IndexTreeKernelFusionPass::getAllComputeLHSs(mlir::func::FuncOp &funcop)
 {
   std::vector<mlir::Operation *> lhss;
   funcop.walk([&](indexTree::IndexTreeComputeLHSOp op)
@@ -276,7 +275,7 @@ std::vector<mlir::Operation *> KernelFusionPass::getAllComputeLHSs(mlir::func::F
   return lhss;
 }
 
-int KernelFusionPass::getIndicesOpsIndex(mlir::Operation *op)
+int IndexTreeKernelFusionPass::getIndicesOpsIndex(mlir::Operation *op)
 {
   assert(llvm::isa<indexTree::IndexTreeIndicesOp>(op) && "Error: op is not IndexTreeIndicesOp.");
   auto indices_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(*op);
@@ -284,7 +283,7 @@ int KernelFusionPass::getIndicesOpsIndex(mlir::Operation *op)
   return index;
 }
 
-std::vector<mlir::Operation *> KernelFusionPass::getPathFromRoot(mlir::Operation *op)
+std::vector<mlir::Operation *> IndexTreeKernelFusionPass::getPathFromRoot(mlir::Operation *op)
 {
   std::vector<mlir::Operation *> path;
 
@@ -302,7 +301,7 @@ std::vector<mlir::Operation *> KernelFusionPass::getPathFromRoot(mlir::Operation
   return path;
 }
 
-std::vector<mlir::Operation *> KernelFusionPass::
+std::vector<mlir::Operation *> IndexTreeKernelFusionPass::
     getLongestCommonPrefix(std::vector<std::vector<mlir::Operation *>> &paths)
 {
   std::vector<mlir::Operation *> lcp;
@@ -332,7 +331,7 @@ std::vector<mlir::Operation *> KernelFusionPass::
   return lcp;
 }
 
-mlir::Value KernelFusionPass::createNewTensorDecl(
+mlir::Value IndexTreeKernelFusionPass::createNewTensorDecl(
     const mlir::Value &old_dense_tensor_decl,
     uint32_t rank_base)
 {
@@ -373,7 +372,7 @@ mlir::Value KernelFusionPass::createNewTensorDecl(
   return new_dense_tensor_decl;
 }
 
-void KernelFusionPass::createNewTensor(
+void IndexTreeKernelFusionPass::createNewTensor(
     const mlir::Value &old_tensor_alloc,
     const mlir::Value &old_tensor_load,
     uint32_t rank_base,
@@ -478,11 +477,11 @@ void KernelFusionPass::createNewTensor(
   }
   else
   {
-    llvm::errs() << "Error: KernelFusionPass::createNewTensor() does not support tensors whose rank is larger than 2.";
+    llvm::errs() << "Error: IndexTreeKernelFusionPass::createNewTensor() does not support tensors whose rank is larger than 2.";
   }
 }
 
-mlir::Value KernelFusionPass::createReducedComputeLHS(
+mlir::Value IndexTreeKernelFusionPass::createReducedComputeLHS(
     mlir::Operation *lhs_op,
     mlir::Value &new_tensor_load,
     uint32_t rank_base)
@@ -526,7 +525,7 @@ mlir::Value KernelFusionPass::createReducedComputeLHS(
   return new_lhs_op;
 }
 
-mlir::Value KernelFusionPass::createReducedComputeRHS(
+mlir::Value IndexTreeKernelFusionPass::createReducedComputeRHS(
     mlir::Operation *rhs_op,
     mlir::Value &new_tensor_load,
     mlir::Value &old_tensor_load,
@@ -614,7 +613,7 @@ mlir::Value KernelFusionPass::createReducedComputeRHS(
   return new_rhs_op;
 }
 
-void KernelFusionPass::replaceOldOperandToNew(mlir::Operation *old_operand, mlir::Value &new_val)
+void IndexTreeKernelFusionPass::replaceOldOperandToNew(mlir::Operation *old_operand, mlir::Value &new_val)
 {
   for (auto user : old_operand->getUsers())
   {
@@ -635,7 +634,7 @@ void KernelFusionPass::replaceOldOperandToNew(mlir::Operation *old_operand, mlir
   old_operand->erase();
 }
 
-void KernelFusionPass::replaceOldTensorFillOp(
+void IndexTreeKernelFusionPass::replaceOldTensorFillOp(
     const mlir::Value &old_dense_tensor_decl,
     const mlir::Value &new_dense_tensor_decl)
 {
@@ -673,7 +672,7 @@ void KernelFusionPass::replaceOldTensorFillOp(
   }
 }
 
-void KernelFusionPass::replaceOldLinalgFillOp(
+void IndexTreeKernelFusionPass::replaceOldLinalgFillOp(
     mlir::Value &old_tensor_alloc,
     mlir::Value &old_tensor_load,
     mlir::Value &new_tensor_load)
@@ -742,7 +741,7 @@ void KernelFusionPass::replaceOldLinalgFillOp(
   }
 }
 
-mlir::Value KernelFusionPass::createResetComputeRHS(
+mlir::Value IndexTreeKernelFusionPass::createResetComputeRHS(
     const mlir::Value &new_dense_tensor_decl,
     mlir::Operation *last_common_prefix)
 {
@@ -801,7 +800,7 @@ mlir::Value KernelFusionPass::createResetComputeRHS(
   return compute_rhs;
 }
 
-mlir::Value KernelFusionPass::createResetComputeLHS(
+mlir::Value IndexTreeKernelFusionPass::createResetComputeLHS(
     const mlir::Value &new_dense_tensor_decl,
     mlir::Operation *last_common_prefix,
     int &lcp_index,
@@ -883,10 +882,10 @@ mlir::Value createResetIndicesOps(
   return last_indices_op;
 }
 
-void KernelFusionPass::insertTensorReset(
+void IndexTreeKernelFusionPass::insertTensorReset(
     const std::vector<mlir::Operation *> &lcp,
     const mlir::Value &new_dense_tensor_decl)
-// void KernelFusionPass::insertTensorReset(
+// void IndexTreeKernelFusionPass::insertTensorReset(
 //     const std::vector<mlir::Operation *> &lcp,
 //     const mlir::Value &new_tensor_alloc,
 //     const mlir::Value &new_tensor_load)
@@ -947,7 +946,7 @@ void KernelFusionPass::insertTensorReset(
   last_common_prefix->setOperands(operands);
 }
 
-void KernelFusionPass::doKernelFusion(
+void IndexTreeKernelFusionPass::doKernelFusion(
     std::vector<mlir::Operation *> &itrees, mlir::func::FuncOp &funcop)
 {
 
@@ -1046,7 +1045,7 @@ void KernelFusionPass::doKernelFusion(
   }
 }
 
-void KernelFusionPass::reduceTensorDimension(std::vector<mlir::Operation *> &LHSs, mlir::func::FuncOp &funcop)
+void IndexTreeKernelFusionPass::reduceTensorDimension(std::vector<mlir::Operation *> &LHSs, mlir::func::FuncOp &funcop)
 {
   for (mlir::Operation *lhs_op : LHSs)
   {
@@ -1168,7 +1167,7 @@ void KernelFusionPass::reduceTensorDimension(std::vector<mlir::Operation *> &LHS
   }
 }
 
-void KernelFusionPass::RedundancyAwareFusion(mlir::func::FuncOp &funcop)
+void IndexTreeKernelFusionPass::RedundancyAwareFusion(mlir::func::FuncOp &funcop)
 {
   comet_vdump(funcop);
   comet_debug() << "ParitalFusionIT pass\n";
@@ -1189,16 +1188,16 @@ void KernelFusionPass::RedundancyAwareFusion(mlir::func::FuncOp &funcop)
   reduceTensorDimension(LHSs, funcop);
 }
 
-void KernelFusionPass::runOnOperation()
+void IndexTreeKernelFusionPass::runOnOperation()
 {
-  LLVM_DEBUG(llvm::dbgs() << "start KernelFusionPass\n");
+  LLVM_DEBUG(llvm::dbgs() << "start IndexTreeKernelFusionPass\n");
   comet_debug() << " start KernelFusion pass \n";
   func::FuncOp func = getOperation();
   RedundancyAwareFusion(func);
 }
 
-// Apply the partial fusion on the index tree IR
-std::unique_ptr<Pass> mlir::IndexTree::createKernelFusionPass()
+// Apply the partial fusion on the index tree dialect
+std::unique_ptr<Pass> mlir::comet::createIndexTreeKernelFusionPass()
 {
-  return std::make_unique<KernelFusionPass>();
+  return std::make_unique<IndexTreeKernelFusionPass>();
 }

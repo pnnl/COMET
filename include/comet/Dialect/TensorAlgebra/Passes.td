@@ -1,4 +1,4 @@
-//===- IndexTreeToSCF.h - Convert IndexTree dialect to SCF dialect --*- C++ -*-===//
+//===-- Passes.td - TensorAlgebra dialect pass definition file--------*- tablegen -*-===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,30 +21,47 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef COMET_CONVERSION_INDEXTREETOSCF_H
-#define COMET_CONVERSION_INDEXTREETOSCF_H
+#ifndef COMET_DIALECT_TENSORALGEBRA_PASSES
+#define COMET_DIALECT_TENSORALGEBRA_PASSES
 
-#include "mlir/Support/LLVM.h"
+include "mlir/Pass/PassBase.td"
 
-namespace mlir
-{
-    class Pass;
-    class RewritePatternSet;
+//===----------------------------------------------------------------------===//
+// If needed, add tensor declaration for temporary tensors introduced by compound expressions
+//===----------------------------------------------------------------------===//
 
-    namespace comet
-    {
-#define GEN_PASS_DECL_CONVERTINDEXTREETOSCF
-#include "comet/Conversion/Passes.h.inc"
+def TensorAlgebraCheckImplicitTensorDecl : Pass<"check-implicit-tensor-decl"> {
+  let summary = "check if it is needed to add missing tensor declarations introduced by compound expressions";
+  let description = [{
 
-        /// Collect a set of patterns to convert IndexTree operations to SCF
-        /// operations within the SCF dialect.
-        void populateIndexTreeToSCFConversionPatterns(RewritePatternSet &patterns);
+      }];
+  let constructor = "comet::createTensorAlgebraCheckImplicitTensorDeclPass()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect"
+  ];
+}
 
-        /// Lowers indexTree operations (e.g., IndexTreeComputeLHSOp, IndexTreeComputeRHSOp and IndexTreeComputeOp)
-        /// to equivalent scf constructs including basic blocks and arithmetic
-        /// primitives).
-        std::unique_ptr<Pass> createLowerIndexTreeToSCFPass();
-    }
-} // namespace mlir
 
-#endif // COMET_CONVERSION_INDEXTREETOSCF_H
+def TensorAlgebraDenseTensorDeclLowering : Pass<"lower-dense-tensor-decl"> {
+  let summary = "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createDenseTensorDeclLoweringPass()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect"
+  ];
+}
+
+def TensorAlgebraSparseTensorDeclLowering : Pass<"lower-sparse-tensor-decl"> {
+  let summary = "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createSparseTensorDeclLoweringPass()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect"
+  ];
+}
+
+#endif // COMET_DIALECT_TENSORALGEBRA_PASSES

@@ -1,4 +1,4 @@
-//===- Passes.h - Passes Definition implemented in Index Tree-----------------------------------===//
+//===- Passes.h - Conversion Pass Construction and Registration -----------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -19,35 +19,28 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// =============================================================================
-//
-// This file exposes the entry points to create compiler passes for Index Tree dialect.
-//
 //===----------------------------------------------------------------------===//
 
-#ifndef INDEXTREE_PASSES_H
-#define INDEXTREE_PASSES_H
+#ifndef COMET_DIALECT_INDEXTREE_PASSES_H
+#define COMET_DIALECT_INDEXTREE_PASSES_H
 
 #include "mlir/Pass/Pass.h"
-#include <memory>
 
 namespace mlir
 {
-  class Pass;
+    namespace comet
+    {
+/// Generate the code for registering conversion passes.
+#define GEN_PASS_DECL
+#include "comet/Dialect/IndexTree/Passes.h.inc"
 
-  namespace IndexTree
-  {
-    std::unique_ptr<mlir::Pass> createIndexTreePass();
+        /// Create a pass for applying compressed workspace transformation into IndexTreeIR
+        std::unique_ptr<Pass> createIndexTreeWorkspaceTransformationsPass();
 
-    /// Create a pass for applying compressed workspace transformation into IndexTreeIR
-    std::unique_ptr<Pass> createCompressedWorkspaceTransformsPass();
+        /// Create a pass for the redundancy-aware kernel fusion on index tree dialect for some compound expressions
+        std::unique_ptr<Pass> createIndexTreeKernelFusionPass();
+    }
 
-    /// Create a pass for lowering IndexTree IR ops to scf dialect version
-    std::unique_ptr<Pass> createLowerIndexTreeIRToSCFPass();
+}
 
-    /// Create a pass for the redundancy-aware kernel fusion on index tree dialect for some compound expressions
-    std::unique_ptr<Pass> createKernelFusionPass();
-  } // end namespace IndexTree
-} // end namespace mlir
-
-#endif // INDEXTREE_PASSES_H
+#endif // COMET_DIALECT_INDEXTREE_PASSES_H

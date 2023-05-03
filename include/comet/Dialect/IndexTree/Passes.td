@@ -1,4 +1,4 @@
-//===- IndexTreeToSCF.h - Convert IndexTree dialect to SCF dialect --*- C++ -*-===//
+//===-- Passes.td - IndexTree dialect pass definition file--------*- tablegen -*-===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,30 +21,45 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef COMET_CONVERSION_INDEXTREETOSCF_H
-#define COMET_CONVERSION_INDEXTREETOSCF_H
+#ifndef COMET_DIALECT_INDEXTREE_PASSES
+#define COMET_DIALECT_INDEXTREE_PASSES
 
-#include "mlir/Support/LLVM.h"
+include "mlir/Pass/PassBase.td"
 
-namespace mlir
-{
-    class Pass;
-    class RewritePatternSet;
+//===----------------------------------------------------------------------===//
+// Kernel Fusion
+//===----------------------------------------------------------------------===//
 
-    namespace comet
-    {
-#define GEN_PASS_DECL_CONVERTINDEXTREETOSCF
-#include "comet/Conversion/Passes.h.inc"
+def IndexTreeKernelFusion : Pass<"indextree-kernel-fusion"> {
+  let summary = "The redundancy-aware kernel fusion on index tree dialect for compound expressions";
+  let description = [{
 
-        /// Collect a set of patterns to convert IndexTree operations to SCF
-        /// operations within the SCF dialect.
-        void populateIndexTreeToSCFConversionPatterns(RewritePatternSet &patterns);
+      }];
+  let constructor = "comet::createIndexTreeKernelFusionPass()";
+  let dependentDialects = [
+    "comet::IndexTreeDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect"
+  ];
+}
 
-        /// Lowers indexTree operations (e.g., IndexTreeComputeLHSOp, IndexTreeComputeRHSOp and IndexTreeComputeOp)
-        /// to equivalent scf constructs including basic blocks and arithmetic
-        /// primitives).
-        std::unique_ptr<Pass> createLowerIndexTreeToSCFPass();
-    }
-} // namespace mlir
+//===----------------------------------------------------------------------===//
+// Workspace Transformations
+//===----------------------------------------------------------------------===//
 
-#endif // COMET_CONVERSION_INDEXTREETOSCF_H
+def IndexTreeWorkspaceTranformations: Pass<"indextree-workspace-transformations"> {
+  let summary = "Compressed workspace transformation on IndexTree dialect"
+                "to produce sparse output";
+  let description = [{
+
+      }];
+  let constructor = "comet::createIndexTreeWorkspaceTransformationsPass(";
+  let dependentDialects = [
+    "comet::IndexTreeDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect"
+  ];
+}
+
+
+#endif // COMET_DIALECT_INDEXTREE_PASSES

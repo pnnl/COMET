@@ -1,5 +1,4 @@
-# RUN: comet-opt --convert-to-loops %s &> transpose_CSR.mlir
-# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm transpose_CSR.mlir &> transpose_CSR.llvm
+# RUN: comet-opt --convert-to-loops --convert-to-llvm %s &> transpose_CSR.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
 # RUN: export SORT_TYPE=SEQ_QSORT
 # RUN: mlir-cpu-runner transpose_CSR.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s

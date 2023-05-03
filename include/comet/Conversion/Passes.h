@@ -30,14 +30,12 @@
 
 namespace mlir
 {
-
     namespace comet
     {
 /// Generate the code for registering conversion passes.
 #define GEN_PASS_REGISTRATION
 #include "comet/Conversion/Passes.h.inc"
     }
-
-} // namespace mlir
+}
 
 #endif // COMET_CONVERSION_PASSES_H

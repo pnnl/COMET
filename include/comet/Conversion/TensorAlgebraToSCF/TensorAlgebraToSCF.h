@@ -31,18 +31,20 @@ namespace mlir
     class Pass;
     class RewritePatternSet;
 
-#define GEN_PASS_DECL_CONVERTTENSORALGEBRATOINDEXTREE
+    namespace comet
+    {
+#define GEN_PASS_DECL_CONVERTTENSORALGEBRATOSCF
 #include "comet/Conversion/Passes.h.inc"
 
-    /// Collect a set of patterns to convert remaining TensorAlgebra operations 
-    /// that are not converted to IndexTree operations to the operations with SCF
-    /// dialect.
-    void populateTensorAlgebraToIndexTreeConversionPatterns(RewritePatternSet &patterns);
+        /// Collect a set of patterns to convert remaining TensorAlgebra operations
+        /// that are not converted to IndexTree operations to the operations with SCF
+        /// dialect.
+        void populateTensorAlgebraToSCFConversionPatterns(RewritePatternSet &patterns);
 
-    /// Lowers remaining TensorAlgebra operations not lowered to IndexTree dialect(e.g., TransposeOp, ConstantOp)
-    /// to equivalent SCF dialect operations).
-    std::unique_ptr<Pass> createLowerTensorAlgebraToIndexTreePass();
-
+        /// Lowers remaining TensorAlgebra operations not lowered to IndexTree dialect(e.g., TransposeOp, ConstantOp)
+        /// to equivalent SCF dialect operations).
+        std::unique_ptr<Pass> createLowerTensorAlgebraToSCFPass();
+    }
 } // namespace mlir
 
 #endif // COMET_CONVERSION_TENSORALGEBRATOINDEXTREE_H
