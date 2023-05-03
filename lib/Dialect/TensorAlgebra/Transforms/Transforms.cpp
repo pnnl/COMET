@@ -28,7 +28,7 @@
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
-#include "comet/Dialect/IndexTree/IR/ITDialect.h"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"

@@ -1,5 +1,4 @@
-# RUN: comet-opt --convert-to-loops %s &> utility_printCSR_multi.mlir
-# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm utility_printCSR_multi.mlir &> utility_printCSR_multi.llvm
+# RUN: comet-opt --convert-to-loops --convert-to-llvm %s &> utility_printCSR_multi.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2_small.mtx
 # RUN: export SPARSE_FILE_NAME1=%comet_integration_test_data_dir/test_rank2.mtx
 # RUN: export SPARSE_FILE_NAME2=%comet_integration_test_data_dir/test_rank2_small.mtx

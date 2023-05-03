@@ -323,7 +323,7 @@ void LateLoweringPass::runOnOperation()
 }
 
 /// Create a pass for lowering utility operations in tensor algebra to lower level dialects
-std::unique_ptr<Pass> mlir::tensorAlgebra::createLateLoweringPass()
+std::unique_ptr<Pass> mlir::comet::createLateLoweringPass()
 {
   return std::make_unique<LateLoweringPass>();
 }

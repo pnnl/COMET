@@ -2,8 +2,7 @@
 # A[i,j] = (B[i,k] * C[k,h]) * D[h,j]; A sparse-dense matrix multiplication (SpMM) followed by a dense matrix multiplication (M
 # B[i,k] is sparse, the rest is dense
 
-# RUN: comet-opt --convert-ta-to-it --opt-fusion --convert-to-loops  %s &> gnn_loops.mlir
-# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm gnn_loops.mlir &> gnn_loops.llvm
+# RUN: comet-opt --convert-ta-to-it --opt-fusion --convert-to-loops  --convert-to-llvm %s &> gnn_loops.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2_small.mtx
 # RUN: mlir-cpu-runner gnn_loops.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 

@@ -27,17 +27,25 @@
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
-#include "comet/Dialect/IndexTree/IR/ITDialect.h"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
+#include "comet/Conversion/Passes.h"
 #include "MLIRGen.h"
 #include "Parser.h"
 
 #include "mlir/Support/TypeID.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
-#include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
+#include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+
+// #include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
+#include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
+#include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
+#include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
+
 #include "mlir/IR/Verifier.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
@@ -49,7 +57,6 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
-
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
@@ -93,6 +100,8 @@ static cl::opt<enum InputType> inputType(
 static cl::opt<bool> emitAST("emit-ast", cl::desc("Output the AST dump"));
 static cl::opt<bool> emitTA("emit-ta", cl::desc("output the Tensor Algebra dialect dump"));
 static cl::opt<bool> emitIT("emit-it", cl::desc("output the Index Tree dialect dump"));
+static cl::opt<bool> emitLoops("emit-loops", cl::desc("output the SCF dialect dump"));
+static cl::opt<bool> emitLLVM("emit-llvm", cl::desc("output the LLVM dialect dump"));
 
 // =============================================================================
 // Optimization at the TA dialect (High-level optimizations) for tensor contraction operations
@@ -149,8 +158,14 @@ static cl::opt<bool> IsLoweringtoIndexTree("convert-ta-to-it", // Lower sparse/d
 // =============================================================================
 // Lowering IT operations to loops
 // =============================================================================
-static cl::opt<bool> IsLoweringtoSCF("convert-to-loops", // Lower sparse/dense mult (semiring) and elemwise (monoid) ops to index-tree dialect
-                                     cl::desc("Output IR after processing all ops"));
+static cl::opt<bool> IsLoweringtoSCF("convert-to-loops",
+                                     cl::desc("Output SCF dialect after lowering all operations"));
+
+// =============================================================================
+// Lowering to LLVM
+// =============================================================================
+static cl::opt<bool> isLoweringToLLVM("convert-to-llvm",
+                                      cl::desc("Output LLVM IR"));
 
 // =============================================================================
 // Utility functions
@@ -221,11 +236,11 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   applyPassManagerCLOptions(pm);
 
   // Lower tensorAlgebra:FuncOp to func::FuncOp
-  //mlir::OpPassManager &PM = pm.nest<mlir::tensorAlgebra::FuncOp>();
-  pm.addPass(mlir::tensorAlgebra::createFuncOpLoweringPass());
+  // mlir::OpPassManager &PM = pm.nest<mlir::tensorAlgebra::FuncOp>();
+  pm.addPass(mlir::comet::createFuncOpLoweringPass());
 
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
-  optPM.addPass(mlir::tensorAlgebra::createRemoveLabeledTensorOpsPass());
+  optPM.addPass(mlir::comet::createRemoveLabeledTensorOpsPass());
 
   // Check to see if we are dumping to TA dialect.
   if (emitTA)
@@ -245,26 +260,27 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// createFindOptimalTCFactorizationPass should be before lowering of input/output tensor declarations
     /// because this pass finds the optimal ordering of dense tensor multiplication
     /// operations before lowering them specific tc operations
-    optPM.addPass(mlir::tensorAlgebra::createFindOptimalTCFactorizationPass());
+    optPM.addPass(mlir::comet::createFindOptimalTCFactorizationPass());
   }
 
-  optPM.addPass(mlir::tensorAlgebra::createLowerTAMulChainPass()); // Lowering for chain operations
+  optPM.addPass(mlir::comet::createLowerTAMulChainPass()); // Lowering for chain operations
   //  =============================================================================
 
   //  =============================================================================
-  //  Creating tensor declarations for temporal tensors in compound expressions, preprocessing.
+  //  Check if there are missing tensor declaration operations introduced by compound expressions. If so, add a new tensor declaration
+  //  to represent intermediate tensors
   //  =============================================================================
-  optPM.addPass(mlir::tensorAlgebra::createPreLoweringPass()); // Creating tensor declarations for temporal tensors in chain operations
+  optPM.addPass(mlir::comet::createTensorAlgebraCheckImplicitTensorDeclPass());
   //  =============================================================================
 
   // ===================================================================================
   // Lowering of TC (tensor contraction) operation to Index Tree dialect
   // Also performs optimization at the Index Tree dialect
   // ===================================================================================
-  if (IsLoweringtoIndexTree || emitIT)
+  if (IsLoweringtoIndexTree || emitIT || emitLoops)
   {
     /// Generate the index tree IR
-    optPM.addPass(mlir::IndexTree::createIndexTreePass());
+    optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass());
 
     // Dump index tree dialect.
     if (emitIT)
@@ -278,13 +294,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (OptKernelFusion)
   {
     // Apply partial fusion on index tree dialect for some compound expressions.
-    optPM.addPass(mlir::IndexTree::createKernelFusionPass());
+    optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
   }
 
   if (OptWorkspace)
   {
     // Optimized workspace transformations, reduce iteration space for nonzero elements
-    optPM.addPass(mlir::IndexTree::createCompressedWorkspaceTransformsPass());
+    optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
   }
 
   // =============================================================================
@@ -297,9 +313,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// Sparse input tensor declararion should be lowered before dense input tensor declaration
   // sparse input tensor declaration lowering, also generate sparse_output_tensor declaration if needed
   // input and output sparse tensor declaration lowering are distant and need different information
-  optPM.addPass(mlir::tensorAlgebra::createSparseTensorDeclLoweringPass());
-  optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass()); // dense input tensor declaration lowering
-  optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass());
+  // optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass());
+  // optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass()); // dense input tensor declaration lowering
+
+  optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass());
+  optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
+  optPM.addPass(mlir::comet::createTensorFillLoweringPass());
   // =============================================================================
 
   // TTGT reformulation for dense tensor contraction operations
@@ -318,7 +337,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
     /// HPTT: A High-Performance Tensor Transposition C++ Library
     /// https://arxiv.org/abs/1704.04374
-    optPM.addPass(mlir::tensorAlgebra::createTensorOpsLoweringPass());
+    optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
     // optPM.addPass(mlir::tensorAlgebra::createOptDenseTransposePass());
   }
 
@@ -335,39 +354,59 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // =============================================================================
   // Lowering all the operations to loops
   // =============================================================================
-  if (IsLoweringtoSCF)
+  if (IsLoweringtoSCF || emitLoops || emitLLVM)
   {
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
-    optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());            // early lowering for dense input/output
-    optPM.addPass(mlir::tensorAlgebra::createTempSparseOutputTensorDeclLoweringPass()); // early lowering for sparse output tensor declaration for temporaries
-    optPM.addPass(mlir::tensorAlgebra::createSparseOutputTensorDeclLoweringPass());     // early lowering for sparse output
+    // optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());            // early lowering for dense input/output
+    // optPM.addPass(mlir::tensorAlgebra::createTempSparseOutputTensorDeclLoweringPass()); // early lowering for sparse output tensor declaration for temporaries
+    // optPM.addPass(mlir::tensorAlgebra::createSparseOutputTensorDeclLoweringPass());     // early lowering for sparse output
+
+    optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
+    optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass());
 
     // The partial Fusion pass might add new tensor.fill operations
-    optPM.addPass(mlir::tensorAlgebra::createTensorFillLoweringPass());
-    optPM.addPass(mlir::tensorAlgebra::createPCToLoopsLoweringPass());
+    optPM.addPass(mlir::comet::createTensorFillLoweringPass());
+    optPM.addPass(mlir::comet::createPCToLoopsLoweringPass());
 
     // =============================================================================
     // Lowering of other operations such as transpose, sum, etc. to SCF dialect
     // =============================================================================
     // If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
     // If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
-    // optPM.addPass(mlir::tensorAlgebra::createReduceOpLowerToSCFPass());
-    optPM.addPass(mlir::tensorAlgebra::createTensorOpsLoweringPass());
+    optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
 
     // Finally lowering index tree to SCF dialect
-    optPM.addPass(mlir::IndexTree::createLowerIndexTreeIRToSCFPass());
+    optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
 
+    // Dump index tree dialect.
+    if (emitLoops)
+    {
+      if (mlir::failed(pm.run(*module)))
+        return 4;
+      return 0;
+    }
     //  =============================================================================
   }
 
   // =============================================================================
   // Late lowering passes
   // =============================================================================
-  optPM.addPass(mlir::tensorAlgebra::createSTCRemoveDeadOpsPass());
-  optPM.addPass(mlir::tensorAlgebra::createLateLoweringPass());
-  //optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
-  optPM.addPass(mlir::createCSEPass());
+  optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
+  optPM.addPass(mlir::comet::createLateLoweringPass());
+  // optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   // =============================================================================
+
+  if (isLoweringToLLVM || emitLLVM)
+  {
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertSCFToCFPass());
+    pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createArithToLLVMConversionPass());
+    pm.addPass(mlir::createConvertFuncToLLVMPass());
+    pm.addPass(mlir::createReconcileUnrealizedCastsPass());
+  }
+
+  optPM.addPass(mlir::createCSEPass());
 
   if (mlir::failed(pm.run(*module)))
     return 4;
@@ -405,7 +444,7 @@ int main(int argc, char **argv)
   // If we aren't dumping the AST, then we are compiling with/to MLIR.
   // Register our Dialect with MLIR.
   context.loadDialect<mlir::tensorAlgebra::TADialect>();
-  context.loadDialect<mlir::indexTree::ITDialect>();
+  context.loadDialect<mlir::indexTree::IndexTreeDialect>();
   context.loadDialect<mlir::arith::ArithDialect>();
   context.loadDialect<mlir::memref::MemRefDialect>();
   context.loadDialect<mlir::linalg::LinalgDialect>();

@@ -1,5 +1,4 @@
-# RUN: comet-opt --convert-tc-to-ttgt --convert-to-loops %s &> ccsd_t1_3_ttgt.mlir
-# RUN: mlir-opt --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm ccsd_t1_3_ttgt.mlir &> ccsd_t1_3_ttgt.llvm
+# RUN: comet-opt --convert-tc-to-ttgt --convert-to-loops --convert-to-llvm %s &> ccsd_t1_3_ttgt.llvm
 # RUN: mlir-cpu-runner ccsd_t1_3_ttgt.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {

@@ -600,18 +600,18 @@ void STCRemoveDeadOpsPass::runOnOperation()
   }
 }
 
-std::unique_ptr<Pass> mlir::tensorAlgebra::createFindOptimalTCFactorizationPass()
+std::unique_ptr<Pass> mlir::comet::createFindOptimalTCFactorizationPass()
 {
   return std::make_unique<FindOptimalTCFactorizationPass>();
 }
 
-std::unique_ptr<Pass> mlir::tensorAlgebra::createLowerTAMulChainPass()
+std::unique_ptr<Pass> mlir::comet::createLowerTAMulChainPass()
 {
   return std::make_unique<LowerTAMulChainPass>();
 }
 
 // Lower sparse tensor algebra operation to loops
-std::unique_ptr<Pass> mlir::tensorAlgebra::createSTCRemoveDeadOpsPass()
+std::unique_ptr<Pass> mlir::comet::createSTCRemoveDeadOpsPass()
 {
   return std::make_unique<STCRemoveDeadOpsPass>();
 }

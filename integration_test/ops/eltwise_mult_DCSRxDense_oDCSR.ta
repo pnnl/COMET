@@ -1,5 +1,4 @@
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> eltwise_DCSRxDense_oDCSR.mlir
-# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm eltwise_DCSRxDense_oDCSR.mlir &> eltwise_DCSRxDense_oDCSR.llvm
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> eltwise_DCSRxDense_oDCSR.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
 # RUN: mlir-cpu-runner eltwise_DCSRxDense_oDCSR.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 

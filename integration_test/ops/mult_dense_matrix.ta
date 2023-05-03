@@ -1,5 +1,4 @@
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> mult_dense_matrix.mlir
-# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm mult_dense_matrix.mlir &> mult_dense_matrix.llvm
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_dense_matrix.llvm
 # RUN: mlir-cpu-runner mult_dense_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 

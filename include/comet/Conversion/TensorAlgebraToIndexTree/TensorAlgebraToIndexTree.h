@@ -31,17 +31,19 @@ namespace mlir
     class Pass;
     class RewritePatternSet;
 
+    namespace comet
+    {
 #define GEN_PASS_DECL_CONVERTTENSORALGEBRATOINDEXTREE
 #include "comet/Conversion/Passes.h.inc"
 
-    /// Collect a set of patterns to convert TensorAlgebra operations to IndexTree
-    /// dialect operations.
-    void populateTensorAlgebraToIndexTreeConversionPatterns(RewritePatternSet &patterns);
+        /// Collect a set of patterns to convert TensorAlgebra operations to IndexTree
+        /// dialect operations.
+        void populateTensorAlgebraToIndexTreeConversionPatterns(RewritePatternSet &patterns);
 
-    /// Lowers TensorAlgebra dialect operations (e.g., TensorMultOp, TensorElewsMultOp)
-    /// to equivalent index tree dialect operations).
-    std::unique_ptr<Pass> createLowerTensorAlgebraToIndexTreePass();
-
+        /// Lowers TensorAlgebra dialect operations (e.g., TensorMultOp, TensorElewsMultOp)
+        /// to equivalent index tree dialect operations).
+        std::unique_ptr<Pass> createLowerTensorAlgebraToIndexTreePass();
+    }
 } // namespace mlir
 
 #endif // COMET_CONVERSION_TENSORALGEBRATOINDEXTREE_H

@@ -1,4 +1,4 @@
-//===- PreLowering.cpp - PreLowering Pass -- initlization the result of tmp tensor result------------------===//
+//===- CheckImplicitTensorDecl.cpp - check if it is needed to add tensor declarations introduced by compound expressions------------------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,7 +21,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements a initlization the result of tmp tensor result.
+// This file implements a pass that adds temporary tensor declaration introduced by compound expressions in the COMET DSL
 //===----------------------------------------------------------------------===//
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -45,14 +45,14 @@
 using namespace mlir;
 using namespace mlir::tensorAlgebra;
 
-#define DEBUG_TYPE "pre-lowering"
+#define DEBUG_TYPE "check-implicit-tensor-decl"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_PreLoweringPass
-// #define DEBUG_MODE_PreLoweringPass
+// #ifndef DEBUG_MODE_CHECKIMPLICITTENSORDECL
+// #define DEBUG_MODE_CHECKIMPLICITTENSORDECL
 // #endif
 
-#ifdef DEBUG_MODE_PreLoweringPass
+#ifdef DEBUG_MODE_CHECKIMPLICITTENSORDECL
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
@@ -72,10 +72,10 @@ using namespace mlir;
 namespace
 {
   // Add tensor decl ops for tmp result
-  struct PreLoweringPass
-      : public PassWrapper<PreLoweringPass, OperationPass<func::FuncOp>>
+  struct TensorAlgebraCheckImplicitTensorDeclPass
+      : public PassWrapper<TensorAlgebraCheckImplicitTensorDeclPass, OperationPass<func::FuncOp>>
   {
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreLoweringPass)
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TensorAlgebraCheckImplicitTensorDeclPass)
     void runOnOperation() override;
   };
 } // namespace
@@ -191,7 +191,7 @@ void addTensorDecl(t op)
   op.replaceAllUsesWith(itensor);
 
   builder.setInsertionPointAfter(op);
-#ifdef DEBUG_MODE_PreLoweringPass
+#ifdef DEBUG_MODE_ADDTEMPTENSORDECLARATION
   auto setop = builder.create<TensorSetOp>(location, ret_value, itensor);
   comet_debug() << " ";
   comet_vdump(setop);
@@ -203,10 +203,10 @@ void addTensorDecl(t op)
 #endif
 }
 
-void PreLoweringPass::runOnOperation()
+void TensorAlgebraCheckImplicitTensorDeclPass::runOnOperation()
 {
   func::FuncOp func = getOperation();
-  comet_debug() << "Before PreLoweringPass\n";
+  comet_debug() << "Before TensorAlgebraCheckImplicitTensorDeclPass\n";
 
   // The walker proceeds in post-order, but we need to process outer loops first
   // to control the number of outer parallel loops, so push candidate loops to
@@ -257,10 +257,10 @@ void PreLoweringPass::runOnOperation()
              }
            } 
           });
-  comet_debug() << "After PreLoweringPass\n";
+  comet_debug() << "After TensorAlgebraCheckImplicitTensorDeclPass\n";
 }
 
-std::unique_ptr<Pass> mlir::tensorAlgebra::createPreLoweringPass()
+std::unique_ptr<Pass> mlir::comet::createTensorAlgebraCheckImplicitTensorDeclPass()
 {
-  return std::make_unique<PreLoweringPass>();
+  return std::make_unique<TensorAlgebraCheckImplicitTensorDeclPass>();
 }

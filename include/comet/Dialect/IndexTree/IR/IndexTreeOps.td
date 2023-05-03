@@ -25,8 +25,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef IT_OPS
-#define IT_OPS
+#ifndef INDEXTREE_OPS
+#define INDEXTREE_OPS
 
 include "mlir/IR/OpBase.td" 
 include "mlir/IR/FunctionInterfaces.td"
@@ -37,7 +37,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 
 // // Provide a definition of the 'TA' dialect in the ODS framework so that we
 // // can define our operations.
-// def IT_Dialect : Dialect {
+// def IndexTreeDialect : Dialect {
 //   let name = "it";
 //   let cppNamespace = ""; 
 // }
@@ -45,7 +45,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 
 // Provide a definition of the 'it' dialect in the ODS framework so that we
 // can define our operations.
-def IT_Dialect : Dialect {
+def IndexTreeDialect : Dialect {
   let name = "it";
   let cppNamespace = "::mlir::indexTree"; 
 
@@ -60,14 +60,14 @@ def IT_Dialect : Dialect {
 //   * The parent dialect of the operation.
 //   * The mnemonic for the operation, or the name without the dialect prefix.
 //   * A list of traits for the operation.
-class IT_Op<string mnemonic, list<Trait> traits = []> :
-    Op<IT_Dialect, mnemonic, traits>;
+class IndexTree_Op<string mnemonic, list<Trait> traits = []> :
+    Op<IndexTreeDialect, mnemonic, traits>;
             
 //===----------------------------------------------------------------------===//
 // Index Tree Operations
 //===----------------------------------------------------------------------===//
 
-def IndexTreeComputeLHSOp : IT_Op<"ComputeLHS", [Pure]>{
+def IndexTreeComputeLHSOp : IndexTree_Op<"ComputeLHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
@@ -75,7 +75,7 @@ def IndexTreeComputeLHSOp : IT_Op<"ComputeLHS", [Pure]>{
   let results = (outs AnyType:$output);
 }
 
-def IndexTreeComputeRHSOp : IT_Op<"ComputeRHS", [Pure]>{
+def IndexTreeComputeRHSOp : IndexTree_Op<"ComputeRHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
@@ -83,7 +83,7 @@ def IndexTreeComputeRHSOp : IT_Op<"ComputeRHS", [Pure]>{
   let results = (outs AnyType:$output);
 }
 
-def IndexTreeComputeOp : IT_Op<"Compute", [Pure]>{
+def IndexTreeComputeOp : IndexTree_Op<"Compute", [Pure]>{
   let summary = "";
   let description = [{
   }];
@@ -98,7 +98,7 @@ def IndexTreeComputeOp : IT_Op<"Compute", [Pure]>{
   
 }
 
-def IndexTreeIndicesOp : IT_Op<"Indices", [Pure]>{
+def IndexTreeIndicesOp : IndexTree_Op<"Indices", [Pure]>{
   let summary = "";
   let description = [{
   }];
@@ -110,7 +110,7 @@ def IndexTreeIndicesOp : IT_Op<"Indices", [Pure]>{
   //let hasVerifier = 1; 
 }
 
-def IndexTreeOp : IT_Op<"itree", [Pure]>{
+def IndexTreeOp : IndexTree_Op<"itree", [Pure]>{
   let summary = "";
   let description = [{
   }];
@@ -122,4 +122,4 @@ def IndexTreeOp : IT_Op<"itree", [Pure]>{
   //let hasVerifier = 1; 
 }
 
-#endif // IT_OPS
+#endif // INDEXTREE_OPS
