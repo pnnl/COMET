@@ -188,7 +188,6 @@ namespace
       storeElements(/*dimension=*/0);
 
       // Replace this operation with the generated alloc.
-      // rewriter.replaceOp(op, alloc);
       op.replaceAllUsesWith(alloc);
       rewriter.eraseOp(op);
 
@@ -235,8 +234,8 @@ namespace
       if (inputType.isa<TensorType>())
       { // for dense
         comet_debug() << "Dense transpose\n";
-        //AffineMap inputPermuation = AffineMap::getPermutationMap(allPerms[0], ctx);
-        //AffineMap outputPermuation = AffineMap::getPermutationMap(allPerms[1], ctx);
+        // AffineMap inputPermuation = AffineMap::getPermutationMap(allPerms[0], ctx);
+        // AffineMap outputPermuation = AffineMap::getPermutationMap(allPerms[1], ctx);
 
         auto inputTensorLoadOp = cast<ToTensorOp>(op->getOperand(0).getDefiningOp());
         auto inputMemref = inputTensorLoadOp.getMemref();
@@ -262,8 +261,8 @@ namespace
 
         comet_vdump(lhs);
         auto outputMemref = lhs.getDefiningOp()->getOperand(0);
-        //TODO(gkestor): linalg::CopyOp is deprecated
-        //auto copyOp = rewriter.create<linalg::CopyOp>(loc, inputMemref, outputMemref, inputPermuation, outputPermuation);
+        // TODO(gkestor): linalg::CopyOp is deprecated
+        // auto copyOp = rewriter.create<linalg::CopyOp>(loc, inputMemref, outputMemref, inputPermuation, outputPermuation);
         auto copyOp = rewriter.create<linalg::TransposeOp>(loc, inputMemref, outputMemref, llvm::ArrayRef<int64_t>(allPerms[1]));
         comet_vdump(copyOp);
         Value res_value = rewriter.create<ToTensorOp>(loc, outputMemref);
@@ -727,6 +726,8 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
                          ArithDialect,
                          memref::MemRefDialect,
                          bufferization::BufferizationDialect>();
+
+  //target.addLegalOp<func::CallOp>();
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.
