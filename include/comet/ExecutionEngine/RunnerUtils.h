@@ -210,19 +210,19 @@ void cometPrintMemRef(UnrankedMemRefType<T> &M)
 template <typename T>
 void RTmemset(const DynamicMemRefType<T> &M)
 {
-    std::cout << "memset" << std::endl;
-    std::cout << "M.sizes[0]:" << M.sizes[0] << std::endl;
-    std::cout << "M.sizes[1]:" << M.sizes[1] << std::endl;
-    std::cout << "M.rank:" << M.rank << std::endl;
+    // std::cout << "memset" << std::endl;
+    // std::cout << "M.sizes[0]:" << M.sizes[0] << std::endl;
+    // std::cout << "M.sizes[1]:" << M.sizes[1] << std::endl;
+    // std::cout << "M.rank:" << M.rank << std::endl;
 
     unsigned num_elements = 1;
     for (unsigned i = 0; i < M.rank; i++){
         num_elements = num_elements * M.sizes[0];
     }
 
-    std::cout << "NumElements:" << num_elements << std::endl;
+    //std::cout << "NumElements:" << num_elements << std::endl;
     memset(M.data, 0, sizeof(T) * num_elements);
-    std::cout << "\n";
+    //std::cout << "\n";
 }
 
 template <typename T>
