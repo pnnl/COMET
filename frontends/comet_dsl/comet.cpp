@@ -394,6 +394,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::comet::createLateLoweringPass());
   // optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
+  optPM.addPass(mlir::createCSEPass());
   // =============================================================================
 
   if (isLoweringToLLVM || emitLLVM)
@@ -405,8 +406,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(mlir::createConvertFuncToLLVMPass());
     pm.addPass(mlir::createReconcileUnrealizedCastsPass());
   }
-
-  optPM.addPass(mlir::createCSEPass());
 
   if (mlir::failed(pm.run(*module)))
     return 4;

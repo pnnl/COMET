@@ -96,7 +96,6 @@ extern "C" void _mlir_ciface_comet_print_memref_i64(UnrankedMemRefType<int64_t> 
   cometPrintMemRef(*M);
 }
 
-
 extern "C" void comet_print_memref_f64(int64_t rank, void *ptr)
 {
   UnrankedMemRefType<double> descriptor = {rank, ptr};
@@ -117,6 +116,11 @@ extern "C" void _mlir_ciface_comet_memset_f64(UnrankedMemRefType<double> *M)
   cometMemset(*M);
 }
 
+extern "C" void _mlir_ciface_comet_memset_i64(UnrankedMemRefType<int64_t> *M)
+{
+  cometMemset(*M);
+}
+
 extern "C" void _mlir_ciface_comet_memset_i1(UnrankedMemRefType<bool> *M)
 {
   cometMemset(*M);
@@ -128,8 +132,18 @@ extern "C" void comet_memset_f64(int64_t rank, void *ptr)
   _mlir_ciface_comet_memset_f64(&descriptor);
 }
 
+extern "C" void comet_memset_i64(int64_t rank, void *ptr)
+{
+  UnrankedMemRefType<int64_t> descriptor = {rank, ptr};
+  _mlir_ciface_comet_memset_i64(&descriptor);
+}
+
 extern "C" void comet_memset_i1(int64_t rank, void *ptr)
 {
   UnrankedMemRefType<bool> descriptor = {rank, ptr};
   _mlir_ciface_comet_memset_i1(&descriptor);
 }
+
+
+
+
