@@ -16,7 +16,7 @@ def main() {
 	print(A);
 }
 
-# Tensor A is printed in COO. Each data corresponds to A1_pos, A1_crd, A2_pos, A2_crd, Value, respectively. 
+# Tensor A is printed in CSR. Each data corresponds to A1_pos, A1_crd, A2_pos, A2_crd, Value, respectively. 
 # data = -1 means that no data needed for this array
 # Look at the following paper - https://arxiv.org/pdf/2102.05187.pdf - for the internal tensor storage format details.
 # CHECK: data = 

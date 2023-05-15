@@ -378,16 +378,15 @@ namespace
           auto transpose2DF64Func = FunctionType::get(ctx, {i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, unrankedMemrefType_index},
                                                       {});
 
-          std::string print_transpose_2D_f64Str = "transpose_2D_f64";
-
-          if (isFuncInMod(print_transpose_2D_f64Str, module) == false)
+          std::string func_name = "transpose_2D_f64";
+          if (!hasFuncDeclaration(module, func_name))
           {
-            transpose_func = mlir::func::FuncOp::create(loc, print_transpose_2D_f64Str, transpose2DF64Func, ArrayRef<NamedAttribute>{});
+            transpose_func = mlir::func::FuncOp::create(loc, func_name, transpose2DF64Func, ArrayRef<NamedAttribute>{});
             transpose_func.setPrivate();
             module.push_back(transpose_func);
           }
 
-          rewriter.create<func::CallOp>(loc, print_transpose_2D_f64Str, SmallVector<Type, 2>{},
+          rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{},
                                         ValueRange{dim_formatIn[0], dim_formatIn[1], alloc_sizes_cast_vecs[0][0],
                                                    alloc_sizes_cast_vecs[0][1], alloc_sizes_cast_vecs[0][2],
                                                    alloc_sizes_cast_vecs[0][3], alloc_sizes_cast_vecs[0][4],
@@ -401,15 +400,15 @@ namespace
           auto transpose3DF64Func = FunctionType::get(ctx, {i32Type, i32Type, i32Type, i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, i32Type, i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, unrankedMemrefType_index},
                                                       {});
 
-          std::string print_transpose_3D_f64Str = "transpose_3D_f64";
-          if (isFuncInMod(print_transpose_3D_f64Str, module) == false)
+          std::string func_name = "transpose_3D_f64";
+          if (!hasFuncDeclaration(module, func_name))
           {
-            transpose_func = mlir::func::FuncOp::create(loc, print_transpose_3D_f64Str, transpose3DF64Func, ArrayRef<NamedAttribute>{});
+            transpose_func = mlir::func::FuncOp::create(loc, func_name, transpose3DF64Func, ArrayRef<NamedAttribute>{});
             transpose_func.setPrivate();
             module.push_back(transpose_func);
           }
 
-          rewriter.create<func::CallOp>(loc, print_transpose_3D_f64Str, SmallVector<Type, 2>{},
+          rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{},
                                         ValueRange{input_perm_num, output_perm_num, dim_formatIn[0], dim_formatIn[1], dim_formatIn[2],
                                                    alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
                                                    alloc_sizes_cast_vecs[0][2], alloc_sizes_cast_vecs[0][3],
@@ -727,7 +726,7 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
                          memref::MemRefDialect,
                          bufferization::BufferizationDialect>();
 
-  //target.addLegalOp<func::CallOp>();
+  // target.addLegalOp<func::CallOp>();
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.
@@ -741,6 +740,7 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
   // conversion. The conversion will signal failure if any of our `illegal`
   // operations were not converted successfully.
 
+  // function.dump();
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     signalPassFailure();

@@ -105,13 +105,13 @@ namespace
       {
         std::string print_scalar_f64Str = "printF64";
         std::string print_newline_Str = "printNewline";
-        if (isFuncInMod("printF64", module) == false)
+        if (!hasFuncDeclaration(module, "printF64"))
         {
           print_func = func::FuncOp::create(loc, print_scalar_f64Str, printScalarFunc, ArrayRef<NamedAttribute>{});
           print_func.setPrivate();
           module.push_back(print_func);
 
-          if (isFuncInMod("printNewline", module) == false)
+          if (!hasFuncDeclaration(module, "printNewline"))
           {
             auto printNewLineFunc = FunctionType::get(ctx, {}, {});
             func::FuncOp print_newline = func::FuncOp::create(loc, print_newline_Str, printNewLineFunc, ArrayRef<NamedAttribute>{});
@@ -125,7 +125,7 @@ namespace
       else
       {
         std::string comet_print_f64Str = "comet_print_memref_f64";
-        if (isFuncInMod(comet_print_f64Str, module) == false)
+        if (!hasFuncDeclaration(module, comet_print_f64Str))
         {
           print_func = func::FuncOp::create(loc, comet_print_f64Str, printTensorF64Func, ArrayRef<NamedAttribute>{});
           print_func.setPrivate();
@@ -153,7 +153,7 @@ namespace
           else if (inputType.isa<SparseTensorType>())
           {
             std::string comet_print_i64Str = "comet_print_memref_i64";
-            if (isFuncInMod(comet_print_i64Str, module) == false)
+            if (!hasFuncDeclaration(module, comet_print_i64Str))
             {
               print_func = func::FuncOp::create(loc, comet_print_i64Str, printTensorIndexFunc, ArrayRef<NamedAttribute>{});
               print_func.setPrivate();
@@ -210,8 +210,8 @@ namespace
     {
       auto ctx = rewriter.getContext();
       auto module = op->getParentOfType<ModuleOp>();
-      std::string getTimeStr = "getTime";
       auto f64Type = rewriter.getF64Type();
+      std::string getTimeStr = "getTime";
 
       if (!hasFuncDeclaration(module, getTimeStr))
       {
@@ -304,7 +304,9 @@ void LateLoweringPass::runOnOperation()
                          bufferization::BufferizationDialect>();
 
   // PrintOp Lowering insert function call, so mark func::CallOp as a legal Operation
-  target.addLegalOp<func::CallOp>();
+  target.addLegalOp<func::CallOp,                          // for function calls
+                    tensorAlgebra::SparseTensorConstructOp // in the case printing sparse tensor
+                    >();
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.

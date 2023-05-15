@@ -319,6 +319,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createTensorFillLoweringPass());
+
   // =============================================================================
 
   // TTGT reformulation for dense tensor contraction operations
@@ -357,12 +358,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (IsLoweringtoSCF || emitLoops || emitLLVM)
   {
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
-    // optPM.addPass(mlir::tensorAlgebra::createDenseTensorDeclLoweringPass());            // early lowering for dense input/output
-    // optPM.addPass(mlir::tensorAlgebra::createTempSparseOutputTensorDeclLoweringPass()); // early lowering for sparse output tensor declaration for temporaries
-    // optPM.addPass(mlir::tensorAlgebra::createSparseOutputTensorDeclLoweringPass());     // early lowering for sparse output
-
-    optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
-    optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass());
+    optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());  // early lowering for dense input/output
+    optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass()); // early lowering for sparse input/output including tensor declaration for temporaries
 
     // The partial Fusion pass might add new tensor.fill operations
     optPM.addPass(mlir::comet::createTensorFillLoweringPass());
@@ -391,8 +388,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // =============================================================================
   // Late lowering passes
   // =============================================================================
+
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
-  optPM.addPass(mlir::comet::createLateLoweringPass());
+  optPM.addPass(mlir::comet::createLateLoweringPass());      
   // optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================

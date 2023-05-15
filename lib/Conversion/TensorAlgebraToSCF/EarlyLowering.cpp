@@ -395,7 +395,7 @@ namespace
 
   //     if (VALUETYPE.compare("f32") == 0)
   //     {
-  //       if (isFuncInMod("read_input_2D_f32", module) == false)
+  //       if (hasFuncDeclaration("read_input_2D_f32", module) == false)
   //       {
   //         func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_2D_f32",
   //                                                   readInput2DF32Func, ArrayRef<NamedAttribute>{});
@@ -405,7 +405,7 @@ namespace
   //     }
   //     else // f64
   //     {
-  //       if (isFuncInMod("read_input_2D_f64", module) == false)
+  //       if (hasFuncDeclaration("read_input_2D_f64", module) == false)
   //       {
   //         func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_2D_f64",
   //                                                   readInput2DF64Func, ArrayRef<NamedAttribute>{});
@@ -418,7 +418,7 @@ namespace
 
   //     if (VALUETYPE.compare("f32") == 0)
   //     {
-  //       if (isFuncInMod("read_input_sizes_2D_f32", module) == false)
+  //       if (hasFuncDeclaration("read_input_sizes_2D_f32", module) == false)
   //       {
   //         func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_2D_f32",
   //                                                   readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
@@ -428,7 +428,7 @@ namespace
   //     }
   //     else
   //     {
-  //       if (isFuncInMod("read_input_sizes_2D_f64", module) == false)
+  //       if (hasFuncDeclaration("read_input_sizes_2D_f64", module) == false)
   //       {
   //         comet_debug() << " Inserting read_input_sizes_2D_f64\n";
   //         func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_2D_f64",
@@ -447,7 +447,7 @@ namespace
 
   //     if (VALUETYPE.compare("f32") == 0)
   //     {
-  //       if (isFuncInMod("read_input_3D_f32", module) == false)
+  //       if (hasFuncDeclaration("read_input_3D_f32", module) == false)
   //       {
   //         func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_3D_f32",
   //                                                   readInput3DF32Func, ArrayRef<NamedAttribute>{});
@@ -457,7 +457,7 @@ namespace
   //     }
   //     else
   //     {
-  //       if (isFuncInMod("read_input_3D_f64", module) == false)
+  //       if (hasFuncDeclaration("read_input_3D_f64", module) == false)
   //       {
   //         comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
   //         func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_3D_f64",
@@ -471,7 +471,7 @@ namespace
 
   //     if (VALUETYPE.compare("f32") == 0)
   //     {
-  //       if (isFuncInMod("read_input_sizes_3D_f32", module) == false)
+  //       if (hasFuncDeclaration("read_input_sizes_3D_f32", module) == false)
   //       {
   //         func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_3D_f32",
   //                                                   readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
@@ -481,7 +481,7 @@ namespace
   //     }
   //     else
   //     {
-  //       if (isFuncInMod("read_input_sizes_3D_f64", module) == false)
+  //       if (hasFuncDeclaration("read_input_sizes_3D_f64", module) == false)
   //       {
   //         comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
   //         func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_3D_f64",
