@@ -319,9 +319,11 @@ namespace
 
       if (VALUETYPE.compare("f32") == 0)
       {
-        if (isFuncInMod("read_input_2D_f32", module) == false)
+        std::string func_name = "read_input_2D_f32";
+        if (!hasFuncDeclaration(module, func_name))
         {
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_2D_f32",
+          comet_debug() << "Adding read_input_2D_f32 to the module\n";
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
                                                     readInput2DF32Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -329,9 +331,11 @@ namespace
       }
       else // f64
       {
-        if (isFuncInMod("read_input_2D_f64", module) == false)
+        std::string func_name = "read_input_2D_f64";
+        if (!hasFuncDeclaration(module, func_name))
         {
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_2D_f64",
+          comet_debug() << "Adding read_input_2D_f64 to the module\n";
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
                                                     readInput2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -342,9 +346,11 @@ namespace
 
       if (VALUETYPE.compare("f32") == 0)
       {
-        if (isFuncInMod("read_input_sizes_2D_f32", module) == false)
+        std::string func_name = "read_input_sizes_2D_f32";
+        if (!hasFuncDeclaration(module, func_name))
         {
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_2D_f32",
+          comet_debug() << "Adding read_input_sizes_2D_f32 to the module\n";
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
                                                     readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -352,17 +358,17 @@ namespace
       }
       else
       {
-        if (isFuncInMod("read_input_sizes_2D_f64", module) == false)
+        std::string func_name = "read_input_sizes_2D_f64";
+        if (!hasFuncDeclaration(module, func_name))
         {
-          comet_debug() << " Inserting read_input_sizes_2D_f64\n";
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_2D_f64",
+          comet_debug() << "Adding read_input_sizes_2D_f64 to the module\n";
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
                                                     readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
       }
     }
-
     // 3D tensor
     else if (rank_size == 3)
     {
@@ -371,9 +377,10 @@ namespace
 
       if (VALUETYPE.compare("f32") == 0)
       {
-        if (isFuncInMod("read_input_3D_f32", module) == false)
+        std::string func_name = "read_input_3D_f32";
+        if (!hasFuncDeclaration(module, func_name))
         {
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_3D_f32",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
                                                     readInput3DF32Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -381,10 +388,11 @@ namespace
       }
       else
       {
-        if (isFuncInMod("read_input_3D_f64", module) == false)
+        std::string func_name = "read_input_3D_f64";
+        if (!hasFuncDeclaration(module, func_name))
         {
-          comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_3D_f64",
+          comet_debug() << " Insert read_input_3D_f64 decl\n";
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
                                                     readInput3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -395,9 +403,11 @@ namespace
 
       if (VALUETYPE.compare("f32") == 0)
       {
-        if (isFuncInMod("read_input_sizes_3D_f32", module) == false)
+
+        std::string func_name = "read_input_sizes_3D_f32";
+        if (!hasFuncDeclaration(module, func_name))
         {
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_3D_f32",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
                                                     readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -405,10 +415,11 @@ namespace
       }
       else
       {
-        if (isFuncInMod("read_input_sizes_3D_f64", module) == false)
+        std::string func_name = "read_input_sizes_3D_f64";
+        if (!hasFuncDeclaration(module, func_name))
         {
           comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), "read_input_sizes_3D_f64",
+          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
                                                     readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
@@ -1032,8 +1043,6 @@ namespace
       comet_vdump(op);
       mlir::MLIRContext *ctx = rewriter.getContext();
       auto function = cast<func::FuncOp>(op->getParentOp());
-      // comet_vdump(function);
-
       auto module = function.getOperation()->getParentOfType<ModuleOp>();
 
       std::string op_str = dump2str(op);
@@ -1297,10 +1306,12 @@ namespace
           readModeConst = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getIntegerAttr(i32Type, readModeVal));
         }
 
-        // Now, setup the runtime calls
+        // TODO(gkestor): refactor the code to insert read_input file functions
+        //  Now, setup the runtime calls to read sizes related to the input matrices (e.g., read_input_sizes_2D_f32)
         if (rank_size == 2)
         { // 2D
           comet_debug() << " 2D\n";
+          // Add function definition to the module
           insertReadFileLibCall(rank_size, ctx, module, function);
 
           std::string read_input_sizes_str;
@@ -1321,6 +1332,7 @@ namespace
         { // 3D
 
           comet_debug() << " 3D\n";
+          // Add function definition to the module
           insertReadFileLibCall(rank_size, ctx, module, function);
 
           std::string read_input_sizes_str;
@@ -1381,6 +1393,7 @@ namespace
           alloc_sizes_cast_vec.push_back(alloc_size_cast);
         }
 
+        // Now, setup the runtime calls to read the input matrices (e.g., read_input_3D_f64)
         if (rank_size == 2)
         { // 2D
           std::string read_input_str;
@@ -1396,7 +1409,7 @@ namespace
                                                                   ValueRange{sparseFileID, dim_format[0], dim_format[1],
                                                                              alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1],
                                                                              alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3],
-                                                                             alloc_sizes_cast_vec[4], readModeConst});                                                              
+                                                                             alloc_sizes_cast_vec[4], readModeConst});
           read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
         }
         else if (rank_size == 3)
@@ -1523,6 +1536,7 @@ namespace
         comet_debug() << " it is dense tensor\n";
       }
 
+      // module->dump();
       comet_debug() << " SparseInputTensorDeclOpLowering in format end\n";
       return success();
     }
@@ -1923,10 +1937,9 @@ void mlir::comet::populateDenseTensorDeclLoweringPatterns(RewritePatternSet &pat
 
 void mlir::comet::populateSparseTensorDeclLoweringPatterns(RewritePatternSet &patterns)
 {
-  patterns.insert<SparseInputTensorDeclOpLowering
-                  // TempSparseOutputTensorDeclOpLowering,
-                  // SparseOutputTensorDeclOpLowering
-                  >(patterns.getContext());
+  patterns.insert<SparseInputTensorDeclOpLowering,
+                  TempSparseOutputTensorDeclOpLowering,
+                  SparseOutputTensorDeclOpLowering>(patterns.getContext());
 }
 
 std::unique_ptr<Pass> mlir::comet::createDenseTensorDeclLoweringPass()

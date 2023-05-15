@@ -2261,7 +2261,7 @@ void LowerIndexTreeToSCFPass::runOnOperation()
   IndexType indexType = IndexType::get(ctx);
   auto quickSortFunc = FunctionType::get(ctx, {mlir::UnrankedMemRefType::get(indexType, 0), indexType}, {});
 
-  if (isFuncInMod("quick_sort", module) == false)
+  if (!hasFuncDeclaration(module, "quick_sort"))
   {
     mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "quick_sort",
                                                           quickSortFunc, ArrayRef<NamedAttribute>{});
@@ -2294,6 +2294,7 @@ void LowerIndexTreeToSCFPass::runOnOperation()
   RewritePatternSet patterns(&getContext());
   patterns.insert<IndexTreeIRLowering>(&getContext());
 
+  //function.dump();
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     llvm::errs() << "Failed to Lower LowerIndexTreeToSCFPass\n";
