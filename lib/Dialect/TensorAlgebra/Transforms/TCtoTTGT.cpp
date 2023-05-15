@@ -37,10 +37,9 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-//#include "mlir/Dialect/Func/IR/FuncOps.h"
+// #include "mlir/Dialect/Func/IR/FuncOps.h"
 
-//#include "mlir/EDSC/Builders.h"
-
+// #include "mlir/EDSC/Builders.h"
 
 #include <limits>
 #include <map>
@@ -403,13 +402,13 @@ namespace
             MemRefType::get(rhs1Dims, rhs1MemrefType.getElementType()), loc,
             rewriter);
 
-        #ifdef DEBUG_MODE_TTGT
+#ifdef DEBUG_MODE_TTGT
         auto rhs1LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
         comet_debug() << "\n";
         comet_vdump(rhs1LinalgCopy);
-        #else
+#else
         rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
-        #endif
+#endif
       }
 
       if (!rhs2OutMapAttr.getValue().isIdentity())
@@ -424,13 +423,13 @@ namespace
         rhs2Alloc = insertAllocAndDealloc(
             MemRefType::get(rhs2Dims, rhs2MemrefType.getElementType()), loc,
             rewriter);
-        #ifdef DEBUG_MODE_TTGT
+#ifdef DEBUG_MODE_TTGT
         auto rhs2LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
         comet_debug() << " rhs2LinalgCopy op: " << __LINE__ << "\n";
         comet_vdump(rhs2LinalgCopy);
-        #else
+#else
         rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
-        #endif
+#endif
       }
 
       bool useLHSTranspose = false;
@@ -516,7 +515,7 @@ namespace
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs1IndexingMap);
         comet_debug() << " collapsedMemrefType:"
-                     << "\n";
+                      << "\n";
         comet_vdump(collapsedMemrefType);
         comet_debug() << "\n";
         comet_debug() << " rhs1Alloc: \n";
@@ -721,14 +720,14 @@ namespace
       // Copy back the result if needed
       if (lhsAlloc != lhsMemref && useLHSTranspose)
       {
-        #ifdef DEBUG_MODE_TTGT
+#ifdef DEBUG_MODE_TTGT
         auto lhsFinalCopy =
             rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
         comet_debug() << "\n";
         comet_vdump(lhsFinalCopy);
-        #else
+#else
         rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
-        #endif
+#endif
       }
 
       if (printFlops)
@@ -772,8 +771,7 @@ namespace
       : public PassWrapper<TALoweringTTGTPass, OperationPass<func::FuncOp>>
   {
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TALoweringTTGTPass)
-    TALoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops) : 
-                      isSelectBestPerm(isSelectBestPerm), whatPerm(whatPerm), printFlops{printFlops} {};
+    TALoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops) : isSelectBestPerm(isSelectBestPerm), whatPerm(whatPerm), printFlops{printFlops} {};
     void runOnOperation() override;
 
   private:
@@ -797,7 +795,7 @@ void TALoweringTTGTPass::runOnOperation()
   if (!hasFuncDeclaration(module, "getTime"))
   {
     mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "getTime", getTimeFunc,
-                                  ArrayRef<NamedAttribute>{});
+                                                          ArrayRef<NamedAttribute>{});
     func1.setPrivate();
     module.push_back(func1);
   }
@@ -806,7 +804,7 @@ void TALoweringTTGTPass::runOnOperation()
   if (!hasFuncDeclaration(module, "print_flops"))
   {
     mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "print_flops",
-                                  printFlopFunc, ArrayRef<NamedAttribute>{});
+                                                          printFlopFunc, ArrayRef<NamedAttribute>{});
     func1.setPrivate();
     module.push_back(func1);
   }

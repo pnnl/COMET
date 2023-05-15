@@ -33,8 +33,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
-
-//#include "mlir/Transforms/Bufferize.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinDialect.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/PatternMatch.h"
@@ -93,9 +92,28 @@ namespace mlir
       return perm;
     }
 
+    // bool isFuncInMod(std::string funcname, ModuleOp module)
+    // {
+    //   comet_debug() << "Check functions in the module\n";
+    //   for (auto func : module.getOps<func::FuncOp>())
+    //   {
+    //     comet_debug() << "Current FuncOp: " << func.getName() << "\n";
+    //     if (func.getName().compare(funcname) == 0)
+    //     {
+    //       return true;
+    //     }
+    //     else
+    //     { // Not have function decl,
+    //       // check the body of func n to see if it contains callFunc that call funcname
+    //       func.getBody();
+    //     }
+    //   }
+    //   return false;
+    // }
+
     bool hasFuncDeclaration(ModuleOp &module, std::string funcName)
     {
-      for (auto func : module.getOps<FuncOp>())
+      for (auto func : module.getOps<func::FuncOp>())
       {
         StringAttr func_name = func.getSymNameAttr();
         if (funcName == func_name.getValue())
@@ -312,24 +330,6 @@ namespace mlir
       return true;
     }
 
-    bool isFuncInMod(std::string funcname, ModuleOp module)
-    {
-      for (auto n : module.getOps<FuncOp>())
-      {
-        comet_debug() << "current function: " << n.getName() << "\n";
-        if (n.getName().compare(funcname) == 0)
-        {
-          return true;
-        }
-        else
-        { // Not have function decl,
-          // check the body of func n to see if it contains callFunc that call funcname
-          n.getBody();
-        }
-      }
-      return false;
-    }
-
     // Determine whether this index's loop in rhs1 should be merged or not
     bool isMergedIndex(std::vector<std::string> format_vec, int cur_idx, int sumIndex)
     {
@@ -377,12 +377,7 @@ namespace mlir
       // Find summation indices
       for (auto map : indexMaps)
       {
-        comet_debug() << " ";
-        comet_vdump(map.getType());
-        comet_debug() << " ";
-        // comet_debug() <<  " map.size(): " << map.size() << " ";
         comet_vdump(map);
-
         std::vector<int64_t> perm;
 
         if (auto arrayattr = map.dyn_cast<ArrayAttr>())
@@ -402,7 +397,7 @@ namespace mlir
         else
         {
           llvm::errs() << __LINE__ << " Different type: ";
-          //map.getType().dump();
+          // map.getType().dump();
         }
         allPerms.push_back(perm);
         comet_debug() << " ";
@@ -1838,9 +1833,12 @@ namespace mlir
       auto max_idx = cast<ConstantIndexOp>(range.getMax().getDefiningOp());
       auto step_idx = cast<ConstantIndexOp>(range.getStep().getDefiningOp());
 
-      auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();;
-      auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();;
-      auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();;
+      auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+      ;
+      auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+      ;
+      auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+      ;
       return ((max - min) / step);
     }
 
@@ -2100,9 +2098,9 @@ namespace mlir
       else if (isa<tensorAlgebra::DenseConstantOp>(lhsOp))
       {
         auto constOp = cast<tensorAlgebra::DenseConstantOp>(lhsOp);
-        //DenseElementsAttr denseAttr = constOp.getValue();
-        //auto attr = *(denseAttr.getAttributeValues().begin()); //GK changed
-        auto attr =  constOp.getValueAttrName();
+        // DenseElementsAttr denseAttr = constOp.getValue();
+        // auto attr = *(denseAttr.getAttributeValues().begin()); //GK changed
+        auto attr = constOp.getValueAttrName();
         auto f64Attr = attr.cast<FloatAttr>();
         alpha *= f64Attr.getValueAsDouble();
         is_lhs_constant = true;
@@ -2179,9 +2177,9 @@ namespace mlir
       else if (isa<tensorAlgebra::DenseConstantOp>(rhsOp))
       {
         auto constOp = cast<tensorAlgebra::DenseConstantOp>(rhsOp);
-        //DenseElementsAttr denseAttr = constOp.getValue();
-        //auto attr = *(denseAttr.getAttributeValues().begin());
-        auto attr =  constOp.getValueAttrName();
+        // DenseElementsAttr denseAttr = constOp.getValue();
+        // auto attr = *(denseAttr.getAttributeValues().begin());
+        auto attr = constOp.getValueAttrName();
         auto f64Attr = attr.cast<FloatAttr>();
         alpha *= f64Attr.getValueAsDouble();
         is_rhs_constant = true;
@@ -2347,9 +2345,9 @@ namespace mlir
         {
           comet_debug() << "\n";
           auto constOp = cast<tensorAlgebra::DenseConstantOp>(lhsOp);
-          //DenseElementsAttr denseAttr = constOp.getValue();
-          //auto attr = *(denseAttr.getAttributeValues().begin());
-          auto attr =  constOp.getValueAttrName();
+          // DenseElementsAttr denseAttr = constOp.getValue();
+          // auto attr = *(denseAttr.getAttributeValues().begin());
+          auto attr = constOp.getValueAttrName();
           auto f64Attr = attr.cast<FloatAttr>();
           alpha *= f64Attr.getValueAsDouble();
           is_lhs_constant = true;
@@ -2431,9 +2429,9 @@ namespace mlir
         {
           comet_debug() << "\n";
           auto constOp = cast<tensorAlgebra::DenseConstantOp>(rhsOp);
-          //DenseElementsAttr denseAttr = constOp.getValue();
-          //auto attr = *(denseAttr.getAttributeValues().begin());
-          auto attr =  constOp.getValueAttrName();
+          // DenseElementsAttr denseAttr = constOp.getValue();
+          // auto attr = *(denseAttr.getAttributeValues().begin());
+          auto attr = constOp.getValueAttrName();
           auto f64Attr = attr.cast<FloatAttr>();
           alpha *= f64Attr.getValueAsDouble();
           is_rhs_constant = true;
