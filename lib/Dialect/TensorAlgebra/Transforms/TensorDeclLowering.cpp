@@ -970,10 +970,10 @@ namespace
 
       for (int i = 0; i < resultMemTy.getRank(); i++)
       {
-        if (resultMemTy.isDynamicDim(i))
-          cur_memref.push_back(ShapedType::kDynamic);
-        else // The constant dim size must NOT comes from the sparse matrix
-          cur_memref.push_back(resultMemTy.getDimSize(i));
+        // if (resultMemTy.isDynamicDim(i))
+        //   cur_memref.push_back(ShapedType::kDynamic);
+        // else // The constant dim size must NOT come from the sparse matrix
+        //   cur_memref.push_back(resultMemTy.getDimSize(i));
 
         if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
         {
@@ -981,7 +981,14 @@ namespace
           auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
           auto hi = label_decl_value.getMax();
           if (resultMemTy.isDynamicDim(i))
+          {
             cur_indices.push_back(hi); // IndexCastOp
+            comet_vdump(hi);
+          }
+        }
+        else
+        {
+          llvm::errs() << "Dense tensor declaration has dynamic index label\n";
         }
       }
 
@@ -1478,33 +1485,35 @@ namespace
         comet_debug() << "SparseTensorConstructOp generated for input sparse tensor:\n";
         comet_vdump(sptensor);
 
-        // TODO(gkestor): what is the goal of this code block (replacing SparseTensorDeclOp op labels with static index labels)
-        //  auto tensor_decl_value = cast<tensorAlgebra::SparseTensorDeclOp>(op);
-        //  LLVM_DEBUG(comet_debug() << " " << tensor_decl_value.getLabels().size() << "\n");
-        //  for (unsigned int i = 0; i < tensor_decl_value.getLabels().size(); i++)
-        //  {
-        //    comet_vdump(tensor_decl_value.getLabels()[i]);
-        //    comet_pdump(tensor_decl_value.getLabels()[i].getDefiningOp());
-        //    if (isa<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
-        //    {
-        //      auto label_decl_value = cast<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
-        //      auto lo = label_decl_value.getMin();
-        //      auto step = label_decl_value.getStep();
-        //      auto hi = array_sizes[2 * rank_size + 1 + i];
+        // Dynamic indexlabel is propogated to the dense tensor declaration.
+        // For example in the spmv example, dense vector index label comes from sparse input matrix.
+        auto tensor_decl_value = cast<tensorAlgebra::SparseTensorDeclOp>(op);
+        LLVM_DEBUG(comet_debug() << " " << tensor_decl_value.getLabels().size() << "\n");
+        for (unsigned int i = 0; i < tensor_decl_value.getLabels().size(); i++)
+        {
+          comet_vdump(tensor_decl_value.getLabels()[i]);
+          comet_pdump(tensor_decl_value.getLabels()[i].getDefiningOp());
+          if (isa<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
+          {
+            auto label_decl_value = cast<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
+            auto lo = label_decl_value.getMin();
+            auto step = label_decl_value.getStep();
+            auto hi = array_sizes[2 * rank_size + 1 + i];
 
-        //     Value new_index = rewriter.create<IndexLabelStaticOp>(loc, lo, hi, step);
-        //     comet_vdump(new_index);
-        //     label_decl_value.replaceAllUsesWith(new_index);
-        //   }
-        //   else if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
-        //   {
-        //     comet_debug() << " isa<tensorAlgebra::IndexLabelStaticOp\n";
-        //   }
-        // }
+            Value new_index = rewriter.create<IndexLabelStaticOp>(loc, lo, hi, step);
+            comet_vdump(new_index);
+            label_decl_value.replaceAllUsesWith(new_index);
+          }
+          else if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
+          {
+            comet_debug() << " isa<tensorAlgebra::IndexLabelStaticOp\n";
+          }
+        }
 
         op.replaceAllUsesWith(sptensor);
         rewriter.replaceOp(op, sptensor);
       }
+
       // The tensor is sparse output
       else if (isDense(formats_str, ", ") == false && isOutputTensor == true)
       {
@@ -1626,6 +1635,7 @@ namespace
         llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
         signalPassFailure();
       }
+
     }
   };
 
