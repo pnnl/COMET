@@ -313,9 +313,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// Sparse input tensor declararion should be lowered before dense input tensor declaration
   // sparse input tensor declaration lowering, also generate sparse_output_tensor declaration if needed
   // input and output sparse tensor declaration lowering are distant and need different information
-  // optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass());
-  // optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass()); // dense input tensor declaration lowering
-
   optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createTensorFillLoweringPass());
@@ -360,7 +357,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
     optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());  // early lowering for dense input/output
     optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass()); // early lowering for sparse input/output including tensor declaration for temporaries
-
     // The partial Fusion pass might add new tensor.fill operations
     optPM.addPass(mlir::comet::createTensorFillLoweringPass());
     optPM.addPass(mlir::comet::createPCToLoopsLoweringPass());
@@ -390,7 +386,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // =============================================================================
 
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
-  optPM.addPass(mlir::comet::createLateLoweringPass());      
+  optPM.addPass(mlir::comet::createLateLoweringPass());
   // optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================

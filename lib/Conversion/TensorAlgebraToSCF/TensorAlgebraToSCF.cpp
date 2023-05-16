@@ -726,7 +726,7 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
                          memref::MemRefDialect,
                          bufferization::BufferizationDialect>();
 
-  // target.addLegalOp<func::CallOp>();
+  target.addLegalOp<func::CallOp>();
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the TA operations.
