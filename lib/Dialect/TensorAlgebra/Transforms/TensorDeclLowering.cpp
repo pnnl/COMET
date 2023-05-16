@@ -1662,8 +1662,6 @@ namespace
                         tensorAlgebra::TensorMultOp,
                         tensorAlgebra::TensorSetOp,
                         tensorAlgebra::TensorElewsMultOp,
-                        tensorAlgebra::SparseOutputTensorDeclOp,
-                        tensorAlgebra::TempSparseOutputTensorDeclOp,
                         tensorAlgebra::DenseTensorDeclOp,
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::IndexLabelDynamicOp,
