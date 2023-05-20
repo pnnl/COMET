@@ -44,16 +44,6 @@ using namespace mlir::indexTree;
 
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.cpp.inc"
 
-/// Dialect creation, the instance will be owned by the context. This is the
-/// point of registration of custom types and operations for the dialect.
-// IndexTreeDialect::IndexTreeDialect(mlir::MLIRContext *ctx) : mlir::Dialect("it", ctx, mlir::TypeID::get<IndexTreeDialect>())
-// {
-//   addOperations<
-// #define GET_OP_LIST
-// #include "comet/Dialect/IndexTree/IR/ITOps.cpp.inc"
-//       >();
-// }
-
 Type mlir::indexTree::IndexTreeDialect::parseType(DialectAsmParser &parser) const
 {
   // Parse the main keyword for the type.
@@ -76,13 +66,13 @@ void mlir::indexTree::IndexTreeDialect::printType(mlir::Type type,
 
 
 #define GET_OP_CLASSES
-#include "comet/Dialect/IndexTree/IR/ITOps.cpp.inc"
+#include "comet/Dialect/IndexTree/IR/IndexTreeOps.cpp.inc"
 
 /// Dialect initialization, the instance will be owned by the context. This is
 /// the point of registration of types and operations for the dialect.
 void IndexTreeDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
-#include "comet/Dialect/IndexTree/IR/ITOps.cpp.inc"
+#include "comet/Dialect/IndexTree/IR/IndexTreeOps.cpp.inc"
       >();
 }

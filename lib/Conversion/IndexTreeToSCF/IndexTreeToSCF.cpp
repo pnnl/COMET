@@ -2232,9 +2232,12 @@ namespace
       {
         if (indexTree::IndexTreeComputeOp cur_op = dyn_cast<mlir::indexTree::IndexTreeComputeOp>(itOp.getDefiningOp()))
         {
+          comet_pdump(itOp.getDefiningOp()->getOperand(0).getDefiningOp());
+          comet_pdump(itOp.getDefiningOp()->getOperand(1).getDefiningOp());
           rewriter.eraseOp(itOp.getDefiningOp()->getOperand(0).getDefiningOp()); //RHS
           rewriter.eraseOp(itOp.getDefiningOp()->getOperand(1).getDefiningOp()); //LHS
         }
+        comet_pdump(itOp.getDefiningOp());
         rewriter.eraseOp(itOp.getDefiningOp());
       }
 
@@ -2289,12 +2292,11 @@ void LowerIndexTreeToSCFPass::runOnOperation()
                     tensorAlgebra::IndexLabelStaticOp,
                     tensorAlgebra::IndexLabelDynamicOp,
                     tensorAlgebra::LabeledTensorOp,
-                    func::FuncOp>();
+                    func::CallOp>();
 
   RewritePatternSet patterns(&getContext());
   patterns.insert<IndexTreeIRLowering>(&getContext());
 
-  //function.dump();
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     llvm::errs() << "Failed to Lower LowerIndexTreeToSCFPass\n";
