@@ -29,7 +29,6 @@
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
@@ -278,6 +277,7 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
         auto i64Type = builder.getI64Type();
         Value t1 = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, operands[i], indices);
 
+        comet_debug() << "New IndexTreeIndicesOp added:\n";
         comet_vdump(t1);
         newIndicesOp.push_back(t1);
       }
@@ -303,8 +303,11 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
       needSplitNode = parentIndicesOp;
 
       comet_debug() << " plan to erase the following Op\n";
+      comet_debug() << " Indices operations:\n";
       comet_vdump(indicesOp);
+      comet_debug() << " Split Nodes:\n";
       comet_pdump(needSplitNode);
+      comet_debug() << " Indices op first users:\n";
       comet_pdump(indicesOpFirstUsers);
       indicesOp.erase();
     }
@@ -317,7 +320,11 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
   comet_debug() << "\n";
 }
 
-void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir::Value> indexValueMap, int denseDimInOutput, OpBuilder &builder, Location loc)
+void removeRedundantIndices(std::vector<Value> newComputeOps,
+                            std::map<int, mlir::Value> indexValueMap,
+                            int denseDimInOutput,
+                            OpBuilder &builder,
+                            Location loc)
 {
 
   // Check whether need to remove redundant indices or not
@@ -366,7 +373,7 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
     mlir::Value computeOp = n;
 
     // iterate over the IndexTreeIndicesOp;
-    mlir::Value computeOpParent;
+    mlir::Value computeOpParent; // computeOpParent is IndexTreeIndicesOp
 
     comet_vdump(n);
     assert(n.getDefiningOp()->getResult(0).hasOneUse() && " indicesOp has more than one user\n");
@@ -436,12 +443,12 @@ void removeRedundantIndices(std::vector<Value> newComputeOps, std::map<int, mlir
           assert(curIndicesOp.getOperation()->getResult(0).hasOneUse() && " indicesOp has more than one user\n");
           Operation *curIndicesOpParent = *(curIndicesOp.getOperation()->getResult(0).getUsers().begin());
 
-          comet_pdump(curIndicesOpParent);
-          comet_vdump(computeOpParent);
-          computeOpParent.replaceAllUsesWith(computeOp);
           comet_vdump(computeOpParent);
           comet_pdump(curIndicesOpParent);
+
+          computeOpParent.replaceAllUsesWith(computeOp); // replace all uses of the indexOp with the new indecesOp
           computeOp = computeOpParent;
+          computeOpParent.getDefiningOp()->erase(); // erase the previous  indecesOp
           computeOpParent = curIndicesOpParent->getResult(0);
         }
         else
@@ -478,6 +485,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
                                              OpBuilder &builder, indexTree::IndexTreeOp op)
 {
   Location loc = op.getLoc();
+  auto module = op->getParentOfType<ModuleOp>();
 
   auto comp_worksp_opt = builder.getBoolAttr(compressedworkspace);
   int sparseDimOutput = -1;
@@ -720,13 +728,18 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
       }
     }
   }
-  comet_debug() << " existRedundantIndex: " << existRedundantIndex << "\n";
+
+  // comet_debug() << "Before removing loop invariance\n";
+  // module->dump();
 
   if (existRedundantIndex)
   {
+    comet_debug() << "There is loop invariant\n";
     removeRedundantIndices(newComputeOps, indexValueMap, denseDimInOutput, builder, loc);
   }
 
+  // comet_debug() << "After loop invariance optimizations\n";
+  // module->dump();
   return newComputeOps;
 } // end CompressedWorkspaceOutput()
 
@@ -1028,18 +1041,14 @@ void IndexTreeWorkspaceTransformationsPass::CompressedWorkspaceTransforms(mlir::
                   CompressedWorkspaceInput(newComputeOps, builder, loc);
                 }
 
-
                 // Also remove previous IndexTreeComputeOp's LHS and RHS.
                 indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(itComputeOp->getOperand(0).getDefiningOp());
                 indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(itComputeOp->getOperand(1).getDefiningOp());
 
                 itComputeOp.erase();
                 itComputeOp_rhs.erase();
-                itComputeOp_lhs.erase();
+                itComputeOp_lhs.erase(); }); // end function traverse
 
-              }); // end function traverse
-
-  
   comet_debug() << __FILE__ << " " << __LINE__ << "CompressedWorkspaceTransforms pass is done\n";
 }
 
@@ -1049,7 +1058,7 @@ void IndexTreeWorkspaceTransformationsPass::runOnOperation()
   func::FuncOp function = getOperation();
   // Traverse the function, only handle ta.itree operation
   CompressedWorkspaceTransforms(function);
-  //function.dump();
+  // function.dump();
   comet_debug() << __FILE__ << " " << __LINE__ << " ending CompressedWorkspaceTransforms pass \n";
 }
 

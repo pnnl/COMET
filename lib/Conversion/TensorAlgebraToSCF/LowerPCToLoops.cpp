@@ -350,7 +350,6 @@ void PCToLoopsLoweringPass::runOnOperation()
 
   // debug
   auto module = function.getOperation()->getParentOfType<ModuleOp>();
-  module->dump();
 
   comet_debug() << "end PCToLoopsLoweringPass\n";
 }

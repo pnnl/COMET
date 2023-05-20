@@ -954,8 +954,7 @@ namespace
     {
 
       comet_debug() << "--------------DenseTensorDeclarationLowering in format begin\n";
-      // auto module = op->getParentOfType<ModuleOp>(); //debuging purposes
-      // module->dump();
+      auto module = op->getParentOfType<ModuleOp>(); // debuging purposes
       comet_debug() << "\n\n";
 
       comet_vdump(op);
@@ -985,10 +984,6 @@ namespace
             cur_indices.push_back(hi); // IndexCastOp
             comet_vdump(hi);
           }
-        }
-        else
-        {
-          llvm::errs() << "Dense tensor declaration has dynamic index label\n";
         }
       }
 
@@ -1023,12 +1018,13 @@ namespace
       comet_vdump(tensorLoad);
 
       op.replaceAllUsesWith(tensorLoad);
-      rewriter.replaceOp(op, tensorLoad);
+      // rewriter.replaceOp(op, tensorLoad);
+      rewriter.eraseOp(op);
 
       comet_debug() << "--------------DenseTensorDeclarationLowering in format end\n";
-      // module->dump(); //debugging purposes
       comet_debug() << "\n\n";
 
+      // module->dump(); //debugging purposes
       return success();
     }
   };
@@ -1614,6 +1610,7 @@ namespace
       ConversionTarget target(getContext());
       target.addLegalDialect<ArithDialect,
                              memref::MemRefDialect,
+                             scf::SCFDialect,
                              bufferization::BufferizationDialect,
                              IndexTreeDialect>();
 
@@ -1630,12 +1627,14 @@ namespace
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::SparseTensorConstructOp>();
 
+      // function.dump();
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
       {
         llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
         signalPassFailure();
       }
 
+      // function.dump();
     }
   };
 
