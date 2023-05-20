@@ -1,4 +1,4 @@
-//===- ITOps.td - IT dialect operation definitions ----------*- tablegen -*-===//
+//===- IndexTreeOps.td - IT dialect operation definitions ----------*- tablegen -*-===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
