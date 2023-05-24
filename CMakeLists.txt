@@ -108,9 +108,9 @@ include_directories(${COMET_INCLUDE_DIR})
 # Directory setup
 #-------------------------------------------------------------------------------
 
+add_subdirectory(frontends/comet_dsl)
 add_subdirectory(include/comet)
 add_subdirectory(lib)
-add_subdirectory(frontends/comet_dsl)
 add_subdirectory(integration_test)
 
 

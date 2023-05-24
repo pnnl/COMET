@@ -32,6 +32,9 @@
 #include "MLIRGen.h"
 #include "Parser.h"
 
+/* JBMF: Added for the stats files */
+#include "utils/dummyStats.h"
+
 #include "mlir/Dialect/StandardOps/EDSC/Intrinsics.h"
 #include "mlir/Dialect/Linalg/EDSC/Intrinsics.h"
 #include "mlir/Dialect/Linalg/IR/LinalgOps.h"
@@ -363,6 +366,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================
+
+  // JBMF: Adding a late stage Pass 
+
+  optPM.addPass(mlir::dummyStats::createDummyStatsPass());
 
   if (mlir::failed(pm.run(*module)))
     return 4;

@@ -39,6 +39,7 @@ set(LIBS
   COMETUtils
   COMETTensorAlgebra
   COMETIndexTree
+  COMETStats # JBMF: Added to the linkage
 )
 
 target_link_libraries(comet-opt 
