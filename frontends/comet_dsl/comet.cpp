@@ -38,6 +38,9 @@
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
+#include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/SCF/Transforms/Passes.h"
 
 // #include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
@@ -45,6 +48,9 @@
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
+#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
+#include "mlir/Conversion/GPUToNVVM/GPUToNVVMPass.h"
+#include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
 
 #include "mlir/IR/Verifier.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
@@ -160,6 +166,19 @@ static cl::opt<bool> IsLoweringtoIndexTree("convert-ta-to-it", // Lower sparse/d
 // =============================================================================
 static cl::opt<bool> IsLoweringtoSCF("convert-to-loops",
                                      cl::desc("Output SCF dialect after lowering all operations"));
+
+// =============================================================================
+// GPU codegen specific passes
+// =============================================================================
+
+static cl::opt<bool> isLoweringSCFtoGPU("convert-scf-to-gpu", 
+                                       cl::desc("Convert SCF Dialect to GPU Dialect"));
+
+static cl::opt<bool> isLoweringGPUtoLLVM("convert-gpu-to-llvm", 
+                                         cl::desc("Output LLVM/NVVM Dialect from GPU Dialect"));
+
+static cl::opt<bool> isRaisingSCFtoAffine("raise-scf-to-affine",
+                                          cl::desc("Raise SCF Dialect to Affine Dialect for loop parallelization"));
 
 // =============================================================================
 // Lowering to LLVM
@@ -380,6 +399,40 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       return 0;
     }
     //  =============================================================================
+
+    //  =============================================================================
+    
+    if (isRaisingSCFtoAffine)
+    {
+      // SCF -> Affine
+      optPM.addPass(mlir::comet::createRaiseSCFForPass());
+      optPM.addPass(mlir::comet::createRaiseLoadStorePass());
+    }
+
+    if (isLoweringSCFtoGPU)
+    {
+      // Affine -> GPU
+      
+      // affine loop tiling
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::createLoopTilingPass());
+
+      // affine.for -> affine.parallel
+      auto pass = mlir::createAffineParallelizePass();
+      pass->initializeOptions("max-nested=1");
+      pm.addNestedPass<mlir::func::FuncOp>(std::move(pass));
+
+      // Affine -> SCF
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::createLowerAffinePass());
+
+      // SCF -> GPU
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::createCanonicalizerPass());
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::createGpuMapParallelLoopsPass());
+
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createLowerSCFToGPUPass());
+      
+      pm.addPass(mlir::createGpuKernelOutliningPass());
+      
+    }
   }
 
   // =============================================================================
@@ -391,6 +444,22 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================
+
+  if (isLoweringGPUtoLLVM)
+  { 
+    //optPM.addPass(mlir::comet::createLowerGPUToLLVMPass());  // TODO
+
+    //pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createStripDebugInfoPass());
+    //pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createConvertSCFToCFPass());
+    //pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createArithToLLVMConversionPass());
+    //pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createLowerGpuOpsToNVVMOpsPass());
+    //pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createReconcileUnrealizedCastsPass());
+    
+    // Finalize GPU code generation.
+    //pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createGpuSerializeToCubinPass(    // Note: this will only be available if NVPTX is enabled as target during LLVM build
+                             //options.gpuTriple, options.gpuChip, options.gpuFeatures));
+                             //  "", "sm_70", ""));
+  }
 
   if (isLoweringToLLVM || emitLLVM)
   {

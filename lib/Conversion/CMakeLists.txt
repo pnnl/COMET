@@ -1,3 +1,5 @@
 add_subdirectory(IndexTreeToSCF)
 add_subdirectory(TensorAlgebraToIndexTree)
 add_subdirectory(TensorAlgebraToSCF)
+add_subdirectory(SCFToGPU)
+add_subdirectory(SCFToAffine)

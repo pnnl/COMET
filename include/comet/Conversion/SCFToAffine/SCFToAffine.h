@@ -1,4 +1,4 @@
-//===- Passes.h - Conversion Pass Construction and Registration -----------===//
+//===- SCFToAffine.h - Raise SCF dialect to Affine dialect --*- C++ -*-===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,23 +21,34 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef COMET_CONVERSION_PASSES_H
-#define COMET_CONVERSION_PASSES_H
+#ifndef COMET_CONVERSION_SCFTOAFFINE_H
+#define COMET_CONVERSION_SCFTOAFFINE_H
 
-#include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
-#include "comet/Conversion/TensorAlgebraToIndexTree/TensorAlgebraToIndexTree.h"
-#include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
-#include "comet/Conversion/SCFToGPU/SCFToGPU.h"
-#include "comet/Conversion/SCFToAffine/SCFToAffine.h"
+#include "mlir/Support/LLVM.h"
 
 namespace mlir
 {
+    class Pass;
+    class RewritePatternSet;
+
     namespace comet
     {
-/// Generate the code for registering conversion passes.
-#define GEN_PASS_REGISTRATION
+#define GEN_PASS_DECL_CONVERTSCFTOAFFINE
 #include "comet/Conversion/Passes.h.inc"
-    }
-}
 
-#endif // COMET_CONVERSION_PASSES_H
+        /// Collect a set of patterns to raise scf.for and scf.yield
+        /// to affine.for and affine.yield
+        void SCFForRaisingPatterns(RewritePatternSet &patterns, MLIRContext *ctx);
+
+        void LoadStoreRaisingPatterns(RewritePatternSet &patterns, MLIRContext *ctx);
+
+        /// Creates a pass to convert scf.for and scf.yield ops
+        /// to affine.for and affine.yield
+        std::unique_ptr<Pass> createRaiseSCFForPass();
+
+
+        std::unique_ptr<Pass> createRaiseLoadStorePass();
+    }
+} // namespace mlir
+
+#endif // COMET_CONVERSION_SCFTOAFFINE_H

@@ -77,4 +77,56 @@ def ConvertTensorAlgebraToSCF : Pass<"convert-ta-to-scf"> {
   ];
 }
 
+//===----------------------------------------------------------------------===//
+// SCFToGPU
+//===----------------------------------------------------------------------===//
+
+def ConvertSCFToGPU : Pass<"convert-scf-to-gpu"> {
+  let summary = " "
+                "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createLowerSCFToGPUPass()";
+  let dependentDialects = [
+    "gpu::GPUDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect",
+    "arith::ArithDilect"
+  ];
+}
+
+//===----------------------------------------------------------------------===//
+// SCFToAffine
+//===----------------------------------------------------------------------===//
+
+def RaiseSCFToAffine : Pass<"raise-scf-to-affine"> {
+  let summary = " "
+                "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createRaiseSCFForPass()";
+  let dependentDialects = [
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect"
+  ];
+}
+
+def RaiseLoadStore : Pass<"raise-loadstore-affine"> {
+  let summary = " "
+                "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createRaiseLoadStorePass()";
+  let dependentDialects = [
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect"
+  ];
+}
+
 #endif // COMET_CONVERSION_PASSES

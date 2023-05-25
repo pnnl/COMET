@@ -1,4 +1,4 @@
-//===- Passes.h - Conversion Pass Construction and Registration -----------===//
+//===- SCFToGPU.h - Convert SCF dialect to GPU dialect --*- C++ -*-===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,23 +21,28 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef COMET_CONVERSION_PASSES_H
-#define COMET_CONVERSION_PASSES_H
+#ifndef COMET_CONVERSION_SCFTOGPU_H
+#define COMET_CONVERSION_SCFTOGPU_H
 
-#include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
-#include "comet/Conversion/TensorAlgebraToIndexTree/TensorAlgebraToIndexTree.h"
-#include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
-#include "comet/Conversion/SCFToGPU/SCFToGPU.h"
-#include "comet/Conversion/SCFToAffine/SCFToAffine.h"
+#include "mlir/Support/LLVM.h"
 
 namespace mlir
 {
+    class Pass;
+    class RewritePatternSet;
+
     namespace comet
     {
-/// Generate the code for registering conversion passes.
-#define GEN_PASS_REGISTRATION
+#define GEN_PASS_DECL_CONVERTSCFTOGPU
 #include "comet/Conversion/Passes.h.inc"
-    }
-}
 
-#endif // COMET_CONVERSION_PASSES_H
+        /// Collect a set of patterns to convert TensorAlgebra operations to SCF dialect.
+        /// Subsequently lower the SCF dialect to GPU dialect
+        void populateSCFToGPUConversionPatterns(RewritePatternSet &patterns);
+
+        /// Lowers TensorAlgebra operations
+        std::unique_ptr<Pass> createLowerSCFToGPUPass();
+    }
+} // namespace mlir
+
+#endif // COMET_CONVERSION_SCFTOGPU_H
