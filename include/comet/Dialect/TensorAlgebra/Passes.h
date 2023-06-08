@@ -38,13 +38,16 @@ namespace mlir
         std::unique_ptr<Pass> createTensorAlgebraCheckImplicitTensorDeclPass();
 
         void populateDenseTensorDeclLoweringPatterns(RewritePatternSet &patterns);
-        void populateSparseTensorDeclLoweringPatterns(RewritePatternSet &patterns);
+        void populateSparseOutputTensorDeclLoweringPatterns(RewritePatternSet &patterns);
 
         /// Create a pass to lower dense input and output tensor declarations
         std::unique_ptr<Pass> createDenseTensorDeclLoweringPass();
 
-        /// Create a pass to lower sparse input and output tensor declarations
+        /// Create a pass to lower sparse tensor declarations and create sparse output tensor declarations
         std::unique_ptr<Pass> createSparseTensorDeclLoweringPass();
+
+        /// Create a pass to lower sparse output tensor declarations
+        std::unique_ptr<Pass> createSparseOutputTensorDeclLoweringPass();
 
         ////////////////////////////////////
         ////////////////////////////////////
@@ -74,18 +77,6 @@ namespace mlir
         /// Create a pass for lowering to the rest of the operations in `Std` dialects,
         /// such as printOp, constantOp, ReturnOp..
         std::unique_ptr<mlir::Pass> createLateLoweringPass();
-
-        // /// Create a pass to lower dense input/output tensor declarations
-        // std::unique_ptr<Pass> createDenseTensorDeclLoweringPass();
-
-        // /// Create a pass to lower sparse input tensor declarations
-        // std::unique_ptr<Pass> createSparseTensorDeclLoweringPass();
-
-        // /// Create a pass for lowering sparse tensor output tensor decl operations
-        // std::unique_ptr<Pass> createSparseOutputTensorDeclLoweringPass();
-
-        // /// Create a pass for lowering temporal sparse tensor output tensor decl operations generated for compound expressions
-        // std::unique_ptr<Pass> createTempSparseOutputTensorDeclLoweringPass();
 
         /// Create a pass for lowering sparse TA operations to SCFDimAttr
         std::unique_ptr<Pass> createSTCRemoveDeadOpsPass();

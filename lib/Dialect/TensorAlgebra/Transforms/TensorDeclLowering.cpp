@@ -57,9 +57,9 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "tensor-decl-lowering"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_TENSORDECLLOWERING
-// #define DEBUG_MODE_TENSORDECLLOWERING
-// #endif
+#ifndef DEBUG_MODE_TENSORDECLLOWERING
+#define DEBUG_MODE_TENSORDECLLOWERING
+#endif
 
 #ifdef DEBUG_MODE_TENSORDECLLOWERING
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -105,6 +105,9 @@ namespace
 
     auto first_operand = rhsComputeOp->getOperand(0).getDefiningOp();
     auto second_operand = rhsComputeOp->getOperand(1).getDefiningOp();
+    comet_debug() << "EltWiseMult Operands:\n";
+    comet_pdump(first_operand);
+    comet_pdump(second_operand);
 
     if (isa<tensorAlgebra::SparseTensorConstructOp>(first_operand))
     {
@@ -1526,6 +1529,8 @@ namespace
           // TempSparseOutputTensorDeclOp should be lowered before SparseOutputTensorDeclOp
           outputtensordecl = rewriter.create<TempSparseOutputTensorDeclOp>(loc,
                                                                            tensor_type, labels, tensor_format);
+          comet_debug() << "Gokcen\n";
+          comet_vdump(outputtensordecl);
         }
         else
           outputtensordecl = rewriter.create<SparseOutputTensorDeclOp>(loc,
@@ -1541,7 +1546,6 @@ namespace
         comet_debug() << " it is dense tensor\n";
       }
 
-      // module->dump();
       comet_debug() << " SparseInputTensorDeclOpLowering in format end\n";
       return success();
     }
@@ -1627,14 +1631,14 @@ namespace
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::SparseTensorConstructOp>();
 
-      // function.dump();
+      function.dump();
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
       {
         llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
         signalPassFailure();
       }
 
-      // function.dump();
+      function.dump();
     }
   };
 
@@ -1648,33 +1652,37 @@ namespace
       MLIRContext *context = &getContext();
       RewritePatternSet patterns(context);
 
-      mlir::comet::populateSparseTensorDeclLoweringPatterns(patterns);
+      patterns.insert<SparseInputTensorDeclOpLowering>(&getContext());
 
       func::FuncOp function = getOperation();
       ConversionTarget target(getContext());
 
-      // TODO(gkestor): check all legal dialects and operations
-      target.addLegalDialect<LinalgDialect, ArithDialect,
+      target.addLegalDialect<LinalgDialect,
+                             ArithDialect,
                              scf::SCFDialect,
                              mlir::memref::MemRefDialect,
                              IndexTreeDialect,
                              bufferization::BufferizationDialect>();
 
       target.addLegalOp<tensorAlgebra::PrintOp,
-                        tensorAlgebra::TAReturnOp,
+                        tensorAlgebra::GetTimeOp,
+                        tensorAlgebra::PrintElapsedTimeOp,
+                        // tensorAlgebra::TAReturnOp,
                         tensorAlgebra::ReduceOp,
                         tensorAlgebra::TransposeOp,
                         tensorAlgebra::TensorFillOp,
-                        tensorAlgebra::GetTimeOp,
-                        tensorAlgebra::PrintElapsedTimeOp,
                         tensorAlgebra::SparseTensorConstructOp,
-                        tensorAlgebra::TensorMultOp,
+                        tensorAlgebra::SparseOutputTensorDeclOp,
+                        tensorAlgebra::TempSparseOutputTensorDeclOp,
                         tensorAlgebra::TensorSetOp,
-                        tensorAlgebra::TensorElewsMultOp,
                         tensorAlgebra::DenseTensorDeclOp,
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::IndexLabelDynamicOp,
-                        func::CallOp>();
+                        func::CallOp
+                        // func::FuncOp,
+                        // func::ReturnOp
+                        >();
+
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
       {
         llvm::errs() << "Failed to Lower SparseTensorDeclLoweringPass\n";
@@ -1683,22 +1691,69 @@ namespace
       comet_debug() << "---------------SparseTensorDeclLoweringPass end\n";
     }
   };
+
+  class SparseOutputTensorDeclLoweringPass
+      : public PassWrapper<SparseOutputTensorDeclLoweringPass, OperationPass<func::FuncOp>>
+  {
+  public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(SparseTensorDeclLoweringPass)
+    void runOnOperation() override
+    {
+      MLIRContext *context = &getContext();
+      RewritePatternSet patterns(context);
+
+      mlir::comet::populateSparseOutputTensorDeclLoweringPatterns(patterns);
+
+      func::FuncOp function = getOperation();
+      ConversionTarget target(getContext());
+
+      target.addLegalDialect<LinalgDialect,
+                             ArithDialect,
+                             scf::SCFDialect,
+                             mlir::memref::MemRefDialect,
+                             IndexTreeDialect,
+                             bufferization::BufferizationDialect>();
+
+      target.addLegalOp<tensorAlgebra::PrintOp,
+                        tensorAlgebra::GetTimeOp,
+                        tensorAlgebra::PrintElapsedTimeOp,
+                        tensorAlgebra::ReduceOp,
+                        tensorAlgebra::TransposeOp,
+                        tensorAlgebra::TensorFillOp,
+                        tensorAlgebra::SparseTensorConstructOp,
+                        tensorAlgebra::TensorSetOp,
+                        tensorAlgebra::DenseTensorDeclOp,
+                        tensorAlgebra::IndexLabelStaticOp,
+                        tensorAlgebra::IndexLabelDynamicOp,
+                        func::CallOp>();
+
+      if (failed(applyPartialConversion(function, target, std::move(patterns))))
+      {
+        llvm::errs() << "Failed to Lower SparseOutputTensorDeclLoweringPass\n";
+        signalPassFailure();
+      }
+      comet_debug() << "---------------SparseOutputTensorDeclLoweringPass end\n";
+    }
+  };
+
 }
 //===----------------------------------------------------------------------===//
 /// Early Lowering Passes end
 //===----------------------------------------------------------------------===//
-
 
 void mlir::comet::populateDenseTensorDeclLoweringPatterns(RewritePatternSet &patterns)
 {
   patterns.insert<DenseTensorDeclOpLowering>(patterns.getContext());
 }
 
-void mlir::comet::populateSparseTensorDeclLoweringPatterns(RewritePatternSet &patterns)
+void mlir::comet::populateSparseOutputTensorDeclLoweringPatterns(RewritePatternSet &patterns)
 {
-  patterns.insert<SparseInputTensorDeclOpLowering,
-                  TempSparseOutputTensorDeclOpLowering,
-                  SparseOutputTensorDeclOpLowering>(patterns.getContext());
+  patterns.add<TempSparseOutputTensorDeclOpLowering>(patterns.getContext(),
+                                                  /*benefit=*/200);
+  patterns.add<SparseOutputTensorDeclOpLowering>(patterns.getContext(),
+                                                  /*benefit=*/100);
+  // patterns.insert<SparseOutputTensorDeclOpLowering,
+  //                 TempSparseOutputTensorDeclOpLowering>(patterns.getContext());
 }
 
 std::unique_ptr<Pass> mlir::comet::createDenseTensorDeclLoweringPass()
@@ -1709,4 +1764,9 @@ std::unique_ptr<Pass> mlir::comet::createDenseTensorDeclLoweringPass()
 std::unique_ptr<Pass> mlir::comet::createSparseTensorDeclLoweringPass()
 {
   return std::make_unique<SparseTensorDeclLoweringPass>();
+}
+
+std::unique_ptr<Pass> mlir::comet::createSparseOutputTensorDeclLoweringPass()
+{
+  return std::make_unique<SparseOutputTensorDeclLoweringPass>();
 }

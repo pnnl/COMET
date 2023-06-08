@@ -1,7 +1,6 @@
 # Sparse matrix dense matrix multiplication (SpMM)
 # Sparse matrix is in COO format
 # RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mm_SemiringPlusTimes_COOxDense_oDense.llvm
-# RUN: mlir-opt --convert-scf-to-std --convert-std-to-llvm mm_SemiringPlusTimes_COOxDense_oDense.mlir &> mm_SemiringPlusTimes_COOxDense_oDense.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
 # RUN: mlir-cpu-runner mm_SemiringPlusTimes_COOxDense_oDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 

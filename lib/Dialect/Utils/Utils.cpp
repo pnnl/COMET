@@ -778,7 +778,7 @@ namespace mlir
     bool checkIsElementwise(std::vector<std::vector<int>> allPerms)
     {
       bool isElementwise = false;
-      if (allPerms[0].size() == allPerms[1].size()) // to check the case sparse = dense, produced after workspace transformations
+      if (allPerms.size() > 1 && allPerms[0].size() == allPerms[1].size()) // to check the case sparse = dense, produced after workspace transformations
       {
         if (std::equal(allPerms[0].begin(), allPerms[0].end(), allPerms[1].begin()))
         {

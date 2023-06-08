@@ -277,5 +277,4 @@ void mlir::tensorAlgebra::populateSTCRemoveDeadOpsPatterns(
   patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::ChainMulOp>>(context);
   patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::IndexLabelDynamicOp>>(context);
   patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::IndexLabelStaticOp>>(context);
-  // patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::SparseTensorConstructOp>>(context);
 }

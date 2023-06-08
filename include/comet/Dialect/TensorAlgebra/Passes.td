@@ -26,10 +26,11 @@
 
 include "mlir/Pass/PassBase.td"
 
+//TODO(gkestor): add notes for each pass
+
 //===----------------------------------------------------------------------===//
 // If needed, add tensor declaration for temporary tensors introduced by compound expressions
 //===----------------------------------------------------------------------===//
-
 def TensorAlgebraCheckImplicitTensorDecl : Pass<"check-implicit-tensor-decl"> {
   let summary = "check if it is needed to add missing tensor declarations introduced by compound expressions";
   let description = [{
@@ -53,12 +54,24 @@ def TensorAlgebraDenseTensorDeclLowering : Pass<"lower-dense-tensor-decl"> {
   ];
 }
 
+
 def TensorAlgebraSparseTensorDeclLowering : Pass<"lower-sparse-tensor-decl"> {
   let summary = "";
   let description = [{
 
       }];
   let constructor = "comet::createSparseTensorDeclLoweringPass()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect"
+  ];
+}
+
+def TensorAlgebraSparseOutputTensorDeclLowering : Pass<"lower-sparse-output-tensor-decl"> {
+  let summary = "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createSparseOutputTensorDeclLoweringPass()";
   let dependentDialects = [
     "comet::TensorAlgebraDialect"
   ];
