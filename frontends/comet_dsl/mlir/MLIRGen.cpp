@@ -34,7 +34,6 @@
 
 #include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-// #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
@@ -201,20 +200,20 @@ namespace
 
       for (FunctionAST &funcAST : moduleAST)
       {
-        //if (FunctionAST *funcAST = llvm::dyn_cast<FunctionAST>(record.get()))
+        // if (FunctionAST *funcAST = llvm::dyn_cast<FunctionAST>(record.get()))
         //{
-          mlir::tensorAlgebra::FuncOp func = mlirGen(funcAST);
-          if (!func)
-            return nullptr;
-          functionMap.insert({func.getName(), func});
-          // } else if (StructAST *str = llvm::dyn_cast<StructAST>(record.get())) {
-          //   if (failed(mlirGen(*str)))
-          //     return nullptr;
+        mlir::tensorAlgebra::FuncOp func = mlirGen(funcAST);
+        if (!func)
+          return nullptr;
+        functionMap.insert({func.getName(), func});
+        // } else if (StructAST *str = llvm::dyn_cast<StructAST>(record.get())) {
+        //   if (failed(mlirGen(*str)))
+        //     return nullptr;
         //}
-        //else
-       // {
+        // else
+        // {
         //  llvm_unreachable("unknown record type");
-       // }
+        // }
       }
 
       // Verify the module after we have finished constructing it, this will check
@@ -1069,7 +1068,7 @@ namespace
           }
           else if (isa<TensorElewsMultOp>(e.getDefiningOp()))
           {
-            comet_debug() << " is TensorMultOp\n";
+            comet_debug() << " is TensorElewsMultOp\n";
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
@@ -1083,7 +1082,7 @@ namespace
           }
           else if (isa<TensorAddOp>(e.getDefiningOp()))
           {
-            comet_debug() << " is TensorMultOp\n";
+            comet_debug() << " is TensorAddOp\n";
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorAddOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
@@ -1097,7 +1096,7 @@ namespace
           }
           else if (isa<TensorSubtractOp>(e.getDefiningOp()))
           {
-            comet_debug() << " is TensorMultOp\n";
+            comet_debug() << " is TensorSubstract Op\n";
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorSubtractOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
@@ -1111,7 +1110,7 @@ namespace
           }
           else if (isa<mlir::tensorAlgebra::TransposeOp>(e.getDefiningOp()))
           {
-            comet_debug() << " is TensorMultOp\n";
+            comet_debug() << " is TransposeOp\n";
 
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<mlir::tensorAlgebra::TransposeOp>(e.getDefiningOp()).getFormats();
@@ -1141,6 +1140,7 @@ namespace
         }
         else if (out_format.length() > 0) // non-empty format string provided.
         {
+          comet_debug() << " Output Format: " << out_format << "\n";
           formats.push_back(out_format);
         }
         else
@@ -1396,7 +1396,7 @@ namespace
       {
         lhs_decl = lhs.getDefiningOp()->getOperand(0);
         auto lhs_decl_op = cast<SparseTensorDeclOp>(lhs_decl.getDefiningOp());
-        std::string formatStr(lhs_decl_op.getFormatAttrName().cast<mlir::StringAttr>().getValue());
+        std::string formatStr(lhs_decl_op.getFormatAttr().getValue());
         out_format = formatStr;
       }
       else
@@ -1599,8 +1599,7 @@ namespace
 
       mlir::Value lo = builder.create<ConstantIndexOp>(
           loc(labeldecl.loc()), labeldecl.getBegin());
-      mlir::Value hi = builder.create<ConstantIndexOp>(loc(labeldecl.loc()),
-                                                       labeldecl.getEnd());
+
       mlir::Value step = builder.create<ConstantIndexOp>(
           loc(labeldecl.loc()), labeldecl.getIncrement());
 
@@ -1612,6 +1611,8 @@ namespace
       }
       else
       {
+        mlir::Value hi = builder.create<ConstantIndexOp>(loc(labeldecl.loc()),
+                                                         labeldecl.getEnd());
         value =
             builder.create<IndexLabelStaticOp>(loc(labeldecl.loc()), lo, hi, step);
       }

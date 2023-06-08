@@ -1,4 +1,4 @@
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> Dense_mult_dTranspose.mlir
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> Dense_mult_dTranspose.llvm
 # RUN: mlir-cpu-runner Dense_mult_dTranspose.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {
