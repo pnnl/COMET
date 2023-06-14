@@ -18,8 +18,8 @@ This section will go over steps to compile your first COMET DSL program, once CO
      Tensor<double> C([i, k], {Dense});
 
      # Tensor Fill operation
-     A[i, j] = random();                   # random initialization
-     B[j, k] = random();
+     A[i, j] = 2.4;                        # initialization
+     B[j, k] = 3.2;
      C[i, k] = 0.0;                        # all values are initialized to 0
 
      # Tensor Contraction
