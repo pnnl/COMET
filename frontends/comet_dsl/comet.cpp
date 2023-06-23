@@ -358,10 +358,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass()); // lowers sparse tensor declaration. Create sparse output tensor declaration
     optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass()); // lowering for sparse output tensor declarations
                                                                             //(sparse_output_tensor_decl and temp_sparse_output_tensor_decl)
-
-    if (mlir::failed(pm.run(*module)))
-      return 4;
-    return 0;
     // The partial Fusion pass might add new tensor.fill operations
     optPM.addPass(mlir::comet::createTensorFillLoweringPass());
     optPM.addPass(mlir::comet::createPCToLoopsLoweringPass());
