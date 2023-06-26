@@ -591,6 +591,13 @@ namespace mlir
             allFormats[i].push_back("CU");
           }
         }
+        else if (formats_str.compare("ELL") == 0)
+        {
+          // TODO: Add the metadata for the top-level dense attribute
+          allFormats[i].push_back("D");
+          allFormats[i].push_back("D");
+          allFormats[i].push_back("S");
+        }
         else if (formats_str.compare("COO") == 0)
         {
           assert(tensorDims > 1 && "formst is COO, should be more than 1D.\n");
@@ -696,6 +703,10 @@ namespace mlir
         format_ret = "COO";
       else if (format.size() == 2 && (format[0].compare("CN") == 0 && format[1].compare("S") == 0))
         format_ret = "COO";
+      
+      else if (format.size() == 1 && format[0].compare("ELL") == 0)
+        format_ret = "ELL";
+      // TODO: Individual attributes
 
       else if (format.size() == 1 && format[0].compare("DCSR") == 0)
         format_ret = "DCSR";
@@ -868,6 +879,13 @@ namespace mlir
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_singleton);
         }
+        else if (formats_str.compare(0, 3, "ELL") == 0)
+        { // ELL
+          // TODO: Top-level dense layer
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_singleton);
+        }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
           std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
@@ -992,6 +1010,12 @@ namespace mlir
         else if (formats_str.compare(0, 3, "COO") == 0)
         { // COO
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_singleton);
+        }
+        else if (formats_str.compare(0, 3, "ELL") == 0)
+        { // ELL
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
