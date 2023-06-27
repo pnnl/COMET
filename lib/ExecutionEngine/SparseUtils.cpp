@@ -1539,7 +1539,7 @@ int getNumNonZeros (CooMatrix<T> *coo_matrix, int32_t readMode)
 
 // Read input matrices based on the datatype
 template <typename T>
-void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
+void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
                           int sizes_rank, void *sizes_ptr, int32_t readMode)
 {
   auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
@@ -1634,6 +1634,16 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
   else if (A1format == Dense && A2format == Dense && A3format == singleton)
   {
     puts("ELLPACK!!");
+  }
+  // BCSR
+  else if (A1format == Dense && A2format == Compressed_nonunique && A3format == Dense && A4format == Dense)
+  {
+    puts("BCSR");
+  }
+  // CSB
+  else if (A1format == Dense && A2format == Dense && A3format == Compressed_unique && A4format == singleton)
+  {
+    puts("CSB");
   }
   else
   {
@@ -2171,17 +2181,17 @@ extern "C" void read_input_3D_f64(int32_t fileID, int32_t A1format, int32_t A2fo
 }
 
 // Utility functions to read metadata about the input matrices, such as the size of pos and crd array
-extern "C" void read_input_sizes_2D_f32(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
+extern "C" void read_input_sizes_2D_f32(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
                                         int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_2D<float>(fileID, A1format, A2format, A3format, A1pos_rank, A1pos_ptr, readMode);
+  read_input_sizes_2D<float>(fileID, A1format, A2format, A3format, A4format, A1pos_rank, A1pos_ptr, readMode);
 }
 
-extern "C" void read_input_sizes_2D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
+extern "C" void read_input_sizes_2D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
 //                                        int A1pos_rank, void *A1pos_ptr, char *filename, int32_t readMode)
                                         int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_2D<double>(fileID, A1format, A2format, A3format, A1pos_rank, A1pos_ptr, readMode);
+  read_input_sizes_2D<double>(fileID, A1format, A2format, A3format, A4format, A1pos_rank, A1pos_ptr, readMode);
 }
 
 // Read 3D tensors

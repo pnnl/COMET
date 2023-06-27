@@ -11,7 +11,7 @@ def main() {
   IndexLabel [b] = [?];
 
   #Tensor Declarations
-  Tensor<double> A([a, b], {ELL});
+  Tensor<double> A([a, b], {BCSR});
 
   A[a, b] = comet_read(1);
   print(A);
