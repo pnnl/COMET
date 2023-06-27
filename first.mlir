@@ -3,16 +3,14 @@ module {
     %alloc = memref.alloc() : memref<7xindex>
     %cast = memref.cast %alloc : memref<7xindex> to memref<*xindex>
     %c0 = arith.constant 0 : index
-    %c1 = arith.constant 0 : index
-    %c2 = arith.constant 3 : index
+    %c3 = arith.constant 3 : index
     %c1_i32 = arith.constant 1 : i32
-    call @read_input_sizes_2D_f64(%c1_i32, %c1, %c2, %cast, %c1_i32) {filename = "SPARSE_FILE_NAME1"} : (i32, index, index, memref<*xindex>, i32) -> ()
+    call @read_input_sizes_2D_f64(%c1_i32, %c0, %c0, %c3, %cast, %c1_i32) {filename = "SPARSE_FILE_NAME1"} : (i32, index, index, index, memref<*xindex>, i32) -> ()
     %0 = memref.load %alloc[%c0] : memref<7xindex>
     %c1 = arith.constant 1 : index
     %1 = memref.load %alloc[%c1] : memref<7xindex>
     %c2 = arith.constant 2 : index
     %2 = memref.load %alloc[%c2] : memref<7xindex>
-    %c3 = arith.constant 3 : index
     %3 = memref.load %alloc[%c3] : memref<7xindex>
     %c4 = arith.constant 4 : index
     %4 = memref.load %alloc[%c4] : memref<7xindex>
@@ -46,7 +44,7 @@ module {
       memref.store %cst, %alloc_8[%arg0] : memref<?xf64>
     }
     %cast_9 = memref.cast %alloc_8 : memref<?xf64> to memref<*xf64>
-    call @read_input_2D_f64(%c1_i32, %c1, %c2, %cast_1, %cast_3, %cast_5, %cast_7, %cast_9, %c1_i32) {filename = "SPARSE_FILE_NAME1"} : (i32, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
+    call @read_input_2D_f64(%c1_i32, %c0, %c0, %cast_1, %cast_3, %cast_5, %cast_7, %cast_9, %c1_i32) {filename = "SPARSE_FILE_NAME1"} : (i32, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
     %7 = bufferization.to_tensor %alloc_0 : memref<?xindex>
     %8 = bufferization.to_tensor %alloc_2 : memref<?xindex>
     %9 = bufferization.to_tensor %alloc_4 : memref<?xindex>
@@ -60,8 +58,7 @@ module {
     return
   }
   func.func private @read_input_2D_f64(i32, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32)
-  func.func private @read_input_sizes_2D_f64(i32, index, index, memref<*xindex>, i32)
-  func.func private @quick_sort(memref<*xindex>, index)
+  func.func private @read_input_sizes_2D_f64(i32, index, index, index, memref<*xindex>, i32)
   func.func private @comet_print_memref_f64(memref<*xf64>)
   func.func private @comet_print_memref_i64(memref<*xindex>)
 }
