@@ -1,0 +1,214 @@
+Binary files blis/.git/index and blis-comet/.git/index differ
+diff -ruN blis/.git/logs/HEAD blis-comet/.git/logs/HEAD
+--- blis/.git/logs/HEAD	2023-06-26 14:22:46.000000000 -0700
++++ blis-comet/.git/logs/HEAD	2023-06-26 14:22:58.000000000 -0700
+@@ -1 +1 @@
+-0000000000000000000000000000000000000000 6b894c30b9bb2c2518848d74e4c8d96844f77f24 gkestor <gkestor84@gmail.com> 1687814566 -0700	clone: from https://github.com/flame/blis.git
++0000000000000000000000000000000000000000 6b894c30b9bb2c2518848d74e4c8d96844f77f24 gkestor <gkestor84@gmail.com> 1687814578 -0700	clone: from https://github.com/flame/blis.git
+diff -ruN blis/.git/logs/refs/heads/master blis-comet/.git/logs/refs/heads/master
+--- blis/.git/logs/refs/heads/master	2023-06-26 14:22:46.000000000 -0700
++++ blis-comet/.git/logs/refs/heads/master	2023-06-26 14:22:58.000000000 -0700
+@@ -1 +1 @@
+-0000000000000000000000000000000000000000 6b894c30b9bb2c2518848d74e4c8d96844f77f24 gkestor <gkestor84@gmail.com> 1687814566 -0700	clone: from https://github.com/flame/blis.git
++0000000000000000000000000000000000000000 6b894c30b9bb2c2518848d74e4c8d96844f77f24 gkestor <gkestor84@gmail.com> 1687814578 -0700	clone: from https://github.com/flame/blis.git
+diff -ruN blis/.git/logs/refs/remotes/origin/HEAD blis-comet/.git/logs/refs/remotes/origin/HEAD
+--- blis/.git/logs/refs/remotes/origin/HEAD	2023-06-26 14:22:46.000000000 -0700
++++ blis-comet/.git/logs/refs/remotes/origin/HEAD	2023-06-26 14:22:58.000000000 -0700
+@@ -1 +1 @@
+-0000000000000000000000000000000000000000 6b894c30b9bb2c2518848d74e4c8d96844f77f24 gkestor <gkestor84@gmail.com> 1687814566 -0700	clone: from https://github.com/flame/blis.git
++0000000000000000000000000000000000000000 6b894c30b9bb2c2518848d74e4c8d96844f77f24 gkestor <gkestor84@gmail.com> 1687814578 -0700	clone: from https://github.com/flame/blis.git
+diff -ruN blis/frame/base/bli_cpuid.h blis-comet/frame/base/bli_cpuid.h
+--- blis/frame/base/bli_cpuid.h	2023-06-26 14:22:46.000000000 -0700
++++ blis-comet/frame/base/bli_cpuid.h	2023-06-26 14:31:57.000000000 -0700
+@@ -51,7 +51,7 @@
+ #ifndef BLIS_CPUID_H
+ #define BLIS_CPUID_H
+ 
+-arch_t bli_cpuid_query_id( void );
++BLIS_EXPORT_BLIS arch_t bli_cpuid_query_id( void );
+ 
+ // Intel
+ bool bli_cpuid_is_skx( uint32_t family, uint32_t model, uint32_t features );
+diff -ruN blis/kernels/armv8a/3/bli_gemm_armv8a_asm_d6x8.c blis-comet/kernels/armv8a/3/bli_gemm_armv8a_asm_d6x8.c
+--- blis/kernels/armv8a/3/bli_gemm_armv8a_asm_d6x8.c	2023-06-26 14:22:47.000000000 -0700
++++ blis-comet/kernels/armv8a/3/bli_gemm_armv8a_asm_d6x8.c	2023-06-26 14:24:15.000000000 -0700
+@@ -65,7 +65,7 @@
+  * Tested on 1s Altra Max. Arnd 5,800 GFLOPS. 128 x N2 cores @ 3.0 GHz
+ */
+ 
+-void bli_sgemm_armv8a_asm_8x12
++BLIS_EXPORT_BLIS void bli_sgemm_armv8a_asm_8x12
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -788,7 +788,7 @@
+  * Tested on 1s Altra, Around 1,700 GFLOPS,  80 x N2 cores @ 3.0 GHz
+  * Tested on 1s Altra Max,  ~ 2,600 GFLOPS, 128 x N2 cores @ 3.0 GHz
+  */
+-void bli_dgemm_armv8a_asm_6x8
++BLIS_EXPORT_BLIS void bli_dgemm_armv8a_asm_6x8
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/haswell/3/bli_gemm_haswell_asm_d6x8.c blis-comet/kernels/haswell/3/bli_gemm_haswell_asm_d6x8.c
+--- blis/kernels/haswell/3/bli_gemm_haswell_asm_d6x8.c	2023-06-26 14:22:47.000000000 -0700
++++ blis-comet/kernels/haswell/3/bli_gemm_haswell_asm_d6x8.c	2023-06-26 14:25:14.000000000 -0700
+@@ -77,7 +77,7 @@
+ 	vpermilps(imm(0x39), xmm2, xmm1) \
+ 	vmovss(xmm1, mem(rcx, r10, 1))
+ 
+-void bli_sgemm_haswell_asm_6x16
++BLIS_EXPORT_BLIS void bli_sgemm_haswell_asm_6x16
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -757,7 +757,7 @@
+ 	vmovlpd(xmm1, mem(rcx, r13, 2)) \
+ 	vmovhpd(xmm1, mem(rcx, r10, 1))*/
+ 
+-void bli_dgemm_haswell_asm_6x8
++BLIS_EXPORT_BLIS void bli_dgemm_haswell_asm_6x8
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -1316,7 +1316,7 @@
+ 	vmulps(ymm2, ymm3, ymm3) \
+ 	vaddsubps(ymm3, ymm0, ymm0)
+ 
+-void bli_cgemm_haswell_asm_3x8
++BLIS_EXPORT_BLIS void bli_cgemm_haswell_asm_3x8
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -1709,7 +1709,7 @@
+ 	vmulpd(ymm2, ymm3, ymm3) \
+ 	vaddsubpd(ymm3, ymm0, ymm0)
+ 
+-void bli_zgemm_haswell_asm_3x4
++BLIS_EXPORT_BLIS void bli_zgemm_haswell_asm_3x4
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/haswell/3/bli_gemm_haswell_asm_d8x6.c blis-comet/kernels/haswell/3/bli_gemm_haswell_asm_d8x6.c
+--- blis/kernels/haswell/3/bli_gemm_haswell_asm_d8x6.c	2023-06-26 14:22:47.000000000 -0700
++++ blis-comet/kernels/haswell/3/bli_gemm_haswell_asm_d8x6.c	2023-06-26 14:25:45.000000000 -0700
+@@ -76,7 +76,7 @@
+ 	vpermilps(imm(0x39), xmm2, xmm1) \
+ 	vmovss(xmm1, mem(rcx, r10, 1))
+ 
+-void bli_sgemm_haswell_asm_16x6
++BLIS_EXPORT_BLIS void bli_sgemm_haswell_asm_16x6
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -460,7 +460,7 @@
+ 	vmovlpd(xmm1, mem(rcx, r13, 2)) \
+ 	vmovhpd(xmm1, mem(rcx, r10, 1))*/
+ 
+-void bli_dgemm_haswell_asm_8x6
++BLIS_EXPORT_BLIS void bli_dgemm_haswell_asm_8x6
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -830,7 +830,7 @@
+ 	vmulps(ymm2, ymm3, ymm3) \
+ 	vaddsubps(ymm3, ymm0, ymm0)
+ 
+-void bli_cgemm_haswell_asm_8x3
++BLIS_EXPORT_BLIS void bli_cgemm_haswell_asm_8x3
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/haswell/3/bli_gemmtrsm_l_haswell_asm_d6x8.c blis-comet/kernels/haswell/3/bli_gemmtrsm_l_haswell_asm_d6x8.c
+--- blis/kernels/haswell/3/bli_gemmtrsm_l_haswell_asm_d6x8.c	2023-06-26 14:22:47.000000000 -0700
++++ blis-comet/kernels/haswell/3/bli_gemmtrsm_l_haswell_asm_d6x8.c	2023-06-26 14:26:07.000000000 -0700
+@@ -56,7 +56,7 @@
+ 	vmovss(xmm1, mem(rcx, r10, 1))
+ 
+ 
+-void bli_sgemmtrsm_l_haswell_asm_6x16
++BLIS_EXPORT_BLIS void bli_sgemmtrsm_l_haswell_asm_6x16
+      (
+              dim_t      m, \
+              dim_t      n, \
+@@ -847,7 +847,7 @@
+ 	vmovlpd(xmm1, mem(rcx, r13, 2)) \
+ 	vmovhpd(xmm1, mem(rcx, r10, 1))*/
+ 
+-void bli_dgemmtrsm_l_haswell_asm_6x8
++BLIS_EXPORT_BLIS void bli_dgemmtrsm_l_haswell_asm_6x8
+      (
+              dim_t      m, \
+              dim_t      n, \
+diff -ruN blis/kernels/haswell/3/bli_gemmtrsm_u_haswell_asm_d6x8.c blis-comet/kernels/haswell/3/bli_gemmtrsm_u_haswell_asm_d6x8.c
+--- blis/kernels/haswell/3/bli_gemmtrsm_u_haswell_asm_d6x8.c	2023-06-26 14:22:47.000000000 -0700
++++ blis-comet/kernels/haswell/3/bli_gemmtrsm_u_haswell_asm_d6x8.c	2023-06-26 14:26:24.000000000 -0700
+@@ -56,7 +56,7 @@
+ 	vmovss(xmm1, mem(rcx, r10, 1))
+ 
+ 
+-void bli_sgemmtrsm_u_haswell_asm_6x16
++BLIS_EXPORT_BLIS void bli_sgemmtrsm_u_haswell_asm_6x16
+      (
+              dim_t      m, \
+              dim_t      n, \
+@@ -852,7 +852,7 @@
+ 	vmovlpd(xmm1, mem(rcx, r13, 2)) \
+ 	vmovhpd(xmm1, mem(rcx, r10, 1))*/
+ 
+-void bli_dgemmtrsm_u_haswell_asm_6x8
++BLIS_EXPORT_BLIS void bli_dgemmtrsm_u_haswell_asm_6x8
+      (
+              dim_t      m, \
+              dim_t      n, \
+diff -ruN blis/kernels/sandybridge/3/bli_gemm_sandybridge_asm_d8x4.c blis-comet/kernels/sandybridge/3/bli_gemm_sandybridge_asm_d8x4.c
+--- blis/kernels/sandybridge/3/bli_gemm_sandybridge_asm_d8x4.c	2023-06-26 14:22:47.000000000 -0700
++++ blis-comet/kernels/sandybridge/3/bli_gemm_sandybridge_asm_d8x4.c	2023-06-26 14:27:38.000000000 -0700
+@@ -40,7 +40,7 @@
+ #define BLIS_ASM_SYNTAX_ATT
+ #include "bli_x86_asm_macros.h"
+ 
+-void bli_sgemm_sandybridge_asm_8x8
++BLIS_EXPORT_BLIS void bli_sgemm_sandybridge_asm_8x8
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -532,7 +532,7 @@
+ 	GEMM_UKR_FLUSH_CT( s );
+ }
+ 
+-void bli_dgemm_sandybridge_asm_8x4
++BLIS_EXPORT_BLIS void bli_dgemm_sandybridge_asm_8x4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -994,7 +994,7 @@
+ 	GEMM_UKR_FLUSH_CT( d );
+ }
+ 
+-void bli_cgemm_sandybridge_asm_8x4
++BLIS_EXPORT_BLIS void bli_cgemm_sandybridge_asm_8x4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -1697,7 +1697,7 @@
+ 
+ 
+ 
+-void bli_zgemm_sandybridge_asm_4x4
++BLIS_EXPORT_BLIS void bli_zgemm_sandybridge_asm_4x4
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/sandybridge/3/bli_gemm_sandybridge_int_d8x4.c blis-comet/kernels/sandybridge/3/bli_gemm_sandybridge_int_d8x4.c
+--- blis/kernels/sandybridge/3/bli_gemm_sandybridge_int_d8x4.c	2023-06-26 14:22:47.000000000 -0700
++++ blis-comet/kernels/sandybridge/3/bli_gemm_sandybridge_int_d8x4.c	2023-06-26 14:27:45.000000000 -0700
+@@ -36,7 +36,7 @@
+ #include <immintrin.h>
+ #include "blis.h"
+ 
+-void bli_dgemm_sandybridge_int_8x4
++BLIS_EXPORT_BLIS void bli_dgemm_sandybridge_int_8x4
+      (
+              dim_t      m,
+              dim_t      n,

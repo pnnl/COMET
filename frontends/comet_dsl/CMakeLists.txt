@@ -49,4 +49,6 @@ target_link_libraries(comet-opt
     PRIVATE MLIRIR 
     ${LIBS} 
     ${dialect_libs} 
-    ${conversion_libs})
+    ${conversion_libs}
+    ${BLIS_LIB}
+    )
