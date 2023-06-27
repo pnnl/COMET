@@ -57,9 +57,9 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "tensor-decl-lowering"
 
 // *********** For debug purpose *********//
-#ifndef DEBUG_MODE_TENSORDECLLOWERING
-#define DEBUG_MODE_TENSORDECLLOWERING
-#endif
+// #ifndef DEBUG_MODE_TENSORDECLLOWERING
+// #define DEBUG_MODE_TENSORDECLLOWERING
+// #endif
 
 #ifdef DEBUG_MODE_TENSORDECLLOWERING
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -1631,14 +1631,13 @@ namespace
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::SparseTensorConstructOp>();
 
-      function.dump();
+      //function.dump();
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
       {
         llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
         signalPassFailure();
       }
-
-      function.dump();
+      //function.dump();
     }
   };
 
@@ -1667,7 +1666,6 @@ namespace
       target.addLegalOp<tensorAlgebra::PrintOp,
                         tensorAlgebra::GetTimeOp,
                         tensorAlgebra::PrintElapsedTimeOp,
-                        // tensorAlgebra::TAReturnOp,
                         tensorAlgebra::ReduceOp,
                         tensorAlgebra::TransposeOp,
                         tensorAlgebra::TensorFillOp,
@@ -1679,8 +1677,6 @@ namespace
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::IndexLabelDynamicOp,
                         func::CallOp
-                        // func::FuncOp,
-                        // func::ReturnOp
                         >();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
