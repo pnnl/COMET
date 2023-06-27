@@ -8,7 +8,7 @@
 def main() {
   #IndexLabel Declarations
   IndexLabel [a] = [?];
-  IndexLabel [b] = [?];          
+  IndexLabel [b] = [?];
 
   #Tensor Declarations
   Tensor<double> A([a, b], {ELL});
