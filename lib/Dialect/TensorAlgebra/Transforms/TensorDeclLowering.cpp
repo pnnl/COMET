@@ -345,7 +345,7 @@ namespace
         }
       }
 
-      auto readInputSizes2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {}); // last arg (i32Type): readMode
+      auto readInputSizes2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {}); // last arg (i32Type): readMode
 
       if (VALUETYPE.compare("f32") == 0)
       {
@@ -1330,7 +1330,8 @@ namespace
             read_input_sizes_str = "read_input_sizes_2D_f64";
           }
           auto read_input_sizes_Call = rewriter.create<func::CallOp>(loc, read_input_sizes_str, SmallVector<Type, 2>{},
-                                                                     ValueRange{sparseFileID, dim_format[0], dim_format[1], dim_format[2],
+                                                                     ValueRange{sparseFileID,
+                                                                                dim_format[0], dim_format[1], dim_format[2], dim_format[3],
                                                                                 alloc_sizes_cast, readModeConst});
           read_input_sizes_Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
         }
