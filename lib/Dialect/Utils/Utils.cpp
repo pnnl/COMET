@@ -614,7 +614,6 @@ namespace mlir
         }
         else if (formats_str.compare("ELL") == 0)
         {
-          // TODO: Add the metadata for the top-level dense attribute
           allFormats[i].push_back("D");
           allFormats[i].push_back("D");
           allFormats[i].push_back("S");
@@ -873,6 +872,7 @@ namespace mlir
 
     std::vector<Value> getFormatsValue(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IndexType indexType)
     {
+      Value format_unk = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(-1));
       Value format_dense = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(0));
       Value format_compressed = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(1));
       Value format_compressednonunique = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(2));
@@ -889,20 +889,22 @@ namespace mlir
         {
           dim_format.push_back(format_dense);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 4, "DCSR") == 0)
         {
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
         { // COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "ELL") == 0)
         { // ELL
-          // TODO: Top-level dense layer
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
@@ -1006,6 +1008,7 @@ namespace mlir
 
     std::vector<Value> getFormatsValueInt(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IntegerType intType)
     {
+      Value format_unk = rewriter.create<ConstantOp>(loc, intType, rewriter.getIndexAttr(-1));
       Value format_dense = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 0));
       Value format_compressed = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 1));
       Value format_compressednonunique = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 2));
@@ -1022,16 +1025,19 @@ namespace mlir
         {
           dim_format.push_back(format_dense);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 4, "DCSR") == 0)
         {
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
         { // COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "ELL") == 0)
         { // ELL
