@@ -8,11 +8,11 @@
 #
  
 SET(BLIS_INCLUDE_SEARCH_PATHS
-   ${CMAKE_SOURCE_DIR}/blis/include/firestorm/
+   ${CMAKE_SOURCE_DIR}/blis/include/*/
  )
  
  SET(BLIS_LIB_SEARCH_PATHS
-    ${CMAKE_SOURCE_DIR}/blis/lib/firestorm/
+    ${CMAKE_SOURCE_DIR}/blis/lib/*/
  )
  
  FIND_PATH(BLIS_INCLUDE_DIR NAMES blis.h
