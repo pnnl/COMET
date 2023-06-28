@@ -1,3 +1,6 @@
 [submodule "llvm"]
 	path = llvm
 	url = https://github.com/llvm/llvm-project
+[submodule "blis"]
+	path = blis
+	url = https://github.com/flame/blis.git
