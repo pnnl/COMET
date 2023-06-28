@@ -787,6 +787,51 @@ struct DcsrMatrix
   }
 };
 
+// /******************************************************************************
+//  * ELLPACK matrix type
+//  ******************************************************************************/
+
+template <typename T>
+struct EllpackMatrix
+{
+    int num_rows;
+    int num_cols;
+    int *col_crd;
+    T *Aval;
+
+    /**
+     * Initializer
+    */
+    void Init(CooMatrix<T> *coo_matrix, bool verbose = false)
+    {
+
+    }
+
+    /**
+     * Clear matrix
+    */
+    void Clear()
+    {
+
+    }
+
+    /**
+     * The constructor- calls the initializer
+    */
+   EllpackMatrix(CooMatrix<T> *coo_matrix, bool verbose = false)
+   {
+      Init(coo_matrix, verbose);
+   }
+
+   /**
+    * Destructor
+   */
+  ~EllpackMatrix()
+  {
+    Clear();
+  }
+};
+
 /**
  * COO tensor 3D type.  A COO tensor is just a vector of edge tuples.  Tuples are sorted
  * first by first dim, then by second dim and so on.
