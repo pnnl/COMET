@@ -17,43 +17,61 @@ These commands can be used to setup COMET project:
 * C++ compiler toolchain as [mentioned here](https://llvm.org/docs/GettingStarted.html#requirements) and
 * [Python3 (3.6 or later)](https://www.python.org/downloads/).
 
-2) **Check out LLVM and COMET repos.**  COMET contains LLVM as a git
+2) **Get submodules required for COMET.**  COMET contains LLVM and blis as a git
 submodule.  The LLVM repo here includes staged changes to MLIR which
 may be necessary to support COMET.  It also represents the version of
 LLVM that has been tested.  MLIR is still changing relatively rapidly,
 so feel free to use the current version of LLVM, but APIs may have
-changed.
+changed. BLIS is an award-winning portable software framework for instantiating high-performance 
+BLAS-like dense linear algebra libraries. COMET generates a call to BLIS microkernel 
+after some optimizations.
 
 ```
 $ git clone https://github.com/pnnl/COMET.git
-$ cd COMET
+$ export COMET_SRC=`pwd`\COMET
+$ cd $COMET_SRC
 $ git submodule init
 $ git submodule update
 ```
 
-*Note:* The repository is set up so that `git submodule update` performs a 
-shallow clone, meaning it downloads just enough of the LLVM repository to check 
-out the currently specified commit. Optionally, if you wish to work with the full history of
-the LLVM repository, you can manually "unshallow" the submodule.
 
 3) **Build and test LLVM/MLIR:**
 
 ```
+$ cd $COMET_SRC
 $ mkdir llvm/build
 $ cd llvm/build
 $ cmake -G Ninja ../llvm \
-    -DLLVM_ENABLE_PROJECTS="mlir" \
-    -DLLVM_TARGETS_TO_BUILD="X86" \
+    -DLLVM_ENABLE_PROJECTS="mlir;openmp;clang" \
+    -DLLVM_TARGETS_TO_BUILD="AArch64;X86" \
+    -DCMAKE_OSX_ARCHITECTURES="arm64" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=Release
 $ ninja
 $ ninja check-mlir
 ```
 
-4) **Build and test COMET:**
+4) **Apply BLIS patch to meet COMET requirements:**
 
 ```
-$ cd ../../
+$ cd $COMET_SRC
+$ patch -s -p0 < comet-blis.patch
+```
+
+5) **Build and test BLIS:**
+
+```
+$ cd $COMET_SRC
+$ cd blis
+$ ./configure auto
+$ make [-j]
+$ make check [-j]
+```
+
+6) **Build and test COMET:**
+
+```
+$ cd $COMET_SRC
 $ mkdir build
 $ cd build
 $ cmake -G Ninja .. \
