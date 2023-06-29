@@ -320,14 +320,10 @@ namespace
       auto readInput2DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType,
                                     unrankedMemref_index, unrankedMemref_index, 
                                     unrankedMemref_index, unrankedMemref_index,
-                                    //unrankedMemref_index, unrankedMemref_index, 
-                                    //unrankedMemref_index, unrankedMemref_index, 
                                     unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
       auto readInput2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType,
                                     unrankedMemref_index, unrankedMemref_index,
                                     unrankedMemref_index, unrankedMemref_index,
-                                    //unrankedMemref_index, unrankedMemref_index,
-                                    //unrankedMemref_index, unrankedMemref_index,
                                     unrankedMemref_f64, i32Type}, {});
 
       if (VALUETYPE.compare("f32") == 0)
