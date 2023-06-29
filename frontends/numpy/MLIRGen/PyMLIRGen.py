@@ -83,7 +83,7 @@ class TC_and_TrPose_Builder:
 
     tc_decl_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        + ' = "ta.tc"{{operators}}'
+        + ' = "ta.mul"{{operators}}'
         + '{__alpha__ = 1.000000e+00 : f64, '
         +"__beta__ = {{beta}} : f64,"
         + 'formats = ["Dense", "Dense", "Dense"],'
@@ -322,7 +322,7 @@ class MLIRFunctionBuilder:
     )
     function_wrapper_text = jinja2.Template(
         ("" * default_indentation_size)
-        + "func {% if private_func %}private {% endif %}@{{func_name}}({{signature}}) -> {{return_type}} {"
+        + "func.func {% if private_func %}private {% endif %}@{{func_name}}({{signature}}) -> {{return_type}} {"
         + "\n"
         + "{{statements}}"
         + "\n"
