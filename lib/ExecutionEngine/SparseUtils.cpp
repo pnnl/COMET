@@ -1676,7 +1676,7 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     desc_sizes->data[6] = dcsr_matrix.num_cols;
   }
   // ELLPACK
-  else if (A1format == Dense && A2format == Dense && A3format == singleton)
+  else if (A1format == Dense && A2format == singleton && A3format == Dense)
   {
     puts("ELLPACK!!");
   }
@@ -1686,7 +1686,7 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     puts("BCSR");
   }
   // CSB
-  else if (A1format == Dense && A2format == Dense && A3format == Compressed_unique && A4format == singleton)
+  else if (A1format == Compressed_unique && A2format == singleton && A3format == Dense && A4format == Dense)
   {
     puts("CSB");
   }
@@ -1702,10 +1702,6 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A
                    int A1crd_rank, void *A1crd_ptr,
                    int A2pos_rank, void *A2pos_ptr,
                    int A2crd_rank, void *A2crd_ptr,
-                   int A3pos_rank, void *A3pos_ptr,
-                   int A3crd_rank, void *A3crd_ptr,
-                   int A4pos_rank, void *A4pos_ptr,
-                   int A4crd_rank, void *A4crd_ptr,
                    int Aval_rank, void *Aval_ptr,
                    int32_t readMode)
 {
@@ -1924,7 +1920,7 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A
     }
   }
   // ELLPACK
-  else if (A1format == Dense && A2format == Dense && A3format == singleton)
+  else if (A1format == Dense && A2format == singleton && A3format == Dense)
   {
     puts("ELLPACK");
   }
@@ -1934,7 +1930,7 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A
     puts("BCSR");
   }
   // CSB
-  else if (A1format == Dense && A2format == Dense && A3format == Compressed_unique && A4format == singleton)
+  else if (A1format == Compressed_unique && A2format == singleton && A3format == Dense && A4format == Dense)
   {
     puts("CSB");
   }
@@ -2192,18 +2188,12 @@ extern "C" void read_input_2D_f32(int32_t fileID, int32_t A1format, int32_t A2fo
                                   int A1crd_rank, void *A1crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr,
                                   int A2crd_rank, void *A2crd_ptr,
-                                  int A3pos_rank, void *A3pos_ptr,
-                                  int A3crd_rank, void *A3crd_ptr,
-                                  int A4pos_rank, void *A4pos_ptr,
-                                  int A4crd_rank, void *A4crd_ptr,
                                   int Aval_rank, void *Aval_ptr, 
                                   int32_t readMode)
 {
   read_input_2D<float>(fileID, A1format, A2format, A3format, A4format,
                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                       A3pos_rank, A3pos_ptr, A3crd_rank, A3pos_ptr,
-                       A4pos_rank, A4pos_ptr, A4crd_rank, A4pos_ptr,
                        Aval_rank, Aval_ptr, readMode);
 }
 
@@ -2213,10 +2203,6 @@ extern "C" void read_input_2D_f64(int32_t fileID,
                                   int A1crd_rank, void *A1crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr,
                                   int A2crd_rank, void *A2crd_ptr,
-                                  int A3pos_rank, void *A3pos_ptr,
-                                  int A3crd_rank, void *A3crd_ptr,
-                                  int A4pos_rank, void *A4pos_ptr,
-                                  int A4crd_rank, void *A4crd_ptr,
                                   int Aval_rank, void *Aval_ptr,
                                   int32_t readMode)
 {
@@ -2224,8 +2210,6 @@ extern "C" void read_input_2D_f64(int32_t fileID,
                         A1format, A2format, A3format, A4format,
                         A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                         A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                        A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
-                        A4pos_rank, A4pos_ptr, A4crd_rank, A4crd_ptr,
                         Aval_rank, Aval_ptr, readMode);
 }
 
