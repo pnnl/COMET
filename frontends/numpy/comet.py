@@ -325,19 +325,19 @@ class _Build_and_lower_mlir:
 
                 val = dims_label_map[key]
                 if i == 0:
-                    lb = "%c{} = constant {} : index".format(i, i)
-                    ub = "%c{} = constant {} : index".format(val, val)
-                    step = "%cst{} = constant {} : index".format(1, 1)
-                    decl = '%{} = "ta.index_label_static"(%c{}, %c{}, %cst{}) : (index, index, index) -> !ta.range'.format(i,i,val,1)
+                    lb = "%c{} = arith.constant {} : index".format(i, i)
+                    ub = "%c{} = arith.constant {} : index".format(val, val)
+                    step = "%cst{} = arith.constant {} : index".format(1, 1)
+                    decl = '%{} = "ta.static_index_label"(%c{}, %c{}, %cst{}) : (index, index, index) -> !ta.range'.format(i,i,val,1)
                 
                 else:
                     lb_const = "%c{}_{}".format(0,i)
-                    lb = "{} = constant {} : index".format(lb_const, 0)
+                    lb = "{} = arith.constant {} : index".format(lb_const, 0)
                     ub_const = "%c{}_{}".format(i, val)
-                    ub = "{} = constant {} : index".format(ub_const, val)
+                    ub = "{} = arith.constant {} : index".format(ub_const, val)
                     step_const = "%cst{}_{}".format(1,i)
-                    step = "{}= constant {} : index".format(step_const ,1)
-                    decl = '%{} = "ta.index_label_static"({}, {}, {}) : (index, index, index) -> !ta.range'.format(i,lb_const, ub_const,step_const)
+                    step = "{}= arith.constant {} : index".format(step_const ,1)
+                    decl = '%{} = "ta.static_index_label"({}, {}, {}) : (index, index, index) -> !ta.range'.format(i,lb_const, ub_const,step_const)
 
                 self.id_decl_vars_ta[key] = "%{}".format(i)
                 self.vals_ta_idx_vars_map[val] = "%{}".format(i)
@@ -563,9 +563,10 @@ class _Build_and_lower_mlir:
             outputtype = (tensor_vars_ta[target])[1]
             list_out_dims.append(numpy_array_info.get_dims(target))
             irb.add_statement('"ta.print"({})'.format(out_tensor) + " : " + "({})".format(outputtype) + " -> ()")
-            #irb.add_statement('"ta.return"({}) : '.format(out_tensor) + '({})'.format(outputtype) + " -> ()")
+            # irb.add_statement('return {} : '.format(out_tensor) + '{}'.format(outputtype))
         
-        irb.add_statement('"ta.return"() : () -> ()')
+        # irb.add_statement('"ta.return"() : () -> ()')
+        irb.add_statement('return')
         #Return the generated dialect
 
         ta_dialect = PyMLIRGen.MLIRFunctionBuilder.compile(irb)
@@ -614,20 +615,41 @@ def compile(flags):
                 
                 v.visit(parsed_func)
 
-                irb = PyMLIRGen.MLIRFunctionBuilder(
-                    func_def.name,
-                    return_types=[],
-                )    
+
+                # irb = PyMLIRGen.MLIRFunctionBuilder(
+                #     func_def.name,
+                #     return_types=[],
+                # )    
 
                 #Add the dimension declaration statements to the TA dialect function 
-                for st_list in _Build_and_lower_mlir.dim_decl_stats_ta:
-                    for st in st_list:
-                        irb.add_statement(st)
+                # for st_list in _Build_and_lower_mlir.dim_decl_stats_ta:
+                #     for st in st_list:
+                #         irb.add_statement(st)
+
+                all_st_list = _Build_and_lower_mlir.dim_decl_stats_ta
 
                 #Build the tensor declarations in the TA dialect
                 list_tensor_decls_ta, tensor_vars_ta = _Build_and_lower_mlir.build_tensors_decls_ta()
 
                 final_tensor_decl_var = (list(tensor_vars_ta.values())[-1])[0]
+                
+                list_out_dims = []
+                # Retrieve the functions return types to populate the function signature
+                # Currently, COMET does not like this, so it's not used.
+                # for target in numpy_array_info.get_vars("return"):
+                #     outputtype = (tensor_vars_ta[target])[1]
+                #     print("Got return type {}".format(outputtype) )
+                #     list_out_dims.append(outputtype)
+                
+                irb = PyMLIRGen.MLIRFunctionBuilder(
+                    func_def.name,
+                    return_types=list_out_dims,
+                ) 
+
+                #Add the dimension declaration statements to the TA dialect function 
+                for st_list in all_st_list:
+                    for st in st_list:
+                            irb.add_statement(st)
 
                 #Add the tensor declaration statements to the TA dialect function 
                 for decl in list_tensor_decls_ta:

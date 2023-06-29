@@ -66,13 +66,14 @@ def lower_scf_to_llvm(scf_in, scf_lower_flags):
     else:
         f = open(llvm_out_file, 'wb')
 
-    path_to_mliropt = "../llvm/build/bin/mlir-opt"
+    # path_to_mliropt = "../llvm/build/bin/mlir-opt"
+    path_to_cometopt = "../build/bin/comet-opt"
 
-    command = path_to_mliropt + scf_lower_flags + scf_in
+    command = path_to_cometopt + scf_lower_flags + scf_in
 
     p = subprocess.run(shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=False,close_fds=False)
 
-    llvm_out = p.stdout
+    llvm_out = p.stderr
 
     f.write(llvm_out)
     f.close()
@@ -130,7 +131,8 @@ def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
     elif(isinstance(compile_with_flags,str)):
         mlir_lower_flags += compile_with_flags + " "
 
-    scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
+    # scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
+    scf_lower_flags =  " --convert-to-llvm "
 
     if("-emit-ta" in mlir_lower_flags):
         print(ta_dialect_rep)
@@ -146,10 +148,14 @@ def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
     f.write(ta_dialect_rep)
     f.close()
 
-    scf_out_file = lower_ta_to_mlir(ta_dialect_file, mlir_lower_flags)
-  
+    # Uncomment for debugging pusposes
+    # scf_out_file = lower_ta_to_mlir(ta_dialect_file, mlir_lower_flags)
+    
+    # Running --convert-ta-to-it --convert-to-loops and  --convert-to-llvm in separate steps 
+    # does not produce correct output. This is an issue with the backend.
+
     #lower the SCF dialect to first STD dialect and then to the llvm dialect
-    llvm_out_file = lower_scf_to_llvm(scf_out_file, scf_lower_flags)
+    llvm_out_file = lower_scf_to_llvm(ta_dialect_file, mlir_lower_flags + scf_lower_flags)
    
     #lower the SCF dialect to the LLVM dialect
     #result = execute_llvm(llvm_out_file)
@@ -170,7 +176,6 @@ def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
             indx = indx + 1
 
     os.remove(ta_dialect_file)
-    os.remove(scf_out_file)
     os.remove(llvm_out_file)
     os.remove(llvmir_file)
 
