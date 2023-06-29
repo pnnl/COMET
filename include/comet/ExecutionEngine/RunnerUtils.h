@@ -91,8 +91,6 @@ extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f32(int32_t fileID,
                                                            int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                           int A4pos_rank, void *A4pos_ptr, int A4crd_rank, void *A4crd_ptr,
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f64(int32_t fileID,
@@ -104,8 +102,6 @@ extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f64(int32_t fileID,
                                                            int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                           int A4pos_rank, void *A4pos_ptr, int A4crd_rank, void *A4crd_ptr,
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_3D_f32(int32_t fileID, int32_t A1format, int32_t A2format,

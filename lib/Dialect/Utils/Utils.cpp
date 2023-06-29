@@ -594,8 +594,8 @@ namespace mlir
         else if (formats_str.compare("ELL") == 0)
         {
           allFormats[i].push_back("D");
-          allFormats[i].push_back("D");
           allFormats[i].push_back("S");
+          allFormats[i].push_back("D");   // ELLPACK top dimension
         }
         else if (formats_str.compare("BCSR") == 0)
         {
@@ -606,10 +606,10 @@ namespace mlir
         }
         else if (formats_str.compare("CSB") == 0)
         {
-          allFormats[i].push_back("D");
-          allFormats[i].push_back("D");
           allFormats[i].push_back("CU");
           allFormats[i].push_back("S");
+          allFormats[i].push_back("D");   // CSB top dimension
+          allFormats[i].push_back("D");   // CSB second top dimension
         }
         else if (formats_str.compare("COO") == 0)
         {
@@ -910,8 +910,8 @@ namespace mlir
         else if (formats_str.compare(0, 3, "ELL") == 0)
         { // ELL
           dim_format.push_back(format_dense);
-          dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_dense);   // Top dimension
           dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 4, "BCSR") == 0)
@@ -923,10 +923,10 @@ namespace mlir
         }
         else if (formats_str.compare(0, 3, "CSB") == 0)
         { // CSB
-          dim_format.push_back(format_dense);
-          dim_format.push_back(format_dense);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_dense);       // Top dimension
+          dim_format.push_back(format_dense);       // Second dimension
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
@@ -1064,8 +1064,8 @@ namespace mlir
         else if (formats_str.compare(0, 3, "ELL") == 0)
         { // ELL
           dim_format.push_back(format_dense);
-          dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_dense);     // Top dimension
           dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 4, "BCSR") == 0)
@@ -1077,10 +1077,10 @@ namespace mlir
         }
         else if (formats_str.compare(0, 3, "CSB") == 0)
         { // CSB
-          dim_format.push_back(format_dense);
-          dim_format.push_back(format_dense);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_dense);         //1st dimension
+          dim_format.push_back(format_dense);         //2nd dimension
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {

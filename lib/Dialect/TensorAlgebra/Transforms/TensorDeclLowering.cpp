@@ -320,14 +320,14 @@ namespace
       auto readInput2DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType,
                                     unrankedMemref_index, unrankedMemref_index, 
                                     unrankedMemref_index, unrankedMemref_index,
-                                    unrankedMemref_index, unrankedMemref_index, 
-                                    unrankedMemref_index, unrankedMemref_index, 
+                                    //unrankedMemref_index, unrankedMemref_index, 
+                                    //unrankedMemref_index, unrankedMemref_index, 
                                     unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
       auto readInput2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType,
                                     unrankedMemref_index, unrankedMemref_index,
                                     unrankedMemref_index, unrankedMemref_index,
-                                    unrankedMemref_index, unrankedMemref_index,
-                                    unrankedMemref_index, unrankedMemref_index,
+                                    //unrankedMemref_index, unrankedMemref_index,
+                                    //unrankedMemref_index, unrankedMemref_index,
                                     unrankedMemref_f64, i32Type}, {});
 
       if (VALUETYPE.compare("f32") == 0)
@@ -1427,8 +1427,6 @@ namespace
                                                                              dim_format[0], dim_format[1], dim_format[2], dim_format[3],
                                                                              alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1],
                                                                              alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3],
-                                                                             alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1], // TODO: Replace
-                                                                             alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3], // TODO: Replace
                                                                              alloc_sizes_cast_vec[4], readModeConst});
           read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
         }
