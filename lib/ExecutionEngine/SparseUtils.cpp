@@ -796,6 +796,7 @@ struct EllpackMatrix
 {
     int num_rows;
     int num_cols;
+    int num_nonzeros;
     int *col_crd;
     T *Aval;
 
@@ -804,7 +805,89 @@ struct EllpackMatrix
     */
     void Init(CooMatrix<T> *coo_matrix, bool verbose = false)
     {
+        num_rows = coo_matrix->num_rows;
+        num_cols = 0;
+        num_nonzeros = coo_matrix->num_nonzeros;
 
+        // Sort by rows, then columns
+        if (verbose)
+          printf("Ordering...");
+        fflush(stdout);
+        std::stable_sort(coo_matrix->coo_tuples, coo_matrix->coo_tuples + num_nonzeros, CooComparatorRow());
+        if (verbose)
+          printf("done.");
+        fflush(stdout);
+
+        // Calculate the column count
+        int max = 0;
+        int buffer = 0;
+        int current = -1;
+
+        for (int i = 0; i<num_nonzeros; i++) {
+          if (coo_matrix->coo_tuples[i].row == current) {
+            ++buffer;
+          } else {
+            if (buffer > max) max = buffer;
+            buffer = 1;
+            current = coo_matrix->coo_tuples[i].row;
+          }
+        }
+        if (buffer > max) max = buffer;
+        num_cols = max;
+
+        // Create the column coordinate list
+        // TODO: This terrible, but it works
+        col_crd = new int[num_rows*num_cols];
+        int index = 0;
+
+        for (int i = 0; i<num_rows; i++) {
+          int found_cols = 0;
+          for (int j = 0; j<num_nonzeros; j++) {
+            if (coo_matrix->coo_tuples[j].row == i) {
+              ++found_cols;
+            }
+          }
+
+          if (found_cols == num_cols) {
+            for (int j = 0; j<num_nonzeros; j++) {
+              if (coo_matrix->coo_tuples[j].row == i) {
+                col_crd[index] = coo_matrix->coo_tuples[j].col;
+                ++index;
+              }
+            }
+          } else if (found_cols == 0) {
+            for (int j = 0; j<num_cols; j++) {
+              col_crd[index] = j;
+              ++index;
+            }
+          } else {
+            for (int j = 0; j<num_nonzeros; j++) {
+              if (coo_matrix->coo_tuples[j].row == i) {
+                if (coo_matrix->coo_tuples[j].col > 0) {
+                  for (int k = 0; k<coo_matrix->coo_tuples[j].col; k++) {
+                    col_crd[index] = k;
+                    ++index;
+                  }
+                }
+                col_crd[index] = coo_matrix->coo_tuples[j].col;
+                ++index;
+              } 
+            }
+          }
+
+          //printf("Row: %d | Found cols: %d\n", i, found_cols);
+          //printf("(%d, %d, %f)\n", coo_matrix->coo_tuples[i].row, coo_matrix->coo_tuples[i].col, coo_matrix->coo_tuples[i].val);
+        }
+
+        /*
+        puts("---");
+        printf("[");
+        for (int i = 0; i<num_rows*num_cols; i++) {
+          printf("%d ", col_crd[i]);
+        }
+        puts("]");
+        puts("---");
+        */
     }
 
     /**
@@ -1603,8 +1686,17 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     desc_sizes->data[2] = 1;
     desc_sizes->data[3] = NumNonZeros;
     desc_sizes->data[4] = NumNonZeros;
-    desc_sizes->data[5] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[5] = FileReader.coo_matrix->num_rows; 
     desc_sizes->data[6] = FileReader.coo_matrix->num_cols;
+
+    std::cout << "COO detail: \n"
+              << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
+              << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
+              << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
+              << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
+              << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
+              << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
+              << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
   }
   // CSR
   else if (A1format == Dense && A2format == Compressed_unique)
@@ -1630,6 +1722,14 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     //           << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
     //           << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
     /*****************DEBUG******************/
+    std::cout << "CSR detail: \n"
+              << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
+              << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
+              << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
+              << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
+              << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
+              << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
+              << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
   }
   // CSC
   else if (A1format == Compressed_unique && A2format == Dense)
@@ -1678,7 +1778,32 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
   // ELLPACK
   else if (A1format == Dense && A2format == singleton && A3format == Dense)
   {
-    puts("ELLPACK!!");
+    // Load the ellpack matrixs
+    EllpackMatrix<T> ellpack_matrix(FileReader.coo_matrix);
+    int cols = ellpack_matrix.num_cols*ellpack_matrix.num_rows;
+
+    // get num-NNZs from coo_matrix struct.
+    //int NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
+    
+    // Not sure if this will work, but let's see....
+    desc_sizes->data[0] = 1;              // This...
+    desc_sizes->data[1] = 1;              // And this are for the 1st dimension
+    desc_sizes->data[2] = 1;              // This...
+    desc_sizes->data[3] = cols;           // And this must be equal for the 2nd dimension
+    desc_sizes->data[4] = cols;           // Controls count of value dimension
+    desc_sizes->data[5] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[6] = FileReader.coo_matrix->num_cols;
+
+    /*****************DEBUG******************/
+    // std::cout << "ELLPACK detail: \n"
+    //           << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
+    //           << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
+    //           << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
+    //           << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
+    //           << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
+    //           << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
+    //           << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
+    /*****************DEBUG******************/
   }
   // BCSR
   else if (A1format == Dense && A2format == Compressed_nonunique && A3format == Dense && A4format == Dense)
@@ -1922,7 +2047,15 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A
   // ELLPACK
   else if (A1format == Dense && A2format == singleton && A3format == Dense)
   {
-    puts("ELLPACK");
+    EllpackMatrix<T> ellpack_matrix(FileReader.coo_matrix);
+    FileReader.FileReaderWrapperFinalize();
+
+    desc_A1pos->data[0] = ellpack_matrix.num_rows;
+
+    desc_A2pos->data[0] = ellpack_matrix.num_cols;
+    for (int i = 0; i<ellpack_matrix.num_cols*ellpack_matrix.num_rows; i++) {
+      desc_A2crd->data[i] = ellpack_matrix.col_crd[i];
+    }
   }
   // BCSR
   else if (A1format == Dense && A2format == Compressed_nonunique && A3format == Dense && A4format == Dense)
