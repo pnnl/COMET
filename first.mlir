@@ -3,11 +3,11 @@ module attributes {llvm.data_layout = ""} {
   llvm.func @main() {
     %0 = llvm.mlir.constant(0.000000e+00 : f64) : f64
     %1 = llvm.mlir.constant(4 : index) : i64
-    %2 = llvm.mlir.constant(2 : index) : i64
-    %3 = llvm.mlir.constant(1 : index) : i64
+    %2 = llvm.mlir.constant(1 : index) : i64
+    %3 = llvm.mlir.constant(0 : index) : i64
     %4 = llvm.mlir.constant(1 : i32) : i32
     %5 = llvm.mlir.constant(3 : index) : i64
-    %6 = llvm.mlir.constant(0 : index) : i64
+    %6 = llvm.mlir.constant(2 : index) : i64
     %7 = llvm.mlir.constant(-1 : index) : i64
     %8 = llvm.mlir.constant(7 : index) : i64
     %9 = llvm.mlir.constant(1 : index) : i64
@@ -31,12 +31,12 @@ module attributes {llvm.data_layout = ""} {
     %26 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
     %27 = llvm.insertvalue %25, %26[0] : !llvm.struct<(i64, ptr<i8>)> 
     %28 = llvm.insertvalue %24, %27[1] : !llvm.struct<(i64, ptr<i8>)> 
-    llvm.call @read_input_sizes_2D_f64(%4, %6, %6, %5, %7, %25, %24, %4) {filename = "SPARSE_FILE_NAME1"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i32) -> ()
-    %29 = llvm.getelementptr %14[%6] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
+    llvm.call @read_input_sizes_2D_f64(%4, %6, %5, %7, %7, %25, %24, %4) {filename = "SPARSE_FILE_NAME1"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i32) -> ()
+    %29 = llvm.getelementptr %14[%3] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     %30 = llvm.load %29 : !llvm.ptr<i64>
-    %31 = llvm.getelementptr %14[%3] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
+    %31 = llvm.getelementptr %14[%2] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     %32 = llvm.load %31 : !llvm.ptr<i64>
-    %33 = llvm.getelementptr %14[%2] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
+    %33 = llvm.getelementptr %14[%6] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     %34 = llvm.load %33 : !llvm.ptr<i64>
     %35 = llvm.getelementptr %14[%5] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     %36 = llvm.load %35 : !llvm.ptr<i64>
@@ -55,14 +55,14 @@ module attributes {llvm.data_layout = ""} {
     %49 = llvm.insertvalue %48, %47[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
     %50 = llvm.insertvalue %30, %49[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
     %51 = llvm.insertvalue %39, %50[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb1(%6 : i64)
+    llvm.br ^bb1(%3 : i64)
   ^bb1(%52: i64):  // 2 preds: ^bb0, ^bb2
     %53 = llvm.icmp "slt" %52, %30 : i64
     llvm.cond_br %53, ^bb2, ^bb3
   ^bb2:  // pred: ^bb1
     %54 = llvm.getelementptr %44[%52] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %6, %54 : !llvm.ptr<i64>
-    %55 = llvm.add %52, %3  : i64
+    llvm.store %3, %54 : !llvm.ptr<i64>
+    %55 = llvm.add %52, %2  : i64
     llvm.br ^bb1(%55 : i64)
   ^bb3:  // pred: ^bb1
     %56 = llvm.mlir.constant(1 : index) : i64
@@ -86,14 +86,14 @@ module attributes {llvm.data_layout = ""} {
     %73 = llvm.insertvalue %72, %71[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
     %74 = llvm.insertvalue %32, %73[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
     %75 = llvm.insertvalue %63, %74[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb4(%6 : i64)
+    llvm.br ^bb4(%3 : i64)
   ^bb4(%76: i64):  // 2 preds: ^bb3, ^bb5
     %77 = llvm.icmp "slt" %76, %32 : i64
     llvm.cond_br %77, ^bb5, ^bb6
   ^bb5:  // pred: ^bb4
     %78 = llvm.getelementptr %68[%76] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %6, %78 : !llvm.ptr<i64>
-    %79 = llvm.add %76, %3  : i64
+    llvm.store %3, %78 : !llvm.ptr<i64>
+    %79 = llvm.add %76, %2  : i64
     llvm.br ^bb4(%79 : i64)
   ^bb6:  // pred: ^bb4
     %80 = llvm.mlir.constant(1 : index) : i64
@@ -117,14 +117,14 @@ module attributes {llvm.data_layout = ""} {
     %97 = llvm.insertvalue %96, %95[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
     %98 = llvm.insertvalue %34, %97[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
     %99 = llvm.insertvalue %87, %98[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb7(%6 : i64)
+    llvm.br ^bb7(%3 : i64)
   ^bb7(%100: i64):  // 2 preds: ^bb6, ^bb8
     %101 = llvm.icmp "slt" %100, %34 : i64
     llvm.cond_br %101, ^bb8, ^bb9
   ^bb8:  // pred: ^bb7
     %102 = llvm.getelementptr %92[%100] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %6, %102 : !llvm.ptr<i64>
-    %103 = llvm.add %100, %3  : i64
+    llvm.store %3, %102 : !llvm.ptr<i64>
+    %103 = llvm.add %100, %2  : i64
     llvm.br ^bb7(%103 : i64)
   ^bb9:  // pred: ^bb7
     %104 = llvm.mlir.constant(1 : index) : i64
@@ -148,14 +148,14 @@ module attributes {llvm.data_layout = ""} {
     %121 = llvm.insertvalue %120, %119[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
     %122 = llvm.insertvalue %36, %121[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
     %123 = llvm.insertvalue %111, %122[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb10(%6 : i64)
+    llvm.br ^bb10(%3 : i64)
   ^bb10(%124: i64):  // 2 preds: ^bb9, ^bb11
     %125 = llvm.icmp "slt" %124, %36 : i64
     llvm.cond_br %125, ^bb11, ^bb12
   ^bb11:  // pred: ^bb10
     %126 = llvm.getelementptr %116[%124] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %6, %126 : !llvm.ptr<i64>
-    %127 = llvm.add %124, %3  : i64
+    llvm.store %3, %126 : !llvm.ptr<i64>
+    %127 = llvm.add %124, %2  : i64
     llvm.br ^bb10(%127 : i64)
   ^bb12:  // pred: ^bb10
     %128 = llvm.mlir.constant(1 : index) : i64
@@ -179,14 +179,14 @@ module attributes {llvm.data_layout = ""} {
     %145 = llvm.insertvalue %144, %143[2] : !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> 
     %146 = llvm.insertvalue %38, %145[3, 0] : !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> 
     %147 = llvm.insertvalue %135, %146[4, 0] : !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb13(%6 : i64)
+    llvm.br ^bb13(%3 : i64)
   ^bb13(%148: i64):  // 2 preds: ^bb12, ^bb14
     %149 = llvm.icmp "slt" %148, %38 : i64
     llvm.cond_br %149, ^bb14, ^bb15
   ^bb14:  // pred: ^bb13
     %150 = llvm.getelementptr %140[%148] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
     llvm.store %0, %150 : !llvm.ptr<f64>
-    %151 = llvm.add %148, %3  : i64
+    %151 = llvm.add %148, %2  : i64
     llvm.br ^bb13(%151 : i64)
   ^bb15:  // pred: ^bb13
     %152 = llvm.mlir.constant(1 : index) : i64
@@ -197,7 +197,7 @@ module attributes {llvm.data_layout = ""} {
     %156 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
     %157 = llvm.insertvalue %155, %156[0] : !llvm.struct<(i64, ptr<i8>)> 
     %158 = llvm.insertvalue %154, %157[1] : !llvm.struct<(i64, ptr<i8>)> 
-    llvm.call @read_input_2D_f64(%4, %6, %6, %5, %7, %59, %58, %83, %82, %107, %106, %131, %130, %59, %58, %83, %82, %107, %106, %131, %130, %155, %154, %4) {filename = "SPARSE_FILE_NAME1"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i32) -> ()
+    llvm.call @read_input_2D_f64(%4, %6, %5, %7, %7, %59, %58, %83, %82, %107, %106, %131, %130, %155, %154, %4) {filename = "SPARSE_FILE_NAME1"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i32) -> ()
     llvm.call @comet_print_memref_i64(%59, %58) : (i64, !llvm.ptr<i8>) -> ()
     llvm.call @comet_print_memref_i64(%83, %82) : (i64, !llvm.ptr<i8>) -> ()
     llvm.call @comet_print_memref_i64(%107, %106) : (i64, !llvm.ptr<i8>) -> ()
@@ -205,7 +205,7 @@ module attributes {llvm.data_layout = ""} {
     llvm.call @comet_print_memref_f64(%155, %154) : (i64, !llvm.ptr<i8>) -> ()
     llvm.return
   }
-  llvm.func @read_input_2D_f64(i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i32) attributes {sym_visibility = "private"}
+  llvm.func @read_input_2D_f64(i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i32) attributes {sym_visibility = "private"}
   llvm.func @read_input_sizes_2D_f64(i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i32) attributes {sym_visibility = "private"}
   llvm.func @quick_sort(i64, !llvm.ptr<i8>, i64) attributes {sym_visibility = "private"}
   llvm.func @comet_print_memref_f64(i64, !llvm.ptr<i8>) attributes {sym_visibility = "private"}
