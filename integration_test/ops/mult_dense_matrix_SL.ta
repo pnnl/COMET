@@ -1,0 +1,41 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> mult_dense_matrix_SL.mlir
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [256];
+	IndexLabel [j] = [256];  
+	IndexLabel [k] = [256];           
+
+	#Tensor Declarations
+	Tensor<double> A([i, j], {Dense});	  
+	Tensor<double> B([j, k], {Dense});
+	Tensor<double> C([i, k], {Dense});
+
+	#Tensor Fill Operation
+	A[i, j] = 2.2;
+	B[j, k] = 3.4;
+	C[i, k] = 0.0;
+
+	C[i, k] = A[i, j] * B[j, k];
+	print(C);
+}
+
+#CHECK: problem:
+#CHECK:  shape:
+#CHECK:    name: "tc"
+#CHECK:    dimensions: [ i, j, k,  ]
+#CHECK:    data-spaces:
+#CHECK:    - name: A
+#CHECK:      projection:
+#CHECK:        - - [i]
+#CHECK:        - - [j]
+#CHECK:    - name: B
+#CHECK:      projection:
+#CHECK:        - - [j]
+#CHECK:        - - [k]
+#CHECK:    - name: C
+#CHECK:      projection:
+#CHECK:        - - [i]
+#CHECK:        - - [k]
+#CHECK:      read-write: True
+#CHECK:  instance: {i: 256, j: 256, k: 256, }
