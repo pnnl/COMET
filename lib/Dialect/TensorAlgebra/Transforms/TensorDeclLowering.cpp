@@ -320,14 +320,18 @@ namespace
       auto readInput2DF32Func = FunctionType::get(ctx, {i32Type,
                                     indexType, indexType,     // A1_format, A2_format
                                     indexType, indexType,     // A1_tile_format, A2_tile_format
-                                    unrankedMemref_index, unrankedMemref_index, 
-                                    unrankedMemref_index, unrankedMemref_index,
+                                    unrankedMemref_index, unrankedMemref_index,   // A1_pos, A1_crd
+                                    unrankedMemref_index, unrankedMemref_index,   // A2_pos, A2_crd
+                                    unrankedMemref_index, unrankedMemref_index,   // A1_tile_pos, A1_tile_crd
+                                    unrankedMemref_index, unrankedMemref_index,   // A2_tile_pos, A2_tile_crd
                                     unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
       auto readInput2DF64Func = FunctionType::get(ctx, {i32Type,
                                     indexType, indexType,     // A1_format, A2_format
                                     indexType, indexType,     // A1_tile_format, A2_tile_format
-                                    unrankedMemref_index, unrankedMemref_index,
-                                    unrankedMemref_index, unrankedMemref_index,
+                                    unrankedMemref_index, unrankedMemref_index,   // A1_pos, A1_crd
+                                    unrankedMemref_index, unrankedMemref_index,   // A2_pos, A2_crd
+                                    unrankedMemref_index, unrankedMemref_index,   // A1_tile_pos, A1_tile_crd
+                                    unrankedMemref_index, unrankedMemref_index,   // A2_tile_pos, A2_tile_crd
                                     unrankedMemref_f64, i32Type}, {});
 
       if (VALUETYPE.compare("f32") == 0)
@@ -1373,7 +1377,7 @@ namespace
         }
 
         std::vector<Value> array_sizes;
-        for (unsigned int i = 0; i < 3 * rank_size + 1; i++)
+        for (unsigned int i = 0; i < 5*rank_size+1; i++)
         { // 2*rank_size + 1 + rank_size
           Value idx = rewriter.create<ConstantIndexOp>(loc, i);
           Value cor = rewriter.create<memref::LoadOp>(loc, alloc_sizes, idx);
@@ -1384,7 +1388,7 @@ namespace
 
         std::vector<Value> alloc_sizes_cast_vec;
         std::vector<Value> alloc_sizes_vec;
-        for (unsigned int i = 0; i < 2 * rank_size; i++)
+        for (unsigned int i = 0; i < 4 * rank_size; i++)
         {
           std::vector<Value> idxes;
           idxes.push_back(array_sizes[i]);
@@ -1398,7 +1402,7 @@ namespace
           alloc_sizes_cast_vec.push_back(alloc_size_cast);
         }
 
-        for (unsigned int i = 2 * rank_size; i < 2 * rank_size + 1; i++)
+        for (unsigned int i = 4 * rank_size; i < 4 * rank_size + 1; i++)
         {
           std::vector<Value> idxes;
           idxes.push_back(array_sizes[i]);
@@ -1424,10 +1428,17 @@ namespace
           }
           auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
                                                                   ValueRange{sparseFileID,
-                                                                             dim_format[0], dim_format[1], dim_format[2], dim_format[3],
-                                                                             alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1],
-                                                                             alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3],
-                                                                             alloc_sizes_cast_vec[4], readModeConst});
+                                                                             dim_format[0], dim_format[1], // A1_format, A2_format
+                                                                             dim_format[2], dim_format[3], // A1_file_format, A2_tile_format
+                                                                             alloc_sizes_cast_vec[0],   // A1_pos
+                                                                             alloc_sizes_cast_vec[1],   // A1_crd
+                                                                             alloc_sizes_cast_vec[2],   // A2_pos
+                                                                             alloc_sizes_cast_vec[3],   // A2_crd
+                                                                             alloc_sizes_cast_vec[4],   // A1_tile_pos
+                                                                             alloc_sizes_cast_vec[5],   // A1_tile_crd
+                                                                             alloc_sizes_cast_vec[6],   // A2_tile_pos
+                                                                             alloc_sizes_cast_vec[7],   // A2_tile_crd
+                                                                             alloc_sizes_cast_vec[8], readModeConst});
           read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
         }
         else if (rank_size == 3)
@@ -1456,7 +1467,7 @@ namespace
 
         comet_debug() << " Generate read_input_2D or read_input_3D functions\n";
         std::vector<Value> alloc_tensor_vec;
-        for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
+        for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
         {
           Value tensorLoad = rewriter.create<ToTensorOp>(loc, alloc_sizes_vec[i]);
           alloc_tensor_vec.push_back(tensorLoad);
@@ -1464,7 +1475,7 @@ namespace
 
         // create sptensor_construct
         SmallVector<mlir::Type, 1> elementTypes;
-        for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
+        for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
         {
           elementTypes.push_back(alloc_tensor_vec[i].getType());
         }
@@ -1472,7 +1483,7 @@ namespace
         // [0 ... 2*rank_size, 2*rank_size+1 ... 4*rank_size+1, 4*rank_size+2 ... 5*rank_size + 1]
         // 2d+1 + 2d+1 + d => 5d+2
         // for(unsigned int i = 2*rank_size + 1; i < 5*rank_size + 2; i++){
-        for (unsigned int i = 0; i < 3 * rank_size + 1; i++)
+        for (unsigned int i = 0; i < 5 * rank_size + 1; i++)
         {
           elementTypes.push_back(array_sizes[i].getType());
         }
@@ -1482,7 +1493,19 @@ namespace
         Value sptensor;
         if (rank_size == 2)
         {
-          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{alloc_tensor_vec[0], alloc_tensor_vec[1], alloc_tensor_vec[2], alloc_tensor_vec[3], alloc_tensor_vec[4], array_sizes[0], array_sizes[1], array_sizes[2], array_sizes[3], array_sizes[4], array_sizes[5], array_sizes[6]});
+          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{
+                                                                                alloc_tensor_vec[0], alloc_tensor_vec[1], // A1
+                                                                                alloc_tensor_vec[2], alloc_tensor_vec[3], // A2
+                                                                                alloc_tensor_vec[4], alloc_tensor_vec[5], // A1_tile
+                                                                                alloc_tensor_vec[6], alloc_tensor_vec[7], // A2_tile
+                                                                                alloc_tensor_vec[8],
+                                                                                array_sizes[0], array_sizes[1],
+                                                                                array_sizes[2], array_sizes[3],
+                                                                                array_sizes[4], array_sizes[5],
+                                                                                array_sizes[6], array_sizes[7],
+                                                                                array_sizes[8], array_sizes[9],
+                                                                                array_sizes[10]
+                                                                                });
         }
         else if (rank_size == 3)
         {
@@ -1509,7 +1532,7 @@ namespace
             auto label_decl_value = cast<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
             auto lo = label_decl_value.getMin();
             auto step = label_decl_value.getStep();
-            auto hi = array_sizes[2 * rank_size + 1 + i];
+            auto hi = array_sizes[4 * rank_size + 1 + i];
 
             Value new_index = rewriter.create<IndexLabelStaticOp>(loc, lo, hi, step);
             comet_vdump(new_index);
