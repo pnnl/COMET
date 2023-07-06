@@ -18,7 +18,7 @@ project(comet LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules) 
-  
+
 #-------------------------------------------------------------------------------
 # Options and settings
 #-------------------------------------------------------------------------------
@@ -35,6 +35,7 @@ endif ()
 #-------------------------------------------------------------------------------
 # BLIS Configuration
 #-------------------------------------------------------------------------------
+  
   find_package(BLIS REQUIRED)
 
 #-------------------------------------------------------------------------------
@@ -104,12 +105,14 @@ add_custom_target(comet-doc)
 # Add MLIR, LLVM and BLIS headers to the include path
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
-include_directories(${BLIS_INCLUDE_DIR})
+include_directories(${COMET_BLIS_INCLUDE_DIR})
 
 # Add COMET files to the include path
 include_directories(${COMET_MAIN_INCLUDE_DIR})
 include_directories(${COMET_INCLUDE_DIR})
 
+# Add BLIS LIBRARY_PATH
+set(CMAKE_LIBRARY_PATH ${BLIS_LIB_SEARCH_PATHS})
 
 #-------------------------------------------------------------------------------
 # Directory setup
