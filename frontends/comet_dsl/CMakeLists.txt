@@ -50,5 +50,5 @@ target_link_libraries(comet-opt
     ${LIBS} 
     ${dialect_libs} 
     ${conversion_libs}
-    ${BLIS_LIB}
+    #${BLIS_LIB}
     )
