@@ -317,11 +317,15 @@ namespace
     if (rank_size == 2)
     {
       comet_debug() << " Rank Size is 2\n";
-      auto readInput2DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType,
+      auto readInput2DF32Func = FunctionType::get(ctx, {i32Type,
+                                    indexType, indexType,     // A1_format, A2_format
+                                    indexType, indexType,     // A1_tile_format, A2_tile_format
                                     unrankedMemref_index, unrankedMemref_index, 
                                     unrankedMemref_index, unrankedMemref_index,
                                     unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
-      auto readInput2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType,
+      auto readInput2DF64Func = FunctionType::get(ctx, {i32Type,
+                                    indexType, indexType,     // A1_format, A2_format
+                                    indexType, indexType,     // A1_tile_format, A2_tile_format
                                     unrankedMemref_index, unrankedMemref_index,
                                     unrankedMemref_index, unrankedMemref_index,
                                     unrankedMemref_f64, i32Type}, {});
