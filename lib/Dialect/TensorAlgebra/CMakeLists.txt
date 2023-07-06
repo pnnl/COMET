@@ -2,8 +2,8 @@ add_llvm_library(COMETTensorAlgebraDialect
   IR/TADialect.cpp
 
   Transforms/Transforms.cpp
-  Transforms/LinalgTransforms.cpp
-  Transforms/TCtoTTGT.cpp
+  # Transforms/LinalgTransforms.cpp
+  # Transforms/TCtoTTGT.cpp
   Transforms/Passes.cpp
 
   Transforms/CheckImplicitTensorDecls.cpp
