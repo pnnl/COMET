@@ -838,6 +838,7 @@ struct EllpackMatrix
         // Create the column coordinate list
         // TODO: This terrible, but it works
         col_crd = new int[num_rows*num_cols];
+        Aval = new T[num_rows*num_cols];
         int index = 0;
 
         for (int i = 0; i<num_rows; i++) {
@@ -852,12 +853,14 @@ struct EllpackMatrix
             for (int j = 0; j<num_nonzeros; j++) {
               if (coo_matrix->coo_tuples[j].row == i) {
                 col_crd[index] = coo_matrix->coo_tuples[j].col;
+                Aval[index] = coo_matrix->coo_tuples[j].val;
                 ++index;
               }
             }
           } else if (found_cols == 0) {
             for (int j = 0; j<num_cols; j++) {
               col_crd[index] = j;
+              Aval[index] = 0;
               ++index;
             }
           } else {
@@ -866,10 +869,12 @@ struct EllpackMatrix
                 if (coo_matrix->coo_tuples[j].col > 0) {
                   for (int k = 0; k<coo_matrix->coo_tuples[j].col; k++) {
                     col_crd[index] = k;
+                    Aval[index] = 0;
                     ++index;
                   }
                 }
                 col_crd[index] = coo_matrix->coo_tuples[j].col;
+                Aval[index] = coo_matrix->coo_tuples[j].val;
                 ++index;
               } 
             }
@@ -2051,10 +2056,12 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A
     FileReader.FileReaderWrapperFinalize();
 
     desc_A1pos->data[0] = ellpack_matrix.num_rows;
+    //num_cols here
 
-    desc_A2pos->data[0] = ellpack_matrix.num_cols;
+    //desc_A2pos->data[0] = ellpack_matrix.num_cols;
     for (int i = 0; i<ellpack_matrix.num_cols*ellpack_matrix.num_rows; i++) {
       desc_A2crd->data[i] = ellpack_matrix.col_crd[i];
+      desc_Aval->data[i] = ellpack_matrix.Aval[i];
     }
   }
   // BCSR
