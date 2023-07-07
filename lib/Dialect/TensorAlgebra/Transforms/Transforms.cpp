@@ -182,6 +182,7 @@ namespace
     }
   };
 
+  //TODO(gkestor): test TensorCopyLowering
   struct TensorCopyLowering : public ConversionPattern
   {
     TensorCopyLowering(MLIRContext *ctx)
