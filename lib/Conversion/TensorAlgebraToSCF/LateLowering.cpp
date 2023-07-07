@@ -48,9 +48,9 @@ using namespace mlir::bufferization;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LateLoweringPass
-// #define DEBUG_MODE_LateLoweringPass
-// #endif
+#ifndef DEBUG_MODE_LateLoweringPass
+#define DEBUG_MODE_LateLoweringPass
+#endif
 
 #ifdef DEBUG_MODE_LateLoweringPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -160,9 +160,23 @@ namespace
               module.push_back(print_func);
             }
 
+            /*
+            puts("{");
+            auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp());
+            sp_op.dump();
+            puts("--");
+            printf("COUNT: %d\n", sp_op.getNumberOps());
+            puts("}\n");
+            */
+
             // SparseTensorType includes 5 metadata per dimension. Additionally, 2 elements for value array, value array size.
             // TODO(gkestor): get tensor ranks by functions
-            int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
+            // TODO(pflynn157): See above- temporary fix
+            //int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
+            int tensorRanks = 4;
+            //puts("\n");
+            //puts("-----");
+
             Type unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
 
             auto rhs = op->getOperand(0).getDefiningOp();
