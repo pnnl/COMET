@@ -305,6 +305,17 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
     `(` $indices `)` attr-dict `:` `(` type($indices) `)` `->` `(` type($output) `)`
   }];
 
+  let extraClassDeclaration = [{
+    ///bool hasOperand() { return getNumOperands() != 0; }
+    int getNumberOps() { return getNumOperands(); }
+
+    /// Returns the argument types of this function.
+    ///ArrayRef<Type> getArgumentTypes() { return getFunctionType().getInputs(); }
+
+    /// Returns the result types of this function.
+    ///ArrayRef<Type> getResultTypes() { return getFunctionType().getResults(); }
+  }];
+
   //TODO(gkestor): add verifier
   //let hasVerifier = 1;
   
