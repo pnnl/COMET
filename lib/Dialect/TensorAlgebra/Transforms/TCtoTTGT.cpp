@@ -255,6 +255,8 @@ namespace
 
       ArrayAttr indexMaps = multop.getIndexingMaps();
       std::vector<std::vector<unsigned>> allPerms;
+
+
       // Find summation indices
       for (const auto &map : indexMaps)
       {
@@ -318,8 +320,8 @@ namespace
 
       // computeBestPermutations identifies the optimal index permutation for TTGT
       // it should enable and disable to heuristic
-      IndexVector rhs1Perm, rhs2Perm, lhsPerm;
-      std::tie(rhs1Perm, rhs2Perm, lhsPerm) = plan.computePermutations(isSelectBestPerm, whatPerm);
+      IndexVector rhs1OutPerm, rhs2OutPerm, lhsOutPerm;
+      std::tie(rhs1OutPerm, rhs2OutPerm, lhsOutPerm) = plan.computePermutations(isSelectBestPerm, whatPerm);
 
       comet_debug() << "Best permutation : " << plan.bestPermStr_ << "\n";
 
@@ -333,30 +335,37 @@ namespace
                           lhsIndices.begin(), lhsIndices.end(),
                           std::inserter(sumIndices, sumIndices.begin()));
 
-      AffineMapAttr rhs1OutMapAttr = AffineMapAttr::get(AffineMap::getPermutationMap(rhs1Perm, ctx));
-      AffineMap rhs1InMap = AffineMap::getPermutationMap(getIdentityPermutation(allPerms[0].size()), ctx);
-      AffineMap rhs1OutMap = AffineMap::getPermutationMap(rhs1Perm, ctx);
+      std::vector<unsigned int> rhs1InPerm = getIdentityPermutation(allPerms[0].size());
+      std::vector<unsigned int> rhs2InPerm = getIdentityPermutation(allPerms[1].size());
+      std::vector<unsigned int> lhsInPerm = getIdentityPermutation(allPerms[2].size());
+
+      AffineMapAttr rhs1OutMapAttr = AffineMapAttr::get(AffineMap::getPermutationMap(rhs1OutPerm, ctx));
+      AffineMap rhs1InMap = AffineMap::getPermutationMap(rhs1InPerm, ctx);
+      AffineMap rhs1OutMap = AffineMap::getPermutationMap(rhs1OutPerm, ctx);
 
       AffineMapAttr rhs2OutMapAttr =
-          AffineMapAttr::get(AffineMap::getPermutationMap(rhs2Perm, ctx));
-      AffineMap rhs2InMap = AffineMap::getPermutationMap(getIdentityPermutation(allPerms[1].size()), ctx);
-      AffineMap rhs2OutMap = AffineMap::getPermutationMap(rhs2Perm, ctx);
+          AffineMapAttr::get(AffineMap::getPermutationMap(rhs2OutPerm, ctx));
+      AffineMap rhs2InMap = AffineMap::getPermutationMap(rhs2InPerm, ctx);
+      AffineMap rhs2OutMap = AffineMap::getPermutationMap(rhs2OutPerm, ctx);
 
       AffineMapAttr lhsOutMapAttr =
-          AffineMapAttr::get(AffineMap::getPermutationMap(lhsPerm, ctx));
-      AffineMap lhsInMap = AffineMap::getPermutationMap(
-          getIdentityPermutation(allPerms[2].size()), ctx);
-      AffineMap lhsOutMap = AffineMap::getPermutationMap(lhsPerm, ctx);
+          AffineMapAttr::get(AffineMap::getPermutationMap(lhsOutPerm, ctx));
+      AffineMap lhsInMap = AffineMap::getPermutationMap(lhsInPerm, ctx);
+      AffineMap lhsOutMap = AffineMap::getPermutationMap(lhsOutPerm, ctx);
 
       Value rhs1Alloc = rhs1Memref;
       Value rhs2Alloc = rhs2Memref;
       Value lhsAlloc = lhsMemref;
 
+      std::vector<int64_t> rhs1OutPerm_int64(rhs1OutPerm.begin(), rhs1OutPerm.end());
+      std::vector<int64_t> rhs2OutPerm_int64(rhs2OutPerm.begin(), rhs2OutPerm.end());
+      std::vector<int64_t> lhsOutPerm_int64(lhsOutPerm.begin(), lhsOutPerm.end());
+
       // Do transpose if needed
       if (!rhs1OutMapAttr.getValue().isIdentity())
       {
         std::vector<int64_t> rhs1Dims;
-        for (auto idx : rhs1Perm)
+        for (auto idx : rhs1OutPerm)
         {
           auto shape = rhs1MemrefType.getShape();
           rhs1Dims.push_back(shape[idx]);
@@ -367,18 +376,18 @@ namespace
             rewriter);
 
 #ifdef DEBUG_MODE_TTGT
-        auto rhs1LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
+        auto rhs1LinalgCopy = rewriter.create<linalg::TransposeOp>(loc, rhs1Memref, rhs1Alloc, llvm::ArrayRef<int64_t>(rhs1OutPerm_int64));
         comet_debug() << "\n";
         comet_vdump(rhs1LinalgCopy);
 #else
-        rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
+        rewriter.create<linalg::TransposeOp>(loc, rhs1Memref, rhs1Alloc, llvm::ArrayRef<int64_t>(rhs1OutPerm_int64));
 #endif
       }
 
       if (!rhs2OutMapAttr.getValue().isIdentity())
       {
         std::vector<int64_t> rhs2Dims;
-        for (auto idx : rhs2Perm)
+        for (auto idx : rhs2OutPerm)
         {
           auto shape = rhs2MemrefType.getShape();
           rhs2Dims.push_back(shape[idx]);
@@ -388,11 +397,13 @@ namespace
             MemRefType::get(rhs2Dims, rhs2MemrefType.getElementType()), loc,
             rewriter);
 #ifdef DEBUG_MODE_TTGT
-        auto rhs2LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
+        auto rhs2LinalgCopy = rewriter.create<linalg::TransposeOp>(loc, rhs2Memref, rhs2Alloc, llvm::ArrayRef<int64_t>(rhs2OutPerm_int64));
         comet_debug() << " rhs2LinalgCopy op: " << __LINE__ << "\n";
         comet_vdump(rhs2LinalgCopy);
 #else
-        rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
+        rewriter.create<linalg::TransposeOp>(loc, rhs2Memref, rhs2Alloc, llvm::ArrayRef<int64_t>(rhs2OutPerm_int64));
+        
+
 #endif
       }
 
@@ -400,7 +411,7 @@ namespace
       if (!lhsOutMapAttr.getValue().isIdentity())
       {
         std::vector<int64_t> lhsDims;
-        for (auto idx : lhsPerm)
+        for (auto idx : lhsOutPerm)
         {
           auto shape = lhsMemrefType.getShape();
           lhsDims.push_back(shape[idx]);
@@ -411,7 +422,7 @@ namespace
             rewriter);
         useLHSTranspose = true;
         // TODO(gkestor): we might need this copy if we support update C[] += A[] * B[]
-        rewriter.create<linalg::CopyOp>(loc, lhsMemref, lhsAlloc, lhsInMap, lhsOutMap);
+        rewriter.create<linalg::TransposeOp>(loc, lhsMemref, lhsAlloc, llvm::ArrayRef<int64_t>(lhsOutPerm_int64));
       }
 
       RankedTensorType collapsedTensorType;
@@ -449,7 +460,6 @@ namespace
 
         comet_debug() << "\n";
         rhs1Reshape = rewriter.create<tensor::CollapseShapeOp>(
-        //rhs1Reshape = rewriter.create<linalg::ReshapeOp>(
             loc, collapsedTensorType, rhs1Alloc, reassociationIndices);
         comet_vdump(rhs1Reshape);
       }
@@ -513,16 +523,12 @@ namespace
 
         SmallVector<AffineMap, 2> rhs2IndexingMap{rhs2AffineMap};
 
-        // collapsedTensorType = computeReshapeCollapsedType(
-        //     rhs2Alloc.getType().cast<MemRefType>(), rhs2IndexingMap);
-
         collapsedTensorType = tensor::CollapseShapeOp::inferCollapsedType(
                rhs2Alloc.getType().cast<RankedTensorType>(), rhs2IndexingMap);
 
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs2IndexingMap);
         
-        //rhs2Reshape = rewriter.create<linalg::ReshapeOp>(
         rhs2Reshape = rewriter.create<tensor::CollapseShapeOp>(
             loc, collapsedTensorType, rhs2Alloc, reassociationIndices);
 
@@ -720,18 +726,16 @@ namespace
       // Copy back the result if needed
       if (lhsAlloc != lhsMemref && useLHSTranspose)
       {
+        std::vector<int64_t> lhsInPerm_int64(lhsInPerm.begin(), lhsInPerm.end()); 
+
 #ifdef DEBUG_MODE_TTGT
         auto lhsFinalCopy =
-            rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
+              rewriter.create<linalg::TransposeOp>(loc, lhsAlloc, lhsMemref, llvm::ArrayRef<int64_t>(lhsInPerm_int64));
         comet_debug() << "\n";
         comet_vdump(lhsFinalCopy);
 #else
-        rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
-
-
-              // auto copyOp = rewriter.create<linalg::CopyOp>(loc, inputMemref, outputMemref, inputPermuation, outputPermuation);
-        auto copyOp = rewriter.create<linalg::TransposeOp>(loc, inputMemref, outputMemref, llvm::ArrayRef<int64_t>(allPerms[1]));
-        
+        rewriter.create<linalg::TransposeOp>(loc, lhsAlloc, lhsMemref, llvm::ArrayRef<int64_t>(lhsInPerm_int64));
+   
 #endif
       }
 
