@@ -33,12 +33,6 @@ else ()
 endif ()
 
 #-------------------------------------------------------------------------------
-# BLIS Configuration
-#-------------------------------------------------------------------------------
-  
-  find_package(BLIS REQUIRED)
-
-#-------------------------------------------------------------------------------
 # MLIR/LLVM Configuration
 #-------------------------------------------------------------------------------
   
@@ -79,6 +73,13 @@ if (MSVC_IDE OR XCODE)
 endif()
 set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
 
+
+#-------------------------------------------------------------------------------
+# BLIS Configuration
+#-------------------------------------------------------------------------------
+  SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a") #linking with BLIS static library
+  find_package(BLIS REQUIRED)
+
 #-------------------------------------------------------------------------------
 # COMET configuration
 #-------------------------------------------------------------------------------
@@ -94,7 +95,7 @@ set(COMET_TOOLS_DIR ${CMAKE_BINARY_DIR}/bin)
 
 list(APPEND CMAKE_MODULE_PATH "${MLIR_MAIN_SRC_DIR}/cmake/modules")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
-#include(AddCOMET)
+
 
 # Installing the headers and docs needs to depend on generating any public
 # tablegen'd targets.
@@ -112,7 +113,7 @@ include_directories(${COMET_MAIN_INCLUDE_DIR})
 include_directories(${COMET_INCLUDE_DIR})
 
 # Add BLIS LIBRARY_PATH
-set(CMAKE_LIBRARY_PATH ${BLIS_LIB_SEARCH_PATHS})
+set(CMAKE_PREFIX_PATH ${BLIS_LIB_SEARCH_PATHS})
 
 #-------------------------------------------------------------------------------
 # Directory setup
