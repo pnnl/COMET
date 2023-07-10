@@ -1824,6 +1824,7 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
   {
     assert(false && "unsupported matrix format\n");
   }
+  puts("DONE_read_input_sizes");
 }
 
 template <typename T>
@@ -1833,10 +1834,14 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
                    int A1crd_rank, void *A1crd_ptr,
                    int A2pos_rank, void *A2pos_ptr,
                    int A2crd_rank, void *A2crd_ptr,
+                   int A1tile_pos_rank, void *A1tile_pos_ptr,
+                   int A1tile_crd_rank, void *A1tile_crd_ptr,
+                   int A2tile_pos_rank, void *A2tile_pos_ptr,
+                   int A2tile_crd_rank, void *A2tile_crd_ptr, 
                    int Aval_rank, void *Aval_ptr,
                    int32_t readMode)
 {
-
+  puts("IN_read_input_2D");
   auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
   auto *desc_A1crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1crd_ptr);
   auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
@@ -2079,6 +2084,7 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
   {
     assert(false && "unsupported matrix format\n");
   }
+  puts("DONE_read_input_2D");
 }
 
 template <typename T>
@@ -2331,13 +2337,21 @@ extern "C" void read_input_2D_f32(int32_t fileID,
                                   int A1crd_rank, void *A1crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr,
                                   int A2crd_rank, void *A2crd_ptr,
+                                  int A1tile_pos_rank, void *A1tile_pos_ptr,
+                                  int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                  int A2tile_pos_rank, void *A2tile_pos_ptr,
+                                  int A2tile_crd_rank, void *A2tile_crd_ptr, 
                                   int Aval_rank, void *Aval_ptr, 
                                   int32_t readMode)
 {
+  puts("PRE_IN_read_input_2D");
   read_input_2D<float>(fileID, A1format, A2format, A1_tile_format, A2_tile_format,
                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                       A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                       A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr, 
                        Aval_rank, Aval_ptr, readMode);
+                       
 }
 
 extern "C" void read_input_2D_f64(int32_t fileID,
@@ -2347,13 +2361,20 @@ extern "C" void read_input_2D_f64(int32_t fileID,
                                   int A1crd_rank, void *A1crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr,
                                   int A2crd_rank, void *A2crd_ptr,
+                                  int A1tile_pos_rank, void *A1tile_pos_ptr,
+                                  int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                  int A2tile_pos_rank, void *A2tile_pos_ptr,
+                                  int A2tile_crd_rank, void *A2tile_crd_ptr, 
                                   int Aval_rank, void *Aval_ptr,
                                   int32_t readMode)
 {
+  puts("PRE_IN_read_input_2D");
   read_input_2D<double>(fileID,
                         A1format, A2format, A1_tile_format, A2_tile_format,
                         A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                         A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                        A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                        A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr, 
                         Aval_rank, Aval_ptr, readMode);
 }
 
