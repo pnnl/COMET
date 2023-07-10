@@ -1784,20 +1784,24 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
   else if (A1format == Dense && A2format == singleton && A3format == Dense)
   {
     // Load the ellpack matrixs
+    
     EllpackMatrix<T> ellpack_matrix(FileReader.coo_matrix);
     int cols = ellpack_matrix.num_cols*ellpack_matrix.num_rows;
 
     // get num-NNZs from coo_matrix struct.
     //int NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
-    
-    // Not sure if this will work, but let's see....
-    desc_sizes->data[0] = 1;              // This...
-    desc_sizes->data[1] = 1;              // And this are for the 1st dimension
-    desc_sizes->data[2] = 1;              // This...
-    desc_sizes->data[3] = cols;           // And this must be equal for the 2nd dimension
-    desc_sizes->data[4] = cols;           // Controls count of value dimension
-    desc_sizes->data[5] = FileReader.coo_matrix->num_rows;
-    desc_sizes->data[6] = FileReader.coo_matrix->num_cols;
+
+    desc_sizes->data[0] = 1;              // A1pos
+    desc_sizes->data[1] = 1;              // A1crd
+    desc_sizes->data[2] = 1;              // A2pos
+    desc_sizes->data[3] = cols;           // A2crd
+    desc_sizes->data[4] = 1;    // A1_tile_pos
+    desc_sizes->data[5] = 1;    // A1_tile_crd
+    desc_sizes->data[6] = 0;    // A2_tile_pos
+    desc_sizes->data[7] = 0;   // A2_tile_crd
+    desc_sizes->data[8] = cols;           // Controls count of value dimension
+    desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
 
     /*****************DEBUG******************/
     // std::cout << "ELLPACK detail: \n"
@@ -1824,7 +1828,6 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
   {
     assert(false && "unsupported matrix format\n");
   }
-  puts("DONE_read_input_sizes");
 }
 
 template <typename T>
@@ -1841,11 +1844,14 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
                    int Aval_rank, void *Aval_ptr,
                    int32_t readMode)
 {
-  puts("IN_read_input_2D");
   auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
   auto *desc_A1crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1crd_ptr);
   auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
   auto *desc_A2crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2crd_ptr);
+  auto *desc_A1tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1tile_pos_ptr);
+  auto *desc_A1tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1tile_crd_ptr);
+  auto *desc_A2tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_pos_ptr);
+  auto *desc_A2tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_crd_ptr);
   auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
 
   // For example, A2pos is not used for COO, but initialized with -1 to speficify that it is not used
@@ -1853,6 +1859,10 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
   desc_A1crd->data[0] = -1;
   desc_A2pos->data[0] = -1;
   desc_A2crd->data[0] = -1;
+  desc_A1tile_pos->data[0] = -1;
+  desc_A1tile_crd->data[0] = -1;
+  desc_A2tile_pos->data[0] = -1;
+  desc_A2tile_crd->data[0] = -1;
 
   int selected_matrix_read = getMatrixReadOption(readMode);
   FileReaderWrapper<T> FileReader (fileID);  // init of COO
@@ -2062,6 +2072,7 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
     FileReader.FileReaderWrapperFinalize();
 
     desc_A1pos->data[0] = ellpack_matrix.num_rows;
+    desc_A1tile_pos->data[0] = ellpack_matrix.num_cols;
     //num_cols here
 
     //desc_A2pos->data[0] = ellpack_matrix.num_cols;
@@ -2351,7 +2362,7 @@ extern "C" void read_input_2D_f32(int32_t fileID,
                        A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
                        A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr, 
                        Aval_rank, Aval_ptr, readMode);
-                       
+
 }
 
 extern "C" void read_input_2D_f64(int32_t fileID,
