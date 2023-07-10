@@ -1690,10 +1690,15 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     desc_sizes->data[1] = NumNonZeros;
     desc_sizes->data[2] = 1;
     desc_sizes->data[3] = NumNonZeros;
-    desc_sizes->data[4] = NumNonZeros;
-    desc_sizes->data[5] = FileReader.coo_matrix->num_rows; 
-    desc_sizes->data[6] = FileReader.coo_matrix->num_cols;
+    desc_sizes->data[4] = 0;              // A1_tile_pos
+    desc_sizes->data[5] = 0;              // A1_tile_crd
+    desc_sizes->data[6] = 0;              // A2_tile_pos
+    desc_sizes->data[7] = 0;              // A2_tile_crd
+    desc_sizes->data[8] = NumNonZeros;
+    desc_sizes->data[9] = FileReader.coo_matrix->num_rows; 
+    desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
 
+    /*
     std::cout << "COO detail: \n"
               << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
               << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
@@ -1702,6 +1707,7 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
               << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
               << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
               << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
+    */
   }
   // CSR
   else if (A1format == Dense && A2format == Compressed_unique)
@@ -1713,9 +1719,13 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     desc_sizes->data[1] = 1;
     desc_sizes->data[2] = FileReader.coo_matrix->num_rows + 1;
     desc_sizes->data[3] = NumNonZeros;
-    desc_sizes->data[4] = NumNonZeros;
-    desc_sizes->data[5] = FileReader.coo_matrix->num_rows;
-    desc_sizes->data[6] = FileReader.coo_matrix->num_cols;
+    desc_sizes->data[4] = 0;              // A1_tile_pos
+    desc_sizes->data[5] = 0;              // A1_tile_crd
+    desc_sizes->data[6] = 0;              // A2_tile_pos
+    desc_sizes->data[7] = 0;              // A2_tile_crd
+    desc_sizes->data[8] = NumNonZeros;
+    desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
 
     /*****************DEBUG******************/
     // std::cout << "CSR detail: \n"
@@ -1727,14 +1737,6 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     //           << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
     //           << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
     /*****************DEBUG******************/
-    std::cout << "CSR detail: \n"
-              << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
-              << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
-              << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
-              << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
-              << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
-              << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
-              << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
   }
   // CSC
   else if (A1format == Compressed_unique && A2format == Dense)
@@ -1749,9 +1751,13 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     desc_sizes->data[1] = NumNonZeros;
     desc_sizes->data[2] = 1;
     desc_sizes->data[3] = 1;
-    desc_sizes->data[4] = NumNonZeros;
-    desc_sizes->data[5] = FileReader.coo_matrix->num_rows;
-    desc_sizes->data[6] = FileReader.coo_matrix->num_cols;
+    desc_sizes->data[4] = 0;              // A1_tile_pos
+    desc_sizes->data[5] = 0;              // A1_tile_crd
+    desc_sizes->data[6] = 0;              // A2_tile_pos
+    desc_sizes->data[7] = 0;              // A2_tile_crd
+    desc_sizes->data[8] = NumNonZeros;
+    desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
 
     /*****************DEBUG******************/
     // std::cout << "CSC detail: \n"
@@ -1776,9 +1782,13 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     desc_sizes->data[1] = dcsr_matrix.A1crd_size;
     desc_sizes->data[2] = dcsr_matrix.A2pos_size;
     desc_sizes->data[3] = dcsr_matrix.A2crd_size;
-    desc_sizes->data[4] = dcsr_matrix.A2crd_size;
-    desc_sizes->data[5] = dcsr_matrix.num_rows;
-    desc_sizes->data[6] = dcsr_matrix.num_cols;
+    desc_sizes->data[4] = 0;              // A1_tile_pos
+    desc_sizes->data[5] = 0;              // A1_tile_crd
+    desc_sizes->data[6] = 0;              // A2_tile_pos
+    desc_sizes->data[7] = 0;              // A2_tile_crd
+    desc_sizes->data[8] = dcsr_matrix.A2crd_size;
+    desc_sizes->data[9] = dcsr_matrix.num_rows;
+    desc_sizes->data[10] = dcsr_matrix.num_cols;
   }
   // ELLPACK
   else if (A1format == Dense && A2format == singleton && A3format == Dense)
@@ -1795,10 +1805,10 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     desc_sizes->data[1] = 1;              // A1crd
     desc_sizes->data[2] = 1;              // A2pos
     desc_sizes->data[3] = cols;           // A2crd
-    desc_sizes->data[4] = 1;    // A1_tile_pos
-    desc_sizes->data[5] = 1;    // A1_tile_crd
-    desc_sizes->data[6] = 0;    // A2_tile_pos
-    desc_sizes->data[7] = 0;   // A2_tile_crd
+    desc_sizes->data[4] = 1;              // A1_tile_pos
+    desc_sizes->data[5] = 1;              // A1_tile_crd
+    desc_sizes->data[6] = 0;              // A2_tile_pos
+    desc_sizes->data[7] = 0;              // A2_tile_crd
     desc_sizes->data[8] = cols;           // Controls count of value dimension
     desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
     desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
@@ -2073,9 +2083,7 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
 
     desc_A1pos->data[0] = ellpack_matrix.num_rows;
     desc_A1tile_pos->data[0] = ellpack_matrix.num_cols;
-    //num_cols here
-
-    //desc_A2pos->data[0] = ellpack_matrix.num_cols;
+    
     for (int i = 0; i<ellpack_matrix.num_cols*ellpack_matrix.num_rows; i++) {
       desc_A2crd->data[i] = ellpack_matrix.col_crd[i];
       desc_Aval->data[i] = ellpack_matrix.Aval[i];
@@ -2095,7 +2103,6 @@ void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
   {
     assert(false && "unsupported matrix format\n");
   }
-  puts("DONE_read_input_2D");
 }
 
 template <typename T>
@@ -2355,7 +2362,6 @@ extern "C" void read_input_2D_f32(int32_t fileID,
                                   int Aval_rank, void *Aval_ptr, 
                                   int32_t readMode)
 {
-  puts("PRE_IN_read_input_2D");
   read_input_2D<float>(fileID, A1format, A2format, A1_tile_format, A2_tile_format,
                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
@@ -2379,7 +2385,6 @@ extern "C" void read_input_2D_f64(int32_t fileID,
                                   int Aval_rank, void *Aval_ptr,
                                   int32_t readMode)
 {
-  puts("PRE_IN_read_input_2D");
   read_input_2D<double>(fileID,
                         A1format, A2format, A1_tile_format, A2_tile_format,
                         A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
