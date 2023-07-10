@@ -48,9 +48,9 @@ using namespace mlir::bufferization;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-#ifndef DEBUG_MODE_LateLoweringPass
-#define DEBUG_MODE_LateLoweringPass
-#endif
+// #ifndef DEBUG_MODE_LateLoweringPass
+// #define DEBUG_MODE_LateLoweringPass
+// #endif
 
 #ifdef DEBUG_MODE_LateLoweringPass
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
