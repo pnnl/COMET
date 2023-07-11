@@ -4,3 +4,6 @@
 [submodule "blis"]
 	path = blis
 	url = https://github.com/flame/blis.git
+[submodule "mcl"]
+	path = mcl
+	url = https://github.com/pnnl/mcl
