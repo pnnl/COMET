@@ -298,22 +298,20 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
   //Aval_size (size of value array) 
   //dim1_size, dim2_size (size of each dimension in sparse tensor) 
   //TODO(gkestor): might be better to have a struct with all the data elements
-  let arguments = (ins Variadic<AnyType>:$indices);
+  let arguments = (ins Variadic<AnyType>:$indices, I32Attr:$tensor_rank);
   let results = (outs TA_AnyTensor:$output);
 
   let assemblyFormat = [{
     `(` $indices `)` attr-dict `:` `(` type($indices) `)` `->` `(` type($output) `)`
   }];
 
+  // TODO(pflynn) This may need to be adjusted
+  // This works for the moment; the idea is that each rank has a tiling
+  // dimension per dimension.
   let extraClassDeclaration = [{
-    ///bool hasOperand() { return getNumOperands() != 0; }
-    int getNumberOps() { return getNumOperands(); }
-
-    /// Returns the argument types of this function.
-    ///ArrayRef<Type> getArgumentTypes() { return getFunctionType().getInputs(); }
-
-    /// Returns the result types of this function.
-    ///ArrayRef<Type> getResultTypes() { return getFunctionType().getResults(); }
+    int getExpandedRank() {
+      return getTensorRank() * 2;
+    }
   }];
 
   //TODO(gkestor): add verifier
