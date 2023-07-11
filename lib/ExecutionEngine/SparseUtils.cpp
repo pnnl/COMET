@@ -841,58 +841,57 @@ struct EllpackMatrix
         Aval = new T[num_rows*num_cols];
         int index = 0;
 
+        // Build the column coordinates/value array
         for (int i = 0; i<num_rows; i++) {
-          int found_cols = 0;
-          for (int j = 0; j<num_nonzeros; j++) {
-            if (coo_matrix->coo_tuples[j].row == i) {
-              ++found_cols;
-            }
-          }
-
-          if (found_cols == num_cols) {
+            // In this loop, get all non-zero column coordinates and track
+            // how many we have found
+            int found_cols = 0;
             for (int j = 0; j<num_nonzeros; j++) {
               if (coo_matrix->coo_tuples[j].row == i) {
+                ++found_cols;
+              }
+            }
+
+            // If the number of columns we have found in the row is less than
+            // the block, we need to add some zeros to create the block
+            if (found_cols == num_cols) {
+              for (int j = 0; j<num_nonzeros; j++) {
+                if (coo_matrix->coo_tuples[j].row == i) {
+                  col_crd[index] = coo_matrix->coo_tuples[j].col;
+                  Aval[index] = coo_matrix->coo_tuples[j].val;
+                  ++index;
+                }
+              }
+              continue;
+            }
+            
+            // If there were no found columns, we'll just add zeros
+            if (found_cols == 0) {
+              for (int j = 0; j<num_cols; j++) {
+                  col_crd[index] = j;
+                  Aval[index] = 0;
+                  ++index;
+              }
+              continue;
+            }
+
+            // If we have an odd number, we need to add preceeding elements before
+            // the actual non-zero indicies
+            for (int j = 0; j<num_nonzeros; j++) {
+              if (coo_matrix->coo_tuples[j].row == i) {
+                // TODO: This IS NOT portable
+                for (int k = 0; k<coo_matrix->coo_tuples[j].col && found_cols < num_cols; k++) {
+                  col_crd[index] = k;
+                  Aval[index] = 0;
+                  ++index;
+                  ++found_cols;
+                }
                 col_crd[index] = coo_matrix->coo_tuples[j].col;
                 Aval[index] = coo_matrix->coo_tuples[j].val;
                 ++index;
               }
             }
-          } else if (found_cols == 0) {
-            for (int j = 0; j<num_cols; j++) {
-              col_crd[index] = j;
-              Aval[index] = 0;
-              ++index;
-            }
-          } else {
-            for (int j = 0; j<num_nonzeros; j++) {
-              if (coo_matrix->coo_tuples[j].row == i) {
-                if (coo_matrix->coo_tuples[j].col > 0) {
-                  for (int k = 0; k<coo_matrix->coo_tuples[j].col; k++) {
-                    col_crd[index] = k;
-                    Aval[index] = 0;
-                    ++index;
-                  }
-                }
-                col_crd[index] = coo_matrix->coo_tuples[j].col;
-                Aval[index] = coo_matrix->coo_tuples[j].val;
-                ++index;
-              } 
-            }
-          }
-
-          //printf("Row: %d | Found cols: %d\n", i, found_cols);
-          //printf("(%d, %d, %f)\n", coo_matrix->coo_tuples[i].row, coo_matrix->coo_tuples[i].col, coo_matrix->coo_tuples[i].val);
         }
-
-        /*
-        puts("---");
-        printf("[");
-        for (int i = 0; i<num_rows*num_cols; i++) {
-          printf("%d ", col_crd[i]);
-        }
-        puts("]");
-        puts("---");
-        */
     }
 
     /**
@@ -900,7 +899,8 @@ struct EllpackMatrix
     */
     void Clear()
     {
-
+      delete[] col_crd;
+      delete[] Aval;
     }
 
     /**
