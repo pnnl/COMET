@@ -1672,7 +1672,9 @@ int getNumNonZeros (CooMatrix<T> *coo_matrix, int32_t readMode)
 
 // Read input matrices based on the datatype
 template <typename T>
-void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
+void read_input_sizes_2D(int32_t fileID,
+                          int32_t A1format, int32_t A1_tile_format,
+                          int32_t A2format, int32_t A2_tile_format,
                           int sizes_rank, void *sizes_ptr, int32_t readMode)
 {
   auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
@@ -1686,12 +1688,12 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     // get num-NNZs from coo_matrix struct.
     int NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
 
-    desc_sizes->data[0] = 2;
-    desc_sizes->data[1] = NumNonZeros;
-    desc_sizes->data[2] = 1;
-    desc_sizes->data[3] = NumNonZeros;
-    desc_sizes->data[4] = 0;              // A1_tile_pos
-    desc_sizes->data[5] = 0;              // A1_tile_crd
+    desc_sizes->data[0] = 2;              // A1_pos
+    desc_sizes->data[1] = NumNonZeros;    // A1_crd
+    desc_sizes->data[2] = 0;              // A1_tile_pos
+    desc_sizes->data[3] = 0;              // A1_tile_crd
+    desc_sizes->data[4] = 1;              // A2_pos
+    desc_sizes->data[5] = NumNonZeros;    // A2_crd
     desc_sizes->data[6] = 0;              // A2_tile_pos
     desc_sizes->data[7] = 0;              // A2_tile_crd
     desc_sizes->data[8] = NumNonZeros;
@@ -1715,12 +1717,12 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     // get num-NNZs from coo_matrix struct.
     int NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
 
-    desc_sizes->data[0] = 1;
-    desc_sizes->data[1] = 1;
-    desc_sizes->data[2] = FileReader.coo_matrix->num_rows + 1;
-    desc_sizes->data[3] = NumNonZeros;
-    desc_sizes->data[4] = 0;              // A1_tile_pos
-    desc_sizes->data[5] = 0;              // A1_tile_crd
+    desc_sizes->data[0] = 1;              // A1pos
+    desc_sizes->data[1] = 1;              // A1crd
+    desc_sizes->data[2] = 0;              // A1_tile_pos
+    desc_sizes->data[3] = 0;              // A1_tile_crd
+    desc_sizes->data[4] = FileReader.coo_matrix->num_rows + 1;  // A2pos
+    desc_sizes->data[5] = NumNonZeros;                          // A2crd
     desc_sizes->data[6] = 0;              // A2_tile_pos
     desc_sizes->data[7] = 0;              // A2_tile_crd
     desc_sizes->data[8] = NumNonZeros;
@@ -1747,12 +1749,12 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     else
       assert(false && "unsupported matrix format (CSC) for triangular reads.\n");
 
-    desc_sizes->data[0] = FileReader.coo_matrix->num_cols + 1;
-    desc_sizes->data[1] = NumNonZeros;
-    desc_sizes->data[2] = 1;
-    desc_sizes->data[3] = 1;
-    desc_sizes->data[4] = 0;              // A1_tile_pos
-    desc_sizes->data[5] = 0;              // A1_tile_crd
+    desc_sizes->data[0] = FileReader.coo_matrix->num_cols + 1;  // A1pos
+    desc_sizes->data[1] = NumNonZeros;                          // A1crd
+    desc_sizes->data[2] = 0;              // A1_tile_pos
+    desc_sizes->data[3] = 0;              // A1_tile_crd
+    desc_sizes->data[4] = 1;              // A2pos
+    desc_sizes->data[5] = 1;              // A2crd
     desc_sizes->data[6] = 0;              // A2_tile_pos
     desc_sizes->data[7] = 0;              // A2_tile_crd
     desc_sizes->data[8] = NumNonZeros;
@@ -1778,12 +1780,12 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     if (selected_matrix_read != DEFAULT)
       assert(false && "unsupported matrix format (DCSR) for triangular reads.\n");
 
-    desc_sizes->data[0] = dcsr_matrix.A1pos_size;
-    desc_sizes->data[1] = dcsr_matrix.A1crd_size;
-    desc_sizes->data[2] = dcsr_matrix.A2pos_size;
-    desc_sizes->data[3] = dcsr_matrix.A2crd_size;
-    desc_sizes->data[4] = 0;              // A1_tile_pos
-    desc_sizes->data[5] = 0;              // A1_tile_crd
+    desc_sizes->data[0] = dcsr_matrix.A1pos_size;   // A1pos
+    desc_sizes->data[1] = dcsr_matrix.A1crd_size;   // A1crd
+    desc_sizes->data[2] = 0;              // A1_tile_pos
+    desc_sizes->data[3] = 0;              // A1_tile_crd
+    desc_sizes->data[4] = dcsr_matrix.A2pos_size;   // A2pos
+    desc_sizes->data[5] = dcsr_matrix.A2crd_size;   // A2crd
     desc_sizes->data[6] = 0;              // A2_tile_pos
     desc_sizes->data[7] = 0;              // A2_tile_crd
     desc_sizes->data[8] = dcsr_matrix.A2crd_size;
@@ -1791,22 +1793,33 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     desc_sizes->data[10] = dcsr_matrix.num_cols;
   }
   // ELLPACK
-  else if (A1format == Dense && A2format == singleton && A3format == Dense)
+  else if (A1format == Dense && A2format == singleton && A1_tile_format == Dense)
   {
     // Load the ellpack matrixs
     
     EllpackMatrix<T> ellpack_matrix(FileReader.coo_matrix);
     int cols = ellpack_matrix.num_cols*ellpack_matrix.num_rows;
 
-    // get num-NNZs from coo_matrix struct.
-    //int NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
-
+    /*
     desc_sizes->data[0] = 1;              // A1pos
     desc_sizes->data[1] = 1;              // A1crd
     desc_sizes->data[2] = 1;              // A2pos
     desc_sizes->data[3] = cols;           // A2crd
     desc_sizes->data[4] = 1;              // A1_tile_pos
     desc_sizes->data[5] = 1;              // A1_tile_crd
+    desc_sizes->data[6] = 0;              // A2_tile_pos
+    desc_sizes->data[7] = 0;              // A2_tile_crd
+    desc_sizes->data[8] = cols;           // Controls count of value dimension
+    desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
+    */
+
+    desc_sizes->data[0] = 1;              // A1pos
+    desc_sizes->data[1] = 1;              // A1crd
+    desc_sizes->data[2] = 1;              // A1_tile_pos
+    desc_sizes->data[3] = 1;              // A1_tile_crd
+    desc_sizes->data[4] = 1;              // A2pos
+    desc_sizes->data[5] = cols;           // A2crd
     desc_sizes->data[6] = 0;              // A2_tile_pos
     desc_sizes->data[7] = 0;              // A2_tile_crd
     desc_sizes->data[8] = cols;           // Controls count of value dimension
@@ -1825,12 +1838,12 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
     /*****************DEBUG******************/
   }
   // BCSR
-  else if (A1format == Dense && A2format == Compressed_nonunique && A3format == Dense && A4format == Dense)
+  else if (A1format == Dense && A2format == Compressed_nonunique && A1_tile_format == Dense && A2_tile_format == Dense)
   {
     puts("BCSR");
   }
   // CSB
-  else if (A1format == Compressed_unique && A2format == singleton && A3format == Dense && A4format == Dense)
+  else if (A1format == Compressed_unique && A2format == singleton && A1_tile_format == Dense && A2_tile_format == Dense)
   {
     puts("CSB");
   }
@@ -1841,14 +1854,15 @@ void read_input_sizes_2D(int32_t fileID, int32_t A1format, int32_t A2format, int
 }
 
 template <typename T>
-void read_input_2D(int32_t fileID, int32_t A1format, int32_t A2format,
-                   int32_t A1_tile_format, int32_t A2_tile_format,
+void read_input_2D(int32_t fileID,
+                   int32_t A1format, int32_t A1_tile_format,
+                   int32_t A2format, int32_t A2_tile_format,
                    int A1pos_rank, void *A1pos_ptr,
                    int A1crd_rank, void *A1crd_ptr,
-                   int A2pos_rank, void *A2pos_ptr,
-                   int A2crd_rank, void *A2crd_ptr,
                    int A1tile_pos_rank, void *A1tile_pos_ptr,
                    int A1tile_crd_rank, void *A1tile_crd_ptr,
+                   int A2pos_rank, void *A2pos_ptr,
+                   int A2crd_rank, void *A2crd_ptr,
                    int A2tile_pos_rank, void *A2tile_pos_ptr,
                    int A2tile_crd_rank, void *A2tile_crd_ptr, 
                    int Aval_rank, void *Aval_ptr,
@@ -2349,47 +2363,50 @@ void read_input_3D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A
 
 // Utility functions to read sparse matrices and fill in the pos and crd arrays per dimension
 extern "C" void read_input_2D_f32(int32_t fileID,
-                                  int32_t A1format, int32_t A2format,
-                                  int32_t A1_tile_format, int32_t A2_tile_format,
+                                  int32_t A1format, int32_t A1_tile_format, 
+                                  int32_t A2format, int32_t A2_tile_format,
                                   int A1pos_rank, void *A1pos_ptr,
                                   int A1crd_rank, void *A1crd_ptr,
-                                  int A2pos_rank, void *A2pos_ptr,
-                                  int A2crd_rank, void *A2crd_ptr,
                                   int A1tile_pos_rank, void *A1tile_pos_ptr,
                                   int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr,
+                                  int A2crd_rank, void *A2crd_ptr,
                                   int A2tile_pos_rank, void *A2tile_pos_ptr,
                                   int A2tile_crd_rank, void *A2tile_crd_ptr, 
                                   int Aval_rank, void *Aval_ptr, 
                                   int32_t readMode)
 {
-  read_input_2D<float>(fileID, A1format, A2format, A1_tile_format, A2_tile_format,
-                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
-                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                       A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
-                       A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr, 
-                       Aval_rank, Aval_ptr, readMode);
+  read_input_2D<float>(fileID,
+                      A1format, A1_tile_format,
+                      A2format, A2_tile_format,
+                      A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                      A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                      A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                      A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr, 
+                      Aval_rank, Aval_ptr, readMode);
 
 }
 
 extern "C" void read_input_2D_f64(int32_t fileID,
-                                  int32_t A1format, int32_t A2format,
-                                  int32_t A1_tile_format, int32_t A2_tile_format,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
                                   int A1pos_rank, void *A1pos_ptr,
                                   int A1crd_rank, void *A1crd_ptr,
-                                  int A2pos_rank, void *A2pos_ptr,
-                                  int A2crd_rank, void *A2crd_ptr,
                                   int A1tile_pos_rank, void *A1tile_pos_ptr,
                                   int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr,
+                                  int A2crd_rank, void *A2crd_ptr,
                                   int A2tile_pos_rank, void *A2tile_pos_ptr,
                                   int A2tile_crd_rank, void *A2tile_crd_ptr, 
                                   int Aval_rank, void *Aval_ptr,
                                   int32_t readMode)
 {
   read_input_2D<double>(fileID,
-                        A1format, A2format, A1_tile_format, A2_tile_format,
+                        A1format, A1_tile_format,
+                        A2format, A2_tile_format,
                         A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
-                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
                         A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
                         A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr, 
                         Aval_rank, Aval_ptr, readMode);
 }
@@ -2423,17 +2440,21 @@ extern "C" void read_input_3D_f64(int32_t fileID, int32_t A1format, int32_t A2fo
 }
 
 // Utility functions to read metadata about the input matrices, such as the size of pos and crd array
-extern "C" void read_input_sizes_2D_f32(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
+extern "C" void read_input_sizes_2D_f32(int32_t fileID,
+                                        int32_t A1format, int32_t A1_tile_format,
+                                        int32_t A2format, int32_t A2_tile_format,
                                         int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_2D<float>(fileID, A1format, A2format, A3format, A4format, A1pos_rank, A1pos_ptr, readMode);
+  read_input_sizes_2D<float>(fileID, A1format, A1_tile_format, A2format, A2_tile_format, A1pos_rank, A1pos_ptr, readMode);
 }
 
-extern "C" void read_input_sizes_2D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
+extern "C" void read_input_sizes_2D_f64(int32_t fileID,
+                                        int32_t A1format, int32_t A1_tile_format,
+                                        int32_t A2format, int32_t A2_tile_format,
 //                                        int A1pos_rank, void *A1pos_ptr, char *filename, int32_t readMode)
                                         int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_2D<double>(fileID, A1format, A2format, A3format, A4format, A1pos_rank, A1pos_ptr, readMode);
+  read_input_sizes_2D<double>(fileID, A1format, A1_tile_format, A2format, A2_tile_format, A1pos_rank, A1pos_ptr, readMode);
 }
 
 // Read 3D tensors

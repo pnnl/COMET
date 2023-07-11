@@ -84,29 +84,31 @@ enum SparseFormatAttribute
 
 // Read matrices and tensors
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f32(int32_t fileID,
-                                                                int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
+                                                                 int32_t A1format, int32_t A1_tile_format,
+                                                                 int32_t A2format, int32_t A2_tile_format,
                                                                  int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f32(int32_t fileID,
-                                                           int32_t A1format, int32_t A2format,
-                                                           int32_t A1_tile_format, int32_t A2_tile_format,
+                                                           int32_t A1format, int32_t A1_tile_format,
+                                                           int32_t A2format, int32_t A2_tile_format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                           int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
                                                            int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                                           int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
                                                            int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr, 
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f64(int32_t fileID,
-                                                                int32_t A1format, int32_t A2format, int32_t A3format, int32_t A4format,
+                                                                int32_t A1format, int32_t A1_tile_format,
+                                                                int32_t A2format, int32_t A2_tile_format,
                                                                 // int A1pos_rank, void *A1pos_ptr, char *filename, int32_t readMode);
                                                                  int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f64(int32_t fileID,
-                                                           int32_t A1format, int32_t A2format,
-                                                           int32_t A1_tile_format, int32_t A2_tile_format,
+                                                           int32_t A1format, int32_t A1_tile_format,
+                                                           int32_t A2format, int32_t A2_tile_format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                           int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
                                                            int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                                           int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
                                                            int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr, 
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
@@ -200,6 +202,9 @@ void printData(std::ostream &os, T *base, int64_t dim,
 template <typename T>
 void cometPrint(const DynamicMemRefType<T> &M)
 {
+    if (M.sizes[0] <= 0) {
+        return;
+    }
     std::cout << "data = " << std::endl;
     printData(std::cout, M.data, M.rank, M.rank, M.offset,
               M.sizes, M.strides);
