@@ -39,20 +39,10 @@
   COMET :: ops/transpose_COO_tensor.ta
   COMET :: ops/transpose_CSF_tensor.ta
   COMET :: ops/transpose_CSR_matrix.ta
-  COMET :: ops/utility_printCOO.ta
-  COMET :: ops/utility_printCOO_lowerTri.ta
-  COMET :: ops/utility_printCOO_lowerTriStrict.ta
-  COMET :: ops/utility_printCOO_multi.ta
   COMET :: ops/utility_printCOO_upperTri.ta
   COMET :: ops/utility_printCOO_upperTriStrict.ta
   COMET :: ops/utility_printCSF_multi.ta
-  COMET :: ops/utility_printCSR.ta
   COMET :: ops/utility_printCSR_CSF.ta
-  COMET :: ops/utility_printCSR_lowerTri.ta
-  COMET :: ops/utility_printCSR_lowerTriStrict.ta
-  COMET :: ops/utility_printCSR_multi.ta
-  COMET :: ops/utility_printCSR_upperTri.ta
-  COMET :: ops/utility_printCSR_upperTriStrict.ta
   COMET :: opts/ccsd_t1_21_ttgt.ta
   COMET :: opts/ccsd_t1_21_ttgt_all_opts.ta
   COMET :: opts/ccsd_t1_21_ttgt_tiling.ta
