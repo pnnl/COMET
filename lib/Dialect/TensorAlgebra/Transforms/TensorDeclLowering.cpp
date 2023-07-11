@@ -318,19 +318,19 @@ namespace
     {
       comet_debug() << " Rank Size is 2\n";
       auto readInput2DF32Func = FunctionType::get(ctx, {i32Type,
-                                    indexType, indexType,     // A1_format, A2_format
-                                    indexType, indexType,     // A1_tile_format, A2_tile_format
+                                    indexType, indexType,     // A1_format, A1_tile_format
+                                    indexType, indexType,     // A2_format, A2_tile_format
                                     unrankedMemref_index, unrankedMemref_index,   // A1_pos, A1_crd
-                                    unrankedMemref_index, unrankedMemref_index,   // A2_pos, A2_crd
                                     unrankedMemref_index, unrankedMemref_index,   // A1_tile_pos, A1_tile_crd
+                                    unrankedMemref_index, unrankedMemref_index,   // A2_pos, A2_crd
                                     unrankedMemref_index, unrankedMemref_index,   // A2_tile_pos, A2_tile_crd
                                     unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
       auto readInput2DF64Func = FunctionType::get(ctx, {i32Type,
-                                    indexType, indexType,     // A1_format, A2_format
-                                    indexType, indexType,     // A1_tile_format, A2_tile_format
+                                    indexType, indexType,     // A1_format, A1_tile_format
+                                    indexType, indexType,     // A2_format, A2_tile_format
                                     unrankedMemref_index, unrankedMemref_index,   // A1_pos, A1_crd
-                                    unrankedMemref_index, unrankedMemref_index,   // A2_pos, A2_crd
                                     unrankedMemref_index, unrankedMemref_index,   // A1_tile_pos, A1_tile_crd
+                                    unrankedMemref_index, unrankedMemref_index,   // A2_pos, A2_crd
                                     unrankedMemref_index, unrankedMemref_index,   // A2_tile_pos, A2_tile_crd
                                     unrankedMemref_f64, i32Type}, {});
 
@@ -1432,10 +1432,10 @@ namespace
                                                                              dim_format[2], dim_format[3], // A1_file_format, A2_tile_format
                                                                              alloc_sizes_cast_vec[0],   // A1_pos
                                                                              alloc_sizes_cast_vec[1],   // A1_crd
-                                                                             alloc_sizes_cast_vec[2],   // A2_pos
-                                                                             alloc_sizes_cast_vec[3],   // A2_crd
-                                                                             alloc_sizes_cast_vec[4],   // A1_tile_pos
-                                                                             alloc_sizes_cast_vec[5],   // A1_tile_crd
+                                                                             alloc_sizes_cast_vec[2],   // A1_tile_pos
+                                                                             alloc_sizes_cast_vec[3],   // A1_tile_crd
+                                                                             alloc_sizes_cast_vec[4],   // A2_pos
+                                                                             alloc_sizes_cast_vec[5],   // A2_crd
                                                                              alloc_sizes_cast_vec[6],   // A2_tile_pos
                                                                              alloc_sizes_cast_vec[7],   // A2_tile_crd
                                                                              alloc_sizes_cast_vec[8], readModeConst});
@@ -1495,8 +1495,8 @@ namespace
         {
           sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{
                                                                                 alloc_tensor_vec[0], alloc_tensor_vec[1], // A1
-                                                                                alloc_tensor_vec[2], alloc_tensor_vec[3], // A2
-                                                                                alloc_tensor_vec[4], alloc_tensor_vec[5], // A1_tile
+                                                                                alloc_tensor_vec[2], alloc_tensor_vec[3], // A1_tile
+                                                                                alloc_tensor_vec[4], alloc_tensor_vec[5], // A2
                                                                                 alloc_tensor_vec[6], alloc_tensor_vec[7], // A2_tile
                                                                                 alloc_tensor_vec[8],
                                                                                 array_sizes[0], array_sizes[1],
