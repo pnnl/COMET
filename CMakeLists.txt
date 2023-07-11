@@ -4,7 +4,7 @@
 ##
 ##===----------------------------------------------------------------------===//
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.25)
 
 # If we are not building as a part of LLVM, build COMET as an
 # standalone project, using LLVM as an external library:
@@ -77,8 +77,12 @@ set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
 #-------------------------------------------------------------------------------
 # BLIS Configuration
 #-------------------------------------------------------------------------------
-  SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a") #linking with BLIS static library
-  find_package(BLIS REQUIRED)
+  set(BLA_STATIC ON) #linking with BLIS static library
+  set(BLA_VENDOR FLAME)
+  set(BLA_PREFER_PKGCONFIG TRUE)
+  set(BLA_PKGCONFIG_BLAS blis)
+  set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/blis")
+  find_package(BLAS REQUIRED)
 
 #-------------------------------------------------------------------------------
 # COMET configuration
@@ -106,14 +110,11 @@ add_custom_target(comet-doc)
 # Add MLIR, LLVM and BLIS headers to the include path
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
-include_directories(${COMET_BLIS_INCLUDE_DIR})
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/blis/include/blis")
 
 # Add COMET files to the include path
 include_directories(${COMET_MAIN_INCLUDE_DIR})
 include_directories(${COMET_INCLUDE_DIR})
-
-# Add BLIS LIBRARY_PATH
-set(CMAKE_PREFIX_PATH ${BLIS_LIB_SEARCH_PATHS})
 
 #-------------------------------------------------------------------------------
 # Directory setup
@@ -123,7 +124,6 @@ add_subdirectory(include/comet)
 add_subdirectory(lib)
 add_subdirectory(frontends/comet_dsl)
 add_subdirectory(integration_test)
-
 
 
 option(COMET_INCLUDE_DOCS "Generate build targets for the COMET docs.")
@@ -161,8 +161,6 @@ if (NOT LLVM_ENABLE_IDE)
                            DEPENDS comet-headers
                            COMPONENT comet-headers)
 endif()
-
-#add_subdirectory(cmake/modules)
 
 # Set RPATH to $ORIGIN on all targets.
 function(set_rpath_all_targets dir)
