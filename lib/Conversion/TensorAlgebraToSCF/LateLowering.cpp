@@ -159,23 +159,9 @@ namespace
               print_func.setPrivate();
               module.push_back(print_func);
             }
-
-            /*
-            puts("{");
+            
             auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp());
-            sp_op.dump();
-            puts("--");
-            printf("COUNT: %d\n", sp_op.getNumberOps());
-            puts("}\n");
-            */
-
-            // SparseTensorType includes 5 metadata per dimension. Additionally, 2 elements for value array, value array size.
-            // TODO(gkestor): get tensor ranks by functions
-            // TODO(pflynn157): See above- temporary fix
-            //int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
-            int tensorRanks = 4;
-            //puts("\n");
-            //puts("-----");
+            int tensorRanks = sp_op.getExpandedRank();
 
             Type unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
 

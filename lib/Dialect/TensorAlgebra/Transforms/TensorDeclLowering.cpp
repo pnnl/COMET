@@ -1505,7 +1505,7 @@ namespace
                                                                                 array_sizes[6], array_sizes[7],
                                                                                 array_sizes[8], array_sizes[9],
                                                                                 array_sizes[10]
-                                                                                });
+                                                                                }, 2);
         }
         else if (rank_size == 3)
         {
