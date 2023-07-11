@@ -81,6 +81,7 @@ set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
   set(BLA_VENDOR FLAME)
   set(BLA_PREFER_PKGCONFIG TRUE)
   set(BLA_PKGCONFIG_BLAS blis)
+  set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/blis")
   find_package(BLAS REQUIRED)
 
 #-------------------------------------------------------------------------------
