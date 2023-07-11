@@ -61,7 +61,7 @@
 #endif
 // *********** For debug purpose *********//
 
-namespace tensorAlgebra
+namespace mlir::tensorAlgebra
 {
 
   /// This is a simple recursive parser for the Tensor Algebra language. It produces a well

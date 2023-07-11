@@ -31,7 +31,7 @@
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 
-using namespace tensorAlgebra;
+using namespace mlir::tensorAlgebra;
 
 namespace
 {
@@ -409,7 +409,7 @@ void ASTDumper::dump(GetTimeExprAST *node)
                << "\n";
 }
 
-namespace tensorAlgebra
+namespace mlir::tensorAlgebra
 {
 
   // Public API

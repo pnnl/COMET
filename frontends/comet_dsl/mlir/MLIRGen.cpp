@@ -54,7 +54,6 @@
 #include "mlir/IR/Verifier.h"
 
 using namespace mlir::tensorAlgebra;
-using namespace tensorAlgebra;
 using namespace mlir::arith;
 
 using llvm::ArrayRef;
@@ -280,7 +279,7 @@ namespace
       // Arguments type are uniformly unranked tensors.
       llvm::SmallVector<mlir::Type, 4> arg_types(proto.getArgs().size(),
                                                  getType(VarType{}));
-      auto func_type = builder.getFunctionType(arg_types, llvm::None);
+      auto func_type = builder.getFunctionType(arg_types, std::nullopt);
       return builder.create<mlir::tensorAlgebra::FuncOp>(location, proto.getName(),
                                                          func_type);
     }
@@ -1406,7 +1405,7 @@ namespace
       }
 
       auto out_lbls_vec =
-          cast<tensorAlgebra::LabeledTensorExprAST>(*tensor_op.getLHS())
+          cast<LabeledTensorExprAST>(*tensor_op.getLHS())
               .getLabelNames();
       std::set<std::string> out_labels(out_lbls_vec.begin(), out_lbls_vec.end());
 
@@ -1506,25 +1505,25 @@ namespace
       comet_debug() << " mlirGen ExprAST " << expr.getKind() << " \n";
       switch (expr.getKind())
       {
-      case tensorAlgebra::ExprAST::Expr_BinOp:
+      case ExprAST::Expr_BinOp:
         return mlirGen(cast<BinaryExprAST>(expr), out_lbls, out_format);
-      case tensorAlgebra::ExprAST::Expr_Var:
+      case ExprAST::Expr_Var:
         return mlirGen(cast<VariableExprAST>(expr));
-      case tensorAlgebra::ExprAST::Expr_Literal:
+      case ExprAST::Expr_Literal:
         return mlirGen(cast<LiteralExprAST>(expr));
-      case tensorAlgebra::ExprAST::Expr_Call:
+      case ExprAST::Expr_Call:
         return mlirGen(cast<CallExprAST>(expr));
-      case tensorAlgebra::ExprAST::Expr_Transpose:
+      case ExprAST::Expr_Transpose:
         return mlirGen(cast<TransposeExprAST>(expr));
-      case tensorAlgebra::ExprAST::Expr_Num:
+      case ExprAST::Expr_Num:
         return mlirGen(cast<NumberExprAST>(expr));
-      case tensorAlgebra::ExprAST::Expr_LabeledTensor:
+      case ExprAST::Expr_LabeledTensor:
         comet_debug() << " Is Expr_LabeledTensor\n";
         return mlirGen(cast<LabeledTensorExprAST>(expr));
-      case tensorAlgebra::ExprAST::Expr_Tensor:
+      case ExprAST::Expr_Tensor:
         comet_debug() << " Is Expr_Tensor\n";
         return mlirGen(cast<TensorOpExprAST>(expr));
-      case tensorAlgebra::ExprAST::Expr_GetTime:
+      case ExprAST::Expr_GetTime:
         return mlirGen(cast<GetTimeExprAST>(expr));
       default:
         emitError(loc(expr.loc()))
@@ -2833,7 +2832,7 @@ namespace
 
 } // namespace
 
-namespace tensorAlgebra
+namespace mlir::tensorAlgebra
 {
 
   // The public API for codegen.

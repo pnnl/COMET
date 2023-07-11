@@ -50,6 +50,7 @@
 #include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
 #include "mlir/Dialect/SPIRV/Transforms/Passes.h"
 
+#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
@@ -80,10 +81,11 @@
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/raw_ostream.h"
 
+
 #include <fstream>
 
 using namespace mlir;
-using namespace tensorAlgebra;
+using namespace mlir::tensorAlgebra;
 using namespace mlir::indexTree;
 
 #define DEBUG_TYPE "comet_dsl"
@@ -200,7 +202,7 @@ static cl::opt<bool> IsPrintFlops("print-flops", cl::init(false),
                                   cl::desc("Print the flops per tensor contraction"));
 
 /// Returns a Tensor Algebra AST resulting from parsing the file or a nullptr on error.
-std::unique_ptr<tensorAlgebra::ModuleAST> parseInputFile(llvm::StringRef filename)
+std::unique_ptr<mlir::tensorAlgebra::ModuleAST> parseInputFile(llvm::StringRef filename)
 {
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr =
       llvm::MemoryBuffer::getFileOrSTDIN(filename);
@@ -226,7 +228,7 @@ int loadMLIR(mlir::MLIRContext &context,
     auto moduleAST = parseInputFile(inputFilename);
     if (!moduleAST)
       return 6;
-    module = mlirGen(context, *moduleAST);
+    module = mlir::tensorAlgebra::mlirGen(context, *moduleAST);
     return !module ? 1 : 0;
   }
 
@@ -429,7 +431,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(createLowerAffinePass());
     pm.addPass(createCanonicalizerPass());
     pm.addNestedPass<func::FuncOp>(createGpuMapParallelLoopsPass());
-    pm.addPass(createParallelLoopToGpuPass());
+    pm.addPass(createGpuMapParallelLoopsPass());
     pm.addPass(createLowerAffinePass());
     // Assume that scf loops are lowered to GPU dialect
     pm.addNestedPass<func::FuncOp>(createConvertLinalgToLoopsPass());

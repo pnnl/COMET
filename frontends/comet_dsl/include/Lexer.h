@@ -54,7 +54,7 @@
 #endif
 // *********** For debug purpose *********//
 
-namespace tensorAlgebra
+namespace mlir::tensorAlgebra
 {
 
   /// Structure definition a location in a file.

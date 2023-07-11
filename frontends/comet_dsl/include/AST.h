@@ -38,7 +38,7 @@
 
 using llvm::cast;
 
-namespace tensorAlgebra
+namespace mlir::tensorAlgebra
 {
   /// A variable type with either name or shape information.
 

@@ -39,7 +39,7 @@ namespace mlir
     class ModuleOp;
 } // namespace mlir
 
-namespace tensorAlgebra
+namespace mlir::tensorAlgebra
 {
     class ModuleAST;
 
