@@ -63,12 +63,24 @@ $ patch -s -p0 < comet-blis.patch
 ```
 $ cd $COMET_SRC
 $ cd blis
-$ ./configure auto
+$ ./configure --prefix=`pwd` auto
 $ make [-j]
 $ make check [-j]
+$ make install [-j]
 ```
 
-6) **Build and test COMET:**
+6) **Build and test MCL:**
+
+```
+$ cd $COMET_SRC
+$ cd mcl
+$ ./configure --prefix=`pwd`
+$ make [-j]
+$ make check [-j]
+$ make install [-j]
+```
+
+7) **Build and test COMET:**
 
 ```
 $ cd $COMET_SRC
