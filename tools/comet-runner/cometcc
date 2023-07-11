@@ -1,0 +1,115 @@
+#!/usr/bin/env python
+import argparse
+import sys
+import os
+
+def print_banner():
+        if(args.verbose):
+                print('COMET Opt Version: ', comet_ver, '\n')
+                print('\t Input  file: ', args.ifile)
+                print('\t Output file: ', args.ofile)
+                print('\t Targets:     ', args.targets)
+                if(args.O0):
+                        print('\t Optimization: 0')
+                elif(args.O1):
+                        print('\t Optimization: 1')
+                elif(args.O2):
+                        print('\t Optimization: 2')
+                elif(args.O2):                     
+                        print('\t Optimization: 3') 
+                print('')
+                print('COMET Tools paths:')
+                print('\t comet-opt:             ', comet_opt)
+                print('\t comet-libt:            ', comet_lib)
+                print('\t comet-flags:           ', comet_flags)
+                print('\t mlir-opt:              ', mlir_opt)
+                print('\t mlir-lib:              ', mlir_lib)
+                print('\t mlir-flags:            ', mlir_flags)
+                print('\t LLVM disassembler:     ', llvm_dis)
+                print('\t SPIRV Toos:            ', llvm_spirv)
+                print('\t HLS assembler:         ', hls_as)
+                print('\t HLS linker:            ', hls_link)
+                print('\t Vitis SPIRV lib:       ', vitis_lib)
+                print('\t Xilinx compiler:       ', vpp)
+                print('\t Xilinx compiler flags: ', vpp_flags)
+                print('\t Xilinx compiler temp:  ', vpp_temp)
+                print('\n\n')
+
+def generate_cmd(opt, flags, ofile=None, ifile=None):
+        cmd  = opt + ' ' + flags
+        if((args.targets == 'fpga' or args.targets == 'spirv') and opt.find('comet-opt') != -1):
+                cmd += ' --convert-loops-to-spirv'
+        cmd += ' ' + ifile
+        cmd += ' &> ' + ofile
+
+        return cmd
+
+def exec_cmd(cmd):
+        if(args.verbose):      
+                print('Executing Command: ', cmd)
+        stream = os.popen(cmd)
+        ret = stream.read()
+
+def generate_xclbin(ifile, ofile):
+        cmd = llvm_spirv + ' -r ' + ifile + ' -o ' + ofile + '.bc'
+        exec_cmd(cmd)
+        cmd = llvm_dis + ' ' + ofile + '.bc -o ' + ofile + '.ll'
+        exec_cmd(cmd)
+        cmd = hls_as + ' ' + ofile + '.ll -o ' + ofile + '.xpirbc'
+        exec_cmd(cmd)
+        cmd = hls_link + ' ' + ofile + '.xpirbc ' + vitis_lib + '/libspir-39-hls.bc -o ' + ofile + '.linked.xpirbc --only-needed'
+        exec_cmd(cmd)
+
+        os.system('mkdir ' + vpp_temp)
+        cmd = vpp + ' ' + vpp_flags + ' -c -k main_kernel --temp_dir ' + vpp_temp + ' -o ' + vpp_temp + '/' + ofile + '.xo ' + ofile + '.linked.xpirbc'
+        exec_cmd(cmd)
+        cmd = vpp + ' ' + vpp_flags + ' -l --temp_dir ' +  vpp_temp + ' -o ' + ofile + '.xclbin ' + vpp_temp + '/' + ofile + '.xo'
+        exec_cmd(cmd)
+
+comet_dir    = os.getenv('COMET_DIR')
+mlir_dir     = os.getenv('MLIR_DIR')
+hls_dir      = os.getenv('LLVM_HLS_DIR')
+vitis_dir    = os.getenv('XILINX_VITIS')
+comet_opt    = comet_dir + '/bin/comet-opt'
+comet_lib    = comet_dir + '/COMET/lib'
+comet_ver    = os.getenv('COMET_VER')
+mlir_opt     = mlir_dir + '/bin/mlir-opt'
+mlir_lib     = mlir_dir + 'lib'
+llvm_spirv   = os.getenv('LLVM_SPIRV')
+llvm_dis     = os.getenv('LLVM_DIS')
+hls_as       = hls_dir + '/bin/llvm-as'
+hls_link     = hls_dir + '/bin/llvm-link'
+vitis_lib    = vitis_dir + '/lnx64/lib'
+vpp          = os.getenv('VPP')
+vpp_flags    = os.getenv('VPP_FLAGS')
+vpp_temp     = os.getenv('VPP_TEMP_DIR')
+
+comet_flags = "--convert-ta-to-it --convert-to-loops"
+mlir_flags  = "--convert-scf-to-std --convert-std-to-llvm"
+stream = os.popen(comet_opt + ' --version')
+comet_info = stream.read()
+
+arg_parser = argparse.ArgumentParser(description='COMET Opt Wrapper ' + comet_ver)
+arg_parser.add_argument(                  dest="ifile",   metavar="FILE", type=str, help="Input file")
+arg_parser.add_argument('-o', '--output', dest='ofile',   required=True,           help="Output file")
+arg_parser.add_argument('-t','--target',  dest='targets', default='cpu', choices=['cpu','fpga','spirv'], help='Target architectures')
+arg_parser.add_argument('-i','--info',    dest='info',    action='version', version=comet_info, help='Print COMET information')
+arg_parser.add_argument('-v','--verbose', dest='verbose', action='store_true',     help='Print verbose information')
+group = arg_parser.add_mutually_exclusive_group()
+group.add_argument('-O0', action='store_true', help='Optimization level 0')
+group.add_argument('-O1', action='store_true', help='Optimization level 1')
+group.add_argument('-O2', action='store_true', help='Optimization level 2')
+group.add_argument('-O3', action='store_true', help='Optimization level 3')
+
+
+args = arg_parser.parse_args()
+print_banner()
+
+cmd = generate_cmd(comet_opt, comet_flags, args.ofile + '.mlir', args.ifile)
+exec_cmd(cmd)
+
+cmd = generate_cmd(mlir_opt, mlir_flags, args.ofile + '.llvm', args.ofile + '.mlir')
+exec_cmd(cmd)
+
+if(args.targets == 'fpga'):
+        generate_xclbin('spirv_comet_main_kernel.spv', args.ofile)

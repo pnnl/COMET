@@ -30,6 +30,7 @@
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Conversion/Passes.h"
+#include "comet/Transforms/Passes.h"
 #include "MLIRGen.h"
 #include "Parser.h"
 
@@ -38,6 +39,16 @@
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
+#include "mlir/Dialect/MemRef/Transforms/Passes.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/SCF/Transforms/Passes.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
+#include "mlir/Dialect/SPIRV/Transforms/Passes.h"
 
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
@@ -54,7 +65,9 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Support/FileUtilities.h"
 #include "mlir/Target/LLVMIR/Export.h"
+#include "mlir/Target/SPIRV/Serialization.h"
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
@@ -64,8 +77,12 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <fstream>
+
+using namespace mlir;
 using namespace tensorAlgebra;
 using namespace mlir::indexTree;
 
@@ -90,6 +107,10 @@ static cl::opt<enum InputType> inputType(
     "x", cl::init(TensorAlgebra), cl::desc("Decided the kind of output desired"),
     cl::values(clEnumValN(TensorAlgebra, "ta", "load the input file as a TensorAlgebra source.")),
     cl::values(clEnumValN(MLIR, "mlir", "load the input file as an MLIR file")));
+
+static cl::opt<std::string> outputFilename("o", cl::desc("Output filename"),
+                                           cl::value_desc("filename"),
+                                           cl::init("-"));
 
 // List of TA compiler parameters
 
@@ -159,6 +180,12 @@ static cl::opt<bool> IsLoweringtoIndexTree("convert-ta-to-it", // Lower sparse/d
 // =============================================================================
 static cl::opt<bool> IsLoweringtoSCF("convert-to-loops",
                                      cl::desc("Output SCF dialect after lowering all operations"));
+
+// =============================================================================
+// Generate SPIRV kernel from loops
+// =============================================================================
+static cl::opt<bool> IsLoweringtoSPIRV("convert-loops-to-spirv", // Generating spriv kernel from loops to target FPGA platforms
+                                       cl::desc("Output IR after processing all ops"));
 
 // =============================================================================
 // Lowering to LLVM
@@ -353,7 +380,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (IsLoweringtoSCF || emitLoops || emitLLVM)
   {
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
-    optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass()); // lowers dense input/output tensor declaration
+    optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());        // lowers dense input/output tensor declaration
     optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass()); // lowering for sparse output tensor declarations
                                                                             //(sparse_output_tensor_decl and temp_sparse_output_tensor_decl)
     // The partial Fusion pass might add new tensor.fill operations
@@ -389,6 +416,33 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================
+
+  if (IsLoweringtoSPIRV)
+  {
+    pm.addPass(createRaiseSCFWhileToForPass());
+    pm.addPass(createRaiseSCFToAffinePass());
+    pm.addPass(replaceAffineCFGPass());
+    auto pass = createAffineParallelizePass();
+    if (failed(pass->initializeOptions("max-nested=1")))
+      return 1;
+    pm.addNestedPass<func::FuncOp>(std::move(pass));
+    pm.addPass(createLowerAffinePass());
+    pm.addPass(createCanonicalizerPass());
+    pm.addNestedPass<func::FuncOp>(createGpuMapParallelLoopsPass());
+    pm.addPass(createParallelLoopToGpuPass());
+    pm.addPass(createLowerAffinePass());
+    // Assume that scf loops are lowered to GPU dialect
+    pm.addNestedPass<func::FuncOp>(createConvertLinalgToLoopsPass());
+    pm.addPass(createGpuLauchSinkIndexComputationsPass());
+    pm.addPass(createGpuKernelOutliningPass());
+    pm.addPass(memref::createFoldMemRefAliasOpsPass());
+    pm.addPass(createCanonicalizerPass());
+    pm.addPass(createSymbolDCEPass());
+    pm.addPass(createGPUToOCLSPIRVPass());
+    mlir::OpPassManager &modulePM = pm.nest<spirv::ModuleOp>();
+    modulePM.addPass(spirv::createSPIRVLowerABIAttributesPass());
+    modulePM.addPass(spirv::createSPIRVUpdateVCEPass());
+  }
 
   if (isLoweringToLLVM || emitLLVM)
   {
@@ -447,8 +501,14 @@ int main(int argc, char **argv)
 
   if (int error = loadAndProcessMLIR(context, module))
     return error;
-
-  // If we aren't exporting to non-mlir, then we are done.
-  module->dump();
+  auto file = mlir::openOutputFile(outputFilename);
+  if (!file)
+  {
+    // If we aren't exporting to non-mlir, then we are done.
+    module->dump();
+    return 0;
+  }
+  module.get()->print(file->os());
+  file->keep();
   return 0;
 }

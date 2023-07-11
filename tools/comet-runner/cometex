@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+import argparse
+import sys
+import os
+
+def print_banner():
+        if(args.verbose):
+                print('COMET Exec Version: ', comet_ver, '\n')
+                print('\t Input  file:     ', args.ifile)
+                print('\t Backend Runtime: ', args.runtime)
+                print('')
+                print('COMET Tools paths:')
+                print('\t comet-lib:             ', comet_lib)
+                print('\t mlir-lib:              ', mlir_lib)
+                print('\n\n')
+
+def generate_cmd(runner, flags, ifile, kernels=None):
+        cmd  = runner + ' ' + ifile + ' ' + flags
+
+        return cmd
+
+def exec_cmd(cmd):
+        if(args.verbose):      
+                print('Executing Command: ', cmd)
+        stream = os.popen(cmd)
+        ret = stream.read()
+
+        return ret
+
+comet_dir    = os.getenv('COMET_DIR')
+mlir_dir     = os.getenv('MLIR_DIR')
+comet_lib    = comet_dir + '/lib/libcomet_runner_utils.so'
+comet_run     = comet_dir + '/bin/comet-runner'
+comet_run_flags = "--mcl-target=fpga"
+comet_ver    = os.getenv('COMET_VER')
+mlir_lib     = mlir_dir + '/lib/libmlir_runner_utils.so'
+mlir_run     = mlir_dir + '/bin/mlir-cpu-runner'
+mlir_run_flags = '-O3 -e main -entry-point-result=void -shared-libs=' + mlir_lib + ',' + comet_lib
+
+arg_parser = argparse.ArgumentParser(description='COMET Exec ' + comet_ver)
+arg_parser.add_argument(                  dest="ifile",   metavar="FILE", type=str, help="Input file")
+arg_parser.add_argument('-v','--verbose', dest='verbose', action='store_true',     help='Print verbose information')
+arg_parser.add_argument('-k','--kernels', dest='kfiles',  help="Kernel files")
+arg_parser.add_argument('-r','--runtime', dest='runtime', default='cpu', choices=['cpu','mcl'], help='Backend runtime')
+
+
+args = arg_parser.parse_args()
+print_banner()
+
+if args.runtime == "cpu": 
+        cmd = generate_cmd(mlir_run, mlir_run_flags, args.ifile)
+elif args.runtime == "mcl":
+        flags = comet_run_flags + ' ' +  '--xclbin-file=' + args.kfiles
+        cmd = generate_cmd(comet_run, flags, args.ifile, args.kfiles)
+        
+ret = exec_cmd(cmd)
+
+print(ret)

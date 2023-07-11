@@ -123,7 +123,7 @@ add_subdirectory(include/comet)
 add_subdirectory(lib)
 add_subdirectory(frontends/comet_dsl)
 add_subdirectory(integration_test)
-
+add_subdirectory(tools)
 
 
 option(COMET_INCLUDE_DOCS "Generate build targets for the COMET docs.")
