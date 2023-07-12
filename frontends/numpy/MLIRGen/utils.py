@@ -63,7 +63,7 @@ class HashTable:
   
         found_key = False
         for index, record in enumerate(bucket):
-            record_key, record_val = record
+            record_key, _ = record
               
             if record_key == key:
                 found_key = True
