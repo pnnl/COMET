@@ -161,27 +161,25 @@ namespace
             }
             
             auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp());
-            int tensorRanks = sp_op.getExpandedRank();
-
             Type unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
 
             auto rhs = op->getOperand(0).getDefiningOp();
-            for (int rsize = 0; rsize < tensorRanks; rsize++)
+            for (int rsize = 0; rsize < sp_op.getDimArrayCount(); rsize += 2)
             {
               // accessing xD_pos array and creating cast op for its alloc
-              auto xD_pos = rhs->getOperand(rsize * 2).getDefiningOp();
+              auto xD_pos = rhs->getOperand(rsize).getDefiningOp();
               auto alloc_rhs = cast<memref::AllocOp>(xD_pos->getOperand(0).getDefiningOp());
               auto u = rewriter.create<memref::CastOp>(loc, unrankedMemref_index, alloc_rhs);
               rewriter.create<func::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
 
               // accessing xD_crd array and creating cast op for its alloc
-              auto xD_crd = rhs->getOperand((rsize * 2) + 1).getDefiningOp();
+              auto xD_crd = rhs->getOperand(rsize + 1).getDefiningOp();
               alloc_rhs = cast<memref::AllocOp>(xD_crd->getOperand(0).getDefiningOp());
               u = rewriter.create<memref::CastOp>(loc, unrankedMemref_index, alloc_rhs);
               rewriter.create<func::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
             }
 
-            auto xD_value = rhs->getOperand(tensorRanks * 2).getDefiningOp();
+            auto xD_value = rhs->getOperand(sp_op.getValueArrayPos()).getDefiningOp();
             auto alloc_rhs = cast<memref::AllocOp>(xD_value->getOperand(0).getDefiningOp());
             auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_rhs);
             rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
