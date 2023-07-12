@@ -334,7 +334,7 @@ class MLIRFunctionBuilder:
     def __init__(
         self,
         func_name: str,
-        #input_types: Sequence[Union[str, Type]],
+        input_types,
         return_types: Sequence[Union[str, types_mlir.Type]],
         aliases: types_mlir.AliasMap = None,
     ) -> None:
@@ -356,7 +356,7 @@ class MLIRFunctionBuilder:
         return_types = [types_mlir.Type.find(rt, aliases) for rt in return_types]
 
         self.func_name = func_name
-        #self.inputs = inputs
+        self.inputs = input_types
         self.return_types = return_types
 
         self.var_name_counter = itertools.count()
@@ -422,12 +422,12 @@ class MLIRFunctionBuilder:
         if len(self.return_types) != 1:
             return_type = f"({return_type})"
 
-        #signature = ", ".join(f"{var}: {var.type}" for var in self.inputs)
+        signature = ", ".join(f"{var[0].replace('%','%arg_')}: {var[1].replace('tensor', 'memref')}" for var in self.inputs)
 
         return needed_function_definitions + self.function_wrapper_text.render(
             private_func=make_private,
             func_name=self.func_name,
-            signature="",
+            signature=signature,
             return_type=return_type,
             statements=joined_statements,
         )
