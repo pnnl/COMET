@@ -387,6 +387,10 @@ class _Build_and_lower_mlir:
                 tensor_decl = decl_var +  tensor_decl_build_init.build_tensor()
                 count = count + 1
 
+                # print("Checking {} versus {}".format(array, numpy_array_info.get_vars("args")))
+                # if array in numpy_array_info.get_vars("args"):
+                #     print("in vars")
+                # else:
                 list_tensor_decls.append(tensor_decl)
                 tensor_Decl_vars_ta[array] = [decl_var,tensor_type]
                 self.declared_arrays.append(array)
@@ -507,15 +511,16 @@ class _Build_and_lower_mlir:
 
     #Build the tensor contractions in TA dialect and lower
     @classmethod
-    def build_tensorOps_and_lower(self,irb,tensor_vars_ta, final_tensor_decl_var,flags,func_name):
+    def build_tensorOps_and_lower(self,irb,tensor_vars_ta, final_tensor_decl_var,flags,func_name, args_vals, outputs):
 
         #Proceed to creating tensor fill operations or ops for random initialization
         final_var_ta = ""
         for label in tensor_vars_ta.keys():
+            # if label in numpy_array_info.get_vars("args"):
+            #     continue
             ta_op_type_list = tensor_vars_ta[label]
             ta_op_var = ta_op_type_list[0]
             vartype = ta_op_type_list[1]
-          
             init_value = numpy_array_info.get_val(label)
             if(isinstance(init_value, np.ndarray)):
                 temp_arr = init_value.reshape(1,init_value.size)
@@ -545,7 +550,7 @@ class _Build_and_lower_mlir:
                 raise RuntimeError(
                     "Unsupported input type"
                 )
-
+                
         #Proceed to generate the Tensor contraction operations
         if(final_var_ta):
             tensor_ops_ta = _Build_and_lower_mlir.build_tensorOps_ta(list_operations, final_var_ta, self.id_decl_vars_ta, tensor_vars_ta)
@@ -558,12 +563,13 @@ class _Build_and_lower_mlir:
 
         #Add print statements for testing purposes in accordance with the input. 
         list_out_dims = []
-        for target in numpy_array_info.get_vars("return"):
-            out_tensor = (tensor_vars_ta[target])[0]
-            outputtype = (tensor_vars_ta[target])[1]
-            list_out_dims.append(numpy_array_info.get_dims(target))
-            irb.add_statement('"ta.print"({})'.format(out_tensor) + " : " + "({})".format(outputtype) + " -> ()")
-            # irb.add_statement('return {} : '.format(out_tensor) + '{}'.format(outputtype))
+        if numpy_array_info.get_vars("return") != "No record found":
+            for target in numpy_array_info.get_vars("return"):
+                out_tensor = (tensor_vars_ta[target])[0]
+                outputtype = (tensor_vars_ta[target])[1]
+                list_out_dims.append(numpy_array_info.get_dims(target))
+                irb.add_statement('"ta.print"({})'.format(out_tensor) + " : " + "({})".format(outputtype) + " -> ()")
+                # irb.add_statement('return {} : '.format(out_tensor) + '{}'.format(outputtype))
         
         # irb.add_statement('"ta.return"() : () -> ()')
         irb.add_statement('return')
@@ -572,7 +578,8 @@ class _Build_and_lower_mlir:
         ta_dialect = PyMLIRGen.MLIRFunctionBuilder.compile(irb)
 
         #Begin lowering. TODO: Correctness check for enabled flags.
-        lowering_result = lowering.lower_dialect(ta_dialect,list_out_dims,flags,func_name)
+        # lowering_result = lowering.lower_dialect(ta_dialect,list_out_dims,flags,func_name)
+        lowering_result = lowering.lower_dialect_with_jit(ta_dialect,list_out_dims,flags,func_name, args_vals, outputs)
       
         return lowering_result
     
@@ -597,16 +604,22 @@ def compile(flags):
             list_numpy_arrays = []
             global numpy_array_info
             numpy_array_info = HashTable(50)
-
+            global args_vals
+            args_vals = []
             #Parse the function body, create the AST and generate the TA dialect using the AST
             if(isinstance(parsed_func.body[0], ast.FunctionDef)):
                 func_def = parsed_func.body[0]
                 #If the numpy arrays are passed as arguements to the function
+                in_args = []
                 for func_arg,value in zip(func_def.args.args, pos_args):
                     numpy_array_label = func_arg.arg
                     numpy_array_info.set_val(numpy_array_label, value)
                     numpy_array_info.set_dims(numpy_array_label, list(value.shape))
+                    in_args.append(numpy_array_label)
                     list_numpy_arrays.append(numpy_array_label)
+                    args_vals.append(value)
+
+                numpy_array_info.add_vars("args", in_args)
                 
                 #Initialize the global variables of the class
                 _Build_and_lower_mlir.initialize()
@@ -640,9 +653,25 @@ def compile(flags):
                 #     outputtype = (tensor_vars_ta[target])[1]
                 #     print("Got return type {}".format(outputtype) )
                 #     list_out_dims.append(outputtype)
+                list_in_dims = []
+                for target in numpy_array_info.get_vars("args"):
+                    arg = (tensor_vars_ta[target])[0]
+                    outputtype = (tensor_vars_ta[target])[1]
+                    list_in_dims.append((arg, outputtype))
+                
+                outputs = []
+                if numpy_array_info.get_vars("return") != "No record found":
+                    for target in numpy_array_info.get_vars("return"):
+                        arg = (tensor_vars_ta[target])[0]
+                        outputtype = (tensor_vars_ta[target])[1]
+                        list_in_dims.append((arg, outputtype))
+                        shape = [int(x) for x in outputtype.split('<')[1].split('f64>')[0].split('x')[:-1]]
+                        outputs.append(np.empty(shape))
+
                 
                 irb = PyMLIRGen.MLIRFunctionBuilder(
                     func_def.name,
+                    input_types=list_in_dims,
                     return_types=list_out_dims,
                 ) 
 
@@ -656,7 +685,7 @@ def compile(flags):
                     irb.add_statement(decl)
 
                 #Build the tensor operations and lower
-                result = _Build_and_lower_mlir.build_tensorOps_and_lower(irb,tensor_vars_ta,final_tensor_decl_var,flags,func_def.name)
+                result = _Build_and_lower_mlir.build_tensorOps_and_lower(irb,tensor_vars_ta,final_tensor_decl_var,flags,func_def.name, args_vals, outputs)
             
             return result
         
