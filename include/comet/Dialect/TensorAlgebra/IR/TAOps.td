@@ -309,8 +309,14 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
   // This works for the moment; the idea is that each rank has a tiling
   // dimension per dimension.
   let extraClassDeclaration = [{
-    int getExpandedRank() {
-      return getTensorRank() * 2;
+    int getDimArrayCount() {
+      return getTensorRank() * 4;
+    }
+
+    int getValueArrayPos() {
+      // Value position- technically +1, but since we start at 0,
+      // we do not need to add anything
+      return getTensorRank() * 4;
     }
   }];
 
