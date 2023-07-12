@@ -53,6 +53,7 @@
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
+#include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
@@ -431,7 +432,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(createLowerAffinePass());
     pm.addPass(createCanonicalizerPass());
     pm.addNestedPass<func::FuncOp>(createGpuMapParallelLoopsPass());
-    pm.addPass(createGpuMapParallelLoopsPass());
+    pm.addPass(createParallelLoopToGpuPass());
     pm.addPass(createLowerAffinePass());
     // Assume that scf loops are lowered to GPU dialect
     pm.addNestedPass<func::FuncOp>(createConvertLinalgToLoopsPass());
