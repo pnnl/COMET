@@ -4,7 +4,7 @@
 ##
 ##===----------------------------------------------------------------------===//
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.25)
 
 # If we are not building as a part of LLVM, build COMET as an
 # standalone project, using LLVM as an external library:
