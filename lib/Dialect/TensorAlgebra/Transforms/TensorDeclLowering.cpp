@@ -1059,6 +1059,7 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
       assert(isa<tensorAlgebra::SparseTensorDeclOp>(op));
+      auto sp_decl = cast<tensorAlgebra::SparseTensorDeclOp>(op);
       comet_debug() << " SparseInputTensorDeclOpLowering in format begin\n";
       comet_vdump(op);
       mlir::MLIRContext *ctx = rewriter.getContext();
@@ -1284,7 +1285,8 @@ namespace
           }
         }
 
-        MemRefType memTy_alloc_sizes = MemRefType::get({3 * rank_size + 1}, indexType);
+        comet_debug() << "sp_decl.getParameterCount(): " << sp_decl.getParameterCount() << "\n";
+        MemRefType memTy_alloc_sizes = MemRefType::get({sp_decl.getParameterCount()}, indexType);
         Value alloc_sizes = rewriter.create<memref::AllocOp>(loc, memTy_alloc_sizes);
         comet_debug() << " ";
         comet_vdump(alloc_sizes);
@@ -1377,7 +1379,7 @@ namespace
         }
 
         std::vector<Value> array_sizes;
-        for (unsigned int i = 0; i < 5*rank_size+1; i++)
+        for (unsigned int i = 0; i < sp_decl.getParameterCount(); i++)
         { // 2*rank_size + 1 + rank_size
           Value idx = rewriter.create<ConstantIndexOp>(loc, i);
           Value cor = rewriter.create<memref::LoadOp>(loc, alloc_sizes, idx);
@@ -1388,7 +1390,7 @@ namespace
 
         std::vector<Value> alloc_sizes_cast_vec;
         std::vector<Value> alloc_sizes_vec;
-        for (unsigned int i = 0; i < 4 * rank_size; i++)
+        for (unsigned int i = 0; i < sp_decl.getDimArrayCount(); i++)
         {
           std::vector<Value> idxes;
           idxes.push_back(array_sizes[i]);
@@ -1402,7 +1404,7 @@ namespace
           alloc_sizes_cast_vec.push_back(alloc_size_cast);
         }
 
-        for (unsigned int i = 4 * rank_size; i < 4 * rank_size + 1; i++)
+        for (unsigned int i = sp_decl.getDimArrayCount(); i < sp_decl.getValueArrayPos(); i++)
         {
           std::vector<Value> idxes;
           idxes.push_back(array_sizes[i]);
@@ -1467,7 +1469,7 @@ namespace
 
         comet_debug() << " Generate read_input_2D or read_input_3D functions\n";
         std::vector<Value> alloc_tensor_vec;
-        for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
+        for (unsigned int i = 0; i < sp_decl.getTotalArrayCount(); i++)
         {
           Value tensorLoad = rewriter.create<ToTensorOp>(loc, alloc_sizes_vec[i]);
           alloc_tensor_vec.push_back(tensorLoad);
@@ -1475,7 +1477,7 @@ namespace
 
         // create sptensor_construct
         SmallVector<mlir::Type, 1> elementTypes;
-        for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
+        for (unsigned int i = 0; i < sp_decl.getTotalArrayCount(); i++)
         {
           elementTypes.push_back(alloc_tensor_vec[i].getType());
         }

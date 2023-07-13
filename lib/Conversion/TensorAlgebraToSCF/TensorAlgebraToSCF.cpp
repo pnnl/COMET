@@ -509,14 +509,16 @@ namespace
         assert(isa<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp()));
 
         // TODO(gkestor): get tensor ranks by functions
-        int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
+        //int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
+        int tensorRanks = 2;
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
         comet_debug() << "Tensor to reduce:\n";
         comet_pdump(op->getOperand(0).getDefiningOp());
 
         // TODO(gkestor): need a better way to acces information from SparseTensorConstructOp
         //  create the lowerBound, upperbound and step for loop
-        int indexValueSize = (tensorRanks * 4) + 1; // 4 corresponding to pos, crd, crd_size, pos_size
+        //int indexValueSize = (tensorRanks * 4) + 1; // 4 corresponding to pos, crd, crd_size, pos_size
+        int indexValueSize = 17;
         comet_debug() << "indexValueSize in SparseTensorConstructOp:" << indexValueSize << "\n";
 
         auto loadOpForNNZ = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
@@ -542,7 +544,9 @@ namespace
         else
         {
           // size of value array comes from read_input_sizes_2D_f64, and alloc dimsize can be only expected size
-          auto expectedMemRefSize = tensorRanks * 2 + tensorRanks + 1; //"2" is corresponding the pos, crd per dimension, "1" is for value array
+          auto expectedMemRefSize = 13;//tensorRanks * 2 + tensorRanks + 1; //"2" is corresponding the pos, crd per dimension, "1" is for value array
+          comet_debug() << "tensorRanks: " << tensorRanks << "\n";
+          comet_debug() << "expectedMemRefSize: " << expectedMemRefSize << "\n";
           assert(memRefDimSize == expectedMemRefSize);
           upperBound = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
         }
@@ -558,7 +562,7 @@ namespace
         rewriter.setInsertionPointToStart(loop.getBody());
 
         // Build loop body
-        int indexValuePtr = (tensorRanks * 2); // 2 corresponding to pos, crd
+        int indexValuePtr = (tensorRanks * 4); // 2 corresponding to pos, crd
         auto alloc_op = op->getOperand(0).getDefiningOp()->getOperand(indexValuePtr).getDefiningOp()->getOperand(0);
         comet_debug() << " ValueAllocOp";
         comet_vdump(alloc_op);
