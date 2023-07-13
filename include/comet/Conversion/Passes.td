@@ -97,6 +97,40 @@ def ConvertSCFToGPU : Pass<"convert-scf-to-gpu"> {
   ];
 }
 
+def GPUAffineParallelize : Pass<"gpu-affine-vectorize"> {
+  let summary = "Vectorize affine loops "
+                "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createAffineVectorizePass()";
+  let dependentDialects = [
+    "gpu::GPUDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect",
+    "arith::ArithDilect",
+    "vector::VectorDialect"
+  ];
+}
+
+def GPUHostRegister : Pass<"gpu-add-host-register"> {
+  let summary = "Adds gpu host register ops needed for mapping "
+                " host buffer into device address space.";
+  let description = [{
+
+      }];
+  let constructor = "comet::createGPUHostRegisterOpPass()";
+  let dependentDialects = [
+    "gpu::GPUDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect",
+    "arith::ArithDilect",
+    "vector::VectorDialect"
+  ];
+}
+
 //===----------------------------------------------------------------------===//
 // SCFToAffine
 //===----------------------------------------------------------------------===//

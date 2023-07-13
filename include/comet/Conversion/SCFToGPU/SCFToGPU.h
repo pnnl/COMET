@@ -42,6 +42,12 @@ namespace mlir
 
         /// Lowers TensorAlgebra operations
         std::unique_ptr<Pass> createLowerSCFToGPUPass();
+
+        //*** affine-super-vectorize
+        std::unique_ptr<Pass> createAffineVectorizePass();
+
+        //*** creates gpu.host_register ops
+        std::unique_ptr<Pass> createGPUHostRegisterOpPass();        
     }
 } // namespace mlir
 

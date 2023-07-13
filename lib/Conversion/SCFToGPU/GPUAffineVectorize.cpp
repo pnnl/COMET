@@ -1,4 +1,4 @@
-//===- SCFToGPU.cpp------===//
+//===- GPUAffineVectorize.cpp------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,7 +21,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file SCF loops to GPU Ops.
+// This file vectorizes affine operations.
 //===----------------------------------------------------------------------===//
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -29,22 +29,38 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
 #include "comet/Conversion/SCFToGPU/SCFToGPU.h"
+#include "comet/Conversion/Utils/GPUUtils.h"
 #include "comet/Conversion/TensorAlgebraToIndexTree/TensorAlgebraToIndexTree.h"
 #include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 
+#include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"
+#include "mlir/Dialect/Affine/Analysis/NestedMatcher.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/Utils.h"
+
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/SCF/Transforms/Transforms.h"
+#include "mlir/Dialect/SCF/Transforms/Patterns.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/NVGPU/IR/NVGPUDialect.h"
+#include "mlir/Dialect/Linalg/Transforms/Hoisting.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPU.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "mlir/Transforms/LoopInvariantCodeMotionUtils.h"
 #include "llvm/ADT/Sequence.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
+#include "mlir/Dialect/Vector/Transforms/VectorTransforms.h"
+
 
 #include "mlir/IR/BuiltinOps.h"
 
@@ -54,16 +70,14 @@
 #include "mlir/IR/PatternMatch.h"
 
 using namespace mlir;
-using namespace mlir::arith;
 using namespace mlir::bufferization;
-using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_SCFToGPUPass
- #define DEBUG_MODE_SCFToGPUPass
+// #ifndef DEBUG_MODE_GPUAffineVectorize
+// #define DEBUG_MODE_GPUAffineVectorize
 // #endif
 
-#ifdef DEBUG_MODE_SCFToGPUPass
+#ifdef DEBUG_MODE_GPUAffineVectorize
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
@@ -78,67 +92,44 @@ using namespace mlir::tensorAlgebra;
 #endif
 // *********** For debug purpose *********//
 
-/// This is a lowering of SCF ops to GPU ops
+namespace {
+struct GPUAffineVectorizePass
+    : public PassWrapper<GPUAffineVectorizePass, OperationPass<func::FuncOp>> {
 
-namespace
-{
-  struct LowerSCFToGPUPass
-      : public PassWrapper<LowerSCFToGPUPass, OperationPass<func::FuncOp>>
-  {
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerSCFToGPUPass)
 
-    void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<gpu::GPUDialect, AffineDialect, func::FuncDialect, memref::MemRefDialect>();
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(GPUAffineVectorizePass)
+
+private:
+  
+ public:
+  GPUAffineVectorizePass() {}
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<mlir::vector::VectorDialect>();
   }
 
-    void runOnOperation() override;
-  };
-} // end anonymous namespace.
+  void runOnOperation() override {
+    comet_debug() << "[DEBUG][GPU][Start] GPUAffineVectorize\n";
 
-void LowerSCFToGPUPass::runOnOperation()
-{
-  func::FuncOp function = getOperation();
+    auto funcOp = getOperation();
+    DenseSet<Operation *> forOps;
+    funcOp.walk([&forOps](AffineForOp forOp) { forOps.insert(forOp); });
 
-  // debug
-  //auto module = function.getOperation()->getParentOfType<ModuleOp>();
-  //module->dump();
+    ArrayRef<int64_t> vectorSizes = {2};  // For GPUs, this should be 128 bits for coalesced access: e.g., for f64-> 2xf64, f32-> 4xf32, f16->8xf18...
+    ArrayRef<int64_t> fastestVaryingPattern = {0};
 
-  // The first thing to define is the conversion target. This will define the
-  // final target for this lowering.
-  ConversionTarget target(getContext());
+    mlir::vectorizeAffineLoops(funcOp, forOps,
+                          vectorSizes,
+                          fastestVaryingPattern);
 
-  // We define the specific operations, or dialects, that are legal targets for
-  // this lowering.
-  target.addLegalDialect<gpu::GPUDialect,
-                         LinalgDialect,
-                         AffineDialect,
-                         scf::SCFDialect,
-                         ArithDialect,
-                         memref::MemRefDialect,
-                         bufferization::BufferizationDialect>();
-
-  RewritePatternSet patternsAlloc(&getContext());
-  //patternsAlloc.insert<>(&getContext());
- 
-  RewritePatternSet patterns(&getContext());
-  populateParallelLoopToGPUPatterns(patterns);  // gpu.launch_func created here
-  target.markUnknownOpDynamicallyLegal([](Operation *) { return true; });
-  configureParallelLoopToGPULegality(target);
-
-  // With the target and rewrite patterns defined, we can now attempt the
-  // conversion. The conversion will signal failure if any of our `illegal`
-  // operations were not converted successfully.
-
-  if (failed(applyPatternsAndFoldGreedily(getOperation(), std::move(patterns))))
-  {
-    signalPassFailure();
+    comet_debug() << "[DEBUG][GPU][End] GPUAffineVectorize\n";
   }
+};
 
-  finalizeParallelLoopToGPUConversion(getOperation());
-}
+}  // namespace
 
-/// Create a pass for lowering SCF operations in the SCF dialect to GPU ops in the GPU dialect
-std::unique_ptr<Pass> mlir::comet::createLowerSCFToGPUPass()
-{
-  return std::make_unique<LowerSCFToGPUPass>();
+
+/// Create a pass to do vectorization and padding
+std::unique_ptr<Pass> mlir::comet::createAffineVectorizePass() {
+  return std::make_unique<GPUAffineVectorizePass>();
 }

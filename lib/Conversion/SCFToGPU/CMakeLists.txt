@@ -1,5 +1,7 @@
 add_mlir_conversion_library(COMETSCFToGPU
   SCFToGPU.cpp
+  GPUAffineVectorize.cpp
+  GPUHostRegister.cpp
 
 
   ADDITIONAL_HEADER_DIRS
@@ -18,6 +20,7 @@ add_mlir_conversion_library(COMETSCFToGPU
   MLIRIR
   MLIRMemRefDialect
   MLIRSCFDialect
+  MLIRSCFTransforms
   MLIRGPUOps
   MLIRGPUTransformOps
   MLIRPass
