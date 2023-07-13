@@ -81,7 +81,7 @@ set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
   set(BLA_VENDOR FLAME)
   set(BLA_PREFER_PKGCONFIG TRUE)
   set(BLA_PKGCONFIG_BLAS blis)
-  set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/blis")
+  set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/install")
   find_package(BLAS REQUIRED)
 
 #-------------------------------------------------------------------------------
@@ -110,7 +110,7 @@ add_custom_target(comet-doc)
 # Add MLIR, LLVM and BLIS headers to the include path
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/blis/include/blis")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/install/include/blis/")
 
 # Add COMET files to the include path
 include_directories(${COMET_MAIN_INCLUDE_DIR})
