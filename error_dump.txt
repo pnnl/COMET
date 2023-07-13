@@ -1,3 +1,4 @@
+Failed Tests (71):
   COMET :: compound_exps/CSR_mult_dTranspose.ta
   COMET :: compound_exps/CSR_mult_spTranspose_CSR.ta
   COMET :: compound_exps/Dense_eltwise_sTranspose_CSR.ta
@@ -32,15 +33,11 @@
   COMET :: ops/mult_spmv_COOxDense.ta
   COMET :: ops/mult_spmv_CSRxDense.ta
   COMET :: ops/mult_spmv_DCSRxDense.ta
-  COMET :: ops/sum_COO.ta
   COMET :: ops/sum_CSF.ta
-  COMET :: ops/sum_CSR.ta
   COMET :: ops/transpose_COO_matrix.ta
   COMET :: ops/transpose_COO_tensor.ta
   COMET :: ops/transpose_CSF_tensor.ta
   COMET :: ops/transpose_CSR_matrix.ta
-  COMET :: ops/utility_printCOO_upperTri.ta
-  COMET :: ops/utility_printCOO_upperTriStrict.ta
   COMET :: ops/utility_printCSF_multi.ta
   COMET :: ops/utility_printCSR_CSF.ta
   COMET :: opts/ccsd_t1_21_ttgt.ta
