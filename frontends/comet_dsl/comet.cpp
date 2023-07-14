@@ -386,7 +386,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::comet::createLateLoweringPass());
-  // optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
+  optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================
 
