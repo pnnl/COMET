@@ -25,6 +25,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
   option(LLVM_INCLUDE_TOOLS "Generate build targets for the LLVM tools." ON)
   option(LLVM_BUILD_TOOLS "Build the LLVM tools. If OFF, just generate build targets." ON)
 
+set(COMET_GPU_CUBIN 0 CACHE BOOL "Enable GPU To CUBIN pass")
+
+if (COMET_GPU_CUBIN)
+  # Configure CUDA language support. Using check_language first allows us to
+  # give a custom error message.
+  include(CheckLanguage)
+  check_language(CUDA)
+  if (CMAKE_CUDA_COMPILER)
+    enable_language(CUDA)
+  else()
+    message(SEND_ERROR
+      "Building COMET with cuda support requires a working CUDA install")
+  endif()
+  
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_CUBIN_GEN")
+endif ()
+
 if (MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHs-c- /GR-")
 else ()

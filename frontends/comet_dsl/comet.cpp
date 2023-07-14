@@ -53,6 +53,7 @@
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/GPUToNVVM/GPUToNVVMPass.h"
+#include "mlir/Conversion/GPUCommon/GPUCommonPass.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
 #include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
 
@@ -87,6 +88,9 @@ static cl::opt<std::string> inputFilename(cl::Positional,
                                           cl::desc("<input tensorAlgebra file>"),
                                           cl::init("-"),
                                           cl::value_desc("filename"));
+
+static cl::opt<std::string> gpuChip ("gpuChip", cl::init("sm_35"), 
+				     cl::desc("GPU Chip option for CUBIN generation"));
 
 namespace
 {
@@ -415,7 +419,11 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     if (isLoweringSCFtoGPU)
     {
-      // Affine -> GPU
+      // ** SCF -> Affine
+      optPM.addPass(mlir::comet::createRaiseSCFForPass());
+      optPM.addPass(mlir::comet::createRaiseLoadStorePass());
+
+      // ** Affine -> GPU
       
       // Loop tiling
       pm.addNestedPass<mlir::func::FuncOp>(mlir::createLoopTilingPass());
@@ -430,7 +438,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       pm.addPass(mlir::createCSEPass());
 
       // Vectorize
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createAffineVectorizePass());
+      //pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createAffineVectorizePass());
       pm.addPass(mlir::createCanonicalizerPass());
       pm.addPass(mlir::createCSEPass());
 
@@ -494,16 +502,15 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // Finalize GPU code generation.
     // Note: this will only be available if NVPTX is enabled as target during LLVM build
     // TODO: add ability to pass gpu 
-    //pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createGpuSerializeToCubinPass(    
-                             //options.gpuTriple, options.gpuChip, options.gpuFeatures));
-    //                           "", "sm_70", ""));
+    #if ENABLE_CUBIN_GEN
+    pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createGpuSerializeToCubinPass(    
+                               "nvptx64-nvidia-cuda", gpuChip, "+ptx60"));
 
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertSCFToCFPass());
-    pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createArithToLLVMConversionPass());
+    pm.addPass(mlir::createGpuToLLVMConversionPass());
+    pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());    
     pm.addPass(mlir::createConvertFuncToLLVMPass());
     pm.addPass(mlir::createReconcileUnrealizedCastsPass());
+    #endif
   }
 
   if (mlir::failed(pm.run(*module)))
@@ -532,6 +539,11 @@ int main(int argc, char **argv)
 
   mlir::MLIRContext context;
   mlir::registerAllDialects(context);
+
+  // initialize NVPTX target
+  #if ENABLE_CUBIN_GEN
+  mlir::registerGpuSerializeToCubinPass();
+  #endif
 
   mlir::registerPassManagerCLOptions();
   cl::ParseCommandLineOptions(argc, argv, "Tensor Algebra compiler\n");

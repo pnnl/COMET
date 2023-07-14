@@ -29,7 +29,6 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
 #include "comet/Conversion/SCFToGPU/SCFToGPU.h"
-#include "comet/Conversion/Utils/GPUUtils.h"
 #include "comet/Conversion/TensorAlgebraToIndexTree/TensorAlgebraToIndexTree.h"
 #include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"

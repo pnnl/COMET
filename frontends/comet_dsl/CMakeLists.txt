@@ -39,10 +39,13 @@ set(LIBS
   # MLIRVectorToSCF
   MLIRTransforms
   MLIRSupport
+  MLIRGPUToNVVMTransforms
+  MLIRGPUTransforms
   COMETUtils
   COMETTensorAlgebraDialect
   COMETIndexTreeDialect
   COMETIndexTreeToSCF
+  COMETSCFToGPU
 )
 
 target_link_libraries(comet-opt 
