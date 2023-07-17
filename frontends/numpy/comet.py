@@ -202,7 +202,8 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
                     input1_dims = list(input_dim_lbls[0])
                     input2_dims = list(input_dim_lbls[1])
                     output_dim_lbls = list(mapping[1])
-                    input_dim_lbls = [input1_dims,input2_dims]
+                    # input_dim_lbls = [input1_dims,input2_dims]
+                    input_dim_lbls = [list(x) for x in input_dim_lbls]
                     opr_type = "contraction"
                     oprs_info(opr_no,target,input_arrays,input_dim_lbls,output_dim_lbls,opr_type,op)
                     list_operations.append(opr_no)
@@ -214,7 +215,6 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
                     opr_type = "transpose"
                     oprs_info(opr_no,target,input_arrays,input_dim_lbls,output_dim_lbls,opr_type,op)
                     list_operations.append(opr_no)
-
         #Map the labels in the einsum input syntax to their corresponding values stored in the hash table
         for i,j in zip(range(len(input_arrays)), range(len(input_dim_lbls))):  
             dim_values = numpy_array_info.get_dims(input_arrays[i])
@@ -227,10 +227,8 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
         output_dim_vals = []
         for lbl in output_dim_lbls:
             output_dim_vals.append(label_id_map[lbl])
-
         numpy_array_info.set_dims(target,output_dim_vals)
         numpy_array_info.set_dims_labels(target,output_dim_lbls)
-
         #Build the dimension declarations for the dialect
         _Build_and_lower_mlir.build_dim_decls()
 
@@ -416,6 +414,34 @@ class _Build_and_lower_mlir:
         self.counter += 2
         return const_op_ta_var, ele_wise_assign_op    
     
+
+    def build_op_helper(op_ops, op_types, target_type, dimslbls_lists, target_dims_lbls, id_decl_vars_ta, opr_type, op):
+        tensor_types = []
+        ta_operators = []
+        
+        for top in op_ops:
+            ta_operators.append(top)
+        for type in op_types:
+            tensor_types.append(type)
+
+        tensor_types.append(target_type)
+
+        dimslbls_to_map = []
+        for lst in dimslbls_lists:
+            dimslbls_to_map = list(set(lst+dimslbls_to_map))
+
+        tc_indices = []
+        for dim_lbl in target_dims_lbls:
+            tc_indices.append(id_decl_vars_ta[dim_lbl])
+
+        dimslbls_to_map.sort()
+        tc_builder_init = PyMLIRGen.TC_and_TrPose_Builder(ta_operators, dimslbls_to_map, dimslbls_lists, 
+                                                                    target_dims_lbls,tensor_types,tc_indices, opr_type,op)
+        
+        return tc_builder_init
+        
+
+
     #Build the tensor contractions by going through each einsum in order.
     #Can handle dependencies between einsums as well.
     #Other types of tensor operations yet to be handled.
@@ -434,54 +460,69 @@ class _Build_and_lower_mlir:
         tc_var = ""
         for opr_no in list_operations:
             opr_type = oprs_info.get_opr_type(opr_no)
-            tensor_types = []
-            ta_operators = []
-            tc_var = "%{}".format(last_var_assigned+count)
+            target = oprs_info.get_einsum_target(opr_no)
             if(opr_type == "contraction" or opr_type == "transpose" or opr_type == "elewise_mult"):
-                target = oprs_info.get_einsum_target(opr_no)
                 input_arrays = oprs_info.get_input_arrays(opr_no)
                 input_array_dimslbls_lists = oprs_info.get_input_dims_lbls(opr_no)
                 target_dims_lbls = oprs_info.get_out_dims_lbls(opr_no)
                 op = oprs_info.get_op(opr_no)
-
                 target_var_ta = (tensor_vars_ta[target])[0]
                 target_type = (tensor_vars_ta[target])[1]
-
-                for array in input_arrays:
-                    ta_operators.append((tensor_vars_ta[array])[0])
-                    tensor_types.append((tensor_vars_ta[array])[1])
-                tensor_types.append(target_type)
-
-                dimslbls_to_map = []
-                for lst in input_array_dimslbls_lists:
-                    dimslbls_to_map = list(set(lst+dimslbls_to_map))
                 
-                tc_indices = []
-                for dim_lbl in target_dims_lbls:
-                    tc_indices.append(id_decl_vars_ta[dim_lbl])
+                op1 = input_arrays[0]
+                op1_op = tensor_vars_ta[op1][0]
+                op1_type = tensor_vars_ta[op1][1]
+                op1_dimslbls_lists = input_array_dimslbls_lists[0]
 
-                dimslbls_to_map.sort()
-            
-                if(opr_type == "contraction" or opr_type== "elewise_mult"):
-                    tc_builder_init = PyMLIRGen.TC_and_TrPose_Builder(ta_operators, dimslbls_to_map, input_array_dimslbls_lists, 
-                                                                            target_dims_lbls,tensor_types,tc_indices, opr_type,op)
-                
+                if len(input_arrays) == 1:
+                    tc_var = "%{}".format(last_var_assigned+count)
+                    tc_builder_init = _Build_and_lower_mlir.build_op_helper([op1_op], [op1_type], target_type, [op1_dimslbls_lists], 
+                                                                            target_dims_lbls, id_decl_vars_ta, opr_type, op)
+                    beta_val = PyMLIRGen.TC_and_TrPose_Builder.get_beta_val(op)
+                    
+                    tc_op_ta = tc_var + tc_builder_init.build_tc()
+
+                    set_op = '\n"ta.set_op"({},{}) '.format(tc_var,target_var_ta) \
+                                    + "{" + "__beta__ = {} : f64".format(beta_val) +'} : ' +'({},{})'.format(target_type,target_type) + ' -> ()'
+                    tensor_ops.append(tc_op_ta + set_op)
+
+                    count += 1
                 else:
-                    tc_builder_init = PyMLIRGen.TC_and_TrPose_Builder(ta_operators, dimslbls_to_map, input_array_dimslbls_lists, 
-                                                                            target_dims_lbls,tensor_types,tc_indices,opr_type,op)
+                    for jj, op2 in enumerate(input_arrays[1:]):
+                        j = jj + 1
+                        tc_var = "%{}".format(last_var_assigned+count)
 
-                beta_val = PyMLIRGen.TC_and_TrPose_Builder.get_beta_val(op)
-                tc_op_ta = tc_var + tc_builder_init.build_tc()
-                set_op = '\n"ta.set_op"({},{}) '.format(tc_var,target_var_ta) \
-                                + "{" + "__beta__ = {} : f64".format(beta_val) +'} : ' +'({},{})'.format(target_type,target_type) + ' -> ()'
-                tensor_ops.append(tc_op_ta + set_op)
-            
+                        op2_dimslbls_lists = input_array_dimslbls_lists[j]
+                        int_input_array_dimslbls_lists = [op1_dimslbls_lists, op2_dimslbls_lists]
+                        if j == len(input_arrays) - 1:
+                            int_target_dims = target_dims_lbls
+                        else:
+                            int_target_dims = [x for x in op1_dimslbls_lists if x not in op2_dimslbls_lists]
+                            int_target_dims += [x for x in op2_dimslbls_lists if x not in op1_dimslbls_lists]
+
+                        
+                        int_target_type = "tensor<"+ "x".join(["{}"] * len(int_target_dims)).format(*[label_id_map[x] for x in int_target_dims])+"xf64>"
+                        tc_builder_init = _Build_and_lower_mlir.build_op_helper([op1_op,tensor_vars_ta[op2][0]], [op1_type, tensor_vars_ta[op2][1]], int_target_type, int_input_array_dimslbls_lists, 
+                                                                            int_target_dims, id_decl_vars_ta, opr_type, op)
+                        
+                        tc_op_ta = tc_var + tc_builder_init.build_tc()
+
+                        op1_dimslbls_lists =  int_target_dims
+                        op1_op = tc_var
+
+                        tensor_ops.append(tc_op_ta)
+                        count += 1
+
+                    beta_val = PyMLIRGen.TC_and_TrPose_Builder.get_beta_val(op)
+                    set_op = '"ta.set_op"({},{}) '.format(tc_var,target_var_ta) \
+                                    + "{" + "__beta__ = {} : f64".format(beta_val) +'} : ' +'({},{})'.format(target_type,target_type) + ' -> ()'
+                    tensor_ops.append(set_op)
          
             #Handle other tensor operations like tensor arithmetic operations
             else:
-                target = oprs_info.get_einsum_target(opr_no)
-                input_arrays = oprs_info.get_input_arrays(opr_no)
-                op = oprs_info.get_op(opr_no)
+                ta_operators = []
+                tensor_types = []
+                tc_var = "%{}".format(last_var_assigned+count)
 
                 target_var_ta = (tensor_vars_ta[target])[0]
                 target_type =  (tensor_vars_ta[target])[1]
@@ -499,7 +540,7 @@ class _Build_and_lower_mlir:
 
                 tensor_ops.append(arith_op_ta + set_op)
         
-            count += 1
+                count += 1
 
         # end_time_op = "%" + str(last_var_assigned+count)
         # end_timer = end_time_op + ' = "ta.getTime"() : () -> f64'
@@ -511,7 +552,7 @@ class _Build_and_lower_mlir:
 
     #Build the tensor contractions in TA dialect and lower
     @classmethod
-    def build_tensorOps_and_lower(self,irb,tensor_vars_ta, final_tensor_decl_var,flags,func_name, args_vals, outputs):
+    def build_tensorOps_and_lower(self,irb,tensor_vars_ta, final_tensor_decl_var,flags, with_jit, func_name, args_vals, outputs):
 
         #Proceed to creating tensor fill operations or ops for random initialization
         final_var_ta = ""
@@ -578,15 +619,17 @@ class _Build_and_lower_mlir:
         ta_dialect = PyMLIRGen.MLIRFunctionBuilder.compile(irb)
 
         #Begin lowering. TODO: Correctness check for enabled flags.
-        # lowering_result = lowering.lower_dialect(ta_dialect,list_out_dims,flags,func_name)
-        lowering_result = lowering.lower_dialect_with_jit(ta_dialect,list_out_dims,flags,func_name, args_vals, outputs)
+        if with_jit:
+            lowering_result = lowering.lower_dialect_with_jit(ta_dialect,list_out_dims,flags,func_name, args_vals, outputs)
+        else:
+            lowering_result = lowering.lower_dialect(ta_dialect,list_out_dims,flags,func_name)
       
         return lowering_result
     
        
 
 #Wrapper function. The input function (in the form of an object) is passed an arguement to this function.
-def compile(flags):
+def compile(flags, with_jit=True):
     
     def innerfunc(func):
 
@@ -685,7 +728,7 @@ def compile(flags):
                     irb.add_statement(decl)
 
                 #Build the tensor operations and lower
-                result = _Build_and_lower_mlir.build_tensorOps_and_lower(irb,tensor_vars_ta,final_tensor_decl_var,flags,func_def.name, args_vals, outputs)
+                result = _Build_and_lower_mlir.build_tensorOps_and_lower(irb,tensor_vars_ta,final_tensor_decl_var,flags, with_jit, func_def.name, args_vals, outputs)
             
             return result
         

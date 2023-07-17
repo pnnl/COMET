@@ -146,9 +146,7 @@ class TC_and_TrPose_Builder:
         types_range_str += "!ta.range)"
 
         self.operators = str(tuple(self.operators)).replace("'", "")
-        
         indexing_maps = TC_and_TrPose_Builder.create_affine_mapping(self.dimslbls_to_map,self.input_array_dims_lbls,self.target_dims_lbls)
-
         self.beta_val = TC_and_TrPose_Builder.get_beta_val(self.op)        
 
         if(self.opr_type == "contraction"):
