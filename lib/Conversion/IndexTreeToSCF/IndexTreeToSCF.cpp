@@ -260,8 +260,8 @@ std::vector<Value> getAllocs(Value tensor)
     auto defop = tensor.getDefiningOp<tensorAlgebra::SparseTensorConstructOp>();
 
     // TODO(gkestor): get tensor ranks by functions
-    unsigned int ranks = (defop.getIndices().size() - 2) / 5;
-    for (unsigned int n = 0; n < 2 * ranks + 1; n++)
+    unsigned int ranks = defop.getTensorRank();
+    for (unsigned int n = 0; n < defop.getTotalDimArrayCount(); n++)
     {
       comet_vdump(defop.getIndices()[n]);
       Operation *tensorload = defop.getIndices()[n].getDefiningOp<ToTensorOp>();
@@ -269,6 +269,8 @@ std::vector<Value> getAllocs(Value tensor)
       allocs.push_back(alloc_op);
       comet_vdump(alloc_op);
     }
+
+    comet_debug() << "------\n";
   }
   else if (dyn_cast<ConstantOp>(tensor.getDefiningOp()))
   { // ConstantOp
