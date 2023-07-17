@@ -335,6 +335,10 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
       return getTensorRank() * 4;
     }
 
+    int getTotalDimArrayCount() {
+      return (getTensorRank() * 4) + 1;
+    }
+
     int getValueArrayPos() {
       // Value position- technically +1, but since we start at 0,
       // we do not need to add anything
