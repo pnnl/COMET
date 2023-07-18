@@ -21,7 +21,7 @@ def main() {
 	C[a, c] = 0.0;
 
 	C[a, c] = A[a, b] * B[b, c];
-	#print(C);
+	print(C);
 }
 
 # Print the result for verification.
