@@ -450,7 +450,7 @@ module attributes {llvm.data_layout = ""} {
   ^bb43:  // pred: ^bb42
     %353 = llvm.getelementptr %88[%351] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     %354 = llvm.load %353 : !llvm.ptr<i64>
-    %355 = llvm.getelementptr %136[%351] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
+    %355 = llvm.getelementptr %184[%351] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     %356 = llvm.load %355 : !llvm.ptr<i64>
     llvm.br ^bb44(%0 : i64)
   ^bb44(%357: i64):  // 2 preds: ^bb43, ^bb45
@@ -482,9 +482,19 @@ module attributes {llvm.data_layout = ""} {
     %376 = llvm.add %345, %2  : i64
     llvm.br ^bb40(%376 : i64)
   ^bb48:  // pred: ^bb40
+    %377 = llvm.mlir.constant(1 : index) : i64
+    %378 = llvm.alloca %377 x !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<2 x i64>, array<2 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<f64>, ptr<f64>, i64, array<2 x i64>, array<2 x i64>)>>
+    llvm.store %326, %378 : !llvm.ptr<struct<(ptr<f64>, ptr<f64>, i64, array<2 x i64>, array<2 x i64>)>>
+    %379 = llvm.bitcast %378 : !llvm.ptr<struct<(ptr<f64>, ptr<f64>, i64, array<2 x i64>, array<2 x i64>)>> to !llvm.ptr<i8>
+    %380 = llvm.mlir.constant(2 : index) : i64
+    %381 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
+    %382 = llvm.insertvalue %380, %381[0] : !llvm.struct<(i64, ptr<i8>)> 
+    %383 = llvm.insertvalue %379, %382[1] : !llvm.struct<(i64, ptr<i8>)> 
+    llvm.call @comet_print_memref_f64(%380, %379) : (i64, !llvm.ptr<i8>) -> ()
     llvm.return
   }
   llvm.func @read_input_2D_f64(i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i32) attributes {sym_visibility = "private"}
   llvm.func @read_input_sizes_2D_f64(i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i32) attributes {sym_visibility = "private"}
   llvm.func @quick_sort(i64, !llvm.ptr<i8>, i64) attributes {sym_visibility = "private"}
+  llvm.func @comet_print_memref_f64(i64, !llvm.ptr<i8>) attributes {sym_visibility = "private"}
 }
