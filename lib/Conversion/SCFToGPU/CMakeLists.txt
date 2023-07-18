@@ -1,7 +1,12 @@
 add_mlir_conversion_library(COMETSCFToGPU
   SCFToGPU.cpp
+  GPUVectorization.cpp
+  GPUReduceBankConflicts.cpp
+  GPUOptimizeVectorTransfer.cpp
+  GPUPipelining.cpp
   GPUAffineVectorize.cpp
   GPUHostRegister.cpp
+  GPUMemrefCopy.cpp
 
 
   ADDITIONAL_HEADER_DIRS

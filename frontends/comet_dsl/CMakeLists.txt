@@ -46,6 +46,7 @@ set(LIBS
   COMETIndexTreeDialect
   COMETIndexTreeToSCF
   COMETSCFToGPU
+  COMETGPUUtils
 )
 
 target_link_libraries(comet-opt 

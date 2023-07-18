@@ -1,4 +1,4 @@
-//===- GPUHostRegister.cpp------===//
+//===- GPUMemrefCopy.cpp------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,7 +21,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file adds gpu host_register op for mapping host memory to device space.
+// This file adds memref.copy ops for better vectorization.
 //===----------------------------------------------------------------------===//
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -29,6 +29,7 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
 #include "comet/Conversion/SCFToGPU/SCFToGPU.h"
+#include "comet/Conversion/Utils/MarkerUtils.h"
 #include "comet/Conversion/TensorAlgebraToIndexTree/TensorAlgebraToIndexTree.h"
 #include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
@@ -72,11 +73,11 @@ using namespace mlir;
 using namespace mlir::gpu;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_GPUHostRegister
-// #define DEBUG_MODE_GPUHostRegister
+// #ifndef DEBUG_MODE_GPUMemrefCopy
+// #define DEBUG_MODE_GPUMemrefCopy
 // #endif
 
-#ifdef DEBUG_MODE_GPUHostRegister
+#ifdef DEBUG_MODE_GPUMemrefCopy
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
@@ -92,23 +93,23 @@ using namespace mlir::gpu;
 // *********** For debug purpose *********//
 
 namespace {
-struct GPUHostRegisterPass
-    : public PassWrapper<GPUHostRegisterPass, OperationPass<func::FuncOp>> {
+struct GPUMemrefCopyPass
+    : public PassWrapper<GPUMemrefCopyPass, OperationPass<func::FuncOp>> {
 
 
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(GPUHostRegisterPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(GPUMemrefCopyPass)
 
 private:
   
  public:
-  GPUHostRegisterPass() {}
+  GPUMemrefCopyPass() {}
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<mlir::gpu::GPUDialect>();
+    registry.insert<mlir::memref::MemRefDialect>();
   }
 
   void runOnOperation() override {
-    comet_debug() << "[DEBUG][GPU][Start] GPUHostRegister\n";
+    comet_debug() << "[DEBUG][GPU][Start] GPUMemrefCopy\n";
 
     MLIRContext *context = &getContext();
 
@@ -117,20 +118,11 @@ private:
     funcOp.walk([&allocOps](memref::AllocOp allocOp) { allocOps.insert(allocOp); });
 
     IRRewriter rewriter(context);
-    FloatType f64Type = FloatType::getF64(context);
-    Type unrankedMemrefType_f64 = UnrankedMemRefType::get(f64Type, 0);
 
-    // look for memref::allocs use in gpu.launch_func.
-    // if found being used in the launch_func, then a host_register op needs to be created.
-    bool found_use = false;
+    // look for memref::alloc 
     bool found_insert = false;
     for (auto alloc : allocOps) {
       for (auto n : alloc->getUsers()) {
-        if (isa<gpu::LaunchFuncOp>(n)) {
-          //comet_debug() << "Found use of alloc in launch func\n";
-          found_use = true;
-        }
-
         if (isa<linalg::FillOp>(n)) {
           // insert the new ops after linalg.fill 
           found_insert = true;
@@ -138,31 +130,32 @@ private:
         }
       }
 
-      if (found_use) {
+      if (found_insert) {
 
         Location loc = alloc->getLoc();
-        if (!found_insert) 
-          rewriter.setInsertionPointAfter(alloc);
-
+        
         auto alloc_op = cast<memref::AllocOp>(alloc);
-        auto newCastOp = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
-        comet_vdump(newCastOp);
+        MemRefType resultType = alloc_op->getResult(0).getType().cast<MemRefType>();
+        auto newAllocOp = rewriter.create<memref::AllocOp>(loc, resultType);
+        comet_vdump(newAllocOp);
 
-        rewriter.create<gpu::HostRegisterOp>(loc, newCastOp);
+        auto MemrefCopyOp = rewriter.create<memref::CopyOp>(loc, alloc_op, newAllocOp);
+        mlir::comet::setMarker(MemrefCopyOp, mlir::comet::getCopyToWorkgroupMemoryMarker());
+        comet_vdump(MemrefCopyOp);
+
       }
 
-      found_use = false; // reset for next alloc
       found_insert = false; 
     }
 
-    comet_debug() << "[DEBUG][GPU][End] GPUHostRegister\n";
+    comet_debug() << "[DEBUG][GPU][End] GPUMemrefCopy\n";
   }
 };
 
 }  // namespace
 
 
-/// Create a pass to add host register op to map host memory to device address space.
-std::unique_ptr<Pass> mlir::comet::createGPUHostRegisterOpPass() {
-  return std::make_unique<GPUHostRegisterPass>();
+/// Create a pass to memref.copy ops.
+std::unique_ptr<Pass> mlir::comet::createGPUMemrefCopyPass() {
+  return std::make_unique<GPUMemrefCopyPass>();
 }

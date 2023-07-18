@@ -425,11 +425,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
       // ** Affine -> GPU
       
-      // Loop tiling
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::createLoopTilingPass());
-      pm.addPass(mlir::createCanonicalizerPass());
-      pm.addPass(mlir::createCSEPass());
-
       // Parallel loops
       auto pass = mlir::createAffineParallelizePass();
       pass->initializeOptions("max-nested=1");
@@ -438,7 +433,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       pm.addPass(mlir::createCSEPass());
 
       // Vectorize
-      //pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createAffineVectorizePass());
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createAffineVectorizePass());
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
+
+      // Loop tiling
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::createLoopTilingPass());
       pm.addPass(mlir::createCanonicalizerPass());
       pm.addPass(mlir::createCSEPass());
 
@@ -447,9 +447,37 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       pm.addPass(mlir::createCanonicalizerPass());
       pm.addPass(mlir::createCSEPass());
 
+      // Create memref copy ops for vectorization.
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUMemrefCopyPass());
+
+      // Creates vector ops (vectorized data transfers from Global memory)
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUVectorizationPass());
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
+
       // Map the parallel loops to workgroups
       pm.addNestedPass<mlir::func::FuncOp>(mlir::createGpuMapParallelLoopsPass());
       pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createLowerSCFToGPUPass());
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
+
+      // Pad vector ops to reduce shared memory bank conflicts
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUReduceSharedMemoryBankConflictsPass());
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
+
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::memref::createFoldMemRefAliasOpsPass());
+      pm.addPass(mlir::createCSEPass());
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
+
+      // Optimize vector transfers using MLIR's vector dialect passes
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUOptimizeVectorTransferPass());
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
+
+      // Apply software pipelining
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUPipeliningPass());
       pm.addPass(mlir::createCanonicalizerPass());
       pm.addPass(mlir::createCSEPass());
 

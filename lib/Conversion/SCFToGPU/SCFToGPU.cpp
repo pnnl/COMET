@@ -60,7 +60,7 @@ using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
 // #ifndef DEBUG_MODE_SCFToGPUPass
- #define DEBUG_MODE_SCFToGPUPass
+// #define DEBUG_MODE_SCFToGPUPass
 // #endif
 
 #ifdef DEBUG_MODE_SCFToGPUPass

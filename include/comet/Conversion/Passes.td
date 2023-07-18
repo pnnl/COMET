@@ -114,6 +114,23 @@ def GPUAffineParallelize : Pass<"gpu-affine-vectorize"> {
   ];
 }
 
+def GPUMemrefCopy : Pass<"gpu-add-memref-copy"> {
+  let summary = "Adds memref copy ops for better vectorization "
+                "";
+  let description = [{
+
+      }];
+    let constructor = "comet::createGPUMemrefCopyPass()";
+  let dependentDialects = [
+    "gpu::GPUDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect",
+    "arith::ArithDilect",
+    "vector::VectorDialect"
+  ];
+}
+
 def GPUHostRegister : Pass<"gpu-add-host-register"> {
   let summary = "Adds gpu host register ops needed for mapping "
                 " host buffer into device address space.";
@@ -128,6 +145,75 @@ def GPUHostRegister : Pass<"gpu-add-host-register"> {
     "affine::AffineDialect",
     "arith::ArithDilect",
     "vector::VectorDialect"
+  ];
+}
+
+//===----------------------------------------------------------------------===//
+// Disclaimer: The following passes are adopted from IREE GPU pass pipeline
+//             and have been modified to integrate with COMET compiler.
+//===----------------------------------------------------------------------===//
+
+def GPUVectorization : Pass<"gpu-vectorization"> {
+  let summary = "GPU vectorization of linalg ops "
+                "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createGPUVectorizationPass()";
+  let dependentDialects = [
+    "gpu::GPUDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect",
+    "arith::ArithDilect"
+  ];
+}
+
+def GPUReduceSharedMemoryBankConflicts : Pass<"gpu-reduce-shared-mem-bank-conflicts"> {
+  let summary = "Reduce shared memory bank conflicts "
+                "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createGPUReduceSharedMemoryBankConflictsPass()";
+  let dependentDialects = [
+    "gpu::GPUDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect",
+    "arith::ArithDilect"
+  ];
+}
+
+def GPUVectorTransfer : Pass<"gpu-vector-transfer"> {
+  let summary = "Optimize Vector Transfers "
+                "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createGPUOptimizeVectorTransferPass()";
+  let dependentDialects = [
+    "gpu::GPUDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect",
+    "arith::ArithDilect"
+  ];
+}
+
+def GPUPipelining : Pass<"gpu-apply-pipelining"> {
+  let summary = "Do software pipelining of scf loops "
+                "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createGPUPipeliningPass()";
+  let dependentDialects = [
+    "gpu::GPUDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "affine::AffineDialect",
+    "arith::ArithDilect"
   ];
 }
 

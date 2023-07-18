@@ -43,11 +43,54 @@ namespace mlir
         /// Lowers TensorAlgebra operations
         std::unique_ptr<Pass> createLowerSCFToGPUPass();
 
+        /// Convert Linalg ops to Vector.
+        void populateGPUVectorizationPatterns(RewritePatternSet &patterns);
+
+        std::unique_ptr<Pass> createGPUVectorizationPass(int64_t maxVectorSize = 4096);
+
+        void populateGPUReduceSharedMemoryBankConflictsPatterns(RewritePatternSet &patterns);
+
+        /// Apply transformation to reduce the number of bank conflicts when accessing
+        /// shared memory by padding fastest moving dimension with the specified size.
+        std::unique_ptr<Pass> createGPUReduceSharedMemoryBankConflictsPass(int64_t paddingSizeBits = 128);
+
+        /// Various pipelining strategies
+        /// Pipeline shared memory copy by apply software pipelining scheduling where
+        /// copy to shared memory is in stage 0 and the rest of the operations are in
+        /// stage `depth - 1`.
+        enum class PipeliningSchedulingStrategy {
+         // Schedule the load from global memory into stage 0 and the associated store
+         // will be in stage depth - 1.
+         loadGlobalStage0 = 0,
+         // Schedule both the load from global and the store to shared memory in stage
+         // 0. The compute operations will be in stage depth-1. This means there won't
+         // be vector registers carried between stages.
+         loadStoreStage0 = 1,
+         // Schedule optimized when using nvidia tensorcore with async copies. It will
+         // set all the copies in stage 0 then it will prefecth part of loads in `depth
+         // - 2` stage and keep the rest of the load and compute into `depth - 1`.
+         nvidiaTensorCore = 2,
+        };
+
+        /// *** perform GPU S/W pipelining.
+        void populateGPUPipeliningPatterns(RewritePatternSet &patterns);
+
+        std::unique_ptr<Pass> createGPUPipeliningPass(bool epiloguePeeling = true, unsigned depth = 1,
+                        PipeliningSchedulingStrategy schedule = PipeliningSchedulingStrategy::loadGlobalStage0);
+
+        /// Pass to optimize vector transfer_read and transfer_write.
+        void populateGPUOptimizeVectorTransferPatterns(RewritePatternSet &patterns);
+
+        std::unique_ptr<Pass> createGPUOptimizeVectorTransferPass(bool flatten = false);
+
         //*** affine-super-vectorize
         std::unique_ptr<Pass> createAffineVectorizePass();
 
         //*** creates gpu.host_register ops
-        std::unique_ptr<Pass> createGPUHostRegisterOpPass();        
+        std::unique_ptr<Pass> createGPUHostRegisterOpPass();  
+
+        //*** create memref.copy ops
+        std::unique_ptr<Pass> createGPUMemrefCopyPass();      
     }
 } // namespace mlir
 
