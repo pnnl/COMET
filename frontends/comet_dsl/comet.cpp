@@ -450,6 +450,27 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   if (mlir::failed(pm.run(*module)))
     return 4;
+  if (IsLoweringtoSPIRV)
+  {
+    llvm::SmallVector<spirv::ModuleOp> spirvModules;
+    module->walk([&spirvModules](spirv::ModuleOp op) { spirvModules.push_back(op); });
+    if (!spirvModules.empty())
+      for (spirv::ModuleOp mOp: spirvModules)
+      {
+        SmallVector<uint32_t, 0> binary;
+        if (!failed(spirv::serialize(mOp, binary)))
+        {
+          std::string pathname("spirv_comet_");
+          //try to drop __spv__ prefix
+          pathname += mOp.getName()->data();
+          pathname += ".bin";
+          pathname.erase(pathname.find("_spv__"), 6);
+          std::ofstream textout(pathname.c_str(), std::ios::out | std::ios::binary);
+          textout.write(reinterpret_cast<char *>(binary.data()),binary.size() * sizeof(uint32_t));
+          textout.close();
+        }
+      }
+  }
   return 0;
 }
 
