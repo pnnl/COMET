@@ -1,29 +1,32 @@
-# Dense matrix - sparse matrix  multiplication
-# Sparse matrix is in COO format
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_DenseMatxCOO.llvm
+# RUN: comet-opt --convert-to-loops --convert-to-llvm %s &> transpose_COO_matrix.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
-# RUN: mlir-cpu-runner mult_DenseMatxCOO.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: export SORT_TYPE=SEQ_QSORT
+# RUN: mlir-cpu-runner transpose_COO_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {
 	#IndexLabel Declarations
-	IndexLabel [a] = [4];
-	IndexLabel [b] = [?];
-	IndexLabel [c] = [?];             
+	IndexLabel [i] = [?];
+	IndexLabel [j] = [?];           
 
 	#Tensor Declarations
-	Tensor<double> B([b, c], {COO});   #sparse tensor declarations should be before dense tensor declarations
-	Tensor<double> A([a, b], {Dense});	  
-	Tensor<double> C([a, c], {Dense});
+	Tensor<double> A([i, j], COO);	  
+	Tensor<double> B([j, i], COO);
 
-	#Tensor Fill Operation
-	A[a, b] = 1.7;
-	B[b, c] = comet_read(0);
-	C[a, c] = 0.0;
+    #Tensor Readfile Operation      
+    A[i, j] = comet_read(0);
 
-	C[a, c] = A[a, b] * B[b, c];
-	print(C);
+	#Tensor Transpose
+	B[j, i] = transpose(A[i, j],{j,i});
+	print(B);
 }
 
-# Print the result for verification.
 # CHECK: data = 
-# CHECK-NEXT: 8.67,12.24,5.1,9.18,12.75,8.67,12.24,5.1,9.18,12.75,8.67,12.24,5.1,9.18,12.75,8.67,12.24,5.1,9.18,12.75,
+# CHECK-NEXT: 0,9,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,0,1,1,2,3,3,4,4,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: -1,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,3,1,4,2,0,3,1,4,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 1,4.1,2,5.2,3,1.4,4,2.5,5,
