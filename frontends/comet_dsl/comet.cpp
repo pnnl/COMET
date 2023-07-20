@@ -432,13 +432,16 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       pm.addPass(mlir::createCanonicalizerPass());
       pm.addPass(mlir::createCSEPass());
 
-      // Vectorize
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createAffineVectorizePass());
+      // Create memref copy ops for vectorization.
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUMemrefCopyPass());
+
+      // Creates vector ops (vectorized data transfers from Global memory)
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUVectorizationPass());
       pm.addPass(mlir::createCanonicalizerPass());
       pm.addPass(mlir::createCSEPass());
 
-      // Loop tiling
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::createLoopTilingPass());
+      // Vectorize
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createAffineVectorizePass());
       pm.addPass(mlir::createCanonicalizerPass());
       pm.addPass(mlir::createCSEPass());
 
@@ -447,13 +450,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       pm.addPass(mlir::createCanonicalizerPass());
       pm.addPass(mlir::createCSEPass());
 
-      // Create memref copy ops for vectorization.
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUMemrefCopyPass());
-
-      // Creates vector ops (vectorized data transfers from Global memory)
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUVectorizationPass());
-      pm.addPass(mlir::createCanonicalizerPass());
-      pm.addPass(mlir::createCSEPass());
+      // scf-parallel-loop-tiling
+      auto pass2 = mlir::createParallelLoopTilingPass();
+      pass2->initializeOptions("parallel-loop-tile-sizes=4");
+      pm.addNestedPass<mlir::func::FuncOp>(std::move(pass2));
 
       // Map the parallel loops to workgroups
       pm.addNestedPass<mlir::func::FuncOp>(mlir::createGpuMapParallelLoopsPass());
@@ -529,7 +529,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     
     // Finalize GPU code generation.
     // Note: this will only be available if NVPTX is enabled as target during LLVM build
-    // TODO: add ability to pass gpu 
     #if ENABLE_CUBIN_GEN
     pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createGpuSerializeToCubinPass(    
                                "nvptx64-nvidia-cuda", gpuChip, "+ptx60"));
