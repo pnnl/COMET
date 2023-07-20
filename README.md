@@ -74,6 +74,10 @@ To get something that runs fast, use `-DCMAKE_BUILD_TYPE=Release` or
 you want debug info to go with it.  `Release` mode makes a very large difference
 in performance.
 
+Note: GPU codegen using the PTX backend requires a working CUDA install. 
+Moreover, LLVM/MLIR should be built with NVPTX target enabled (`-DLLVM_TARGETS_TO_BUILD="X86;NVPTX"`) 
+and COMET should be built with `COMET_GPU_CUBIN` turned on (`DCOMET_GPU_CUBIN=ON`).
+ 
 ## License
 
 This project is licensed under the Simplified BSD License. 
