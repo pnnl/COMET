@@ -592,7 +592,7 @@ namespace
           for (unsigned int i = 0; i < dst_rank; i++)
           {
             // 4*rank+2 + i
-            dimSizes.push_back(src_input.getDefiningOp()->getOperand(4 * dst_rank + 2 + dstIndexLocInSrcVec[i]));
+            dimSizes.push_back(src_input.getDefiningOp()->getOperand(8 * dst_rank + 2 + dstIndexLocInSrcVec[i]));
           }
 
           Value cst_index_1 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
@@ -609,17 +609,26 @@ namespace
               // 2*dst_rank+1
               unsigned int dstIndexLocInSrc = dstIndexLocInSrcVec[i];
               // src_rank = dst_rank
-              unsigned int posLocInSrc = (2 * dst_rank + 1) + 2 * dstIndexLocInSrc;
+              unsigned int posLocInSrc = (4 * dst_rank + 1) + 4 * dstIndexLocInSrc;
               unsigned int crdLocInSrc = posLocInSrc + 1;
+
+              unsigned int posLocInSrc2 = posLocInSrc + 2;
+              unsigned int crdLocInSrc2 = crdLocInSrc + 2;
 
               array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(posLocInSrc));
               array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(crdLocInSrc));
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(posLocInSrc2));
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(crdLocInSrc2));
+
+              //printf("i: %d | dstIdxLocSrc: %d | posLoc: %d | crdLoc: %d\n", i, dstIndexLocInSrc, posLocInSrc, crdLocInSrc);
+              //printf("\tposLocInSrc2: %d | crdLocInSrc2: %d\n", posLocInSrc2, crdLocInSrc2);
             }
             // val array size
-            array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(4 * dst_rank + 1));
+            array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(8 * dst_rank + 1));
+            //printf("Aval: %d\n", 8*dst_rank+1);
 
             // set the pos array size, 1st dim as 2, all others as 1.
-            for (unsigned int i = 0; i < dst_rank; i++)
+            for (unsigned int i = 0; i < dst_rank * 2; i++)
             {
               if (i == 0)
               {
@@ -670,10 +679,10 @@ namespace
 
           comet_debug() << " array_sizes_vec.size(): " << array_sizes_vec.size() << "\n";
           comet_debug() << " dst_rank: " << dst_rank << "\n";
-          for (unsigned int i = 0; i < 2 * dst_rank + 1; i++)
+          for (unsigned int i = 0; i < 4 * dst_rank + 1; i++)
           {
             Value alloc_sizes;
-            if (i < 2 * dst_rank)
+            if (i < 4 * dst_rank)
             {
               alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{array_sizes_vec[i]}, rewriter);
               comet_debug() << " AllocOp: ";
@@ -838,7 +847,7 @@ namespace
         comet_debug() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
         // create sptensor_construct
         SmallVector<mlir::Type, 1> elementTypes;
-        for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
+        for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
         {
           assert(tensorload_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
           comet_debug() << " " << i << " ";
@@ -848,7 +857,7 @@ namespace
         comet_debug() << "\n ";
         // [0 ... 2*rank_size, 2*rank_size+1 ... 4*rank_size+1, 4*rank_size+2 ... 5*rank_size + 1]
         // 2d+1 + 2d+1 + d => 5d+2
-        for (unsigned int i = 0; i < 2 * rank_size + 1; i++)
+        for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
         {
           assert(array_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
           comet_debug() << " " << i << " ";
@@ -869,18 +878,27 @@ namespace
         if (rank_size == 2)
         {
           sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
-                                                                             ValueRange{tensorload_sizes_vec[0], // A1pos (each dimension consists of pos and crd arrays)
-                                                                                        tensorload_sizes_vec[1], // A1crd
-                                                                                        tensorload_sizes_vec[2], // A2pos
-                                                                                        tensorload_sizes_vec[3], // A2crd
-                                                                                        tensorload_sizes_vec[4], // Aval
-                                                                                        array_sizes_vec[0],      // A1pos_size (size of each pos and crd arrays)
-                                                                                        array_sizes_vec[1],      // A1crd_size
-                                                                                        array_sizes_vec[2],      // A2pos_size
-                                                                                        array_sizes_vec[3],      // A2crd_size
-                                                                                        array_sizes_vec[4],      // Aval_size (size of value array)
-                                                                                        dimSizes[0],             // dim1_size(size of each dimension in sparse tensor)
-                                                                                        dimSizes[1]});           // dim2_size (size of each dimension in sparse tensor)
+                                                                  ValueRange{tensorload_sizes_vec[0],  // A1pos (each dimension consists of pos and crd arrays)
+                                                                            tensorload_sizes_vec[1],   // A1crd
+                                                                            tensorload_sizes_vec[2],   // A1tile_pos
+                                                                            tensorload_sizes_vec[3],   // A1tile_crd
+                                                                            tensorload_sizes_vec[4],   // A2pos
+                                                                            tensorload_sizes_vec[5],   // A2crd
+                                                                            tensorload_sizes_vec[6],   // A2tile_pos
+                                                                            tensorload_sizes_vec[7],   // A2tile_crd
+                                                                            tensorload_sizes_vec[8],   // Aval
+                                                                            array_sizes_vec[0],        // A1pos_size (size of each pos and crd arrays)
+                                                                            array_sizes_vec[1],        // A1crd_size
+                                                                            array_sizes_vec[2],        // A1tile_pos_size
+                                                                            array_sizes_vec[3],        // A1tile_crd_size
+                                                                            array_sizes_vec[4],        // A2pos_size
+                                                                            array_sizes_vec[5],        // A2crd_size
+                                                                            array_sizes_vec[6],        // A2tile_pos_size
+                                                                            array_sizes_vec[7],        // A2tile_crd_size
+                                                                            array_sizes_vec[8],        // Aval_size (size of value array)
+                                                                            dimSizes[0],             // dim1_size(size of each dimension in sparse tensor)
+                                                                            dimSizes[1]              // dim2_size (size of each dimension in sparse tensor)
+                                                                            }, 2);
         }
         else if (rank_size == 3)
         {
