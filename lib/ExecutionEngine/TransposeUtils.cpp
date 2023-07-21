@@ -509,8 +509,8 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
 
   auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
 
-  int rowSize = desc_sizes->data[5];
-  int colSize = desc_sizes->data[6];
+  int rowSize = desc_sizes->data[9];
+  int colSize = desc_sizes->data[10];
 
   if ((A1format == Compressed_nonunique && A2format == singleton) || (A1format == singleton && A2format == Compressed_nonunique))
   {
