@@ -1027,7 +1027,7 @@ namespace mlir
 
     std::vector<Value> getFormatsValueInt(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IntegerType intType)
     {
-      Value format_unk = rewriter.create<ConstantOp>(loc, intType, rewriter.getIndexAttr(-1));
+      Value format_unk = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, -1));
       Value format_dense = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 0));
       Value format_compressed = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 1));
       Value format_compressednonunique = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 2));
