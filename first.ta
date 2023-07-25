@@ -17,7 +17,7 @@ def main() {
 
 	#Tensor Transpose
 	B[j, i] = transpose(A[i, j],{j,i});
-	print(B);
+	print(A);
 }
 
 # CHECK: data = 
