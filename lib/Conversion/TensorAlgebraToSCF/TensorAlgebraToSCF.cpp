@@ -384,7 +384,20 @@ namespace
 
         if (rank_size == 2)
         { // 2D
-          auto transpose2DF64Func = FunctionType::get(ctx, {i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, unrankedMemrefType_index},
+          auto transpose2DF64Func = FunctionType::get(ctx,
+                            {i32Type, i32Type, i32Type, i32Type,
+                            unrankedMemrefType_index, unrankedMemrefType_index,
+                            unrankedMemrefType_index, unrankedMemrefType_index,
+                            unrankedMemrefType_index, unrankedMemrefType_index,
+                            unrankedMemrefType_index, unrankedMemrefType_index,
+                            unrankedMemrefType_f64,
+                            i32Type, i32Type, i32Type, i32Type,
+                            unrankedMemrefType_index, unrankedMemrefType_index,
+                            unrankedMemrefType_index, unrankedMemrefType_index,
+                            unrankedMemrefType_index, unrankedMemrefType_index,
+                            unrankedMemrefType_index, unrankedMemrefType_index,
+                            unrankedMemrefType_f64,
+                            unrankedMemrefType_index},
                                                       {});
 
           std::string func_name = "transpose_2D_f64";
@@ -401,13 +414,17 @@ namespace
           comet_debug() << "dim_formatOut: " << dim_formatOut.size() << "\n";
 
           rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{},
-                                        ValueRange{dim_formatIn[0], dim_formatIn[2],
+                                        ValueRange{dim_formatIn[0], dim_formatIn[1], dim_formatIn[2], dim_formatIn[3],
                                                    alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
+                                                   alloc_sizes_cast_vecs[0][2], alloc_sizes_cast_vecs[0][3],
                                                    alloc_sizes_cast_vecs[0][4], alloc_sizes_cast_vecs[0][5],
+                                                   alloc_sizes_cast_vecs[0][6], alloc_sizes_cast_vecs[0][7],
                                                    alloc_sizes_cast_vecs[0][8],
-                                                   dim_formatOut[0], dim_formatOut[2],
+                                                   dim_formatOut[0], dim_formatOut[1], dim_formatOut[2], dim_formatOut[3],
                                                    alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
+                                                   alloc_sizes_cast_vecs[1][2], alloc_sizes_cast_vecs[1][3],
                                                    alloc_sizes_cast_vecs[1][4], alloc_sizes_cast_vecs[1][5],
+                                                   alloc_sizes_cast_vecs[1][6], alloc_sizes_cast_vecs[1][7],
                                                    alloc_sizes_cast_vecs[1][8],
                                                    sparse_tensor_desc});
         }
