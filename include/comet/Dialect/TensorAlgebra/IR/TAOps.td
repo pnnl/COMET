@@ -344,6 +344,10 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
       // we do not need to add anything
       return getTensorRank() * 4;
     }
+
+    int getIndexValueSize() {
+      return (getTensorRank() * 8) + 1;
+    }
   }];
 
   //TODO(gkestor): add verifier
