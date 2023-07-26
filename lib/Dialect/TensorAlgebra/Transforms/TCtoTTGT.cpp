@@ -450,17 +450,12 @@ namespace
 
         SmallVector<AffineMap, 2> rhs1IndexingMap{rhs1AffineMap};
 
-        // collapsedTensorType = computeReshapeCollapsedType(
-        //     rhs1Alloc.getType().cast<MemRefType>(), rhs1IndexingMap);
-        collapsedTensorType = tensor::CollapseShapeOp::inferCollapsedType(
-               rhs1Alloc.getType().cast<RankedTensorType>(),rhs1IndexingMap);
-
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs1IndexingMap);
 
         comet_debug() << "\n";
-        rhs1Reshape = rewriter.create<tensor::CollapseShapeOp>(
-            loc, collapsedTensorType, rhs1Alloc, reassociationIndices);
+        rhs1Reshape = rewriter.create<memref::CollapseShapeOp>(
+            loc, rhs1Alloc, reassociationIndices);
         comet_vdump(rhs1Reshape);
       }
       else if (rhs1MemrefType.getShape().size() != 2)
@@ -489,25 +484,17 @@ namespace
 
         rhs1IndexingMap.push_back(rhs1Subset0);
         rhs1IndexingMap.push_back(rhs1Subset1);
-        // collapsedTensorType = computeReshapeCollapsedType(
-        //     rhs1Alloc.getType().cast<MemRefType>(), rhs1IndexingMap);
-
-        collapsedTensorType = tensor::CollapseShapeOp::inferCollapsedType(
-               rhs1Alloc.getType().cast<RankedTensorType>(), rhs1IndexingMap);
 
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs1IndexingMap);
-        comet_debug() << " collapsedTensorType:"
-                      << "\n";
-        comet_vdump(collapsedTensorType);
+
         comet_debug() << "\n";
         comet_debug() << " rhs1Alloc: \n";
         comet_vdump(rhs1Alloc);
         comet_vdump(rhs1MemrefType);
 
-        rhs1Reshape = rewriter.create<tensor::CollapseShapeOp>(
-        //rhs1Reshape = rewriter.create<linalg::ReshapeOp>(
-            loc, collapsedTensorType, rhs1Alloc, reassociationIndices);
+        rhs1Reshape = rewriter.create<memref::CollapseShapeOp>(
+            loc, rhs1Alloc, reassociationIndices);
         comet_debug() << " Before rhs1Reshape: \n";
         comet_vdump(rhs1Reshape);
         comet_debug() << " After rhs1Reshape: \n";
@@ -523,18 +510,14 @@ namespace
 
         SmallVector<AffineMap, 2> rhs2IndexingMap{rhs2AffineMap};
 
-        collapsedTensorType = tensor::CollapseShapeOp::inferCollapsedType(
-               rhs2Alloc.getType().cast<RankedTensorType>(), rhs2IndexingMap);
-
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs2IndexingMap);
         
-        rhs2Reshape = rewriter.create<tensor::CollapseShapeOp>(
-            loc, collapsedTensorType, rhs2Alloc, reassociationIndices);
+        rhs2Reshape = rewriter.create<memref::CollapseShapeOp>(
+            loc, rhs2Alloc, reassociationIndices);
 
         comet_debug() << "\n";
         comet_vdump(rhs2Reshape);
-        // } else if (rhs2MemrefType.getShape().size() != 2) {
       }
       else if (rhs2MemrefType.getShape().size() != 2 && rhs2MemrefType.getShape().size() != 1)
       {
@@ -564,22 +547,20 @@ namespace
         rhs2IndexingMap.push_back(rhs2Subset0);
         rhs2IndexingMap.push_back(rhs2Subset1);
 
-        // collapsedTensorType = computeReshapeCollapsedType(
-        //     rhs2Alloc.getType().cast<MemRefType>(), rhs2IndexingMap);
-
-        collapsedTensorType = tensor::CollapseShapeOp::inferCollapsedType(
-               rhs2Alloc.getType().cast<RankedTensorType>(), rhs2IndexingMap);
-
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs2IndexingMap);
 
-        //rhs2Reshape = rewriter.create<linalg::ReshapeOp>(
-        rhs2Reshape = rewriter.create<tensor::CollapseShapeOp>(
-            loc, collapsedTensorType, rhs2Alloc, reassociationIndices);
+        rhs2Reshape = rewriter.create<memref::CollapseShapeOp>(
+            loc, rhs2Alloc, reassociationIndices);
 
         comet_debug() << "\n";
         comet_vdump(rhs2Reshape);
       }
+
+      bool expandLHS = false;
+      // Keep the reassociation indices that will be used for collapsing the LHS tensor
+      // The exact same indices can be used to re-expand it back to its original rank (after the potential transpose operation)
+      SmallVector<ReassociationIndices> lhsReassociationIndices;
 
       comet_debug() << "\n";
       // if (isRHS1SumPermutation || isRHS2SumPermutation) {
@@ -593,23 +574,17 @@ namespace
 
         SmallVector<AffineMap, 2> lhsIndexingMap{lhsAffineMap};
 
-        // collapsedTensorType = computeReshapeCollapsedType(
-        //     lhsAlloc.getType().cast<MemRefType>(), lhsIndexingMap);
-
-        
-        collapsedTensorType = tensor::CollapseShapeOp::inferCollapsedType(
-               lhsAlloc.getType().cast<RankedTensorType>(),lhsIndexingMap);
-
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(lhsIndexingMap);
 
         //TODO(gkestor): should it be expandop?
-        //lhsReshape = rewriter.create<linalg::ReshapeOp>(
-        lhsReshape = rewriter.create<tensor::CollapseShapeOp>(
-            loc, collapsedTensorType, lhsAlloc, reassociationIndices);
+        lhsReshape = rewriter.create<memref::CollapseShapeOp>(
+            loc, lhsAlloc, reassociationIndices);
 
         comet_debug() << "\n";
         comet_vdump(lhsReshape);
+        expandLHS = true;
+        lhsReassociationIndices = reassociationIndices;
       }
       else if (lhsMemrefType.getShape().size() != 2 && lhsMemrefType.getShape().size() != 1)
       {
@@ -638,20 +613,17 @@ namespace
         lhsIndexingMap.push_back(lhsSubset0);
         lhsIndexingMap.push_back(lhsSubset1);
 
-        // collapsedTensorType = computeReshapeCollapsedType(
-        //     lhsAlloc.getType().cast<MemRefType>(), lhsIndexingMap);
-
-        collapsedTensorType = tensor::CollapseShapeOp::inferCollapsedType(
-               lhsAlloc.getType().cast<RankedTensorType>(), lhsIndexingMap);
-
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(lhsIndexingMap);
 
         //TODO(gkestor): should it be expandOp?
-        lhsReshape = rewriter.create<tensor::CollapseShapeOp>(
-            loc, collapsedTensorType, lhsAlloc, reassociationIndices);
+        lhsReshape = rewriter.create<memref::CollapseShapeOp>(
+            loc, lhsAlloc, reassociationIndices);
         comet_debug() << "\n";
         comet_vdump(lhsReshape);
+
+        expandLHS = true;
+        lhsReassociationIndices = reassociationIndices;
       }
 
       comet_debug() << "\n";
@@ -723,18 +695,30 @@ namespace
         matmulop.getOperation()->setAttr("__beta__", betaAttr);
       }
 
+      Value lhsExpand = lhsReshape;
+      if(expandLHS) // LHS tensor was collapsed and now needs to be re-expanded using the same reassociation indices
+      {        
+        auto expandedTensorType = MemRefType::get(lhsAlloc.getType().cast<MemRefType>().getShape(), lhsAlloc.getType().cast<MemRefType>().getElementType());
+
+        comet_debug() << "\nExpanded:\n";
+        lhsExpand = rewriter.create<memref::ExpandShapeOp>(
+            loc, expandedTensorType, lhsReshape, lhsReassociationIndices);
+#ifdef DEBUG_MODE_TTGT
+        comet_debug() << "\n";
+        comet_vdump(lhsExpand);
+#endif
+      }
+
       // Copy back the result if needed
       if (lhsAlloc != lhsMemref && useLHSTranspose)
       {
-        std::vector<int64_t> lhsInPerm_int64(lhsInPerm.begin(), lhsInPerm.end()); 
-
 #ifdef DEBUG_MODE_TTGT
         auto lhsFinalCopy =
-              rewriter.create<linalg::TransposeOp>(loc, lhsAlloc, lhsMemref, llvm::ArrayRef<int64_t>(lhsInPerm_int64));
+              rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(lhsOutPerm_int64));
         comet_debug() << "\n";
         comet_vdump(lhsFinalCopy);
 #else
-        rewriter.create<linalg::TransposeOp>(loc, lhsAlloc, lhsMemref, llvm::ArrayRef<int64_t>(lhsInPerm_int64));
+        rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(lhsOutPerm_int64)); // (A^T)^T = A, so we use lhsOutPerm_int64 to bring the result array to its original format
    
 #endif
       }
