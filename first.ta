@@ -1,32 +1,49 @@
-# RUN: comet-opt --convert-to-loops --convert-to-llvm %s &> transpose_COO_matrix.llvm
-# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
-# RUN: export SORT_TYPE=SEQ_QSORT
-# RUN: mlir-cpu-runner transpose_COO_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: comet-opt --convert-to-loops --convert-to-llvm %s &> utility_printCSR_CSF.llvm
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2_small.mtx
+# RUN: export SPARSE_FILE_NAME1=%comet_integration_test_data_dir/test_rank3.tns
+# RUN: mlir-cpu-runner utility_printCSR_CSF.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {
 	#IndexLabel Declarations
-	IndexLabel [i] = [?];
-	IndexLabel [j] = [?];           
+	IndexLabel [a] = [?];
+	IndexLabel [b] = [?];                     
+    IndexLabel [c] = [?];
+	IndexLabel [d] = [?];           
+	IndexLabel [e] = [?];           
 
 	#Tensor Declarations
-	Tensor<double> A([i, j], COO);	  
-	Tensor<double> B([j, i], COO);
+	#Tensor<double> A([a, b], {CSR}); 
+	Tensor<double> B([c, d, e], CSF);
 
     #Tensor Readfile Operation      
-    A[i, j] = comet_read(0);
+    #A[a, b] = comet_read(0);
+    B[c, d, e] = comet_read(1);
 
-	#Tensor Transpose
-	B[j, i] = transpose(A[i, j],{j,i});
-	print(A);
+    #print(A);
+	print(B);
 }
 
 # CHECK: data = 
-# CHECK-NEXT: 0,9,
-# CHECK-NEXT: data = 
-# CHECK-NEXT: 0,0,1,1,2,3,3,4,4,
+# CHECK-NEXT: 5,
 # CHECK-NEXT: data = 
 # CHECK-NEXT: -1,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 0,3,1,4,2,0,3,1,4,
+# CHECK-NEXT: 0,2,4,4,5,7,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 1,4.1,2,5.2,3,1.4,4,2.5,5,
+# CHECK-NEXT: 0,3,0,1,1,2,3,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 1,2,3,4,5,6,7,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,3,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 1,2,3,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,1,2,3,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 3,1,6,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,1,2,3,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 2,3,5,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 1.3,2.11,3,

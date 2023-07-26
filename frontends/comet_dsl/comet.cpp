@@ -293,14 +293,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   if (OptKernelFusion)
   {
-    puts("comet.cpp- Loop 3");
     // Apply partial fusion on index tree dialect for some compound expressions.
     optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
   }
 
   if (OptWorkspace)
   {
-    puts("comet.cpp- Loop 4");
     // Optimized workspace transformations, reduce iteration space for nonzero elements
     optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
   }

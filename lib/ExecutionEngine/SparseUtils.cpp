@@ -2120,7 +2120,11 @@ void read_input_2D(int32_t fileID,
 }
 
 template <typename T>
-void read_input_sizes_3D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int sizes_rank, void *sizes_ptr, int32_t readMode)
+void read_input_sizes_3D(int32_t fileID,
+                          int32_t A1format, int32_t A1_tile_format,
+                          int32_t A2format, int32_t A2_tile_format,
+                          int32_t A3format, int32_t A3_tile_format,
+                          int sizes_rank, void *sizes_ptr, int32_t readMode)
 {
   // FIXME: readMode is for future use.
   auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
@@ -2129,17 +2133,26 @@ void read_input_sizes_3D(int32_t fileID, int32_t A1format, int32_t A2format, int
 
   if (A1format == Compressed_nonunique && A2format == singleton && A3format == singleton)
   {
-    // A1pos, A1crd, A2pos, A2crd, A3pos, A3crd, Aval, I, J, K
-    desc_sizes->data[0] = 2;
-    desc_sizes->data[1] = FileReader.coo_3dtensor->num_nonzeros;
-    desc_sizes->data[2] = 1;
-    desc_sizes->data[3] = FileReader.coo_3dtensor->num_nonzeros;
-    desc_sizes->data[4] = 1;
-    desc_sizes->data[5] = FileReader.coo_3dtensor->num_nonzeros;
-    desc_sizes->data[6] = FileReader.coo_3dtensor->num_nonzeros;
-    desc_sizes->data[7] = FileReader.coo_3dtensor->num_index_i;
-    desc_sizes->data[8] = FileReader.coo_3dtensor->num_index_j;
-    desc_sizes->data[9] = FileReader.coo_3dtensor->num_index_k;
+    // A1pos, A1crd, A1tile_pos, A1tile_crd
+    // A2pos, A2crd, A2tile_pos, A2tile_crd
+    // A3pos, A3crd, A3tile_pos, A3tile_crd
+    // Aval, I, J, K
+    desc_sizes->data[0] = 2;                                        // A1pos
+    desc_sizes->data[1] = FileReader.coo_3dtensor->num_nonzeros;    // A1crd
+    desc_sizes->data[2] = 0;                                        // A1_tile_pos
+    desc_sizes->data[3] = 0;                                        // A1_tile_crd
+    desc_sizes->data[4] = 1;                                        // A2pos
+    desc_sizes->data[5] = FileReader.coo_3dtensor->num_nonzeros;    // A2crd
+    desc_sizes->data[6] = 0;                                        // A2_tile_pos
+    desc_sizes->data[7] = 0;                                        // A2_tile_crd
+    desc_sizes->data[8] = 1;                                        // A3pos
+    desc_sizes->data[9] = FileReader.coo_3dtensor->num_nonzeros;    // A3crd
+    desc_sizes->data[10] = 0;                                       // A3_tile_pos
+    desc_sizes->data[11] = 0;                                       // A3_tile_crd
+    desc_sizes->data[12] = FileReader.coo_3dtensor->num_nonzeros;      // Aval
+    desc_sizes->data[13] = FileReader.coo_3dtensor->num_index_i;       // I
+    desc_sizes->data[14] = FileReader.coo_3dtensor->num_index_j;       // J
+    desc_sizes->data[15] = FileReader.coo_3dtensor->num_index_k;       // K
   }
   // CSF
   else if (A1format == Compressed_unique && A2format == Compressed_unique && A3format == Compressed_unique)
@@ -2149,14 +2162,20 @@ void read_input_sizes_3D(int32_t fileID, int32_t A1format, int32_t A2format, int
 
     desc_sizes->data[0] = csf_3dtensor.A1pos_size;
     desc_sizes->data[1] = csf_3dtensor.A1crd_size;
-    desc_sizes->data[2] = csf_3dtensor.A2pos_size;
-    desc_sizes->data[3] = csf_3dtensor.A2crd_size;
-    desc_sizes->data[4] = csf_3dtensor.A3pos_size;
-    desc_sizes->data[5] = csf_3dtensor.A3crd_size;
-    desc_sizes->data[6] = csf_3dtensor.Aval_size;
-    desc_sizes->data[7] = csf_3dtensor.num_index_i;
-    desc_sizes->data[8] = csf_3dtensor.num_index_j;
-    desc_sizes->data[9] = csf_3dtensor.num_index_k;
+    desc_sizes->data[2] = 0;
+    desc_sizes->data[3] = 0;
+    desc_sizes->data[4] = csf_3dtensor.A2pos_size;
+    desc_sizes->data[5] = csf_3dtensor.A2crd_size;
+    desc_sizes->data[6] = 0;
+    desc_sizes->data[7] = 0;
+    desc_sizes->data[8] = csf_3dtensor.A3pos_size;
+    desc_sizes->data[9] = csf_3dtensor.A3crd_size;
+    desc_sizes->data[10] = 0;
+    desc_sizes->data[11] = 0;
+    desc_sizes->data[12] = csf_3dtensor.Aval_size;
+    desc_sizes->data[13] = csf_3dtensor.num_index_i;
+    desc_sizes->data[14] = csf_3dtensor.num_index_j;
+    desc_sizes->data[15] = csf_3dtensor.num_index_k;
   }
   // Mode-Generic
   else if (A1format == Compressed_nonunique && A2format == singleton && A3format == Dense)
@@ -2166,14 +2185,20 @@ void read_input_sizes_3D(int32_t fileID, int32_t A1format, int32_t A2format, int
 
     desc_sizes->data[0] = mg_3dtensor.A1pos_size;
     desc_sizes->data[1] = mg_3dtensor.A1crd_size;
-    desc_sizes->data[2] = mg_3dtensor.A2pos_size;
-    desc_sizes->data[3] = mg_3dtensor.A2crd_size;
-    desc_sizes->data[4] = mg_3dtensor.A3pos_size;
-    desc_sizes->data[5] = mg_3dtensor.A3crd_size;
-    desc_sizes->data[6] = mg_3dtensor.Aval_size;
-    desc_sizes->data[7] = mg_3dtensor.num_index_i;
-    desc_sizes->data[8] = mg_3dtensor.num_index_j;
-    desc_sizes->data[9] = mg_3dtensor.num_index_k;
+    desc_sizes->data[2] = 0;
+    desc_sizes->data[3] = 0;
+    desc_sizes->data[4] = mg_3dtensor.A2pos_size;
+    desc_sizes->data[5] = mg_3dtensor.A2crd_size;
+    desc_sizes->data[6] = 0;
+    desc_sizes->data[7] = 0;
+    desc_sizes->data[8] = mg_3dtensor.A3pos_size;
+    desc_sizes->data[9] = mg_3dtensor.A3crd_size;
+    desc_sizes->data[10] = 0;
+    desc_sizes->data[11] = 0;
+    desc_sizes->data[12] = mg_3dtensor.Aval_size;
+    desc_sizes->data[13] = mg_3dtensor.num_index_i;
+    desc_sizes->data[14] = mg_3dtensor.num_index_j;
+    desc_sizes->data[15] = mg_3dtensor.num_index_k;
   }
   else
   {
@@ -2182,9 +2207,16 @@ void read_input_sizes_3D(int32_t fileID, int32_t A1format, int32_t A2format, int
 }
 
 template <typename T>
-void read_input_3D(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format, int A1pos_rank, void *A1pos_ptr,
-                   int A1crd_rank, void *A1crd_ptr, int A2pos_rank, void *A2pos_ptr, int A2crd_rank,
-                   void *A2crd_ptr, int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+void read_input_3D(int32_t fileID,
+                    int32_t A1format, int32_t A1_tile_format,
+                    int32_t A2format, int32_t A2_tile_format,
+                    int32_t A3format, int32_t A3_tile_format,
+                    int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                    int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                    int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                    int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
+                    int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                    int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
                    int Aval_rank, void *Aval_ptr, int32_t readMode)
 {
   // FIXME: readMode is for future use.
@@ -2411,32 +2443,55 @@ extern "C" void read_input_2D_f64(int32_t fileID,
                         Aval_rank, Aval_ptr, readMode);
 }
 
-extern "C" void read_input_3D_f32(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
+extern "C" void read_input_3D_f32(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int32_t A3format, int32_t A3_tile_format,
                                   int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                  int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                  int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
                                   int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                                  int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
                                   int Aval_rank, void *Aval_ptr, int32_t readMode)
 {
 
-  read_input_3D<float>(fileID, A1format, A2format, A3format,
+  read_input_3D<float>(fileID,
+                       A1format, A1_tile_format,
+                       A2format, A2_tile_format,
+                       A3format, A3_tile_format,
                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                       A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                       A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
                        A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
+                       A3tile_pos_rank, A3tile_pos_ptr, A3tile_crd_rank, A3tile_crd_ptr,
                        Aval_rank, Aval_ptr, readMode);
 }
 
-extern "C" void read_input_3D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
+extern "C" void read_input_3D_f64(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int32_t A3format, int32_t A3_tile_format,
                                   int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                  int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                   int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                  int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
                                   int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                                  int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
                                   int Aval_rank, void *Aval_ptr, int32_t readMode)
 {
-
-  read_input_3D<double>(fileID, A1format, A2format, A3format,
-                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
-                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                        A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
-                        Aval_rank, Aval_ptr, readMode);
+  read_input_3D<double>(fileID,
+                       A1format, A1_tile_format,
+                       A2format, A2_tile_format,
+                       A3format, A3_tile_format,
+                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                       A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                       A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
+                       A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
+                       A3tile_pos_rank, A3tile_pos_ptr, A3tile_crd_rank, A3tile_crd_ptr,
+                       Aval_rank, Aval_ptr, readMode);
 }
 
 // Utility functions to read metadata about the input matrices, such as the size of pos and crd array
@@ -2458,16 +2513,30 @@ extern "C" void read_input_sizes_2D_f64(int32_t fileID,
 }
 
 // Read 3D tensors
-extern "C" void read_input_sizes_3D_f32(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
+extern "C" void read_input_sizes_3D_f32(int32_t fileID,
+                                        int32_t A1format, int32_t A1_tile_format,
+                                        int32_t A2format, int32_t A2_tile_format,
+                                        int32_t A3format, int32_t A3_tile_format,
                                         int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_3D<float>(fileID, A1format, A2format, A3format, A1pos_rank, A1pos_ptr, readMode);
+  read_input_sizes_3D<float>(fileID,
+                  A1format, A1_tile_format,
+                  A2format, A2_tile_format,
+                  A3format, A3_tile_format,
+                  A1pos_rank, A1pos_ptr, readMode);
 }
 
-extern "C" void read_input_sizes_3D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
+extern "C" void read_input_sizes_3D_f64(int32_t fileID,
+                                        int32_t A1format, int32_t A1_tile_format,
+                                        int32_t A2format, int32_t A2_tile_format,
+                                        int32_t A3format, int32_t A3_tile_format,
                                         int A1pos_rank, void *A1pos_ptr, int32_t readMode)
 {
-  read_input_sizes_3D<double>(fileID, A1format, A2format, A3format, A1pos_rank, A1pos_ptr, readMode);
+  read_input_sizes_3D<double>(fileID,
+                  A1format, A1_tile_format,
+                  A2format, A2_tile_format,
+                  A3format, A3_tile_format,
+                  A1pos_rank, A1pos_ptr, readMode);
 }
 
 int qsort_comp(const void *a, const void *b)
