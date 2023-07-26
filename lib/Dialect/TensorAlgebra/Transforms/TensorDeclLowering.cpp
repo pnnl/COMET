@@ -389,8 +389,24 @@ namespace
     // 3D tensor
     else if (rank_size == 3)
     {
-      auto readInput3DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
-      auto readInput3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_index, unrankedMemref_f64, i32Type}, {});
+      auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
+                                      indexType, indexType, indexType, indexType, indexType, indexType, // Dimensions
+                                      unrankedMemref_index, unrankedMemref_index,     // A1
+                                      unrankedMemref_index, unrankedMemref_index,     // A1_tile
+                                      unrankedMemref_index, unrankedMemref_index,     // A2
+                                      unrankedMemref_index, unrankedMemref_index,     // A2_tile
+                                      unrankedMemref_index, unrankedMemref_index,     // A3
+                                      unrankedMemref_index, unrankedMemref_index,     // A3_tile
+                                      unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
+      auto readInput3DF64Func = FunctionType::get(ctx, {i32Type,
+                                      indexType, indexType, indexType, indexType, indexType, indexType, // Dimensions
+                                      unrankedMemref_index, unrankedMemref_index,     // A1
+                                      unrankedMemref_index, unrankedMemref_index,     // A1_tile
+                                      unrankedMemref_index, unrankedMemref_index,     // A2
+                                      unrankedMemref_index, unrankedMemref_index,     // A2_tile
+                                      unrankedMemref_index, unrankedMemref_index,     // A3
+                                      unrankedMemref_index, unrankedMemref_index,     // A3_tile
+                                      unrankedMemref_f64, i32Type}, {});
 
       if (VALUETYPE.compare("f32") == 0)
       {
@@ -416,7 +432,11 @@ namespace
         }
       }
 
-      auto readInputSizes3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {}); // last arg (i32Type): readMode
+      auto readInputSizes3DF64Func = FunctionType::get(ctx, {
+                                              i32Type,
+                                              indexType, indexType, indexType,
+                                              indexType, indexType, indexType,
+                                              unrankedMemref_index, i32Type}, {}); // last arg (i32Type): readMode
 
       if (VALUETYPE.compare("f32") == 0)
       {
@@ -1386,8 +1406,11 @@ namespace
             read_input_sizes_str = "read_input_sizes_3D_f64";
           }
           auto read_input_sizes_3D_Call = rewriter.create<func::CallOp>(loc, read_input_sizes_str, SmallVector<Type, 2>{},
-                                                                        ValueRange{sparseFileID, dim_format[0], dim_format[1],
-                                                                                   dim_format[2], alloc_sizes_cast, readModeConst});
+                                                                        ValueRange{sparseFileID,
+                                                                                  dim_format[0], dim_format[1],   // A1, A1_tile
+                                                                                  dim_format[2], dim_format[3],   // A2, A2_tile
+                                                                                  dim_format[4], dim_format[5],   // A3, A3_tile
+                                                                                  alloc_sizes_cast, readModeConst});
           read_input_sizes_3D_Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
           comet_debug() << "\n";
         }
@@ -1448,8 +1471,8 @@ namespace
           }
           auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
                                                                   ValueRange{sparseFileID,
-                                                                             dim_format[0], dim_format[1], // A1_format, A2_format
-                                                                             dim_format[2], dim_format[3], // A1_file_format, A2_tile_format
+                                                                             dim_format[0], dim_format[1], // A1_format, A1_tile_format
+                                                                             dim_format[2], dim_format[3], // A2_format, A2_tile_format
                                                                              alloc_sizes_cast_vec[0],   // A1_pos
                                                                              alloc_sizes_cast_vec[1],   // A1_crd
                                                                              alloc_sizes_cast_vec[2],   // A1_tile_pos
@@ -1473,11 +1496,17 @@ namespace
             read_input_str = "read_input_3D_f64";
           }
           auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
-                                                                  ValueRange{sparseFileID, dim_format[0], dim_format[1],
-                                                                             dim_format[2], alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1],
-                                                                             alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3],
-                                                                             alloc_sizes_cast_vec[4], alloc_sizes_cast_vec[5],
-                                                                             alloc_sizes_cast_vec[6], readModeConst});
+                                                                  ValueRange{sparseFileID,
+                                                                             dim_format[0], dim_format[1],    // A1, A1_tile
+                                                                             dim_format[2], dim_format[3],    // A2, A2_tile
+                                                                             dim_format[4], dim_format[5],    // A3, A3_tile
+                                                                             alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1],    // A1
+                                                                             alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3],    // A1_tile
+                                                                             alloc_sizes_cast_vec[4], alloc_sizes_cast_vec[5],    // A2
+                                                                             alloc_sizes_cast_vec[6], alloc_sizes_cast_vec[7],    // A2_tile
+                                                                             alloc_sizes_cast_vec[8], alloc_sizes_cast_vec[9],    // A3
+                                                                             alloc_sizes_cast_vec[10], alloc_sizes_cast_vec[11],  // A3_tile
+                                                                             alloc_sizes_cast_vec[12], readModeConst});
           read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
         }
         else
@@ -1529,7 +1558,25 @@ namespace
         }
         else if (rank_size == 3)
         {
-          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{alloc_tensor_vec[0], alloc_tensor_vec[1], alloc_tensor_vec[2], alloc_tensor_vec[3], alloc_tensor_vec[4], alloc_tensor_vec[5], alloc_tensor_vec[6], array_sizes[0], array_sizes[1], array_sizes[2], array_sizes[3], array_sizes[4], array_sizes[5], array_sizes[6], array_sizes[7], array_sizes[8], array_sizes[9]});
+          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{
+                                                                          alloc_tensor_vec[0], alloc_tensor_vec[1],     // A1
+                                                                          alloc_tensor_vec[2], alloc_tensor_vec[3],     // A1_tile
+                                                                          alloc_tensor_vec[4], alloc_tensor_vec[5],     // A2
+                                                                          alloc_tensor_vec[6], alloc_tensor_vec[7],     // A2_tile
+                                                                          alloc_tensor_vec[8], alloc_tensor_vec[9],     // A3
+                                                                          alloc_tensor_vec[10], alloc_tensor_vec[11],   // A3_tile
+                                                                          alloc_tensor_vec[12],
+                                                                          array_sizes[0], array_sizes[1],
+                                                                          array_sizes[2], array_sizes[3],
+                                                                          array_sizes[4], array_sizes[5],
+                                                                          array_sizes[6], array_sizes[7],
+                                                                          array_sizes[8], array_sizes[9],
+                                                                          array_sizes[10], array_sizes[11],
+                                                                          array_sizes[12], array_sizes[13],
+                                                                          array_sizes[14], array_sizes[15],
+                                                                          array_sizes[16], array_sizes[17],
+                                                                          array_sizes[18]
+                                                                          }, 3);
         }
         else
         {

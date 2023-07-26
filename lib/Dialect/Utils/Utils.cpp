@@ -984,20 +984,29 @@ namespace mlir
         if (formats_str.compare(0, 3, "CSF") == 0)
         {
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 11, "ModeGeneric") == 0)
         {
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_dense);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
         { // COO
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
@@ -1138,20 +1147,29 @@ namespace mlir
         if (formats_str.compare(0, 3, "CSF") == 0)
         {
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 11, "ModeGeneric") == 0)
         {
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_dense);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
         { // COO
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {

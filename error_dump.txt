@@ -1,4 +1,4 @@
-Failed Tests (42):
+Failed Tests (38):
   COMET :: compound_exps/CSR_mult_spTranspose_CSR.ta
   COMET :: compound_exps/Dense_eltwise_sTranspose_CSR.ta
   COMET :: compound_exps/Dense_mult_spTranspose_CSR.ta
@@ -7,7 +7,6 @@ Failed Tests (42):
   COMET :: compound_exps/spTranspose_CSR_eltwise_Dense.ta
   COMET :: compound_exps/spTranspose_CSR_mult_CSR.ta
   COMET :: kernels/ccsd_t1_3_loops.ta
-  COMET :: kernels/gnn.ta
   COMET :: kernels/triangleCount_SandiaLL.ta
   COMET :: ops/eltwise_CSRxCSR_oCSR_sameSpPattern.ta
   COMET :: ops/eltwise_add_CSRxCSR_oCSR_sameSpPattern.ta
@@ -21,15 +20,12 @@ Failed Tests (42):
   COMET :: ops/transpose_COO_tensor.ta
   COMET :: ops/transpose_CSF_tensor.ta
   COMET :: ops/transpose_CSR_matrix.ta
-  COMET :: ops/utility_printCSF_multi.ta
-  COMET :: ops/utility_printCSR_CSF.ta
   COMET :: opts/ccsd_t1_21_ttgt.ta
   COMET :: opts/ccsd_t1_21_ttgt_all_opts.ta
   COMET :: opts/ccsd_t1_21_ttgt_tiling.ta
   COMET :: opts/ccsd_t1_3_ttgt.ta
   COMET :: opts/ccsd_t1_4_ttgt.ta
   COMET :: opts/ccsd_t1_4_ttgt_bestperm.ta
-  COMET :: opts/fusion.ta
   COMET :: opts/spgemm_w_compressed_workspace.ta
   COMET :: semiring/eltwise_monoidPlus_COOxDense_oCOO.ta
   COMET :: semiring/eltwise_monoidTimes_COOxDense_oCOO.ta
