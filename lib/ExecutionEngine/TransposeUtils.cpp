@@ -576,12 +576,6 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
   if (Aspformat.compare("COO") == 0 && Bspformat.compare("COO") == 0)
   {
     int sz = desc_Aval->sizes[0];
-    printf("sz: %d\n", sz);
-    for (int i = 0; i<sz; i++){
-      //printf("%f\n", desc_Aval->data[i]);
-      std::cout << "-> " << desc_Aval->data[i] << std::endl;
-    }
-    puts("----");
     // vector of coordinates
     vector<coo_t> coo_ts(sz);
 
@@ -595,7 +589,6 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
 	            coo_ts[m].coords.push_back(desc_A2crd->data[k]); 
 	            coo_ts[m].coords.push_back(desc_A1crd->data[k]); 
       	      coo_ts[m].val = desc_Aval->data[k];
-              printf("VAL: %f\n", desc_Aval->data[k]);
 	            ++m;
 	          }
 	        }
@@ -623,13 +616,11 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
     //===----------------------------------------------------------------------===//
     // push transposed coords to output tensors
     //===----------------------------------------------------------------------===//
-    puts("----");
     for (int i = 0; i < sz; ++i)
     {
       desc_B1crd->data[i] = coo_ts[i].coords[0];
       desc_B2crd->data[i] = coo_ts[i].coords[1];
       desc_Bval->data[i] = coo_ts[i].val;
-      printf("VAL2: %f\n", coo_ts[i].val);
     }
     
     // B2 pos should have two values: data[0]: 0 and data[1]: sz 
@@ -1285,7 +1276,7 @@ extern "C" void transpose_2D_f64(int32_t A1format, int32_t A1tile_format, int32_
                                 int Bval_rank, void *Bval_ptr,
                                 int sizes_rank, void *sizes_ptr)
 {
-  transpose_2D<float>(A1format, A1tile_format, A2format, A2tile_format,
+  transpose_2D<double>(A1format, A1tile_format, A2format, A2tile_format,
                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
                       A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
