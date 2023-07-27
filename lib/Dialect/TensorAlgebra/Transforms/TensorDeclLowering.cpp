@@ -220,6 +220,10 @@ namespace
       initial_array_sizes.push_back(cst_index_1);
       initial_array_sizes.push_back(cst_index_1);
 
+      // A1tile
+      initial_array_sizes.push_back(cst_index_1);
+      initial_array_sizes.push_back(cst_index_1);
+
       // The other three size information size..
       // get the dimension size from operand
       // std::vector<Value> dim_sizes;
@@ -239,6 +243,12 @@ namespace
 
       Value dim2_crdSize = rewriter.create<MulIOp>(loc, dimSizes[0], dimSizes[1]);
       initial_array_sizes.push_back(dim2_crdSize);
+
+      // A2tile
+      initial_array_sizes.push_back(dim2_posSize);
+      initial_array_sizes.push_back(dim2_crdSize);
+
+      // Aval
       initial_array_sizes.push_back(dim2_crdSize);
       comet_debug() << " ";
       comet_vdump(dim2_crdSize);
@@ -249,13 +259,13 @@ namespace
     }
 
     // same with transpose case
-    comet_debug() << " array_sizes_vec.size(): " << array_sizes_vec.size() << "\n";
+    comet_debug() << " initial_array_sizes.size(): " << initial_array_sizes.size() << "\n";
     comet_debug() << " tensor_rank: " << tensor_rank << "\n";
     std::vector<Value> array_alloc_vec;
-    for (unsigned int i = 0; i < 2 * tensor_rank + 1; i++)
+    for (unsigned int i = 0; i < 4 * tensor_rank + 1; i++)
     {
       Value alloc_sizes;
-      if (i < 2 * tensor_rank)
+      if (i < 4 * tensor_rank)
       {
         comet_debug() << " Inserting AllocOp: ";
         alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{initial_array_sizes[i]}, rewriter);
@@ -277,6 +287,10 @@ namespace
     array_sizes.push_back(cst_index_1);
     array_sizes.push_back(cst_index_1);
     array_sizes.push_back(cst_index_1);
+    array_sizes.push_back(cst_index_1);
+    array_sizes.push_back(cst_index_1);
+    array_sizes.push_back(cst_index_0);
+    array_sizes.push_back(cst_index_0);
     array_sizes.push_back(cst_index_0);
     array_sizes.push_back(cst_index_0);
     // put the array sizes into alloc/store/loadOp
@@ -750,23 +764,25 @@ namespace
             comet_debug() << " rhsPerms: \n";
             for (auto m : rhsPerms)
             {
-              comet_debug() << " \n";
+              //comet_debug() << " \n";
               for (auto n : m)
               {
                 comet_debug() << n << " \n";
               }
-              comet_debug() << "\n";
+              comet_debug() << "-\n";
+              //comet_debug() << "\n";
             }
+            comet_debug() << "--\n";
 
             comet_debug() << " rhsFormats: \n";
             for (auto m : rhsFormats)
             {
-              comet_debug() << " \n";
+              //comet_debug() << " \n";
               for (auto n : m)
               {
                 comet_debug() << n << " \n";
               }
-              comet_debug() << "\n";
+              //comet_debug() << "\n";
             }
 
             bool isElementwise = checkIsElementwise(rhsPerms);
