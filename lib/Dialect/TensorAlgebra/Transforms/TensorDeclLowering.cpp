@@ -126,7 +126,7 @@ namespace
     comet_pdump(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
     auto sptensor_construct_op = cast<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
 
-    for (unsigned int i = 0; i < 2 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
+    for (unsigned int i = 0; i < 4 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
     {
       comet_debug() << " in for loop\n";
       Value intput_tensorload_op = cast<ToTensorOp>(sptensor_construct_op.getOperand(i).getDefiningOp());
@@ -139,7 +139,7 @@ namespace
       comet_debug() << " ";
 
       Value output_alloc_op;
-      if (i < 2 * (rshPerms[sparse_inputtensor_id].size()))
+      if (i < 4 * (rshPerms[sparse_inputtensor_id].size()))
       {
         // Memory allocation for position and coordinate arrays in sparse tensor contractions
         output_alloc_op = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{input_alloc_op_param}, rewriter);
@@ -158,9 +158,9 @@ namespace
     comet_debug() << " ";
 
     // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
-    for (unsigned int i = 0; i < 2 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
+    for (unsigned int i = 0; i < 4 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
     {
-      int sizes_i = i + 2 * (rshPerms[sparse_inputtensor_id].size()) + 1;
+      int sizes_i = i + 4 * (rshPerms[sparse_inputtensor_id].size()) + 1;
       comet_debug() << " ";
       comet_pdump(sptensor_construct_op.getOperand(sizes_i).getDefiningOp());
 

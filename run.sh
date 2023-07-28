@@ -6,15 +6,15 @@
 #export SPARSE_FILE_NAME1=integration_test/data/test_rank2_transpose.mtx
 
 # 2D
-#export SPARSE_FILE_NAME0=integration_test/data/test_rank2.mtx
-#export SPARSE_FILE_NAME1=integration_test/data/test_rank2.mtx
-#export SPARSE_FILE_NAME=integration_test/data/test_rank2.mtx
+export SPARSE_FILE_NAME0=integration_test/data/test_rank2.mtx
+export SPARSE_FILE_NAME1=integration_test/data/test_rank2.mtx
+export SPARSE_FILE_NAME=integration_test/data/test_rank2.mtx
 
 # 3D
-export SPARSE_FILE_NAME0=integration_test/data/test_rank3.tns
-export SPARSE_FILE_NAME1=integration_test/data/test_rank3.tns
-export SPARSE_FILE_NAME=integration_test/data/test_rank3.tns
-export SORT_TYPE=SEQ_QSORT
+#export SPARSE_FILE_NAME0=integration_test/data/test_rank3.tns
+#export SPARSE_FILE_NAME1=integration_test/data/test_rank3.tns
+#export SPARSE_FILE_NAME=integration_test/data/test_rank3.tns
+#export SORT_TYPE=SEQ_QSORT
 
 #build/bin/comet-opt --convert-ta-to-it --convert-to-loops first.ta &> first.mlir
 #build/bin/comet-opt --convert-ta-to-it first.ta &> first.mlir
