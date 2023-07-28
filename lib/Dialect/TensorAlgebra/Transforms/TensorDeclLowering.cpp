@@ -629,6 +629,8 @@ namespace
             dimSizes.push_back(src_input.getDefiningOp()->getOperand(8 * dst_rank + 2 + dstIndexLocInSrcVec[i]));
           }
 
+          Value cst_index_0 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(0));
+          comet_vdump(cst_index_0);
           Value cst_index_1 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
           comet_vdump(cst_index_1);
           Value cst_index_2 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(2));
@@ -680,15 +682,27 @@ namespace
             if (src_format.compare("CSR") == 0)
             {
               comet_debug() << " 2D CSR transpose to 2D CSR\n";
+              // A1
               array_sizes_vec.push_back(cst_index_1);
               array_sizes_vec.push_back(cst_index_1);
+
+              // A1_tile
+              array_sizes_vec.push_back(cst_index_0);
+              array_sizes_vec.push_back(cst_index_0);
+
               mlir::Value crd_size = rewriter.create<AddIOp>(loc, dimSizes[0], cst_index_1);
               comet_debug() << "AddIOp generated for crd_size for CSR:\n";
               comet_vdump(crd_size);
               array_sizes_vec.push_back(crd_size);
               // B2pos, Bval are the same size with A2pos, Aval
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(9));
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(9));
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(17));
+
+              // A2tile
+              array_sizes_vec.push_back(cst_index_0);
+              array_sizes_vec.push_back(cst_index_0);
+
+              // Aval
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(17));
             }
           }
           // For 3D, consider CSF
@@ -702,6 +716,14 @@ namespace
               mlir::Value src_nnz_add1 = rewriter.create<AddIOp>(loc, src_nnz, cst_index_1);
               comet_debug() << "AddIOp generated for nnz for CSF:\n";
               comet_vdump(src_nnz_add1);
+              array_sizes_vec.push_back(src_nnz);
+              array_sizes_vec.push_back(src_nnz_add1);
+              array_sizes_vec.push_back(src_nnz);
+              array_sizes_vec.push_back(src_nnz_add1);
+              array_sizes_vec.push_back(src_nnz);
+              array_sizes_vec.push_back(src_nnz_add1);
+
+              // For the tiling dimensions
               array_sizes_vec.push_back(src_nnz);
               array_sizes_vec.push_back(src_nnz_add1);
               array_sizes_vec.push_back(src_nnz);
@@ -939,23 +961,36 @@ namespace
         else if (rank_size == 3)
         {
           sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
-                                                                             ValueRange{tensorload_sizes_vec[0],
-                                                                                        tensorload_sizes_vec[1],
-                                                                                        tensorload_sizes_vec[2],
-                                                                                        tensorload_sizes_vec[3],
-                                                                                        tensorload_sizes_vec[4],
-                                                                                        tensorload_sizes_vec[5],
-                                                                                        tensorload_sizes_vec[6],
-                                                                                        array_sizes_vec[0],
-                                                                                        array_sizes_vec[1],
-                                                                                        array_sizes_vec[2],
-                                                                                        array_sizes_vec[3],
-                                                                                        array_sizes_vec[4],
-                                                                                        array_sizes_vec[5],
-                                                                                        array_sizes_vec[6],
-                                                                                        dimSizes[0],
-                                                                                        dimSizes[1],
-                                                                                        dimSizes[2]});
+                                                                  ValueRange{tensorload_sizes_vec[0],  // A1pos (each dimension consists of pos and crd arrays)
+                                                                            tensorload_sizes_vec[1],   // A1crd
+                                                                            tensorload_sizes_vec[2],   // A1tile_pos
+                                                                            tensorload_sizes_vec[3],   // A1tile_crd
+                                                                            tensorload_sizes_vec[4],   // A2pos
+                                                                            tensorload_sizes_vec[5],   // A2crd
+                                                                            tensorload_sizes_vec[6],   // A2tile_pos
+                                                                            tensorload_sizes_vec[7],   // A2tile_crd
+                                                                            tensorload_sizes_vec[8],   // A3pos
+                                                                            tensorload_sizes_vec[9],   // A3crd
+                                                                            tensorload_sizes_vec[10],   // A3tile_pos
+                                                                            tensorload_sizes_vec[11],   // A3tile_crd
+                                                                            tensorload_sizes_vec[12],   // Aval
+                                                                            array_sizes_vec[0],        // A1pos_size (size of each pos and crd arrays)
+                                                                            array_sizes_vec[1],        // A1crd_size
+                                                                            array_sizes_vec[2],        // A1tile_pos_size
+                                                                            array_sizes_vec[3],        // A1tile_crd_size
+                                                                            array_sizes_vec[4],        // A2pos_size
+                                                                            array_sizes_vec[5],        // A2crd_size
+                                                                            array_sizes_vec[6],        // A2tile_pos_size
+                                                                            array_sizes_vec[7],        // A2tile_crd_size
+                                                                            array_sizes_vec[8],        // A3pos_size
+                                                                            array_sizes_vec[9],        // A3crd_size
+                                                                            array_sizes_vec[10],        // A3tile_pos_size
+                                                                            array_sizes_vec[11],        // A3tile_crd_size
+                                                                            array_sizes_vec[12],        // Aval_size (size of value array)
+                                                                            dimSizes[0],         // dim1_size (size of each dimension in sparse tensor)
+                                                                            dimSizes[1],         // dim2_size (size of each dimension in sparse tensor)
+                                                                            dimSizes[2]          // dim3_size
+                                                                            }, 3);
         }
         else
         {
