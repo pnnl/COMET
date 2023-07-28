@@ -430,7 +430,29 @@ namespace
         }
         else if (rank_size == 3)
         { // 3D
-          auto transpose3DF64Func = FunctionType::get(ctx, {i32Type, i32Type, i32Type, i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, i32Type, i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, unrankedMemrefType_index},
+          auto transpose3DF64Func = FunctionType::get(ctx, 
+                                          {i32Type, i32Type,
+                                          i32Type, i32Type,
+                                          i32Type, i32Type,
+                                          i32Type, i32Type,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_f64,
+                                          i32Type, i32Type,
+                                          i32Type, i32Type,
+                                          i32Type, i32Type,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_index, unrankedMemrefType_index,
+                                          unrankedMemrefType_f64,
+                                          unrankedMemrefType_index},
                                                       {});
 
           std::string func_name = "transpose_3D_f64";
@@ -442,14 +464,25 @@ namespace
           }
 
           rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{},
-                                        ValueRange{input_perm_num, output_perm_num, dim_formatIn[0], dim_formatIn[1], dim_formatIn[2],
+                                        ValueRange{input_perm_num, output_perm_num,
+                                                   dim_formatIn[0], dim_formatIn[1], dim_formatIn[2],
+                                                   dim_formatIn[3], dim_formatIn[4], dim_formatIn[5],
                                                    alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
                                                    alloc_sizes_cast_vecs[0][2], alloc_sizes_cast_vecs[0][3],
                                                    alloc_sizes_cast_vecs[0][4], alloc_sizes_cast_vecs[0][5],
-                                                   alloc_sizes_cast_vecs[0][6], dim_formatOut[0], dim_formatOut[1],
-                                                   dim_formatOut[2], alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
+                                                   alloc_sizes_cast_vecs[0][6], alloc_sizes_cast_vecs[0][7],
+                                                   alloc_sizes_cast_vecs[0][8], alloc_sizes_cast_vecs[0][9],
+                                                   alloc_sizes_cast_vecs[0][10], alloc_sizes_cast_vecs[0][11],
+                                                   alloc_sizes_cast_vecs[0][12],
+                                                   dim_formatOut[0], dim_formatOut[1], dim_formatOut[2],
+                                                   dim_formatOut[3], dim_formatOut[4], dim_formatOut[5],
+                                                   alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
                                                    alloc_sizes_cast_vecs[1][2], alloc_sizes_cast_vecs[1][3],
-                                                   alloc_sizes_cast_vecs[1][4], alloc_sizes_cast_vecs[1][5], alloc_sizes_cast_vecs[1][6],
+                                                   alloc_sizes_cast_vecs[1][4], alloc_sizes_cast_vecs[1][5],
+                                                   alloc_sizes_cast_vecs[1][6], alloc_sizes_cast_vecs[1][7],
+                                                   alloc_sizes_cast_vecs[1][8], alloc_sizes_cast_vecs[1][9],
+                                                   alloc_sizes_cast_vecs[1][10], alloc_sizes_cast_vecs[1][11],
+                                                   alloc_sizes_cast_vecs[1][12],
                                                    sparse_tensor_desc});
         }
         else
