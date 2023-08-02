@@ -215,14 +215,15 @@ namespace
 
     if (sparseOutputFormat.compare("CSR") == 0)
     { // CSR format
+      //puts("IN- CSR");
       comet_debug() << " 2D CSR format in sparse output decl op\n";
       // AllocOp, storeOp, LoadOp
       initial_array_sizes.push_back(cst_index_1);
       initial_array_sizes.push_back(cst_index_1);
 
       // A1tile
-      initial_array_sizes.push_back(cst_index_1);
-      initial_array_sizes.push_back(cst_index_1);
+      initial_array_sizes.push_back(cst_index_0);
+      initial_array_sizes.push_back(cst_index_0);
 
       // The other three size information size..
       // get the dimension size from operand
@@ -245,8 +246,8 @@ namespace
       initial_array_sizes.push_back(dim2_crdSize);
 
       // A2tile
-      initial_array_sizes.push_back(dim2_posSize);
-      initial_array_sizes.push_back(dim2_crdSize);
+      initial_array_sizes.push_back(cst_index_0);
+      initial_array_sizes.push_back(cst_index_0);
 
       // Aval
       initial_array_sizes.push_back(dim2_crdSize);
@@ -287,10 +288,10 @@ namespace
     array_sizes.push_back(cst_index_1);
     array_sizes.push_back(cst_index_1);
     array_sizes.push_back(cst_index_1);
-    array_sizes.push_back(cst_index_1);
-    array_sizes.push_back(cst_index_1);
     array_sizes.push_back(cst_index_0);
     array_sizes.push_back(cst_index_0);
+    array_sizes.push_back(cst_index_1);
+    array_sizes.push_back(cst_index_1);
     array_sizes.push_back(cst_index_0);
     array_sizes.push_back(cst_index_0);
     // put the array sizes into alloc/store/loadOp
