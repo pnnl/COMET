@@ -2422,10 +2422,19 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
     /// TODO(zhen.peng): to set mask_type, we need to read the masking attribute from the ComputeOp node.
     auto maskingAttr = cur_op.getMaskType();
-    std::string maskingAttrStr (cur_op.getMaskType().data());
+    std::string maskingAttrStr (maskingAttr.data());
     comet_debug() << "mask attr: " << maskingAttrStr << "\n";
-    
-    auto mask_type = PUSH_BASED_MASKING;
+
+    MASKING_TYPE mask_type;
+    if (maskingAttrStr == "push")
+      mask_type = MASKING_TYPE::PUSH_BASED_MASKING;
+    else if (maskingAttrStr == "pull")
+      mask_type = MASKING_TYPE::PULL_BASED_MASKING;
+    else if (maskingAttrStr == "auto")
+      mask_type = MASKING_TYPE::PUSH_BASED_MASKING;
+    else 
+      mask_type = MASKING_TYPE::NO_MASKING;
+
     switch (mask_type) 
     {
       case NO_MASKING: {  /// Use no masking
