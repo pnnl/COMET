@@ -350,7 +350,9 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
                                                                       builder.getArrayAttr(allFormats_lhs));
   bool comp_worksp_opt = false; // non-compressed workspace, this is a place-holder and it is updated in workspace transform pass.
   llvm::StringRef semiring = expr->getSemiring();
-  auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getBoolAttr(comp_worksp_opt), builder.getStringAttr(semiring));
+  llvm::StringRef maskType = "none";
+  //auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getBoolAttr(comp_worksp_opt), builder.getStringAttr(semiring));
+  auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getBoolAttr(comp_worksp_opt), builder.getStringAttr(semiring), builder.getStringAttr(maskType));
 
   comet_pdump(leafop);
   return leafop;

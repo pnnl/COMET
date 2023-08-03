@@ -569,7 +569,9 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   std::vector<mlir::Value> c1_rhs = {const_index_0};
   mlir::Value c1_lhs = {w_index_list_size};
   std::string semiringName(itComputeOp.getSemiring().data());
+  std::string maskTypeName(itComputeOp.getMaskType().data());
   auto c1_semiring = builder.getStringAttr(semiringName);
+  auto c1_maskType = builder.getStringAttr(maskTypeName);
 
   // for c1_rhs
   std::vector<std::vector<int>> c1_rhsop_perms_str = {c1_perms_int_0};
@@ -590,7 +592,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   comet_vdump(c1_lhsop);
 
   // for c1 ==> Wj = 0;
-  mlir::Value c1 = builder.create<indexTree::IndexTreeComputeOp>(loc, builder.getI64Type(), c1_rhsop, c1_lhsop, comp_worksp_opt, c1_semiring);
+  mlir::Value c1 = builder.create<indexTree::IndexTreeComputeOp>(loc, builder.getI64Type(), c1_rhsop, c1_lhsop, comp_worksp_opt, c1_semiring, c1_maskType);
   comet_debug() << "IndexTreeCompute Operation in Output (c1):\n";
   comet_vdump(c1);
 
@@ -613,6 +615,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   std::vector<mlir::Value> c2_lhs = workspaceTensors;
 
   auto c2_semiring = builder.getStringAttr(semiringName);
+  auto c2_maskType = builder.getStringAttr("push");  // TODO: update based on actual value provided by user.
 
   // for c2_rhsop
   std::vector<std::vector<int>> c2_rhsop_perms_str = {c2_perms_int_0, c2_perms_int_1};
@@ -633,7 +636,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   comet_vdump(c2_lhsop);
 
   // for c2
-  mlir::Value c2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c2_rhsop, c2_lhsop, comp_worksp_opt, c2_semiring);
+  mlir::Value c2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c2_rhsop, c2_lhsop, comp_worksp_opt, c2_semiring, c2_maskType);
   comet_debug() << "IndexTreeCompute Operation in Output (c2):\n";
   comet_vdump(c2);
 
@@ -651,6 +654,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   std::vector<mlir::Value> c3_rhs = workspaceTensors;
   mlir::Value c3_lhs = c3_tensors[0];
   auto c3_semiring = builder.getStringAttr(semiringName);
+  auto c3_maskType = builder.getStringAttr(maskTypeName);
 
   // for c3_rhs
   std::vector<std::vector<int>> c3_rhsop_perms_str = {c3_perms_int_0};
@@ -671,7 +675,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   comet_vdump(c3_lhsop);
 
   // for c3 ==> Cij = Wj;
-  mlir::Value c3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c3_rhsop, c3_lhsop, comp_worksp_opt, c3_semiring);
+  mlir::Value c3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c3_rhsop, c3_lhsop, comp_worksp_opt, c3_semiring, c3_maskType);
   comet_debug() << "IndexTreeCompute Operation in Output (c3):\n";
   comet_vdump(c3);
 
@@ -820,7 +824,9 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       std::vector<mlir::Value> c1_rhs = {const_f64_0};
       mlir::Value c1_lhs = {v};
       std::string semiringName(itComputeOp.getSemiring().data());
+      std::string maskTypeName(itComputeOp.getMaskType().data());
       auto c1_semiring = builder.getStringAttr(semiringName);
+      auto c1_maskType = builder.getStringAttr(maskTypeName);
 
       // for c1_rhs
       std::vector<std::vector<int>> c1_rhsop_perms_str = {c1_perms_int_0};
@@ -841,7 +847,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       comet_vdump(c1_lhsop);
 
       // for c1
-      mlir::Value c1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c1_rhsop, c1_lhsop, comp_worksp_opt, c1_semiring);
+      mlir::Value c1 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c1_rhsop, c1_lhsop, comp_worksp_opt, c1_semiring, c1_maskType);
       comet_debug() << "IndexTreeCompute Operation in Input (c1): ";
       comet_vdump(c1);
 
@@ -858,6 +864,8 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
 
       mlir::Value c2_lhs = {v};
       auto c2_semiring = builder.getStringAttr(semiringName);
+      auto c2_maskType = builder.getStringAttr(maskTypeName);
+
       // for c2_rhs
       std::vector<std::vector<int>> c2_rhsop_perms_str = {c2_perms_int_0};
       ArrayAttr c2_rhsop_perms = convert2DVectorToArrayAttrInt(c2_rhsop_perms_str, builder);
@@ -877,7 +885,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       comet_vdump(c2_lhsop);
 
       // for c2
-      mlir::Value c2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c2_rhsop, c2_lhsop, comp_worksp_opt, c2_semiring);
+      mlir::Value c2 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c2_rhsop, c2_lhsop, comp_worksp_opt, c2_semiring, c2_maskType);
       comet_debug() << "IndexTreeCompute Operation in Input (c2): ";
       comet_vdump(c2);
 
@@ -899,6 +907,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       std::vector<mlir::Value> c3_lhs = tensors_lhs;
 
       auto c3_semiring = builder.getStringAttr(semiringName);
+      auto c3_maskType = builder.getStringAttr(maskTypeName);
 
       // for c3_rhs
       std::vector<std::vector<int>> c3_rhsop_perms_str = {c3_perms_int_0, c3_perms_int_1};
@@ -919,7 +928,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       comet_vdump(c3_lhsop);
 
       // for c3
-      mlir::Value c3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c3_rhsop, c3_lhsop, comp_worksp_opt, c3_semiring);
+      mlir::Value c3 = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, c3_rhsop, c3_lhsop, comp_worksp_opt, c3_semiring, c3_maskType);
       comet_debug() << "IndexTreeCompute Operation in Input (t3): ";
       comet_vdump(c3);
 

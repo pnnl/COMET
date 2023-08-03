@@ -111,6 +111,44 @@ static const llvm::StringSet<> Semiring_ops{
 static const llvm::StringSet<> Semiring_reduceOps{"any", "land", "lor", "max",
                                                   "minxy", "plusxy", "times", "noop"}; // noop is for monoid op support
 
+/// MASKING_TYPE to indicate what type of masking is used.
+enum MASKING_TYPE {
+  NO_MASKING = 0,
+  PUSH_BASED_MASKING = 1,
+  PULL_BASED_MASKING = 2
+};
+
+/// class MaksingInfo, passed as a parameter to the formSemiringLoopBody() to indicate if using masking or not.
+struct MaskingInfo {
+public:
+  MASKING_TYPE maskType;
+
+  /// Push-based mask auxiliary dense vector
+  mlir::Value states;  /// %states = memref.alloc(%25) {alignment = 32 : i64} : memref<?xi1>
+
+  /// TODO(zhen.peng): Pull-based mask info and auxiliary variables.
+
+public:
+  MaskingInfo() : maskType(NO_MASKING), states(nullptr) { }
+
+//  MaskingInfo(MASKING_TYPE type_, mlir::Value states_) : maskType(type_), states(states_) { }
+
+  void dump() {
+    switch (maskType) {
+      case NO_MASKING:
+        std::cout << "maskType: NO_MASKING\n";
+        break;
+      case PUSH_BASED_MASKING:
+        std::cout << "maskType: PUSH_BASED_MASKING " << "states: ";
+        states.dump();
+        break;
+      case PULL_BASED_MASKING:
+        std::cout << "maskType: PULL_BASED_MASKING ... Not supported";
+        break;
+    }
+  }
+};
+
 class OpsTree
 {
   // private:
@@ -363,7 +401,13 @@ void genForOps(std::vector<Value> tensors,
             comet_debug() << "\n";
             comet_vdump(brother_forops[0]);
             comet_debug() << "Insertion point (brother_forops.size() > 0 &&  opstree->forOps.size() == 0)\n";
-            rewriter.setInsertionPointAfter(brother_forops[0]);
+            //rewriter.setInsertionPointAfter(brother_forops[0]);
+            /// Another insertion point option added by Zhen Peng on 03/08/2023
+            /// Insert at the end of the outer-most loop body.
+            /// It is for the push-based masking code. Not sure the effects for other cases.
+            /// Using the previous insertion point ( rewriter.setInsertionPointAfter(brother_forops[0]); ) is okay,
+            /// but will move pushed-based masking's reset for-loop afterwards.
+            rewriter.setInsertionPoint(parent_forop.getBody()->getTerminator());
           }
           else
           { // current opstree contains loops, insert in the body of the loops
@@ -855,6 +899,356 @@ Value getSemiringFirstVal(PatternRewriter &rewriter, Location loc,
   return reduceResult;
 }
 
+inline static mlir::Value getIthOperandOfValue(
+    /* the value */ mlir::Value &the_value,
+    /* the i-th operand starting from 0 */ int ith)
+{
+  return the_value.getDefiningOp()->getOperand(ith);
+}
+
+/// Get the memref.alloc of the i-th operand of ta.sptensor_construct
+static mlir::Value getAllocOfIthOperandOfSpTensorConstruct(
+    /* the sparse tensor */ mlir::Value &sptensor_construct,
+    /* the i-th operand starting from 0 */ int ith)
+{
+  mlir::Value ith_tensor_load = getIthOperandOfValue(sptensor_construct, ith);
+  return ith_tensor_load.getDefiningOp()->getOperand(0);
+}
+
+/// Push-based masking
+/// Allocate the temporary dense bit vector (states)
+/// @return temporary dense vector for a row of the mask
+static mlir::Value pushedMaskAllocDenseVector(mlir::Value &mask_tensor,
+                                 PatternRewriter &rewriter,
+                                 Location &loc,
+                                 const std::vector<scf::ForOp> &forLoops)
+{
+  /* ------------------------------------------------------------- *
+    %states = memref.alloc(%25) {alignment = 32 : i64} : memref<?xi1>
+    scf.for %arg0 = %c0 to %25 step %c1 {
+      memref.store %false, %states[%arg0] : memref<?xi1>
+    }
+   * ------------------------------------------------------------- */
+  comet_debug() << "mask tensor\n";
+  comet_vdump(mask_tensor);
+
+  /// mask_tensor should be a ta.sptensor_construct
+  if (!llvm::isa<tensorAlgebra::SparseTensorConstructOp>(mask_tensor.getDefiningOp())) {
+    llvm::errs() << "Error: mask tensor should be a sparse tensor ta.sptensor_construct\n";
+    return {nullptr};
+  }
+
+  /// Relocate the insertion point
+  /// Right before the most outer for loop
+  auto last_insertion_point = rewriter.saveInsertionPoint();
+  rewriter.setInsertionPoint(forLoops.back());
+
+  /// Get the column size from ta.sptensor_construct's 12th operand
+  /// mask_tensor is like
+  /// %93 = ta.sptensor_construct(%74, %76, %78, %80, %82, %84, %86, %88, %90, %92, %10, %38) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+  /// the column size is the 12th parameter (e.g., %38 above).
+  /// See ta.sptensor_construct definition in include/comet/Dialect/TensorAlgebra/IR/TAOps.td
+  mlir::Value column_size = getIthOperandOfValue(mask_tensor, 11);
+  comet_debug() << "column size\n";
+  comet_vdump(column_size);
+
+  /// Alloc the dense bit vector for the push-based mask
+  /// %states = memref.alloc(%25) {alignment = 32 : i64} : memref<?xi1>
+  auto i1_type = mlir::MemRefType::get({mlir::ShapedType::kDynamic},
+                                                   rewriter.getI1Type());
+  comet_debug() << "i1_type\n";
+  comet_vdump(i1_type);
+  std::vector<mlir::Value> tmp_val_vector{column_size};
+  mlir::Value dense_vector = rewriter.create<memref::AllocOp>(loc,
+                                                              i1_type,
+                                                              mlir::ValueRange(tmp_val_vector));
+  comet_debug() << "dense vector\n";
+  comet_vdump(dense_vector);
+
+  /// Generate for-loop
+  /// scf.for %arg0 = %c0 to %25 step %c1 {
+  ///     memref.store %false, %states[%arg0] : memref<?xi1>
+  /// }
+  mlir::Value const_false = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
+  comet_debug() << "true\n";
+  comet_vdump(const_false);
+
+  /// lowerbound is 0
+  mlir::Value lower_bound_0 = rewriter.create<ConstantIndexOp>(loc, 0);
+  mlir::Value step_1 = rewriter.create<ConstantIndexOp>(loc, 1);
+  /// upperbound is column_size
+  mlir::Value upper_bound = column_size;
+  /// The for_loop
+  scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lower_bound_0, upper_bound, step_1);
+  mlir::Value for_loop_index = for_loop.getInductionVar();
+  comet_debug() << "for_loop and index\n";
+  comet_vdump(for_loop);
+  comet_vdump(for_loop_index);
+  /// The loop body
+  auto after_for_loop_insertion_point = rewriter.saveInsertionPoint();
+  rewriter.setInsertionPointToStart(for_loop.getBody());
+//  rewriter.setInsertionPoint(for_loop.getBody()->getTerminator());  // both work
+  memref::StoreOp store_op = rewriter.create<memref::StoreOp>(loc, const_false, dense_vector, for_loop_index);
+  comet_debug() << "store_op\n";
+  comet_vdump(store_op);
+  rewriter.restoreInsertionPoint(after_for_loop_insertion_point);
+
+  /// Restore the insertion point
+  rewriter.restoreInsertionPoint(last_insertion_point);
+
+  return dense_vector;
+}
+
+/// Push-based Masking
+/// Genereate the Initialization for-loop to initialize the dense auxiliary vector by each row of the mask.
+static void pushedMaskGenInitForLoop(mlir::Value &iter_start /* start of the for-loop index */,
+                                     mlir::Value &iter_bound /* boundary of the for-loop index */,
+                                     mlir::Value &states /* temporary dense vector for a row of the mask*/,
+                                     mlir::Value &mask_tensor,
+                                     PatternRewriter &rewriter,
+                                     Location &loc)
+{
+  /// Create the for-loop
+  /// scf.for %arg11 = %173 to %174 step %c1 {
+  ///     %176 = memref.load %51[%arg11] : memref<?xf64>  // %51 = M.val
+  ///     %177 = cmpf une, %176, %cst : f64
+  ///     scf.if %177 {
+  ///       %175 = memref.load %49[%arg11] : memref<?xindex> // %49 = M.col, %175 = M_col_id
+  ///       memref.store %true, %states[%175] : memref<?xi1> // states[M_col_id] = true;
+  ///     }
+  /// }
+  mlir::Value const_index_1 = rewriter.create<ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
+  scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, iter_start, iter_bound, const_index_1);
+  mlir::Value for_loop_index = for_loop.getInductionVar();
+  comet_debug() << "for-loop and its index\n";
+  comet_vdump(for_loop);
+  comet_vdump(for_loop_index);
+  auto after_for_loop_insertion_point = rewriter.saveInsertionPoint();
+  rewriter.setInsertionPointToStart(for_loop.getBody());
+
+  /// Read the Mask.val, the 5th parameter of ta.sptensor_construct
+  mlir::Value val_alloc = getAllocOfIthOperandOfSpTensorConstruct(mask_tensor, 4);
+  mlir::Value mask_val = rewriter.create<memref::LoadOp>(loc, val_alloc, for_loop_index);
+  comet_debug() << "Mask.val\n";
+  comet_vdump(mask_val);
+
+  /// Compare mask_val to zero
+  mlir::Value const_f64_0 = rewriter.create<ConstantOp>(loc, rewriter.getF64Type(), rewriter.getF64FloatAttr(0.0));
+  mlir::Value cmp_une_zero = rewriter.create<CmpFOp>(loc, CmpFPredicate::UNE, mask_val, const_f64_0);
+  scf::IfOp if_nonzero = rewriter.create<scf::IfOp>(loc, cmp_une_zero, /*WithElseRegion*/ false);
+  comet_debug() << "cmp_une_zero and if_nonzero\n";
+  comet_vdump(cmp_une_zero);
+  comet_vdump(if_nonzero);
+
+  if (!if_nonzero.getThenRegion().empty()) {
+    auto after_if_insertion_point = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointToStart(if_nonzero.thenBlock());
+
+    /// Read Mask.col, the 4th parameter of ta.sptensor_construct
+    mlir::Value col_alloc = getAllocOfIthOperandOfSpTensorConstruct(mask_tensor, 3);
+    mlir::Value mask_col = rewriter.create<memref::LoadOp>(loc, col_alloc, for_loop_index);
+    /// Store true
+    mlir::Value const_bool_true = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(1));
+    memref::StoreOp store_true = rewriter.create<memref::StoreOp>(loc, const_bool_true, states, mask_col);
+    comet_debug() << "Store true\n";
+    comet_vdump(mask_col);
+    comet_vdump(store_true);
+
+    rewriter.restoreInsertionPoint(after_if_insertion_point);
+  } else {
+    llvm::errs() << "Error: " << __FILE__ << ":" << __LINE__ << " The if-statement failed to create.\n";
+  }
+
+
+  rewriter.restoreInsertionPoint(after_for_loop_insertion_point);
+}
+
+/// Push-based masking
+/// Generate the for-loop to reset the dense auxiliary vector (states) after computing each row of the output.
+static void pushedMaskGenResetForLoop(mlir::Value &iter_start /* start of the for-loop index */,
+                                      mlir::Value &iter_bound /* boundary of the for-loop index */,
+                                      mlir::Value &states /* temporary dense vector for a row of the mask*/,
+                                      mlir::Value &mask_tensor,
+                                      PatternRewriter &rewriter,
+                                      Location &loc)
+{
+  /* ------------------------------------------------------------- *
+    /// Reset the dense vector
+    scf.for %arg12 = %173 to %174 step %c1 {
+      %175 = memref.load %49[%arg12] : memref<?xindex> // %49 = M.col, %175 = M_col_id
+      memref.store %false, %states[%175] : memref<?xi1> // states[M_col_id] = false;
+    }
+   * ------------------------------------------------------------- */
+
+  /// Create the for-loop
+  mlir::Value const_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
+  scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, iter_start, iter_bound, const_index_1);
+  mlir::Value for_loop_index = for_loop.getInductionVar();
+  comet_debug() << "reset for-loop\n";
+  comet_vdump(for_loop);
+  comet_vdump(for_loop_index);
+  auto after_for_loop_insertion_point = rewriter.saveInsertionPoint();
+  rewriter.setInsertionPointToStart(for_loop.getBody());
+
+  /// Read Mask.col, the 4th parameter of ta.sptensor_construct
+  mlir::Value col_alloc = getAllocOfIthOperandOfSpTensorConstruct(mask_tensor, 3);
+  mlir::Value mask_col = rewriter.create<memref::LoadOp>(loc, col_alloc, for_loop_index);
+
+  // Store the false
+  mlir::Value const_bool_false = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
+  memref::StoreOp store_false = rewriter.create<memref::StoreOp>(loc, const_bool_false, states, mask_col);
+  comet_debug() << "reset to false\n";
+  comet_vdump(mask_col);
+  comet_vdump(store_false);
+
+  rewriter.restoreInsertionPoint(after_for_loop_insertion_point);
+
+}
+
+/// Push-based mask
+/// Initialize the temporary dense vector (states) by a row of the mask.
+/// After the computation, reset the temporary dense vector (states)
+static void pushedMaskInitDenseVectorAndReset(mlir::Value &states /* temporary dense vector for a row of the mask*/,
+                                        mlir::Value &mask_tensor,
+                                        PatternRewriter &rewriter,
+                                        Location &loc,
+                                        const std::vector<scf::ForOp> &forLoops)
+{
+  /* ------------------------------------------------------------- *
+    /// Initialize the dense vector
+    %91 = addi %arg0, %c1 : index
+    %173 = memref.load %47[%arg0] : memref<?xindex> // %47 = M.rowptr
+    %174 = memref.load %47[%91] : memref<?xindex>
+    scf.for %arg11 = %173 to %174 step %c1 {
+      %176 = memref.load %51[%arg11] : memref<?xf64>  // %51 = M.val
+      %177 = cmpf une, %176, %cst : f64
+      scf.if %177 {
+        %175 = memref.load %49[%arg11] : memref<?xindex> // %49 = M.col, %175 = M_col_id
+        memref.store %true, %states[%175] : memref<?xi1> // states[M_col_id] = true;
+      }
+    }
+    /// Reset the dense vector
+    scf.for %arg12 = %173 to %174 step %c1 {
+      %175 = memref.load %49[%arg12] : memref<?xindex> // %49 = M.col, %175 = M_col_id
+      memref.store %false, %states[%175] : memref<?xi1> // states[M_col_id] = false;
+    }
+   * ------------------------------------------------------------- */
+
+  comet_debug() << "mask tensor\n";
+  comet_vdump(mask_tensor);
+  /// mask_tensor should be a ta.sptensor_construct
+  if (!llvm::isa<tensorAlgebra::SparseTensorConstructOp>(mask_tensor.getDefiningOp())) {
+    llvm::errs() << "Error: mask tensor should be a sparse tensor ta.sptensor_construct\n";
+    return;
+  }
+
+  /// Relocate the insertion point to the position before the second most outer for-loop
+  auto last_insertion_point = rewriter.saveInsertionPoint();
+  rewriter.setInsertionPoint(*(forLoops.end() - 2));
+
+  /// Initialize the dense vector
+  /// Get the Mask.rowptr
+  /// mask_tensor is like
+  /// %27 = ta.sptensor_construct(%22, %23, %24, %25, %26, %5, %6, %7, %8, %9, %10, %11) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+  /// the rowptr is the 3rd parameter (e.g., %24 above).
+  /// See ta.sptensor_construct definition in include/comet/Dialect/TensorAlgebra/IR/TAOps.td
+  /// %24 = memref.tensor_load %16 : memref<?xindex>
+  /// %16 = memref.alloc(%7) : memref<?xindex>
+  /// Please note when reading rowptr, need to read %16, not %24.
+  mlir::Value rowptr_alloc = getAllocOfIthOperandOfSpTensorConstruct(mask_tensor, 2);
+  comet_debug() << "rowptr memref.alloc\n";
+  comet_vdump(rowptr_alloc);
+
+  /// Get the outer for-loop index
+  scf::ForOp outer_for_loop = forLoops.back();
+  mlir::Value outer_for_loop_index = outer_for_loop.getInductionVar();
+
+  /// %91 = addi %arg0, %c1 : index
+  /// %173 = memref.load %47[%arg0] : memref<?xindex> // %47 = M.rowptr
+  /// %174 = memref.load %47[%91] : memref<?xindex>
+  mlir::Value const_index_1 = rewriter.create<ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
+  mlir::Value outer_for_loop_index_plus_one = rewriter.create<AddIOp>(loc, outer_for_loop_index, const_index_1);
+  mlir::Value iter_start = rewriter.create<memref::LoadOp>(loc, rowptr_alloc, outer_for_loop_index);
+  mlir::Value iter_bound = rewriter.create<memref::LoadOp>(loc, rowptr_alloc, outer_for_loop_index_plus_one);
+  comet_debug() << "Get the range for row pointers\n";
+  comet_vdump(outer_for_loop_index_plus_one);
+  comet_vdump(iter_start);
+  comet_vdump(iter_bound);
+
+  /// Create the for-loop
+  /// scf.for %arg11 = %173 to %174 step %c1 {
+  ///     %176 = memref.load %51[%arg11] : memref<?xf64>  // %51 = M.val
+  ///     %177 = cmpf une, %176, %cst : f64
+  ///     scf.if %177 {
+  ///       %175 = memref.load %49[%arg11] : memref<?xindex> // %49 = M.col, %175 = M_col_id
+  ///       memref.store %true, %states[%175] : memref<?xi1> // states[M_col_id] = true;
+  ///     }
+  /// }
+  pushedMaskGenInitForLoop(iter_start,
+                           iter_bound,
+                           states,
+                           mask_tensor,
+                           rewriter,
+                           loc);
+
+  /// Reset the dense vector states
+  /// scf.for %arg12 = %173 to %174 step %c1 {
+  ///     %175 = memref.load %49[%arg12] : memref<?xindex> // %49 = M.col, %175 = M_col_id
+  ///     memref.store %false, %states[%175] : memref<?xi1> // states[M_col_id] = false;
+  /// }
+  rewriter.setInsertionPointAfter(*(forLoops.end() - 2));
+
+  /// Create for-loop for resetting the temporary dense vector.
+  /// scf.for %arg12 = %173 to %174 step %c1 {
+  ///     %175 = memref.load %49[%arg12] : memref<?xindex> // %49 = M.col, %175 = M_col_id
+  ///     memref.store %false, %states[%175] : memref<?xi1> // states[M_col_id] = false;
+  /// }
+  pushedMaskGenResetForLoop(iter_start,
+                            iter_bound,
+                            states,
+                            mask_tensor,
+                            rewriter,
+                            loc);
+
+
+  /// Restore the insertion point
+  rewriter.restoreInsertionPoint(last_insertion_point);
+
+}
+
+/// Push-based masking
+/// Generate the filtering if-statement: only the true position of the output needs to do computation.
+static void pushedMaskAddIfCondition(mlir::Value &states /* temporary dense vector for a row of the mask*/,
+                                     mlir::Value &col_id,
+                                     PatternRewriter &rewriter,
+                                     Location &loc,
+                                     mlir::OpBuilder::InsertPoint &last_insertion_point)
+{
+  /* ------------------------------------------------------------- *
+    /// Filtering using dense vector states
+    %179 = memref.load %states[%103] : memref<?xi1> // %179 = states[B_col_id]
+    %180 = cmpi eq, %179, %true : i1 // if (%179 == true)
+    scf.if %180 {
+    }
+   * ------------------------------------------------------------- */
+  mlir::Value states_val = rewriter.create<memref::LoadOp>(loc, states, col_id);
+  mlir::Value const_bool_true = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(1));
+  mlir::Value cmp_eq_true = rewriter.create<CmpIOp>(loc, CmpIPredicate::eq, states_val, const_bool_true);
+  scf::IfOp if_true = rewriter.create<scf::IfOp>(loc, cmp_eq_true, /*WithElseRegion*/ false);
+  comet_debug() << "load the dense vector and compari it to true\n";
+  comet_vdump(const_bool_true);
+  comet_vdump(cmp_eq_true);
+  comet_vdump(if_true);
+
+  /// Generate the if-statement body
+  if (!if_true.getThenRegion().empty()) {
+    last_insertion_point = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointToStart(if_true.thenBlock());
+  } else {
+    llvm::errs() << "Error: " << __FILE__ << ":" << __LINE__ << " The if-statement failed to create.\n";
+  }
+}
+
 void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                           llvm::StringRef &semiringSecond,
                           PatternRewriter &rewriter, Location loc, int lhs_loc,
@@ -866,7 +1260,8 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                           std::vector<scf::ForOp> forLoops,
                           std::vector<std::vector<int>> rhsPerms,
                           std::vector<std::vector<std::string>> rhsFormats,
-                          std::vector<std::vector<std::string>> lhsFormats)
+                          std::vector<std::vector<std::string>> lhsFormats,
+                          MaskingInfo &masking /* masking info, e.g., masking type, auxiliary vectors, etc. */)
 {
   bool isMixedMode = checkIsMixedMode(rhsFormats);
   bool isElementwise = checkIsElementwise(rhsPerms);
@@ -887,6 +1282,18 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
   Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
   auto f64Type = rewriter.getF64Type();
   auto const_f64_0 = rewriter.create<ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
+
+  /// If using masking, generate the masking code
+  mlir::OpBuilder::InsertPoint after_mask_if_statement_insertion_point;
+  if (masking.maskType == PUSH_BASED_MASKING) {
+    assert(masking.states.getDefiningOp()
+            && "Error: uses a push-based mask but the temporary dense vector is not allocated.\n");
+    pushedMaskAddIfCondition(masking.states /* temporary dense vector for a row of the mask*/,
+                             allValueAccessIdx[lhs_loc][0],
+                             rewriter,
+                             loc,
+                             after_mask_if_statement_insertion_point);
+  }
 
   int main_tensor_nums = main_tensors_all_Allocs.size();
   bool compressedWorkspace = false;
@@ -957,6 +1364,10 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       comet_vdump(W_index_list_size_new);
 
       rewriter.create<memref::StoreOp>(loc, W_index_list_size_new, tensors_lhs_Allocs[3][0], ValueRange{const_index_0});
+    }
+    else
+    {
+      llvm::errs() << "Error: " << __FILE__ << ":" << __LINE__ << " The if-statement failed to create.\n";
     }
 
     // if-else region corresponding to if_notAlreadySet instruction.
@@ -1264,6 +1675,13 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
       Value reduceResult = getSemiringFirstVal(rewriter, loc, semiringFirst, allLoads[2], elementWiseResult, compressedWorkspace);
       rewriter.create<memref::StoreOp>(loc, reduceResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
     }
+  }
+
+  /// If used a push-based mask, restore the insertion point
+  if (masking.maskType == PUSH_BASED_MASKING) {
+    assert(after_mask_if_statement_insertion_point.isSet()
+            && "Error: used a pushed-based mask but the last insertion point is not set.\n");
+    rewriter.restoreInsertionPoint(after_mask_if_statement_insertion_point);
   }
 }
 
@@ -1999,24 +2417,86 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       assert(false && "Not supported semiring operator");
     }
 
-    formSemiringLoopBody(comp_worksp_opt,
-                         semiringParts.first, semiringParts.second,
-                         rewriter, loc, lhs_loc,
-                         main_tensors_all_Allocs,
-                         tensors_lhs_Allocs,
-                         tensors_rhs_Allocs,
-                         allValueAccessIdx,
-                         allAccessIdx,
-                         nested_forops,
-                         allPerms_rhs,
-                         rhsFormats,
-                         lhsFormats);
+    comet_debug() << "before formSemiringLoopBody dump functions\n";
+    comet_pdump(rootOp.getOperation()->getParentOp());
+
+    /// TODO(zhen.peng): to set mask_type, we need to read the masking attribute from the ComputeOp node.
+    auto maskingAttr = cur_op.getMaskType();
+    std::string maskingAttrStr (cur_op.getMaskType().data());
+    comet_debug() << "mask attr: " << maskingAttrStr << "\n";
+    
+    auto mask_type = PUSH_BASED_MASKING;
+    switch (mask_type) 
+    {
+      case NO_MASKING: {  /// Use no masking
+        MaskingInfo masking_info;
+        masking_info.maskType = NO_MASKING;
+        formSemiringLoopBody(comp_worksp_opt,
+                             semiringParts.first, semiringParts.second,
+                             rewriter, loc, lhs_loc,
+                             main_tensors_all_Allocs,
+                             tensors_lhs_Allocs,
+                             tensors_rhs_Allocs,
+                             allValueAccessIdx,
+                             allAccessIdx,
+                             nested_forops,
+                             allPerms_rhs,
+                             rhsFormats,
+                             lhsFormats,
+                             masking_info /* masking info, e.g., masking type */);
+        break;
+      }
+      case PUSH_BASED_MASKING: {  /// Use push-based masking
+        mlir::Value states; /// The temporary dense vector for push-based masking
+        /// TODO(zhen.peng): mask_tensor should be the 3rd operand of ComputeRHS (tensors_rhs[2]).
+        mlir::Value mask_tensor = tensors_rhs[1];
+
+        /// Allocate the dense mask vector
+        states = pushedMaskAllocDenseVector(mask_tensor,
+                                            rewriter,
+                                            loc,
+                                            nested_forops);
+
+        /// Initialize the dense mask vector and then reset it
+        pushedMaskInitDenseVectorAndReset(states,
+                                          mask_tensor,
+                                          rewriter,
+                                          loc,
+                                          nested_forops);
+        MaskingInfo masking_info;
+        masking_info.maskType = PUSH_BASED_MASKING;
+        masking_info.states = states;
+        formSemiringLoopBody(comp_worksp_opt,
+                             semiringParts.first, semiringParts.second,
+                             rewriter, loc, lhs_loc,
+                             main_tensors_all_Allocs,
+                             tensors_lhs_Allocs,
+                             tensors_rhs_Allocs,
+                             allValueAccessIdx,
+                             allAccessIdx,
+                             nested_forops,
+                             allPerms_rhs,
+                             rhsFormats,
+                             lhsFormats,
+                             masking_info /* masking info, e.g., masking type */);
+        break;
+      }
+      case PULL_BASED_MASKING:  /// Use pull-based masking
+        /* Fall Through */
+      default:
+        llvm::errs() << "Error: mask type is not supported, yet.\n";
+    }
+
   }
   else
   {
     llvm::errs() << "No support for operation with greater than two operands in workspace transforms!"
                  << "\n";
   }
+
+  comet_debug() << "End genCmptOps dump functions\n";
+  comet_pdump(rootOp.getOperation()->getParentOp());
+
 }
 
 //===----------------------------------------------------------------------===//

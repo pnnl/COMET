@@ -184,7 +184,7 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody (Location loc, OpBuilder &bu
   {
     indexTree::IndexTreeComputeOp it_compute_op = llvm::dyn_cast<indexTree::IndexTreeComputeOp>(op);
     compute = builder.create<indexTree::IndexTreeComputeOp>(loc, i64Type, rhs, lhs, 
-                                                            it_compute_op.getCompWorkspOpt(), it_compute_op.getSemiring());
+                                                            it_compute_op.getCompWorkspOpt(), it_compute_op.getSemiring(), it_compute_op.getMaskType());
   }
 
   // create IndexTreeIndicesOp from existing IndexTreeIndicesOp (checks condition: indices != NULL)
