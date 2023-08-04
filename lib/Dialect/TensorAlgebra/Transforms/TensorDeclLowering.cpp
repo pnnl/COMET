@@ -290,10 +290,10 @@ namespace
     array_sizes.push_back(cst_index_1);
     array_sizes.push_back(cst_index_0);
     array_sizes.push_back(cst_index_0);
-    array_sizes.push_back(cst_index_1);
-    array_sizes.push_back(cst_index_1);
     array_sizes.push_back(cst_index_0);
     array_sizes.push_back(cst_index_0);
+    array_sizes.push_back(cst_index_0);
+    array_sizes.push_back(cst_index_1);
     // put the array sizes into alloc/store/loadOp
     for (auto size : array_sizes)
     {

@@ -1673,12 +1673,16 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       else if (lhs.getType().isa<tensorAlgebra::SparseTensorType>())
       {
         // TODO(gkestor): get tensor ranks by functions
-        unsigned int lhs_ranks = (lhs.getDefiningOp()->getNumOperands() - 2) / 5;
+        //unsigned int lhs_ranks = (lhs.getDefiningOp()->getNumOperands() - 2) / 5;
+        unsigned int lhs_ranks = 2;
 
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
-        unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
-        unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;
-        unsigned int lhs_2pos_size_loc = 4 * lhs_ranks - 1;
+        //unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
+        //unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;
+        //unsigned int lhs_2pos_size_loc = 4 * lhs_ranks - 1;
+        unsigned int lhs_val_size_loc = 15;
+        unsigned int lhs_2crd_size_loc = 12;
+        unsigned int lhs_2pos_size_loc = 11;
 
         // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
         comet_debug() << " ";
@@ -1709,7 +1713,14 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
         std::vector<Value> lhs_accessIndex = {lhs_nnz};
 
+        //llvm::errs() << "---\n";
+        //for (size_t i = 0; i<main_tensors_all_Allocs[lhs_loc].size(); i++) {
+        //  Value v = main_tensors_all_Allocs[lhs_loc][i];
+        //  v.dump();
+        //}
+        //llvm::errs() << "---\n";
         Value lhs_val = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1];
+        //lhs_val.dump();
         comet_debug() << " ";
         comet_vdump(lhs_val);
 
@@ -1749,7 +1760,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           comet_debug() << " format: " << allFormats[lhs_loc][allFormats[lhs_loc].size() - 1] << "\n";
           if (allFormats[lhs_loc][allFormats[lhs_loc].size() - 1].compare(0, 2, "CU") == 0)
           {
-            Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 2];
+            Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];
             comet_debug() << " ";
             comet_vdump(lhs_2crd);
 
@@ -1815,7 +1826,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
           Value c2crd_size_nnz = rewriter.create<memref::LoadOp>(loc, c2crd_size_alloc, ValueRange{cst_index_000});
 
           // store crd_size into pos
-          Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 3];
+          Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 5];
           comet_debug() << " ";
           comet_vdump(lhs_2pos);
           rewriter.create<memref::StoreOp>(loc, c2crd_size_nnz, lhs_2pos, ValueRange{c2pos_size_value});
