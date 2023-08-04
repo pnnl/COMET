@@ -4096,6 +4096,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
       // Cij = Wj
       else if (lhs.getType().isa<tensorAlgebra::SparseTensorType>())
       {
+        // TODO(patrick): This needs to be fixed
         // TODO(gkestor): get tensor ranks by functions
         //unsigned int lhs_ranks = (lhs.getDefiningOp()->getNumOperands() - 2) / 5;
         unsigned int lhs_ranks = 2;
@@ -4133,15 +4134,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
         Value lhs_nnz = builder.create<memref::LoadOp>(loc, lhs_nnz_alloc, ValueRange{cst_0_index});
 
         std::vector<Value> lhs_accessIndex = {lhs_nnz};
-
-        //llvm::errs() << "---\n";
-        //for (size_t i = 0; i<main_tensors_all_Allocs[lhs_loc].size(); i++) {
-        //  Value v = main_tensors_all_Allocs[lhs_loc][i];
-        //  v.dump();
-        //}
-        //llvm::errs() << "---\n";
+        
         Value lhs_val = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1];
-        //lhs_val.dump();
         comet_debug() << " ";
         comet_vdump(lhs_val);
 
