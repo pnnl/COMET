@@ -3336,14 +3336,14 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         comet_debug() << "AddIOp (arg0_next): ";
         comet_vdump(arg0_next);
 
-        Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
-        builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][2], arg0_next);
+        Value Cnnz_index_final = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
+        rewriter.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next);  //2
 
         builder.setInsertionPointAfter(forLoops[1]);
         // Update C2pos[0]
         comet_debug() << "Update C2pos[0]\n";
         std::vector<Value> insert_loc_0 = {const_index_0};
-        builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][2], insert_loc_0);
+        rewriter.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0);  //2
 
         // Update C1pos[0]
         comet_debug() << "Update C1pos[0]\n";
@@ -3368,9 +3368,9 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
             comet_debug() << "AddIOp (arg0_next): ";
             comet_vdump(arg0_next);
 
-            Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
-            builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][2], arg0_next); // C2pos
-            Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
+            Value Cnnz_index_final = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
+            rewriter.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); // C2pos
+            Value Cnnz_row_index = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
             Value idx_i = allAccessIdx[sparse_inputtensor_id][0];
             builder.create<memref::StoreOp>(loc, /*i*/ idx_i, main_tensors_all_Allocs[2][1], Cnnz_row_index); // C1crd
             Value Cnnz_row_index_new = builder.create<AddIOp>(loc, Cnnz_row_index, const_index_1);
@@ -3386,7 +3386,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
           // Update C2pos[0]
           std::vector<Value> insert_loc_0 = {const_index_0};
-          builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][2], insert_loc_0);
+          rewriter.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0);    //2
 
           // Update C1pos[0], C1pos[1]
           Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
@@ -4411,7 +4411,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                                                                       1];
               comet_debug() << " ";
               comet_vdump(crd_index);
-              Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 2];
+              Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];
               comet_debug() << " ";
               comet_vdump(lhs_2crd);
 
@@ -4489,7 +4489,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
           Value c2crd_size_nnz = builder.create<memref::LoadOp>(loc, c2crd_size_alloc, ValueRange{cst_0_index});
 
           // store crd_size into pos
-          Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 3];
+          Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 5];
           comet_debug() << " ";
           comet_vdump(lhs_2pos);
 
@@ -4525,9 +4525,10 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                                       main_tensors_all_Allocs[1][main_tensors_all_Allocs[1].size() - 1],
                                       allValueAccessIdx[1]);
     }
-  } else if (main_tensors_rhs.size() == 2) { // Generate " a = b * c" binary op
-
-    comet_debug() << "No masking codegen...\n";
+  }
+  else if (main_tensors_rhs.size() == 2)
+  { // Generate " a = b * c" binary op
+    comet_debug() << " Generate a = b * c binary op.\n";
 
     auto semiringParts = cur_op.getSemiring().split('_');
     // check validity of semiring provided by user.

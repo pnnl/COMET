@@ -1,13 +1,11 @@
 ********************
 ********************
-Failed Tests (13):
+Failed Tests (11):
   COMET :: compound_exps/Dense_eltwise_sTranspose_CSR.ta
-  COMET :: compound_exps/dTranspose_eltwise_CSR.ta
   COMET :: compound_exps/spTranspose_CSR_eltwise_Dense.ta
   COMET :: kernels/ccsd_t1_3_loops.ta
   COMET :: kernels/triangleCount_SandiaLL.ta
-  COMET :: ops/eltwise_mult_CSRxDense_oCSR.ta
-  COMET :: ops/eltwise_mult_DCSRxDense_oDCSR.ta
+  COMET :: ops/transpose_CSF_tensor.ta
   COMET :: opts/ccsd_t1_21_ttgt.ta
   COMET :: opts/ccsd_t1_21_ttgt_all_opts.ta
   COMET :: opts/ccsd_t1_21_ttgt_tiling.ta
@@ -16,6 +14,6 @@ Failed Tests (13):
   COMET :: opts/ccsd_t1_4_ttgt_bestperm.ta
 
 
-Testing Time: 17.58s
-  Passed: 101
-  Failed:  13
+Testing Time: 20.06s
+  Passed: 103
+  Failed:  11

@@ -655,12 +655,12 @@ module attributes {llvm.data_layout = ""} {
   ^bb67:  // pred: ^bb63
     %505 = llvm.getelementptr %470[%0] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     %506 = llvm.load %505 : !llvm.ptr<i64>
-    %507 = llvm.getelementptr %348[%481] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
+    %507 = llvm.getelementptr %382[%481] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     llvm.store %506, %507 : !llvm.ptr<i64>
     %508 = llvm.add %479, %1  : i64
     llvm.br ^bb61(%508 : i64)
   ^bb68:  // pred: ^bb61
-    %509 = llvm.getelementptr %348[%0] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
+    %509 = llvm.getelementptr %382[%0] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     llvm.store %0, %509 : !llvm.ptr<i64>
     %510 = llvm.getelementptr %314[%0] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
     llvm.store %56, %510 : !llvm.ptr<i64>
