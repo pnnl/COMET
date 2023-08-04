@@ -4097,12 +4097,16 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
       else if (lhs.getType().isa<tensorAlgebra::SparseTensorType>())
       {
         // TODO(gkestor): get tensor ranks by functions
-        unsigned int lhs_ranks = (lhs.getDefiningOp()->getNumOperands() - 2) / 5;
+        //unsigned int lhs_ranks = (lhs.getDefiningOp()->getNumOperands() - 2) / 5;
+        unsigned int lhs_ranks = 2;
 
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
-        unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
-        unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;
-        unsigned int lhs_2pos_size_loc = 4 * lhs_ranks - 1;
+        //unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
+        //unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;
+        //unsigned int lhs_2pos_size_loc = 4 * lhs_ranks - 1;
+        unsigned int lhs_val_size_loc = 15;
+        unsigned int lhs_2crd_size_loc = 12;
+        unsigned int lhs_2pos_size_loc = 11;
 
         // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
         comet_debug() << " ";
@@ -4130,7 +4134,14 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
 
         std::vector<Value> lhs_accessIndex = {lhs_nnz};
 
+        //llvm::errs() << "---\n";
+        //for (size_t i = 0; i<main_tensors_all_Allocs[lhs_loc].size(); i++) {
+        //  Value v = main_tensors_all_Allocs[lhs_loc][i];
+        //  v.dump();
+        //}
+        //llvm::errs() << "---\n";
         Value lhs_val = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1];
+        //lhs_val.dump();
         comet_debug() << " ";
         comet_vdump(lhs_val);
 
@@ -4265,10 +4276,112 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
 //
 //          builder.create<memref::StoreOp>(loc, c2pos_size_value_new, c2pos_size_alloc, ValueRange{cst_index_000});
 
-          /// ----------------- ///
-          /// End Backup: previous Cij = Wj
-          /// ----------------- ///
-        } else {
+          Value const_index_00 = rewriter.create<ConstantIndexOp>(loc, 0);
+          Value w_index_list_size = rewriter.create<memref::LoadOp>(loc, tensors_rhs_Allocs[3][0], const_index_00);
+
+          std::string quick_sort_Str = "quick_sort";
+          Value w_index_list_cast = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, tensors_rhs_Allocs[2][0]);
+          rewriter.create<func::CallOp>(loc, quick_sort_Str, SmallVector<Type, 2>{}, ValueRange{w_index_list_cast, w_index_list_size});
+
+          theForop.setUpperBound(w_index_list_size);
+          comet_debug() << " ";
+          comet_vdump(theForop);
+
+          rewriter.restoreInsertionPoint(last_insertionPoint);
+          Value crd_index = rewriter.create<memref::LoadOp>(loc, tensors_rhs_Allocs[2][0], theForop.getInductionVar());
+          Value c_value = rewriter.create<memref::LoadOp>(loc, tensors_rhs_Allocs[0][0], crd_index);
+          // Fill CVal
+          rewriter.create<memref::StoreOp>(loc, c_value, lhs_val, ValueRange{lhs_nnz});
+
+          // w_already_set[crd_j] = 0
+          rewriter.create<memref::StoreOp>(loc, const_i1_0, tensors_rhs_Allocs[1][0], ValueRange{crd_index});
+
+          comet_debug() << " lhs_loc: " << lhs_loc << "\n";
+          comet_debug() << " format: " << allFormats[lhs_loc][allFormats[lhs_loc].size() - 1] << "\n";
+          if (allFormats[lhs_loc][allFormats[lhs_loc].size() - 1].compare(0, 2, "CU") == 0)
+          {
+            Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];
+            comet_debug() << " ";
+            comet_vdump(lhs_2crd);
+
+            rewriter.create<memref::StoreOp>(loc, crd_index, lhs_2crd, ValueRange{lhs_nnz});
+          }
+
+          comet_debug() << "\n";
+          Value cst_1_index = rewriter.create<ConstantIndexOp>(loc, 1);
+          comet_debug() << " ";
+          comet_vdump(lhs_nnz);
+          Value lhs_nnz_new = rewriter.create<AddIOp>(loc, lhs_nnz, cst_1_index);
+          comet_debug() << " AddIOps (lhs_nnz_new): ";
+          comet_vdump(lhs_nnz_new);
+          comet_debug() << " ";
+          comet_vdump(lhs_nnz_alloc);
+
+          rewriter.create<memref::StoreOp>(loc, lhs_nnz_new, lhs_nnz_alloc, ValueRange{cst_0_index});
+
+          Value lhs_2crd = lhs.getDefiningOp()->getOperand(lhs_2crd_size_loc);
+          Value lhs_2crd_op;
+          comet_vdump(lhs_2crd);
+          if (isa<IndexCastOp>(lhs_2crd.getDefiningOp()))
+          {
+            lhs_2crd_op = lhs_2crd.getDefiningOp()->getOperand(0);
+          }
+          else
+          {
+            lhs_2crd_op = lhs_2crd;
+          }
+          comet_debug() << " ";
+          comet_vdump(lhs_2crd_op);
+          auto c2crd_size_load = cast<memref::LoadOp>(lhs_2crd_op.getDefiningOp());                    // index
+          Value c2crd_size_alloc = cast<memref::AllocOp>(c2crd_size_load.getMemRef().getDefiningOp()); // index
+          comet_debug() << " ";
+          comet_vdump(c2crd_size_alloc);
+
+          rewriter.create<memref::StoreOp>(loc, lhs_nnz_new, c2crd_size_alloc, ValueRange{cst_0_index});
+
+          // Fill C2pos
+          comet_debug() << " \n";
+          auto prev_forop = nested_forops[nested_forops.size() - 1 - 1];
+          rewriter.setInsertionPointAfter(prev_forop);
+
+          Value lhs_2pos_0 = lhs.getDefiningOp()->getOperand(lhs_2pos_size_loc);
+          Value lhs_2pos_op;
+          comet_debug() << " ";
+          comet_vdump(lhs_2pos_0);
+          if (isa<IndexCastOp>(lhs_2pos_0.getDefiningOp()))
+          {
+            lhs_2pos_op = lhs_2pos_0.getDefiningOp()->getOperand(0);
+          }
+          else
+          {
+            lhs_2pos_op = lhs_2pos_0;
+          }
+          comet_debug() << " ";
+          comet_vdump(lhs_2pos_op);
+          auto c2pos_size_load = cast<memref::LoadOp>(lhs_2pos_op.getDefiningOp());                    // index
+          Value c2pos_size_alloc = cast<memref::AllocOp>(c2pos_size_load.getMemRef().getDefiningOp()); // index
+          Value cst_index_000 = rewriter.create<ConstantIndexOp>(loc, 0);
+          Value c2pos_size_value = rewriter.create<memref::LoadOp>(loc, c2pos_size_alloc, ValueRange{cst_index_000});
+
+          Value c2crd_size_nnz = rewriter.create<memref::LoadOp>(loc, c2crd_size_alloc, ValueRange{cst_index_000});
+
+          // store crd_size into pos
+          Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 5];
+          comet_debug() << " ";
+          comet_vdump(lhs_2pos);
+          rewriter.create<memref::StoreOp>(loc, c2crd_size_nnz, lhs_2pos, ValueRange{c2pos_size_value});
+
+          Value cst_index_1 = rewriter.create<ConstantIndexOp>(loc, 1);
+          comet_debug() << " ";
+          comet_vdump(c2pos_size_value);
+          Value c2pos_size_value_new = rewriter.create<AddIOp>(loc, c2pos_size_value, cst_index_1);
+          comet_debug() << " AddIOps (c2pos_size_value_new): ";
+          comet_vdump(c2pos_size_value_new);
+
+          rewriter.create<memref::StoreOp>(loc, c2pos_size_value_new, c2pos_size_alloc, ValueRange{cst_index_000});
+        }
+        else
+        {
 
           // %1 = load b[...]
           // if(%1 != 0) {
