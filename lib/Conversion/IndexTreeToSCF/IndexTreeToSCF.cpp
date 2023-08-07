@@ -74,9 +74,9 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
-// #define DEBUG_MODE_LowerIndexTreeToSCFPass
-// #endif
+//#ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
+//#define DEBUG_MODE_LowerIndexTreeToSCFPass
+//#endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -1119,7 +1119,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
           {
             Value crd = allAccessIdx[sparse_inputtensor_id][d];
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-            auto store_csr_crd = rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][2 * d + 1], Cnnz_index);
+            auto store_csr_crd = rewriter.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1], Cnnz_index);
             comet_debug() << " CSR or DCSR StoreOp: ";
             comet_vdump(store_csr_crd);
 #else
@@ -1233,7 +1233,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
           // Update C2pos[0]
           std::vector<Value> insert_loc_0 = {const_index_0};
-          rewriter.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0);    //2
+          rewriter.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0);
 
           // Update C1pos[0], C1pos[1]
           Value Cnnz_row_index = rewriter.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
@@ -1678,12 +1678,13 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         unsigned int lhs_ranks = 2;
 
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
-        //unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
-        //unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;
-        //unsigned int lhs_2pos_size_loc = 4 * lhs_ranks - 1;
+        //unsigned int lhs_val_size_loc = 8 * lhs_ranks + 1;
+        //unsigned int lhs_2crd_size_loc = 8 * lhs_ranks;
+        //unsigned int lhs_2pos_size_loc = 8 * lhs_ranks - 1;
         unsigned int lhs_val_size_loc = 15;
         unsigned int lhs_2crd_size_loc = 12;
         unsigned int lhs_2pos_size_loc = 11;
+        comet_debug() << "IN\n";
 
         // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
         comet_debug() << " ";
