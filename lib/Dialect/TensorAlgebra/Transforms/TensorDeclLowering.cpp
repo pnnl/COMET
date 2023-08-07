@@ -170,7 +170,6 @@ namespace
       array_sizes_vec.push_back(input_load_op);
     }
 
-    /*
     for (unsigned int i = 0; i < rshPerms[sparse_inputtensor_id].size(); i++)
     {
       int sizes_i = i + 2 * (2 * (rshPerms[sparse_inputtensor_id].size()) + 1);
@@ -181,9 +180,9 @@ namespace
       comet_debug() << "Ops push_back for Sparse Tensor Construct Op for MixedMode elementwise multiplication (dimSizes):\n";
       comet_vdump(input_load_op);
       dimSizes.push_back(input_load_op);
-    }*/
-    dimSizes.push_back(sptensor_construct_op.getOperand(18));
-    dimSizes.push_back(sptensor_construct_op.getOperand(19));
+    }
+    //dimSizes.push_back(sptensor_construct_op.getOperand(18));
+    //dimSizes.push_back(sptensor_construct_op.getOperand(19));
 
   }
 
@@ -296,7 +295,7 @@ namespace
     array_sizes.push_back(cst_index_0);
     array_sizes.push_back(cst_index_0);
     array_sizes.push_back(cst_index_0);
-    array_sizes.push_back(cst_index_0);
+    array_sizes.push_back(cst_index_1);
     array_sizes.push_back(cst_index_1);
     // put the array sizes into alloc/store/loadOp
     for (auto size : array_sizes)
