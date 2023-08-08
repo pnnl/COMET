@@ -1984,10 +1984,12 @@ namespace mlir
       comet_debug() << " formatAttr: " << formatAttr << "\n";
 
       auto SemiringAttr = rewriter.getStringAttr("none");
+      auto MaskingAttr = rewriter.getStringAttr("none");
       auto tc = rewriter.create<tensorAlgebra::TensorMultOp>(loc, lhsTensor.getType(),
                                                              rhs1Tensor, rhs2Tensor,
                                                              lhsLabels, affineMapArrayAttr,
-                                                             formatAttr, SemiringAttr);
+                                                             formatAttr, SemiringAttr, MaskingAttr,
+                                                             nullptr); //TODO: masking is an optional operand
       tc.getOperation()->setAttr("__alpha__", rewriter.getF64FloatAttr(alpha));
       tc.getOperation()->setAttr("__beta__", rewriter.getF64FloatAttr(beta));
       comet_debug() << " ";
