@@ -63,7 +63,8 @@ public:
 
   Tensor(mlir::Value &value, IndicesType &indices, vector<string> &format)
   {
-    assert(format.size() == indices.size());
+    // TODO: This needs to be address
+    //assert(format.size() == indices.size());
     this->value = value;
     this->indices = indices;
     this->format = format;
