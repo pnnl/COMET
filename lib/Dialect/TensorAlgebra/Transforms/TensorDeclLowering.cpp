@@ -680,6 +680,11 @@ namespace
               }
             }
           }
+          // ELLPACK
+          //else if (src_format.compare("ELL") == 0)
+          //{
+          //  comet_debug() << "Tranpose ELL\n";
+          //}
           // For 2D, consider CSR
           else if (dst_rank == 2)
           {
@@ -699,6 +704,7 @@ namespace
               comet_vdump(crd_size);
               array_sizes_vec.push_back(crd_size);
               // B2pos, Bval are the same size with A2pos, Aval
+              // TODO: Do not hardcode
               array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(17));
 
               // A2tile
@@ -706,6 +712,31 @@ namespace
               array_sizes_vec.push_back(cst_index_0);
 
               // Aval
+              // TODO: Do not hardcode
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(17));
+            } else if (src_format.compare("ELL") == 0)
+            { 
+              comet_debug() << " 2D ELL transpose to 2D ELL\n";
+              comet_pdump(src_input.getDefiningOp());
+              // A1
+              array_sizes_vec.push_back(cst_index_1);
+              array_sizes_vec.push_back(cst_index_1);
+
+              // A1_tile
+              array_sizes_vec.push_back(cst_index_1);
+              array_sizes_vec.push_back(cst_index_1);
+
+              // A2
+              array_sizes_vec.push_back(cst_index_1);
+              // TODO: Do not hardcode
+              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(14));
+
+              // A2tile
+              array_sizes_vec.push_back(cst_index_0);
+              array_sizes_vec.push_back(cst_index_0);
+
+              // Aval
+              // TODO: Do not hardcode
               array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(17));
             }
           }
