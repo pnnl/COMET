@@ -330,13 +330,13 @@ namespace tensorAlgebra
     std::string maskType;
 
   public:
-    MaskExprAST(Location loc, const std::string tensor_name,
-                         const std::string maskType)
+    MaskExprAST(Location loc, const std::string &tensor_name,
+                         const std::string &maskType)
         : ExprAST(Expr_Mask, loc), tensor_name(tensor_name),
           maskType(maskType) {}
 
-    llvm::StringRef getTensorName() { return tensor_name; }
-    llvm::StringRef getMaskType() { return maskType; }
+    const llvm::StringRef getTensorName() { return tensor_name; }
+    const llvm::StringRef getMaskType() { return maskType; }
 
     /// LLVM style RTTI
     static bool classof(const ExprAST *C)
