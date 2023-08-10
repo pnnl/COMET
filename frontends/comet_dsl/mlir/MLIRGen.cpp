@@ -2568,8 +2568,8 @@ namespace
       // masking support: determine type (push/pull/auto/none) and variable (DenseTensorDeclOp or SparseTensorDeclOp)
       // NOTE: mask is optional and not required, so we will populate with default values where necessary.
       MaskExprAST *mask = nullptr;
-      std::string MaskingName = "none";
-      std::string MaskingVar_name = "";
+      std::string MaskingName;
+      std::string MaskingVar_name;
       mlir::Value maskVal;  // this may not be found in symbol table.
                             // if not found, mask will not be included as an operand.
 
@@ -2602,6 +2602,11 @@ namespace
         comet_debug() << "masking name: " << MaskingName << "\n";
         comet_debug() << "masking var: " << MaskingVar_name << "\n";
         comet_vdump(maskVal);
+      }
+      else
+      {
+        comet_debug() << "No mask input provided by user!\n";
+        MaskingName = "none";
       }
       auto MaskingAttr = builder.getStringAttr(MaskingName);
 

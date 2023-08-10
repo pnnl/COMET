@@ -2012,6 +2012,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
   int rhs_loc = 0;
   int lhs_loc = main_tensors_rhs.size();
+  comet_debug() << "main_tensors_rhs.size: " << lhs_loc << "\n";
   if (main_tensors_rhs.size() == 1)
   { // Generate "a = b"
     if (ConstantOp cstop = dyn_cast<ConstantOp>(main_tensors_rhs[0].getDefiningOp()))
@@ -2405,6 +2406,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
   }
   else if (main_tensors_rhs.size() == 2)
   { // Generate " a = b * c" binary op
+    
+    comet_debug() << "No masking codegen...\n";
 
     auto semiringParts = cur_op.getSemiring().split('_');
     // check validity of semiring provided by user.
@@ -2420,7 +2423,40 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
     comet_debug() << "before formSemiringLoopBody dump functions\n";
     comet_pdump(rootOp.getOperation()->getParentOp());
 
-    /// TODO(zhen.peng): to set mask_type, we need to read the masking attribute from the ComputeOp node.
+    MaskingInfo masking_info;
+    masking_info.maskType = NO_MASKING;
+    formSemiringLoopBody(comp_worksp_opt,
+                         semiringParts.first, semiringParts.second,
+                         rewriter, loc, lhs_loc,
+                         main_tensors_all_Allocs,
+                         tensors_lhs_Allocs,
+                         tensors_rhs_Allocs,
+                         allValueAccessIdx,
+                         allAccessIdx,
+                         nested_forops,
+                         allPerms_rhs,
+                         rhsFormats,
+                         lhsFormats,
+                         masking_info /* masking info, e.g., masking type */);
+
+  }
+  else if (main_tensors_rhs.size() == 3)
+  { // Generate " a<m> = b * c" binary op with masking
+
+    auto semiringParts = cur_op.getSemiring().split('_');
+    // check validity of semiring provided by user.
+    if (!Semiring_reduceOps.contains(semiringParts.first) || !Semiring_ops.contains(semiringParts.second))
+    {
+      llvm::errs() << "Not supported semiring operator: "
+                   << semiringParts.first << " or " << semiringParts.second << " \n";
+      llvm::errs() << "Please report this error to the developers!\n";
+      // we should not proceed forward from this point to avoid faults.
+      assert(false && "Not supported semiring operator");
+    }
+
+    comet_debug() << "before formSemiringLoopBody dump functions\n";
+    comet_pdump(rootOp.getOperation()->getParentOp());
+
     auto maskingAttr = cur_op.getMaskType();
     std::string maskingAttrStr (maskingAttr.data());
     comet_debug() << "mask attr: " << maskingAttrStr << "\n";
@@ -2432,12 +2468,12 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       mask_type = MASKING_TYPE::PULL_BASED_MASKING;
     else if (maskingAttrStr == "auto")
       mask_type = MASKING_TYPE::PUSH_BASED_MASKING;
-    else 
+    else // none
       mask_type = MASKING_TYPE::NO_MASKING;
 
     switch (mask_type) 
     {
-      case NO_MASKING: {  /// Use no masking
+      case NO_MASKING: {  /// Use no masking; TODO: we should not hit this case!
         MaskingInfo masking_info;
         masking_info.maskType = NO_MASKING;
         formSemiringLoopBody(comp_worksp_opt,
@@ -2458,7 +2494,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
       case PUSH_BASED_MASKING: {  /// Use push-based masking
         mlir::Value states; /// The temporary dense vector for push-based masking
         /// TODO(zhen.peng): mask_tensor should be the 3rd operand of ComputeRHS (tensors_rhs[2]).
-        mlir::Value mask_tensor = tensors_rhs[1];
+        mlir::Value mask_tensor = tensors_rhs[2];
 
         /// Allocate the dense mask vector
         states = pushedMaskAllocDenseVector(mask_tensor,
@@ -2494,6 +2530,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
         /* Fall Through */
       default:
         llvm::errs() << "Error: mask type is not supported, yet.\n";
+        assert(false && "Not supported mask type.");
     }
 
   }
