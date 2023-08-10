@@ -500,10 +500,14 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
   std::string Aspformat;
   std::string Bspformat;
 
-  //auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
+  auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
   auto *desc_A1crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1crd_ptr);
+  auto *desc_A1tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1tile_pos_ptr);
+  auto *desc_A1tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1tile_crd_ptr);
   auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
   auto *desc_A2crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2crd_ptr);
+  auto *desc_A2tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_pos_ptr);
+  auto *desc_A2tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_crd_ptr);
   auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
 
   auto *desc_B1pos = static_cast<StridedMemRefType<int64_t, 1> *>(B1pos_ptr);
@@ -529,7 +533,7 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
   desc_B2tile_crd->sizes[0] = -1;
 
   /*
-  std::cout << "COO detail: \n"
+  std::cout << "desc_sizes detail: \n"
               << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
               << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
               << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
@@ -546,7 +550,11 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
   int rowSize = desc_sizes->data[9];
   int colSize = desc_sizes->data[10];
 
-  if ((A1format == Compressed_nonunique && A2format == singleton) || (A1format == singleton && A2format == Compressed_nonunique))
+  if (A1format == Dense && A1tile_format == Dense && A2format == singleton)
+  {
+    Aspformat.assign("ELL");
+  }
+  else if ((A1format == Compressed_nonunique && A2format == singleton) || (A1format == singleton && A2format == Compressed_nonunique))
   {
     Aspformat.assign("COO");
   }
@@ -556,10 +564,14 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
   }
   else
   {
-    assert(false && "ERROR: At this time, only COO and CSR formats are supported for input for transpose\n");
+    assert(false && "ERROR: At this time, only ELL, COO, CSR formats are supported for input for transpose (A)\n");
   }
 
-  if ((B1format == Compressed_nonunique && B2format == singleton) || (B1format == singleton && B2format == Compressed_nonunique))
+  if (B1format == Dense && B1tile_format == Dense && B2format == singleton)
+  {
+    Bspformat.assign("ELL");
+  }
+  else if ((B1format == Compressed_nonunique && B2format == singleton) || (B1format == singleton && B2format == Compressed_nonunique))
   {
     Bspformat.assign("COO");
   }
@@ -569,7 +581,43 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
   }
   else
   {
-    assert(false && "ERROR: At this time, only COO and CSR formats are supported for output for transpose\n");
+    assert(false && "ERROR: At this time, only ELL, COO, and CSR formats are supported for output for transpose (B)\n");
+  }
+
+  if (Aspformat.compare("ELL") == 0 && Bspformat.compare("ELL") == 0)
+  {
+    // Copy A1 and A1_tile
+    desc_B1crd->data[0] = desc_A1crd->data[0];
+    desc_B1crd->sizes[0] = desc_A1crd->sizes[0];
+
+    desc_B1pos->data[0] = desc_A1pos->data[0];
+    desc_B1pos->sizes[0] = desc_A1pos->sizes[0];
+
+    desc_B1tile_crd->data[0] = desc_A1tile_crd->data[0];
+    desc_B1tile_crd->sizes[0] = desc_A1tile_crd->sizes[0];
+    
+    desc_B1tile_pos->data[0] = desc_A1tile_pos->data[0];
+    desc_B1tile_pos->sizes[0] = desc_A1tile_pos->sizes[0];
+
+    desc_B2pos->data[0] = desc_A2pos->data[0];
+    desc_B2pos->sizes[0] = desc_A2pos->sizes[0];
+
+    // Rearrange the values
+    int val_sz = desc_Aval->sizes[0];
+    int rows = desc_A1pos->data[0];
+    int cols = desc_A1tile_pos->data[0];
+    int index = 0;
+
+    for (int i = 0; i<rows; i++) {
+      for (int j = 0; j<val_sz; j++) {
+        int col = desc_A2crd->data[j];
+        if (col == i) {
+          desc_B2crd->data[j] = desc_A2crd->data[j];
+          desc_Bval->data[index] = desc_Aval->data[j];
+          ++index;
+        }
+      }
+    }
   }
 
   if (Aspformat.compare("COO") == 0 && Bspformat.compare("COO") == 0)
