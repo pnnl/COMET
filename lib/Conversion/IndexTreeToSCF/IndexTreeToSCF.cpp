@@ -74,9 +74,9 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-//#ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
-//#define DEBUG_MODE_LowerIndexTreeToSCFPass
-//#endif
+// #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
+// #define DEBUG_MODE_LowerIndexTreeToSCFPass
+// #endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -1463,11 +1463,31 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
 
   std::vector<std::vector<std::string>> lhsFormats;
   getLHSFormatsOfComputeOp(cur_op.getOperation()->getResult(0), lhsFormats);
+  
+  // TODO: Remove
+  //-------------------------------------------------------------
+  /*printf("allFormats.size(): %ld\n", allFormats.size());
+  printf("allPerms.size(): %ld\n", allPerms.size());
+  for (int i = 0; i<allPerms.size(); i++)  {
+    printf("\tallPerms[%d].size(): %ld\n", i, allPerms[i].size());
+  }
+  int ii = 0;
+  int jj = 0;
+  for (auto m : allFormats) {
+    jj = 0;
+    for (auto f : m) {
+      printf("%s ", f.c_str());
+      ++jj;
+    }
+    ++ii;
+    puts("");
+  }*/
+  //-------------------------------------------------------------
 
   assert(allPerms.size() == allFormats.size() && "allPerms.size() != allFormats.size()\n");
   for (unsigned int m = 0; m < allPerms.size(); m++)
   {
-    assert(allPerms[m].size() == allFormats[m].size() && "allPerms[m].size() != allFormats[m].size()\n");
+    //assert(allPerms[m].size() == allFormats[m].size() && "allPerms[m].size() != allFormats[m].size()\n");
   }
   comet_debug() << " allPerms.size(): " << allPerms.size() << "\n";
   // tensor_nums means the actual tensors except the auxiliary tensors
@@ -1534,25 +1554,51 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
     // if allPerms[i].size() == 0
   }
 
+  //----------------------------------
+  /*llvm::errs() << "allLoopsArg.size(): " << allLoopsArg.size() << "\n";
+  for (int i = 0; i<allLoopsArg.size(); i++) {
+    for (int j = 0; j<allLoopsArg[i].size(); j++) {
+      allLoopsArg[i][j].dump();
+    }
+    llvm::errs() << "--\n";
+  }
+  llvm::errs() << "============\n";*/
+  //----------------------------------
+
   std::vector<std::vector<Value>> allValueAccessIdx(main_tensor_nums);
   for (int i = 0; i < main_tensor_nums; i++)
   { // If constantOp, do not consider it
+    //printf("%d\n", i);
     comet_debug() << " ";
     comet_vdump(main_tensors_all[i]);
     if (main_tensors_all[i].getType().isa<tensorAlgebra::SparseTensorType>())
     { // sparse tensor
+      //puts("Sparse");
 
       // Find the last sparse index m, then loop_arg * all dense loop args
       unsigned lastSparseIndexLoc = allPerms[i].size();
+      //printf("lastSparseIndexLoc: %d\n", lastSparseIndexLoc);
       for (int d = (int)allPerms[i].size() - 1; d >= 0; d--)
       {
+        //printf("d: %d\n", d);
         if (allFormats[i][d].compare(0, 1, "D") != 0 && allFormats[i][d].compare(0, 1, "S") != 0)
         { // sparse dimension and has a loop, i.e. "CU" or "CN"
+          //puts("Set d");
           lastSparseIndexLoc = d;
           break;
         }
+        //puts("--");
       }
+
+      // If the number of formats is greater than the number of permutations, then we have
+      // tiling dimensions
+      // TODO: This probably needs adjustments
+      if (allFormats[i].size() > allPerms[i].size()) {
+        lastSparseIndexLoc -= 1;
+      }
+
       // Calculate for ModeGeneric style format: [CN, S, D (, ... ) ]
+      //printf("i: %d | lastSparseIndexLoc: %d\n", i, lastSparseIndexLoc);
       auto valueAccessIdx_part = allLoopsArg[i][lastSparseIndexLoc];
       if (lastSparseIndexLoc < allPerms[i].size() - 1)
       { // There is dense index after the sparse index
@@ -1585,9 +1631,12 @@ void genCmptOps(indexTree::IndexTreeComputeOp cur_op,
     }
     else if (main_tensors_all[i].getType().isa<TensorType>())
     { // dense tensor
+      //puts("Dense");
       allValueAccessIdx[i] = allAccessIdx[i];
     }
+    //puts("--------");
   }
+  //puts("AFTER- PASS");
 
   for (unsigned int i = 0; i < allValueAccessIdx.size(); i++)
   {
@@ -2056,7 +2105,7 @@ namespace
 
       assert(isa<indexTree::IndexTreeOp>(rootOp));
       comet_debug() << "\nIndexTreeIRLowering in LowerIndexTreeIRToSCF\n";
-      comet_pdump(rootOp.getOperation()->getParentOp());
+      //comet_pdump(rootOp.getOperation()->getParentOp());
       // Here, should check the operands, at least one operand should be sparse;
       // Otherwise, if all dense operands, just return.
       // rootOp only contains one workspace child, no indices
