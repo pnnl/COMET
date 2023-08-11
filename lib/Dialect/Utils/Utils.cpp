@@ -1871,6 +1871,10 @@ namespace mlir
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
       ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.getAllPerms();
 
+      // TODO: Remove
+      //computeOp.getDefiningOp()->getOperand(0).getDefiningOp()->dump();
+      //computeOp.getDefiningOp()->getOperand(1).getDefiningOp()->dump();
+
       // Get output format, vector of vector
       // Convert ArrayAttr into
       std::vector<std::vector<int>> opPerms_rhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_rhs);
