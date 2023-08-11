@@ -93,7 +93,6 @@ using llvm::StringRef;
 #define TENSOR_NUMS 3
 #define INPUT_TENSOR_NUMS 2
 
-const bool workspace = false;
 const bool compressedworkspace = true;
 
 struct dimInTensor
@@ -540,10 +539,10 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
 
   mlir::Value w = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_type, w_lbls_value, w_format);
   comet_vdump(w);
-  auto w_already_set_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getI1Type()); // tensor<?xi1>
-  mlir::Value w_already_set = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_already_set_type, w_lbls_value, w_format);
-  comet_vdump(w_already_set);
+  //auto w_already_set_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getI1Type()); // tensor<?xi1>
   auto w_index_list_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getIndexType()); // tensor<?xindex>
+  mlir::Value w_already_set = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_index_list_type, w_lbls_value, w_format);
+  comet_vdump(w_already_set);
   mlir::Value w_index_list = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_index_list_type, w_lbls_value, w_format);
   comet_vdump(w_index_list);
 
