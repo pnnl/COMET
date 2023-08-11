@@ -1,32 +1,30 @@
-# RUN: comet-opt --convert-to-loops --convert-to-llvm %s &> transpose_COO_matrix.llvm
+# Sparse matrix dense vector multiplication (SpMV)
+# Sparse matrix is in ELL format
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_spmv_ELLxDense.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
-# RUN: export SORT_TYPE=SEQ_QSORT
-# RUN: mlir-cpu-runner transpose_COO_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner mult_spmv_ELLxDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
 
 def main() {
 	#IndexLabel Declarations
-	IndexLabel [i] = [?];
-	IndexLabel [j] = [?];           
+	IndexLabel [a] = [?];
+	IndexLabel [b] = [?];           
 
 	#Tensor Declarations
-	Tensor<double> A([i, j], ELL);	  
-	Tensor<double> B([j, i], ELL);
+	Tensor<double> A([a, b], {ELL});	  
+	Tensor<double> B([b], {Dense});
+	Tensor<double> C([a], {Dense});
 
-    #Tensor Readfile Operation      
-    A[i, j] = comet_read(0);
+    A[a, b] = comet_read(0);
 
-	#Tensor Transpose
-	B[j, i] = transpose(A[i, j],{j,i});
-	print(B);
+	#Tensor Fill Operation
+	B[b] = 1.7;
+	C[a] = 0.0;
+
+	C[a] = A[a, b] * B[b];
+	print(C);
 }
 
+# Print the result for verification.
 # CHECK: data = 
-# CHECK-NEXT: 0,9,
-# CHECK-NEXT: data = 
-# CHECK-NEXT: 0,0,1,1,2,3,3,4,4,
-# CHECK-NEXT: data = 
-# CHECK-NEXT: -1,
-# CHECK-NEXT: data = 
-# CHECK-NEXT: 0,3,1,4,2,0,3,1,4,
-# CHECK-NEXT: data = 
-# CHECK-NEXT: 1,4.1,2,5.2,3,1.4,4,2.5,5,
+# CHECK-NEXT: 4.08,7.65,5.1,13.77,17.34,
