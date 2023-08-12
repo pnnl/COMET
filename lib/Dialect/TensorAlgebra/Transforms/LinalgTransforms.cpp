@@ -481,7 +481,7 @@ namespace
       RewritePatternSet patterns(&getContext());
 
       // Add the patterns to the list lower linalg fill operation
-      patterns.insert<LinalgLoweringPattern<FillOp>>(ctx, LinalgLoweringType::Loops);
+      // patterns.insert<LinalgLoweringPattern<FillOp>>(ctx, LinalgLoweringType::Loops);
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   };
