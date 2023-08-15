@@ -41,6 +41,7 @@
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/Dominance.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Types.h"
@@ -124,26 +125,38 @@ enum MASKING_TYPE {
 /// class MaksingInfo, passed as a parameter to the formSemiringLoopBody() to indicate if using masking or not.
 struct MaskingInfo {
 public:
-  MASKING_TYPE maskType;
+  MASKING_TYPE mask_type;
 
-  /// Push-based mask auxiliary dense vector
-  mlir::Value states;  /// %states = memref.alloc(%25) {alignment = 32 : i64} : memref<?xi1>
+  /// %44 = ta.sptensor_construct(%39, %40, %41, %42, %43, %32, %33, %34, %35, %36, %37, %38) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+  /// mask_tensor = %44
+  /// mask_rowptr = mask_tensor.getOperand(2);
+  /// mask_col = mask_tensor.getOperand(3);
+  /// mask_val = mask_tensor.getOperand(4);
+  mlir::Value mask_tensor;
+  mlir::Value mask_rowptr;
+  mlir::Value mask_col;
+  mlir::Value mask_val;
+
+//  /// Push-based mask auxiliary dense vector
+//  mlir::Value states;  /// %states = memref.alloc(%25) {alignment = 32 : i64} : memref<?xi1>
 
   /// TODO(zhen.peng): Pull-based mask info and auxiliary variables.
 
 public:
-  MaskingInfo() : maskType(NO_MASKING), states(nullptr) { }
+  MaskingInfo() : mask_type(NO_MASKING) { }
 
 //  MaskingInfo(MASKING_TYPE type_, mlir::Value states_) : maskType(type_), states(states_) { }
 
   void dump() {
-    switch (maskType) {
+    switch (mask_type) {
       case NO_MASKING:
         std::cout << "maskType: NO_MASKING\n";
         break;
       case PUSH_BASED_MASKING:
-        std::cout << "maskType: PUSH_BASED_MASKING " << "states: ";
-        states.dump();
+        std::cout << "maskType: PUSH_BASED_MASKING " << "mask_tensor: ";
+        mask_tensor.dump();
+//        std::cout << "maskType: PUSH_BASED_MASKING " << "states: ";
+//        states.dump();
         break;
       case PULL_BASED_MASKING:
         std::cout << "maskType: PULL_BASED_MASKING ... Not supported";
@@ -248,6 +261,47 @@ struct SymbolicInfo {
   */
 };
 
+/// ----------------- ///
+/// Find all users of the old_Value, and replace those users' corresponding operand to new_Value. For example,
+/// "ta.print"(%old_Value)  =>  "ta.print"(%new_Value)
+/// ----------------- ///
+void replaceOldValueToNewValue(Value &old_Value,
+                               Value &new_Value) {
+  {
+    comet_vdump(old_Value);
+    comet_vdump(new_Value);
+  }
+
+  /// Traverse each user of new_Value
+  std::vector<Operation *> users;
+  for (Operation *user : old_Value.getUsers()) {
+    users.push_back(user);
+  }
+  DominanceInfo domInfo(new_Value.getDefiningOp());  // To check dominance
+  for (Operation *user : users) {
+    {
+      comet_debug() << "before replace operand.\n";
+      comet_pdump(user);
+    }
+    if (!domInfo.dominates(new_Value, user)) {
+      continue;
+    }
+    uint64_t op_i = 0;
+    for (Value op : user->getOperands()) {
+      /// Find the mtxC in the user's operands
+      if (op.getDefiningOp() == old_Value.getDefiningOp()) {
+        /// Replace the old sparse tensor to the new one
+        user->setOperand(op_i, new_Value);
+        {
+          comet_debug() << "after replace operand.\n";
+          comet_pdump(user);
+        }
+      }
+      ++op_i;
+    }
+  }
+}
+
 
 /// ----------------- ///
 /// Add declaration of the function comet_index_func;
@@ -273,6 +327,172 @@ void declareSortFunc(ModuleOp &module,
   }
 }
 
+
+/// Get mask_rowptr, mask_col, and mask_val arrays.
+/// ----------------- ///
+/// mask_tensor = %44
+/// mask_rowptr = %alloc_99
+/// mask_col = %alloc_104
+/// mask_val = %alloc_109
+/// ----------------- ///
+/// %41 = bufferization.to_tensor %alloc_99 : memref<?xindex>
+/// %42 = bufferization.to_tensor %alloc_104 : memref<?xindex>
+/// %43 = bufferization.to_tensor %alloc_109 : memref<?xf64>
+/// %44 = ta.sptensor_construct(%39, %40, %41, %42, %43, %32, %33, %34, %35, %36, %37, %38) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+/// ----------------- ///
+void getMaskSparseTensorInfo(MaskingInfo &maskingInfo /* contents updated after call*/) {
+  Value &mask_tensor = maskingInfo.mask_tensor;
+
+  Value mask_rowtpr_buff = mask_tensor.getDefiningOp()->getOperand(2);
+  maskingInfo.mask_rowptr = mask_rowtpr_buff.getDefiningOp()->getOperand(0);
+
+  Value mask_col_buff = mask_tensor.getDefiningOp()->getOperand(3);
+  maskingInfo.mask_col = mask_col_buff.getDefiningOp()->getOperand(0);
+
+  Value mask_val_buff = mask_tensor.getDefiningOp()->getOperand(4);
+  maskingInfo.mask_val = mask_val_buff.getDefiningOp()->getOperand(0);
+
+  {
+    comet_vdump(mask_tensor);
+    comet_vdump(maskingInfo.mask_rowptr);
+    comet_vdump(maskingInfo.mask_col);
+    comet_vdump(maskingInfo.mask_val);
+  }
+}
+
+
+/// ----------------- ///
+/// Generate the symbolic for-loop that initialize the mark_array by using the mask.
+/// ----------------- ///
+///      %j_loc_start = memref.load %mask_rowptr[%i_idx] : memref<?xindex>
+///      %j_loc_bound = memref.load %mask_rowptr[%i_idx_plus_one] : memref<?xindex>
+///      scf.for %j_loc = %j_loc_start to %j_loc_bound step %c1 {
+///        %val = memref.load %mask_val[%j_loc] : memref<?xf64>
+///        %70 = arith.cmpf une, %val, %cst : f64
+///        scf.if %70 {
+///          %j_idx = memref.load %mask_col[%arg1] : memref<?xindex>
+///          memref.store %mark, %mark_array[%j_idx] : memref<?xi1>
+///        }
+///      }
+void genSymbolicInitMarkArrayByMask(std::vector<OpsTree *> &three_index_ancestors,
+                            Value &new_mark_reg,
+                            Value &alloc_mark_array,
+                            MaskingInfo &maskingInfo,
+                            OpBuilder &builder,
+                            Location &loc) {
+  /// Store the insertion point
+  auto last_insertion_point = builder.saveInsertionPoint();
+
+  /// Set the Insertion Point to the place before the 2nd-level symbolic for-loop
+  builder.setInsertionPoint(three_index_ancestors[1]->symbolicForOps[0]);
+
+  /// Generate the for-loop entry
+  Value &mask_rowptr = maskingInfo.mask_rowptr;
+  Value &mask_col = maskingInfo.mask_col;
+  Value &mask_val = maskingInfo.mask_val;
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  Value i_idx = three_index_ancestors[2]->symbolicAccessIdx[0];
+  Value i_idx_plus_one = builder.create<AddIOp>(loc, i_idx, const_index_1);
+  Value j_loc_start = builder.create<memref::LoadOp>(loc, mask_rowptr, ValueRange{i_idx});
+  Value j_loc_bound = builder.create<memref::LoadOp>(loc, mask_rowptr, ValueRange{i_idx_plus_one});
+  auto for_loop = builder.create<scf::ForOp>(loc,
+                                             j_loc_start /* lower_bound */,
+                                             j_loc_bound /* upper_bound*/,
+                                             const_index_1 /* step */);
+  builder.setInsertionPointToStart(for_loop.getBody());
+
+  /// Generate the for-loop body
+  Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0));
+  Value j_loc = for_loop.getInductionVar();
+  Value val = builder.create<memref::LoadOp>(loc,mask_val, ValueRange{j_loc});
+  Value not_zero = builder.create<arith::CmpFOp>(loc, CmpFPredicate::UNE, val, const_f64_0);
+  auto if_not_zero = builder.create<scf::IfOp>(loc, not_zero, false /*NoElseRegion*/);
+  builder.setInsertionPointToStart(&if_not_zero.getThenRegion().front());
+  Value j_idx = builder.create<memref::LoadOp>(loc, mask_col, ValueRange{j_loc});
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+  auto store_mark = builder.create<memref::StoreOp>(loc,
+                                                    new_mark_reg,
+                                                    alloc_mark_array,
+                                                    ValueRange{j_idx});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  new_mark_reg,
+                                  alloc_mark_array,
+                                  ValueRange{j_idx});
+#endif
+  {
+    comet_vdump(for_loop);
+  }
+  /// Restore the insertion point
+  builder.restoreInsertionPoint(last_insertion_point);
+}
+
+/// ----------------- ///
+/// Generate the numeric for-loop that initialize the mark_array by using the mask
+/// ----------------- ///
+///      %j_loc_start = memref.load %mask_rowptr[%i_idx] : memref<?xindex>
+///      %j_loc_bound = memref.load %mask_rowptr[%i_idx_plus_one] : memref<?xindex>
+///      scf.for %j_loc = %j_loc_start to %j_loc_bound step %c1 {
+///        %val = memref.load %mask_val[%j_loc] : memref<?xf64>
+///        %70 = arith.cmpf une, %val, %cst : f64
+///        scf.if %70 {
+///          %j_idx = memref.load %mask_col[%arg1] : memref<?xindex>
+///          memref.store %mark, %mark_array[%j_idx] : memref<?xi1>
+///        }
+///      }
+void genNumericInitMarkArrayByMask(std::vector<scf::ForOp> &forLoops /* numeric for-loops, from innermost to outermost*/,
+                                   Value &new_mark_reg,
+                                   Value &alloc_mark_array,
+                                   MaskingInfo &maskingInfo,
+                                   OpBuilder &builder,
+                                   Location &loc) {
+  /// Store the insertion point
+  auto last_insertion_point = builder.saveInsertionPoint();
+
+  /// Set the Insertion Point to the place before the 2nd-level symbolic for-loop
+  builder.setInsertionPoint(forLoops[1]);
+
+  /// Generate the for-loop entry
+  Value &mask_rowptr = maskingInfo.mask_rowptr;
+  Value &mask_col = maskingInfo.mask_col;
+  Value &mask_val = maskingInfo.mask_val;
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  Value i_idx = forLoops[2].getInductionVar();  /// i_idx is the induction variable of the outermost for-loop.
+  Value i_idx_plus_one = builder.create<AddIOp>(loc, i_idx, const_index_1);
+  Value j_loc_start = builder.create<memref::LoadOp>(loc, mask_rowptr, ValueRange{i_idx});
+  Value j_loc_bound = builder.create<memref::LoadOp>(loc, mask_rowptr, ValueRange{i_idx_plus_one});
+  auto for_loop = builder.create<scf::ForOp>(loc,
+                                             j_loc_start /* lower_bound */,
+                                             j_loc_bound /* upper_bound*/,
+                                             const_index_1 /* step */);
+  builder.setInsertionPointToStart(for_loop.getBody());
+
+  /// Generate the for-loop body
+  Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0));
+  Value j_loc = for_loop.getInductionVar();
+  Value val = builder.create<memref::LoadOp>(loc,mask_val, ValueRange{j_loc});
+  Value not_zero = builder.create<arith::CmpFOp>(loc, CmpFPredicate::UNE, val, const_f64_0);
+  auto if_not_zero = builder.create<scf::IfOp>(loc, not_zero, false /*NoElseRegion*/);
+  builder.setInsertionPointToStart(&if_not_zero.getThenRegion().front());
+  Value j_idx = builder.create<memref::LoadOp>(loc, mask_col, ValueRange{j_loc});
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+  auto store_mark = builder.create<memref::StoreOp>(loc,
+                                                    new_mark_reg,
+                                                    alloc_mark_array,
+                                                    ValueRange{j_idx});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  new_mark_reg,
+                                  alloc_mark_array,
+                                  ValueRange{j_idx});
+#endif
+
+  {
+    comet_vdump(for_loop);
+  }
+  /// Restore the insertion point
+  builder.restoreInsertionPoint(last_insertion_point);
+}
 
 /// ----------------- ///
 /// Generate the 1st level symbolic for-loop
@@ -444,6 +664,8 @@ void genSymbolicForLoops(indexTree::IndexTreeComputeOp &cur_op,
   auto last_insertion_point = builder.saveInsertionPoint();
 
   /// Find the 3rd ancestor and set the insertion point.
+  /// three_index_ancestors[0] is the nearest ancestor, and
+  /// three_index_ancestors[2] is the farthest one.
   OpsTree *third_ancestor = opstree;
   for (int an_i = 0;  third_ancestor && an_i < 3; ++an_i) {
     third_ancestor = third_ancestor->getParent();
@@ -601,10 +823,17 @@ void genMarkInit(OpBuilder &builder,
   MemRefType memTy_alloc_mark = MemRefType::get({1}, builder.getIndexType());
   alloc_mark = builder.create<memref::AllocOp>(loc, memTy_alloc_mark);
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto store_0_to_mark = builder.create<memref::StoreOp>(loc,
                                                          const_index_0,
                                                          alloc_mark,
                                                          ValueRange{const_index_0});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                 const_index_0,
+                                 alloc_mark,
+                                 ValueRange{const_index_0});
+#endif
   {
     comet_vdump(alloc_mark);
     comet_vdump(store_0_to_mark);
@@ -647,10 +876,17 @@ void genMarkArrayInit(indexTree::IndexTreeComputeOp &cur_op,
                                                          const_index_1 /* step */);
   builder.setInsertionPointToStart(mark_array_init_loop.getBody());
   Value i_idx = mark_array_init_loop.getInductionVar();
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto store_0_to_mark_array = builder.create<memref::StoreOp>(loc,
                                                                const_index_0,
                                                                alloc_mark_array,
                                                                ValueRange{i_idx});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  const_index_0,
+                                  alloc_mark_array,
+                                  ValueRange{i_idx});
+#endif
   {
     comet_vdump(alloc_mark_array);
     comet_vdump(mark_array_init_loop);
@@ -688,11 +924,17 @@ void genMarkUpdate(Value &alloc_mark,
 
   Value old_mark = builder.create<memref::LoadOp>(loc, alloc_mark,  ValueRange{const_index_0});
   new_mark_reg = builder.create<AddIOp>(loc, old_mark, const_index_2);
-
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto store_new_mark = builder.create<memref::StoreOp>(loc,
                                                         new_mark_reg,
                                                         alloc_mark,
                                                         ValueRange{const_index_0});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  new_mark_reg,
+                                  alloc_mark,
+                                  ValueRange{const_index_0});
+#endif
   {
     comet_vdump(old_mark);
     comet_vdump(new_mark_reg);
@@ -716,10 +958,14 @@ void genMarkArrayDealloc(std::vector<OpsTree *> &three_index_ancestors,
   builder.setInsertionPointAfter(three_index_ancestors[2]->symbolicForOps[0]);
 
   /// Generate deallocating mark_array
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto deallocate_mark_array = builder.create<memref::DeallocOp>(loc, alloc_mark_array);
   {
     comet_vdump(deallocate_mark_array);
   }
+#else
+  builder.create<memref::DeallocOp>(loc, alloc_mark_array);
+#endif
 }
 
 /// ----------------- ///
@@ -828,7 +1074,7 @@ void findOutputMatrixRowptrAndColAndVal(indexTree::IndexTreeComputeOp &cur_op,
   /// Goal: from cur_op, find cmp_op
   indexTree::IndexTreeComputeOp cmp_op;
   for (Value op : wp_ops) {
-    if (cmp_op = dyn_cast<indexTree::IndexTreeComputeOp>(op.getDefiningOp())) {
+    if ((cmp_op = dyn_cast<indexTree::IndexTreeComputeOp>(op.getDefiningOp()))) {
       if (cmp_op.getRhs().size() != 1) {
         continue;
       }
@@ -920,10 +1166,17 @@ void genSymbolicKernelWSColListSize(std::vector<OpsTree *> &three_index_ancestor
   MemRefType memTy_alloc_1_index = MemRefType::get({1}, builder.getIndexType());
   ws_col_list_size = builder.create<memref::AllocOp>(loc, memTy_alloc_1_index);
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto store_0_to_size = builder.create<memref::StoreOp>(loc,
                                                          const_index_0,
                                                          ws_col_list_size,
                                                          ValueRange{const_index_0});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  const_index_0,
+                                  ws_col_list_size,
+                                  ValueRange{const_index_0});
+#endif
   {
     comet_vdump(ws_col_list_size);
     comet_vdump(store_0_to_size);
@@ -948,6 +1201,7 @@ void genSymbolicKernelIfCondition(std::vector<OpsTree *> &three_index_ancestors,
 //                                  Value &alloc_mark,
                                   Value &alloc_mark_array,
                                   Value &new_mark_reg,
+                                  MaskingInfo &maskingInfo,
                                   Value &ws_col_list_size /* contents updated after call */,
                                   OpBuilder &builder,
                                   Location &loc) {
@@ -959,11 +1213,14 @@ void genSymbolicKernelIfCondition(std::vector<OpsTree *> &three_index_ancestors,
 //  builder.setInsertionPointToEnd(three_index_ancestors[0]->symbolicForOps[0].getBody());  /// This doesn't work because it inserts even after the scf.yield, which is wrong.
   builder.setInsertionPointAfter(three_index_ancestors[0]->symbolicAccessIdx[0].getDefiningOp());
 
-  /// TODO: if using pushed based masking
   /// This is for no-masking
-  ///   %76 = memref.load %mark_array[%j_idx] : memref<?xindex>
-  ///   %77 = arith.cmpi ne, %76, %new_mark : index
-  ///   scf.if %77 {  // if (mark_array[j_idx] != mark)
+  ///    %76 = memref.load %mark_array[%j_idx] : memref<?xindex>
+  ///    %77 = arith.cmpi ne, %76, %new_mark : index
+  ///    scf.if %77 {  // if (mark_array[j_idx] != mark)
+  /// For pushed-based masking
+  ///    %m_v = memref.load %mark_array[%j_idx] : memref<?xindex>
+  ///    %equal_mark = arith.cmpi eq, %m_v, %new_mark_reg : index
+  ///    scf.if %equal_mark {  // if (mark_array[j_idx] == mark
   Value &j_idx = three_index_ancestors[0]->symbolicAccessIdx[0];
   Value mark_value = builder.create<memref::LoadOp>(loc, alloc_mark_array, ValueRange{j_idx});
   {
@@ -971,35 +1228,91 @@ void genSymbolicKernelIfCondition(std::vector<OpsTree *> &three_index_ancestors,
     comet_vdump(mark_value);
     comet_vdump(three_index_ancestors[2]->symbolicForOps[0]);
   }
-  Value if_not_equal = builder.create<arith::CmpIOp>(loc, CmpIPredicate::ne, mark_value, new_mark_reg);
-  auto ifNotSeen = builder.create<scf::IfOp>(loc, if_not_equal, false /*NoElseRegion*/);
-  {
-    comet_vdump(if_not_equal);
-    comet_vdump(three_index_ancestors[2]->symbolicForOps[0]);
-  }
 
-  /// Set Insertion Point to the if-condition's then-region.
-  builder.setInsertionPointToStart(&ifNotSeen.getThenRegion().front());
-  ///      memref.store %new_mark, %mark_array[%73] : memref<?xindex>  // mark_array[B_col_id] = new_mark
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  scf::IfOp ifNotSeen;
+  ///
+  if (NO_MASKING == maskingInfo.mask_type) {
+    Value if_not_equal = builder.create<arith::CmpIOp>(loc, CmpIPredicate::ne, mark_value, new_mark_reg);
+    ifNotSeen = builder.create<scf::IfOp>(loc, if_not_equal, false /*NoElseRegion*/);
+    {
+      comet_vdump(if_not_equal);
+    }
+
+    /// Set Insertion Point to the if-condition's then-region.
+    builder.setInsertionPointToStart(&ifNotSeen.getThenRegion().front());
+    ///      memref.store %new_mark, %mark_array[%j_idx] : memref<?xindex>  // mark_array[B_col_id] = new_mark
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+    auto store_new_mark = builder.create<memref::StoreOp>(loc,
+                                                          new_mark_reg,
+                                                          alloc_mark_array,
+                                                          ValueRange{j_idx});
+#else
+    builder.create<memref::StoreOp>(loc,
+                                    new_mark_reg,
+                                    alloc_mark_array,
+                                    ValueRange{j_idx});
+#endif
+    {
+      comet_vdump(store_new_mark);
+//      comet_vdump(ifNotSeen);
+    }
+  } else if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+    Value equal_mark = builder.create<arith::CmpIOp>(loc,
+                                                     CmpIPredicate::eq,
+                                                     mark_value,
+                                                     new_mark_reg);
+    ifNotSeen = builder.create<scf::IfOp>(loc, equal_mark, false /*NoElseRegion*/);
+    {
+      comet_vdump(equal_mark);
+    }
+
+    /// Set Insertion Point to the if-condition's then-region.
+    builder.setInsertionPointToStart(&ifNotSeen.getThenRegion().front());
+    ///     %m_v_plus_one = arith.addi %m_v, %c1 : index
+    ///     memref.store %m_v_plus_one, %mark_array[%j_idx] : memref<?xindex>  // mark_array[B_col_id] = new_mark
+    Value mark_value_plus_one = builder.create<AddIOp>(loc, mark_value, const_index_1);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+    auto store_mark_value_plus_one = builder.create<memref::StoreOp>(loc,
+                                                                     mark_value_plus_one,
+                                                                     alloc_mark_array,
+                                                                     ValueRange{j_idx});
+#else
+    builder.create<memref::StoreOp>(loc,
+                                    mark_value_plus_one,
+                                    alloc_mark_array,
+                                    ValueRange{j_idx});
+#endif
+    {
+      comet_vdump(mark_value_plus_one);
+      comet_vdump(store_mark_value_plus_one);
+//      comet_vdump(ifNotSeen);
+    }
+  } else {
+    llvm::errs() << "Error: masking type " << maskingInfo.mask_type << " is not supported, yet.\n";
+  }
+  ///
+
   ///      %81 = memref.load %ws_col_list_size[%c0] : memref<1xindex>  // %81 = ws_col_list_size
   ///      %82 = arith.addi %81, %c1 : index  // %82 = ++%81
   ///      memref.store %82, %ws_col_list_size[%c0] : memref<1xindex>  // ws_col_list_size = %82
-  auto store_new_mark = builder.create<memref::StoreOp>(loc,
-                                                        new_mark_reg,
-                                                        alloc_mark_array,
-                                                        ValueRange{j_idx});
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
-  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
   Value old_size = builder.create<memref::LoadOp>(loc,
                                                   ws_col_list_size,
                                                   ValueRange{const_index_0});
   Value new_size = builder.create<AddIOp>(loc, old_size, const_index_1);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto store_new_size = builder.create<memref::StoreOp>(loc,
                                                          new_size,
                                                          ws_col_list_size,
                                                          ValueRange{const_index_0});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  new_size,
+                                  ws_col_list_size,
+                                  ValueRange{const_index_0});
+#endif
   {
-    comet_vdump(store_new_mark);
     comet_vdump(store_new_size);
     comet_vdump(ifNotSeen);
   }
@@ -1024,6 +1337,7 @@ void genUpdateMtxCRowptr(std::vector<OpsTree *> &three_index_ancestors,
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
   Value ws_size = builder.create<memref::LoadOp>(loc, ws_col_list_size, ValueRange{const_index_0});
   Value &i_idx = three_index_ancestors[2]->symbolicAccessIdx[0];
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto update_rowptr = builder.create<memref::StoreOp>(loc,
                                                         ws_size,
                                                         mtxC_rowptr,
@@ -1032,6 +1346,16 @@ void genUpdateMtxCRowptr(std::vector<OpsTree *> &three_index_ancestors,
                                                        const_index_0,
                                                        ws_col_list_size,
                                                        ValueRange{const_index_0});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  ws_size,
+                                  mtxC_rowptr,
+                                  ValueRange{i_idx});
+  builder.create<memref::StoreOp>(loc,
+                                  const_index_0,
+                                  ws_col_list_size,
+                                  ValueRange{const_index_0});
+#endif
   {
     comet_vdump(ws_size);
     comet_vdump(update_rowptr);
@@ -1068,10 +1392,18 @@ void genReduceMtxCRowptr(std::vector<OpsTree *> &three_index_ancestors,
   ///     memref.store %c0, %C_rowptr[%num_cols] : memref<?xindex>
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
   Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+
   auto set_last_zero = builder.create<memref::StoreOp>(loc,
                                                        const_index_0,
                                                        mtxC_rowptr,
                                                        ValueRange{num_rows});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  const_index_0,
+                                  mtxC_rowptr,
+                                  ValueRange{num_rows});
+#endif
   {
     comet_vdump(set_last_zero);
   }
@@ -1082,10 +1414,17 @@ void genReduceMtxCRowptr(std::vector<OpsTree *> &three_index_ancestors,
   Value idx_bound = builder.create<AddIOp>(loc, num_rows, const_index_1);
   MemRefType memTy_alloc_1_index = MemRefType::get({1}, builder.getIndexType());
   Value C_size = builder.create<memref::AllocOp>(loc, memTy_alloc_1_index);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto set_C_size_zero = builder.create<memref::StoreOp>(loc,
                                                          const_index_0,
                                                          C_size,
                                                          ValueRange{const_index_0});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  const_index_0,
+                                  C_size,
+                                  ValueRange{const_index_0});
+#endif
   {
     comet_vdump(idx_bound);
     comet_vdump(C_size);
@@ -1107,6 +1446,7 @@ void genReduceMtxCRowptr(std::vector<OpsTree *> &three_index_ancestors,
   Value idx = reduce_for_loop.getInductionVar();
   Value curr = builder.create<memref::LoadOp>(loc, mtxC_rowptr, ValueRange{idx});
   Value size = builder.create<memref::LoadOp>(loc, C_size, ValueRange{const_index_0});
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto store_size_to_rowptr = builder.create<memref::StoreOp>(loc,
                                                               size,
                                                               mtxC_rowptr,
@@ -1116,6 +1456,17 @@ void genReduceMtxCRowptr(std::vector<OpsTree *> &three_index_ancestors,
                                                            add_up,
                                                            C_size,
                                                            ValueRange{const_index_0});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  size,
+                                  mtxC_rowptr,
+                                  ValueRange{idx});
+  Value add_up = builder.create<AddIOp>(loc, size, curr);
+  builder.create<memref::StoreOp>(loc,
+                                  add_up,
+                                  C_size,
+                                  ValueRange{const_index_0});
+#endif
 
   /// %mtxC_val_size = memref.load %C_size[%c0] : memref<1xindex>
   builder.setInsertionPointAfter(reduce_for_loop);
@@ -1142,37 +1493,51 @@ void genReduceMtxCRowptr(std::vector<OpsTree *> &three_index_ancestors,
 void reallocMtxCColAndVal(Value &mtxC_val_size,
                     OpBuilder &builder,
                     Location &loc,
-                    Value &mtxC_col /* updated after the call */,
-                    Value &mtxC_val /* updated after the call */,
-                    Value &mtxC /* updated after the call */) {
+                    SymbolicInfo &symbolicInfo) {
+//                    Value &mtxC_col /* updated after the call */,
+//                    Value &mtxC_val /* updated after the call */,
+//                    Value &mtxC /* updated after the call */) {
   /// Set Insertion Point to after the mtxC_val_size, so the mtxC_val_size is ready at that point.
   builder.setInsertionPointAfter(mtxC_val_size.getDefiningOp());
 
+  Value &mtxC_col = symbolicInfo.mtxC_col;
+  Value &mtxC_val = symbolicInfo.mtxC_val;
+//  Value &mtxC = symbolicInfo.mtxC;
+
   /// memref.dealloc %C_col : memref<?xindex>
   /// memref.dealloc %mtxC_val : memref<?xindex>
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto dealloc_mtxC_col = builder.create<memref::DeallocOp>(loc, mtxC_col);
   auto dealloc_mtxC_val = builder.create<memref::DeallocOp>(loc, mtxC_val);
   {
     comet_vdump(dealloc_mtxC_col);
     comet_vdump(dealloc_mtxC_val);
   }
+#else
+  builder.create<memref::DeallocOp>(loc, mtxC_col);
+  builder.create<memref::DeallocOp>(loc, mtxC_val);
+#endif
 
   /// %C_col_new = memref.alloc(%mtxC_val_size) {alignment = 8 : i64} : memref<?xindex>
   /// %mtxC_val_new = memref.alloc(%mtxC_val_size) {alignment = 8 : i64} : memref<?xf64>
   MemRefType memTy_alloc_dynamic_index = MemRefType::get({ShapedType::kDynamic}, builder.getIndexType());
   MemRefType memTy_alloc_dynamic_f64 = MemRefType::get({ShapedType::kDynamic}, builder.getF64Type());
-  mtxC_col = builder.create<memref::AllocOp>(loc,
+  Value new_mtxC_col = builder.create<memref::AllocOp>(loc,
                                              memTy_alloc_dynamic_index,
                                              ValueRange{mtxC_val_size},
                                              builder.getI64IntegerAttr(8) /* alignment bytes */);
-  mtxC_val = builder.create<memref::AllocOp>(loc,
+  Value new_mtxC_val = builder.create<memref::AllocOp>(loc,
                                              memTy_alloc_dynamic_f64,
                                              ValueRange{mtxC_val_size},
                                              builder.getI64IntegerAttr(8) /* alignment bytes */);
   {
-    comet_vdump(mtxC_col);
-    comet_vdump(mtxC_val);
+    comet_vdump(new_mtxC_col);
+    comet_vdump(new_mtxC_val);
   }
+
+  /// Set the symbolicInfo
+  mtxC_col = new_mtxC_col;
+  mtxC_val = new_mtxC_val;
 
   /// DEPRECATED below: replacing the old operands with new ones will not work, because
   ///             the sparse tensor %55 is declared before those new operands.
@@ -1220,6 +1585,114 @@ void reallocMtxCColAndVal(Value &mtxC_val_size,
 
 }
 
+
+/// ----------------- ///
+/// Change the old value in C_col_size (A2crd_size) and C_val_size (Aval_size) to new mtxC_val_size.
+/// ----------------- ///
+/// %68 = ta.sptensor_construct(%58, %59, %60, %61, %62, %63, %64, %65, %66, %67, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+/// ----------------- ///
+/**
+sptensor_construct(
+    A1pos,  /// number of rows
+    A1crd,  /// discard
+    A2pos,  /// rowptr array
+    A2crd,  /// col_id array
+    Aval, /// data array
+    A1pos_size,
+    A1crd_size,
+    A2pos_size,
+    A2crd_size,
+    Aval_size,
+    dim1_size,
+    dim2_size,
+)
+*/
+void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
+                                        OpBuilder &builder,
+                                        Location &loc,
+                                        SymbolicInfo &symbolicInfo) {
+  Value &mtxC = symbolicInfo.mtxC;
+  Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+
+  /// Find the alloc of C_col_size (Arcrd_size)
+  ///     %66 = memref.load %alloc_153[%c0_128] : memref<1xindex>
+  Value C_col_size_alloc = mtxC.getDefiningOp()->getOperand(8).getDefiningOp()->getOperand(0);
+  /// Store the new mtxC_val_size to C_col_size
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+  auto store_C_col_size_alloc = builder.create<memref::StoreOp>(loc,
+                                                                mtxC_val_size,
+                                                                C_col_size_alloc,
+                                                                ValueRange{const_index_0});
+  comet_vdump(C_col_size_alloc);
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  mtxC_val_size,
+                                  C_col_size_alloc,
+                                  ValueRange{const_index_0});
+#endif
+
+
+  /// Find the alloc of C_val_size (Aval_size)
+  ///     %67 = memref.load %alloc_154[%c0_128] : memref<1xindex>
+  Value C_val_size_alloc = mtxC.getDefiningOp()->getOperand(9).getDefiningOp()->getOperand(0);
+  /// Store the new mtxC_val_size to C_val_size
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+  auto store_C_val_size_alloc = builder.create<memref::StoreOp>(loc,
+                                                                mtxC_val_size,
+                                                                C_val_size_alloc,
+                                                                ValueRange{const_index_0});
+  comet_vdump(C_val_size_alloc);
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  mtxC_val_size,
+                                  C_val_size_alloc,
+                                  ValueRange{const_index_0});
+#endif
+
+
+}
+
+
+/// ----------------- ///
+/// Replace the old C_col array (A2crd) and C_val array (Aval) to new mtxC_col and mtxC_val, respectively.
+/// ----------------- ///
+/// %68 = ta.sptensor_construct(%58, %59, %60, %61, %62, %63, %64, %65, %66, %67, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+/// ----------------- ///
+/**
+sptensor_construct(
+    A1pos,  /// number of rows
+    A1crd,  /// discard
+    A2pos,  /// rowptr array
+    A2crd,  /// col_id array
+    Aval, /// data array
+    A1pos_size,
+    A1crd_size,
+    A2pos_size,
+    A2crd_size,
+    Aval_size,
+    dim1_size,
+    dim2_size,
+)
+*/
+void replaceOld_CCol_And_CVal(SymbolicInfo &symbolicInfo) {
+  Value &mtxC = symbolicInfo.mtxC;
+
+  /// Find the alloc of old_C_col (A2crd)
+  ///     %61 = bufferization.to_tensor %alloc_142 : memref<?xindex>
+  Value old_C_col = mtxC.getDefiningOp()->getOperand(3).getDefiningOp()->getOperand(0);
+  /// Replace old_C_col with the new mtxC_col
+  replaceOldValueToNewValue(old_C_col, symbolicInfo.mtxC_col);
+
+  /// Find the allod of old_C_val (Aval)
+  ///     %62 = bufferization.to_tensor %alloc_146 : memref<?xf64>
+  Value old_C_val = mtxC.getDefiningOp()->getOperand(4).getDefiningOp()->getOperand(0);
+  /// Replace old_C_val with the new mtxC_val
+  replaceOldValueToNewValue(old_C_val, symbolicInfo.mtxC_val);
+
+}
+
+
+
 /// ----------------- ///
 /// Generate Symbolic Phase kernel inside the for-loops
 /// ----------------- ///
@@ -1228,6 +1701,7 @@ void genSymbolicKernel(std::vector<OpsTree *> &three_index_ancestors,
                        Value &alloc_mark_array,
                        Value &new_mark_reg,
                        Value &num_rows,
+                       MaskingInfo &maskingInfo,
                        OpBuilder &builder,
                        Location &loc,
                        SymbolicInfo &symbolicInfo /* contents updated after call */) {
@@ -1248,6 +1722,7 @@ void genSymbolicKernel(std::vector<OpsTree *> &three_index_ancestors,
   genSymbolicKernelIfCondition(three_index_ancestors,
                                alloc_mark_array,
                                new_mark_reg,
+                               maskingInfo,
                                ws_col_list_size /* contents updated after call */,
                                builder,
                                loc);
@@ -1277,9 +1752,21 @@ void genSymbolicKernel(std::vector<OpsTree *> &three_index_ancestors,
   reallocMtxCColAndVal(mtxC_val_size,
                        builder,
                        loc,
-                       symbolicInfo.mtxC_col /* updated after the call */,
-                       symbolicInfo.mtxC_val /* updated after the call */,
-                       symbolicInfo.mtxC /* updated after the call */);
+                       symbolicInfo /* updated after the call */);
+//                       symbolicInfo.mtxC_col /* updated after the call */,
+//                       symbolicInfo.mtxC_val /* updated after the call */,
+//                       symbolicInfo.mtxC /* updated after the call */);
+
+
+  /// Change the value in old Aval_size and A2crd_size to mtxC_val_size
+  genChangeOld_CColSize_And_CValSize(mtxC_val_size,
+                                     builder,
+                                     loc,
+                                     symbolicInfo);
+
+  /// Replace the old C_val (Aval) to new mtxC_val, and old C_col (A2crd) to new mtxC_col
+  /// Currently, C_col don't have places needs to replacement. This is for safety in future.
+  replaceOld_CCol_And_CVal(symbolicInfo);
 
   /// Restore insertion point
   builder.restoreInsertionPoint(last_insertion_point);
@@ -1294,6 +1781,7 @@ void genSymbolicKernel(std::vector<OpsTree *> &three_index_ancestors,
 void genSymbolicPhase(indexTree::IndexTreeComputeOp &cur_op,
                       OpsTree *opstree,
                       std::vector<Value> &wp_ops,
+                      MaskingInfo &maskingInfo,
                       OpBuilder &builder,
                       Location &loc,
                       SymbolicInfo &symbolicInfo /* updated after call */) {
@@ -1301,7 +1789,9 @@ void genSymbolicPhase(indexTree::IndexTreeComputeOp &cur_op,
 
   /// Generate the for-loops structure.
 //  std::vector<scf::ForOp> symbolicForLoops;
-  std::vector<OpsTree *> three_index_ancestors; /* 3 index node ancestors of the current comput node */
+  std::vector<OpsTree *> three_index_ancestors; /* 3 index node ancestors of the current comput node
+                                                   three_index_ancestors[0] is the nearest ancestor, and
+                                                   three_index_ancestors[2] is the farthest one. */
 //  Value num_rows_alloc; /* the memory alloc of num_rows, needed by mark_array */
   Value num_rows;   /// number of rows of output C = A * B, which is the number of rows of A.
   genSymbolicForLoops(cur_op,
@@ -1328,6 +1818,17 @@ void genSymbolicPhase(indexTree::IndexTreeComputeOp &cur_op,
                       new_mark_reg /* output */,
                       num_cols /* output */);
 
+  /// Generate the for-loop that initializes mark_array by using the mask.
+  if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+    genSymbolicInitMarkArrayByMask(three_index_ancestors,
+                           new_mark_reg,
+                           alloc_mark_array,
+                           maskingInfo,
+                           builder,
+                           loc);
+  }
+
+
   /// Find the output matrix C's rowptr (mtxC_rowptr). It will be updated in the symbolic phase.
 //  Value mtxC_rowptr;
 //  Value mtxC_col;
@@ -1345,6 +1846,7 @@ void genSymbolicPhase(indexTree::IndexTreeComputeOp &cur_op,
                     alloc_mark_array,
                     new_mark_reg,
                     num_rows,
+                    maskingInfo,
                     builder,
                     loc,
                     symbolicInfo /* contents updated after call */);
@@ -1385,10 +1887,17 @@ void insertRowOffsetFromMatrixCRowptr(std::vector<scf::ForOp> &nested_forops,
   Value &mtxC_rowptr = symbolicInfo.mtxC_rowptr;
   Value rowptr = builder.create<memref::LoadOp>(loc, mtxC_rowptr, ValueRange{i_idx});
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto init_row_offset = builder.create<memref::StoreOp>(loc,
                                                        rowptr,
                                                        row_offset,
                                                        ValueRange{const_index_0});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  rowptr,
+                                  row_offset,
+                                  ValueRange{const_index_0});
+#endif
   {
     comet_vdump(row_offset);
     comet_vdump(rowptr);
@@ -1417,11 +1926,19 @@ unsigned int findIndexInVector_OpsTree(std::vector<OpsTree *> vec, OpsTree *e) {
   return ret;
 }
 
-struct indexInTensor {
-  Value tensor;
-  unsigned int id;
-  std::string format;
-};
+/// ----------------- ///
+/// Deprecated: never used
+/// Removed by Zhen Peng on 8/12/2023
+/// ----------------- ///
+//struct indexInTensor {
+//  Value tensor;
+//  unsigned int id;
+//  std::string format;
+//};
+/// ----------------- ///
+/// End Deprecated
+/// ----------------- ///
+
 
 Value findCorrespondingAlloc(Value &iOp) {
   comet_debug() << "findCorrespondingAlloc for loop upper bound\n";
@@ -1956,6 +2473,8 @@ Value getSemiringFirstVal(OpBuilder &builder, Location &loc,
 /// ----------------- ///
 /// Declare the variable Mark = 0.
 /// Mark is used along with the mark_array to replace the WS_bitmap.
+///     %mark = memref.alloc() : memref<1xindex>
+///     memref.store %c0, %mark[%c0] : memref<1xindex>
 /// ----------------- ///
 Value initVariableMarkNumeric(
 //    PatternRewriter &rewriter,
@@ -1991,7 +2510,11 @@ Value initVariableMarkNumeric(
   /// memref.store %c0, %mark[%c0] : memref<1xindex>
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
   std::vector<Value> store_index = {const_index_0};
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto store_0_to_mark = builder.create<memref::StoreOp>(loc, const_index_0, alloc_mark, store_index);
+#else
+  builder.create<memref::StoreOp>(loc, const_index_0, alloc_mark, store_index);
+#endif
   {
     comet_debug() << "Initialize Mark to zero\n";
     comet_vdump(store_0_to_mark);
@@ -2006,6 +2529,10 @@ Value initVariableMarkNumeric(
 
 /// ----------------- ///
 /// Update mark += 2 for every row A[i,:] in A
+/// ----------------- ///
+///      %old_mark = memref.load %mark[%c0] : memref<1xindex>
+///      %new_mark = arith.addi %old_mark, %c2 : index
+///      memref.store %new_mark, %mark[%c0] : memref<1xindex>
 /// ----------------- ///
 Value updateVariableMarkNumeric(
         Value &alloc_mark,
@@ -2074,7 +2601,8 @@ scf::IfOp genIfStatementConditionNumeric(
         const std::vector<std::vector<Value>> &tensors_lhs_Allocs,
         const std::vector<std::vector<Value>> &allValueAccessIdx,
 //    Value &const_i1_0,
-        Value &new_mark) {
+        Value &new_mark,
+        MaskingInfo &maskingInfo) {
   // Workspace tensors are on the lhs
   comet_debug() << " lhs_loc: " << lhs_loc << "\n";
   Value checkAlreadySet = builder.create<memref::LoadOp>(loc, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
@@ -2085,16 +2613,45 @@ scf::IfOp genIfStatementConditionNumeric(
 //  comet_debug() << " ";
 //  comet_vdump(const_i1_0.getType());
 
-  Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::ne, checkAlreadySet, new_mark);
+  scf::IfOp if_notAlreadySet;
+  if (NO_MASKING == maskingInfo.mask_type) {
+    Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::ne, checkAlreadySet, new_mark);
 //  Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, const_i1_0);
-  comet_vdump(notAlreadySet);
-  auto if_notAlreadySet = builder.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
-  comet_debug() << " If branch:\n";
-  comet_vdump(if_notAlreadySet);
+    comet_vdump(notAlreadySet);
+    if_notAlreadySet = builder.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
+  } else if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+    Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, new_mark);
+    comet_vdump(notAlreadySet);
+    if_notAlreadySet = builder.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
+  } else {
+    llvm::errs() << "Error: genIfStatementConditionNumeric(): mask_type " << maskingInfo.mask_type << " is not supported.\n";
+  }
+
+  {
+    comet_debug() << " If branch:\n";
+    comet_vdump(if_notAlreadySet);
+  }
 
   return if_notAlreadySet;
 }
 
+/// ----------------- ///
+/// Generate if statement's then region in the numeric kernel
+/// ----------------- ///
+/// For no masking
+/// if (mark_array[j_idx] != mark) {
+///     mark_array[j_idx] = mark;
+///     C_col[rowptr] = j_idx;
+///     rowptr += 1;
+///     WS_data[j_idx] = a * b;
+/// }
+/// For push-based masking
+/// if (mark_array[j_idx] == mark) {
+///     mark_array[j_idx] = mark + 1;
+///     C_col[rowptr] = j_idx;
+///     rowptr += 1;
+///     WS_data[j_idx] = a * b;
+/// }
 void genIfStatementThenRegionNumeric(
         scf::IfOp &if_notAlreadySet,
 //    PatternRewriter &rewriter,
@@ -2110,13 +2667,11 @@ void genIfStatementThenRegionNumeric(
         const std::vector<std::vector<Value>> &main_tensors_all_Allocs,
         const std::vector<std::vector<Value>> &allValueAccessIdx,
         const std::vector<std::vector<Value>> &tensors_lhs_Allocs,
-        SymbolicInfo &symbolicInfo) {
+        SymbolicInfo &symbolicInfo,
+        MaskingInfo &maskingInfo) {
   builder.setInsertionPointToStart(&if_notAlreadySet.getThenRegion().front());
 
-  // Wj = Aik * Bkj          // computation wj, outer has k, so +=/= need if/else
-  // W_already_set[j] = 1
-  // W_index_list[W_index_list_size] = j
-  // W_index_list_size++
+
 
   std::vector<Value> allLoadsIf(main_tensor_nums);
   for (int m = 0; m < main_tensor_nums; m++) {
@@ -2130,10 +2685,14 @@ void genIfStatementThenRegionNumeric(
   comet_debug() << "calculate elementWise operation only\n";
   Value elementWiseResult = getSemiringSecondVal(builder, loc, semiringSecond, allLoadsIf[0], allLoadsIf[1],
                                                  compressedWorkspace);
-
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
   /// ----------------- ///
   /// Backup of W = A * B
   /// ----------------- ///
+  // Wj = Aik * Bkj          // computation wj, outer has k, so +=/= need if/else
+  // W_already_set[j] = 1
+  // W_index_list[W_index_list_size] = j
+  // W_index_list_size++
 //
 //#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
 //  auto store_sum = builder.create<memref::StoreOp>(loc, elementWiseResult,
@@ -2151,20 +2710,46 @@ void genIfStatementThenRegionNumeric(
   /// ----------------- ////
   /// Look-up Table
   /// ----------------- ////
-  /// tensors_lhs_Allocs[1][0]                                          : mark_array
-  /// allValueAccessIdx[lhs_loc][0]                                     : j_idx (here lhs_loc is 2)
-  /// main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1] : W_data
-  /// tensors_lhs_Allocs[2][0]                                          : W_index_list (DEPRECATED)
-  /// tensors_lhs_Allocs[3][0]                                          : W_index_list_size (DEPRECATED)
+  /// tensors_lhs_Allocs[1][0]                : mark_array
+  /// allValueAccessIdx[lhs_loc][0]           : j_idx (no-masking's lhs_loc is 2, push-masking's lhs_loc is 3)
+  /// main_tensors_all_Allocs[lhs_loc].back() : W_data
+  /// main_tensors_all_Allocs[2].back()       : W_data (NO_MASKING)
+  /// main_tensors_all_Allocs[3].back()       : W_data (PUSH_BASED_MASKING)
+  /// tensors_lhs_Allocs[2][0]                : W_index_list (DEPRECATED)
+  /// tensors_lhs_Allocs[3][0]                : W_index_list_size (DEPRECATED)
   /// ----------------- ///
+  if (NO_MASKING == maskingInfo.mask_type) {
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-  auto assign_new_mark = builder.create<memref::StoreOp>(loc, new_mark, tensors_lhs_Allocs[1][0],
-                                                         allValueAccessIdx[lhs_loc]);
-//  builder.create<memref::StoreOp>(loc, const_i1_1, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
-  comet_vdump(assign_new_mark);
+    auto assign_new_mark = builder.create<memref::StoreOp>(loc, new_mark, tensors_lhs_Allocs[1][0],
+                                                           allValueAccessIdx[lhs_loc]);
+    comet_vdump(assign_new_mark);
 #else
-  builder.create<memref::StoreOp>(loc, new_mark, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
+    builder.create<memref::StoreOp>(loc, new_mark, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
 #endif
+
+  } else if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+    ///     %m_v_plus_one = arith.addi %m_v, %c1 : index
+    ///     memref.store %m_v_plus_one, %mark_array[%j_idx] : memref<?xindex>  // mark_array[B_col_id] = new_mark
+    Value mark_value_plus_one = builder.create<AddIOp>(loc, new_mark, const_index_1);
+
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+    auto store_mark_value_plus_one = builder.create<memref::StoreOp>(loc,
+                                                                     mark_value_plus_one,
+                                                                     tensors_lhs_Allocs[1][0],
+                                                                     allValueAccessIdx[lhs_loc]);
+    {
+      comet_vdump(mark_value_plus_one);
+      comet_vdump(store_mark_value_plus_one);
+    }
+#else
+    builder.create<memref::StoreOp>(loc,
+                                    mark_value_plus_one,
+                                    tensors_lhs_Allocs[1][0],
+                                    allValueAccessIdx[lhs_loc]);
+#endif
+  } else {
+    llvm::errs() << "Error: genIfStatementThenRegionNumeric(): masking type " << maskingInfo.mask_type << " is not supported, yet.\n";
+  }
 
   /// ----------------- ///
   ///     %row = memref.load %rowptr[%c0] : memref<1xindex>  // row = rowptr
@@ -2177,20 +2762,77 @@ void genIfStatementThenRegionNumeric(
   Value &row_offset = symbolicInfo.row_offset;
   Value &mtxC_col = symbolicInfo.mtxC_col;
   Value old_row_offset = builder.create<memref::LoadOp>(loc, row_offset, const_index_0);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto store_col_id = builder.create<memref::StoreOp>(loc,
                                                       allValueAccessIdx[lhs_loc][0],
                                                       mtxC_col,
                                                       ValueRange{old_row_offset});
-  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  allValueAccessIdx[lhs_loc][0],
+                                  mtxC_col,
+                                  ValueRange{old_row_offset});
+#endif
+
   Value new_row_offset = builder.create<AddIOp>(loc, old_row_offset, const_index_1);
+
+
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto store_new_row_offset = builder.create<memref::StoreOp>(loc,
                                                                new_row_offset,
                                                                row_offset,
                                                                ValueRange{const_index_0});
   auto store_sum = builder.create<memref::StoreOp>(loc,
-                                                   elementWiseResult,
-                                                   main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1],
-                                                   allValueAccessIdx[lhs_loc]);
+                                                     elementWiseResult,
+                                                     main_tensors_all_Allocs[lhs_loc].back(),
+                                                     allValueAccessIdx[lhs_loc]);
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  new_row_offset,
+                                  row_offset,
+                                  ValueRange{const_index_0});
+  builder.create<memref::StoreOp>(loc,
+                                  elementWiseResult,
+                                  main_tensors_all_Allocs[lhs_loc].back(),
+                                  allValueAccessIdx[lhs_loc]);
+#endif
+
+
+//  if (NO_MASKING == maskingInfo.mask_type) {
+//    /// main_tensors_all_Allocs[2].back() is W_data
+//
+//#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+//    auto store_sum = builder.create<memref::StoreOp>(loc,
+//                                                     elementWiseResult,
+//                                                     main_tensors_all_Allocs[2].back(),
+//                                                     allValueAccessIdx[lhs_loc]);
+//    comet_vdump(store_sum);
+//#else
+//    builder.create<memref::StoreOp>(loc,
+//                                    elementWiseResult,
+//                                    main_tensors_all_Allocs[2].back(),
+//                                    allValueAccessIdx[lhs_loc]);
+//#endif
+//
+//  } else if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+//    /// main_tensors_all_Allocs[3].back() is W_data
+//
+//#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+//    auto store_sum = builder.create<memref::StoreOp>(loc,
+//                                                     elementWiseResult,
+//                                                     main_tensors_all_Allocs[3].back(),
+//                                                     allValueAccessIdx[lhs_loc]);
+//    comet_vdump(store_sum);
+//#else
+//    builder.create<memref::StoreOp>(loc,
+//                                    elementWiseResult,
+//                                    main_tensors_all_Allocs[3].back(),
+//                                    allValueAccessIdx[lhs_loc]);
+//#endif
+//
+//  } else {
+//    llvm::errs() << "Error: genIfStatementThenRegionNumeric(): masking type " << maskingInfo.mask_type << " is not supported, yet.\n";
+//  }
   {
     comet_vdump(old_row_offset);
     comet_vdump(store_col_id);
@@ -2229,22 +2871,27 @@ void genIfStatementThenRegionNumeric(
 }
 
 
+/// ----------------- ///
+/// Generate if statement's else region in the numeric kernel
+/// ----------------- ///
 void genIfStatementElseRegionNumeric(
         scf::IfOp &if_notAlreadySet,
 //    PatternRewriter &rewriter,
         OpBuilder &builder,
         Location &loc,
         int main_tensor_nums,
+        int lhs_loc,
         llvm::StringRef &semiringFirst,
         bool compressedWorkspace,
         llvm::StringRef &semiringSecond,
         const std::vector<std::vector<Value>> &main_tensors_all_Allocs,
-        const std::vector<std::vector<Value>> &allValueAccessIdx) {
+        const std::vector<std::vector<Value>> &allValueAccessIdx,
+        MaskingInfo &maskingInfo) {
   builder.setInsertionPointToStart(&if_notAlreadySet.getElseRegion().front());
 
   std::vector<Value> allLoadsElse(main_tensor_nums);
   for (auto m = 0; m < main_tensor_nums; m++) {
-    Value s = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1],
+    Value s = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[m].back(),
                                              allValueAccessIdx[m]);
     allLoadsElse[m] = s;
     comet_debug() << " ";
@@ -2255,11 +2902,70 @@ void genIfStatementElseRegionNumeric(
   comet_debug() << "calculate elementWise operation and reduction\n";
   Value elementWiseResult = getSemiringSecondVal(builder, loc, semiringSecond, allLoadsElse[0], allLoadsElse[1],
                                                  compressedWorkspace);
-  Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoadsElse[2], elementWiseResult,
-                                           compressedWorkspace);
-  builder.create<memref::StoreOp>(loc, reduceResult,
-                                  main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1],
-                                  allValueAccessIdx[2]);
+//  Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoadsElse[2], elementWiseResult,
+//                                           compressedWorkspace);
+//  builder.create<memref::StoreOp>(loc, reduceResult,
+//                                  main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1],
+//                                  allValueAccessIdx[lhs_loc]);
+
+
+    /// main_tensors_all_Allocs[lhs_loc].back() is W_data
+    /// ATTENTION: this is tested only for NO_MASKING and PUSH_BASED_MASKING.
+
+    Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoadsElse[lhs_loc], elementWiseResult,
+                                             compressedWorkspace);
+
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+    auto store_sum = builder.create<memref::StoreOp>(loc,
+                                                     reduceResult,
+                                                     main_tensors_all_Allocs[lhs_loc].back(),
+                                                     allValueAccessIdx[lhs_loc]);
+#else
+    builder.create<memref::StoreOp>(loc,
+                                    reduceResult,
+                                    main_tensors_all_Allocs[lhs_loc].back(),
+                                    allValueAccessIdx[lhs_loc]);
+#endif
+
+//  if (NO_MASKING == maskingInfo.mask_type) {
+//    /// main_tensors_all_Allocs[2].back() is W_data
+//
+//    Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoadsElse[2], elementWiseResult,
+//                                             compressedWorkspace);
+//
+//#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+//    auto store_sum = builder.create<memref::StoreOp>(loc,
+//                                                     reduceResult,
+//                                                     main_tensors_all_Allocs[2].back(),
+//                                                     allValueAccessIdx[lhs_loc]);
+//#else
+//    builder.create<memref::StoreOp>(loc,
+//                                    reduceResult,
+//                                    main_tensors_all_Allocs[2].back(),
+//                                    allValueAccessIdx[lhs_loc]);
+//#endif
+//
+//  } else if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+//    /// main_tensors_all_Allocs[3].back() is W_data
+//
+//    Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoadsElse[3], elementWiseResult,
+//                                             compressedWorkspace);
+//
+//#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+//    auto store_sum = builder.create<memref::StoreOp>(loc,
+//                                                     reduceResult,
+//                                                     main_tensors_all_Allocs[3].back(),
+//                                                     allValueAccessIdx[lhs_loc]);
+//#else
+//    builder.create<memref::StoreOp>(loc,
+//                                    reduceResult,
+//                                    main_tensors_all_Allocs[3].back(),
+//                                    allValueAccessIdx[lhs_loc]);
+//#endif
+//
+//  } else {
+//    llvm::errs() << "Error: genIfStatementElseRegionNumeric(): masking type " << maskingInfo.mask_type << " is not supported, yet.\n";
+//  }
 }
 
 
@@ -2273,11 +2979,12 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                           std::vector<std::vector<Value>> &tensors_rhs_Allocs,
                           std::vector<std::vector<Value>> &allValueAccessIdx,
                           std::vector<std::vector<Value>> &allAccessIdx,
-                          std::vector<scf::ForOp> &forLoops,
+                          std::vector<scf::ForOp> &forLoops /*for-loop statements, from innermost to outermost*/,
                           std::vector<std::vector<int>> &rhsPerms,
                           std::vector<std::vector<std::string>> &rhsFormats,
                           std::vector<std::vector<std::string>> &lhsFormats,
-                          SymbolicInfo &symbolicInfo) {
+                          SymbolicInfo &symbolicInfo,
+                          MaskingInfo &maskingInfo) {
   bool isMixedMode = checkIsMixedMode(rhsFormats);
   bool isElementwise = checkIsElementwise(rhsPerms);
   comet_debug() << " isElementwise:" << isElementwise << " isMixedMode: " << isMixedMode << "\n";
@@ -2326,6 +3033,25 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                                         loc,
                                         forLoops);
 
+
+    if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+      /// ----------------- ///
+      /// Generate the numeric for-loop that initialize the mark_array by using the mask
+      /// new_mark: the update value of mark
+      /// tensors_lhs_Allocs[1][0] : the mask tensor
+      /// ----------------- ///
+      {
+        comet_vdump(new_mark);
+        comet_vdump(tensors_lhs_Allocs[1][0]);
+      }
+      genNumericInitMarkArrayByMask(forLoops /* numeric for-loops, from innermost to outermost*/,
+                                    new_mark,
+                                    tensors_lhs_Allocs[1][0],
+                                    maskingInfo,
+                                    builder,
+                                    loc);
+    }
+
     /// ----------------- ///
     /// Generate if statement's condition
     ///   %76 = memref.load %mark_array[%73] : memref<?xindex>
@@ -2338,7 +3064,8 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                                                          tensors_lhs_Allocs,
                                                          allValueAccessIdx,
 //                                                         const_i1_0,
-                                                         new_mark);
+                                                         new_mark,
+                                                         maskingInfo);
 
     // if-then region corresponding to if_notAlreadySet instruction.
     // if (&if_notAlreadySet. getThenRegion())
@@ -2359,7 +3086,8 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                                     main_tensors_all_Allocs,
                                     allValueAccessIdx,
                                     tensors_lhs_Allocs,
-                                    symbolicInfo);
+                                    symbolicInfo,
+                                    maskingInfo);
     }
 
     // if-else region corresponding to if_notAlreadySet instruction.
@@ -2372,11 +3100,13 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                                     builder,
                                     loc,
                                     main_tensor_nums,
+                                    lhs_loc,
                                     semiringFirst,
                                     compressedWorkspace,
                                     semiringSecond,
                                     main_tensors_all_Allocs,
-                                    allValueAccessIdx);
+                                    allValueAccessIdx,
+                                    maskingInfo);
     }
 
   } else { // general dense or mixed mode computation, no need workspace transformations
@@ -2716,39 +3446,41 @@ void genNewSparseTensorToPrint(OpBuilder &builder,
   }
 
   /// ----------------- ///
-  /// ATTENTION: This is to aggressive. Some of the users might be before the new tensor sptensor,
-  /// making the replacement illegal.
-  /// ----------------- ///
   /// Find all users of the old sparse tensor mtxC, and replace those users' corresponding operands
   /// to the new sparse tensor (sptensor). For example,
   /// "ta.print"(%mtxC)  =>  "ta.print"(%sptensor)
-  /// "ta.reduce"(%mtxC)  =>  "ta.reduce"(%sptensor)
   /// ----------------- ///
-  /// Traverse each user of mtxC
+  replaceOldValueToNewValue(mtxC, sptensor);
 //  std::vector<Operation *> users;
 //  for (Operation *user : mtxC.getUsers()) {
 //    users.push_back(user);
 //  }
+//  DominanceInfo domInfo(sptensor.getDefiningOp());  // To check dominance
 //  for (Operation *user : users) {
+//    {
+//      comet_debug() << "before replace operand.\n";
+//      comet_pdump(user);
+//    }
+//    if (!domInfo.dominates(sptensor, user)) {
+//      continue;
+//    }
 //    uint64_t op_i = 0;
 //    for (Value op : user->getOperands()) {
 //      /// Find the mtxC in the user's operands
 //      if (op.getDefiningOp() == mtxC.getDefiningOp()) {
 //        /// Replace the old sparse tensor to the new one
-//        {
-//          comet_debug() << "before replace operand.\n";
-//          comet_pdump(user);
-//        }
 //        user->setOperand(op_i, sptensor);
 //        {
 //          comet_debug() << "after replace operand.\n";
 //          comet_pdump(user);
 //        }
-//        break;
 //      }
 //      ++op_i;
 //    }
 //  }
+  {
+    comet_vdump(sptensor.getDefiningOp()->getParentOfType<ModuleOp>());
+  }
 
   /// ----------------- ///
   /// Surprisingly, this code snippet below does not work.
@@ -2781,28 +3513,28 @@ void genNewSparseTensorToPrint(OpBuilder &builder,
 
 
   /// ----------------- ///
-  /// ATTENTION: this is too ad-hoc, only works for the ta.print operation.
-  /// TODO(zhe.peng): should be more generic, but also avoid illegal replacement.
+  /// DEPRECATED: this is too ad-hoc, only works for the ta.print operation.
+  /// should be more generic, but also avoid illegal replacement.
   /// ----------------- ///
   /// this only find the specific "ta.print" operation, not all kinds of operations.
   /// This code snippet is replaced by the above one which is more generic.
   /// ----------------- ///
   /// Find the ta.print that has the old sparse tensor as its operand.
-  Operation *ta_print = nullptr;
-  for (Operation *user : mtxC.getUsers()) {
-    if (isa<tensorAlgebra::PrintOp>(user)) {
-      ta_print = user;
-      break;
-    }
-  }
-//  assert(ta_print && "Need to find the ta.print that is one of the users of the old sparse tensor mtxC.\n");
-  if (ta_print) {
-    /// Set the ta.print's operand as the new sparse tensor.
-    ta_print->setOperand(0, sptensor);
-    {
-      comet_pdump(ta_print);
-    }
-  }
+//  Operation *ta_print = nullptr;
+//  for (Operation *user : mtxC.getUsers()) {
+//    if (isa<tensorAlgebra::PrintOp>(user)) {
+//      ta_print = user;
+//      break;
+//    }
+//  }
+////  assert(ta_print && "Need to find the ta.print that is one of the users of the old sparse tensor mtxC.\n");
+//  if (ta_print) {
+//    /// Set the ta.print's operand as the new sparse tensor.
+//    ta_print->setOperand(0, sptensor);
+//    {
+//      comet_pdump(ta_print);
+//    }
+//  }
   /// ----------------- ///
   /// End Deprecated
   /// ----------------- ///
@@ -2900,10 +3632,18 @@ void genNumericGatherLoop(indexTree::IndexTreeComputeOp &cur_op,
   builder.setInsertionPointToStart(curr_for_loop.getBody());
   Value c_col_id = builder.create<memref::LoadOp>(loc, mtxC_col, ValueRange{rowptr});
   Value data = builder.create<memref::LoadOp>(loc, ws_data, ValueRange{c_col_id});
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+
   auto store_results = builder.create<memref::StoreOp>(loc,
                                                        data,
                                                        mtxC_val,
                                                        ValueRange{rowptr});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  data,
+                                  mtxC_val,
+                                  ValueRange{rowptr});
+#endif
   {
     comet_vdump(c_col_id);
     comet_vdump(data);
@@ -2913,12 +3653,17 @@ void genNumericGatherLoop(indexTree::IndexTreeComputeOp &cur_op,
 
   /// Free up workspace (ws_data) and mark_array.
   builder.setInsertionPointAfter(parent_for_loop);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   auto deallocate_ws_data = builder.create<memref::DeallocOp>(loc, ws_data);
   auto deallocate_mark_array = builder.create<memref::DeallocOp>(loc, mark_array);
   {
     comet_vdump(deallocate_ws_data);
     comet_vdump(deallocate_mark_array);
   }
+#else
+  builder.create<memref::DeallocOp>(loc, ws_data);
+  builder.create<memref::DeallocOp>(loc, mark_array);
+#endif
 
   /// ----------------- ///
   /// Generate the new ta.sptensor_construct() using the newly allocated C_col and C_val
@@ -3648,7 +4393,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
     }
 
     MaskingInfo masking_info;
-    masking_info.maskType = NO_MASKING;
+    masking_info.mask_type = NO_MASKING;
     if (symbolicInfo.is_SpGEMM && comp_worksp_opt) {
 
       /// cur_op is the compute node
@@ -3656,6 +4401,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
       genSymbolicPhase(cur_op,
                        opstree,
                        wp_ops,
+                       masking_info,
                        builder,
                        loc,
                        symbolicInfo /* updated after call */);
@@ -3683,9 +4429,14 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                          allPerms_rhs,
                          rhsFormats,
                          lhsFormats,
-                         symbolicInfo);
+                         symbolicInfo,
+                         masking_info);
   } else if (main_tensors_rhs.size() == 3) { // Generate " a<m> = b * c" binary op with masking
 
+    {
+//    comet_pdump(rootOp.getOperation()->getParentOfType<ModuleOp>());
+      comet_pdump(rootOp->getParentOfType<ModuleOp>());
+    }
     auto semiringParts = cur_op.getSemiring().split('_');
     // check validity of semiring provided by user.
     if (!Semiring_reduceOps.contains(semiringParts.first) || !Semiring_ops.contains(semiringParts.second)) {
@@ -3713,28 +4464,26 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
       mask_type = MASKING_TYPE::NO_MASKING;
 
     switch (mask_type) {
-      case NO_MASKING: {  /// Use no masking; TODO: we should not hit this case!
+      case NO_MASKING: {  /// Use no masking; we should not hit this case because it is handled
+                          /// by the previous if-else branch when main_tensors_rhs.size() == 2
         break;
       }
       case PUSH_BASED_MASKING: {  /// Use push-based masking
-        mlir::Value states; /// The temporary dense vector for push-based masking
-        /// TODO(zhen.peng): mask_tensor should be the 3rd operand of ComputeRHS (tensors_rhs[2]).
+//        mlir::Value states; /// The temporary dense vector for push-based masking
+        /// mask_tensor should be the 3rd operand of ComputeRHS (tensors_rhs[2]).
         mlir::Value mask_tensor = tensors_rhs[2];
+        {
+          comet_debug() << "mask_tensor\n";
+          comet_vdump(mask_tensor);
+        }
 
-//        /// Allocate the dense mask vector
-//        states = pushedMaskAllocDenseVector(mask_tensor,
-//                                            rewriter,
-//                                            loc,
-//                                            nested_forops);
-//
-//        /// Initialize the dense mask vector and then reset it
-//        pushedMaskInitDenseVectorAndReset(states,
-//                                          mask_tensor,
-//                                          rewriter,
-//                                          loc,
-//                                          nested_forops);
         MaskingInfo masking_info;
-        masking_info.maskType = PUSH_BASED_MASKING;
+        masking_info.mask_type = PUSH_BASED_MASKING;
+        masking_info.mask_tensor = mask_tensor;
+
+        /// Get mask_rowptr, mask_col, and mask_val arrays
+        getMaskSparseTensorInfo(masking_info /* contents updated after call*/);
+
 //        masking_info.states = states;
         if (symbolicInfo.is_SpGEMM && comp_worksp_opt) {
 
@@ -3743,6 +4492,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
           genSymbolicPhase(cur_op,
                            opstree,
                            wp_ops,
+                           masking_info,
                            builder,
                            loc,
                            symbolicInfo /* updated after call */);
@@ -3767,13 +4517,12 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                              allPerms_rhs,
                              rhsFormats,
                              lhsFormats,
-                             symbolicInfo);
+                             symbolicInfo,
+                             masking_info);
         break;
       }
       case PULL_BASED_MASKING:  /// Use pull-based masking
-        /* Fall Through */
-      default:
-        llvm::errs() << "Error: mask type is not supported, yet.\n";
+        llvm::errs() << "Error: mask type PULL_BASED_MASKING is not supported, yet.\n";
         assert(false && "Not supported mask type.");
     }
   } else {
@@ -3800,8 +4549,8 @@ bool checkIfSpGEMM(indexTree::IndexTreeComputeOp &cur_op) {
   std::vector< std::vector<std::string> > opFormats;
   getRHSFormatsOfComputeOp(cur_op, opFormats);
 
-  /// Condition: SpGEMM has 2 operands in RHS (i.e., two input matrices)
-  if (opFormats.size() != 2) {
+  /// Condition: SpGEMM has 2 or 3 operands in RHS (i.e., two input matrices, or plus one mask)
+  if (!(opFormats.size() == 2 /* no mask */ || opFormats.size() == 3 /* mask */)) {
     return false;
   }
 
@@ -4065,8 +4814,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
         comet_debug() << "is_SpGEMM: " << symbolicInfo.is_SpGEMM << "\n";
       }
       {//
-        auto tmp = cur_op.getOperation()->getParentOp();
-        comet_pdump(tmp);
+        comet_pdump(cur_op.getOperation()->getParentOp());
       }
       // ancestors_wp can give all the indices of the nested loops
 //      genCmptOps(cur_op, rootOp, rewriter, opstree_vec[i], ancestors_wp);
