@@ -248,16 +248,27 @@ namespace mlir
       comet_debug() << "\n";
     }
 
-    template <>
-    void print_vector<bool>(std::vector<bool> vec)
-    {
-      // Special code for Array<bool>
-      for (auto n : vec)
-      {
-        comet_debug() << n << " ";
-      }
-      comet_debug() << "\n";
-    }
+    template void print_vector<int>(std::vector<int> vec);
+
+    template void print_vector<bool>(std::vector<bool> vec);
+    /*
+     * Reference:
+     * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
+     *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
+     * 2. How can I avoid linker errors with my template functions?
+     *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
+     */
+
+//    template <>
+//    void print_vector<bool>(std::vector<bool> vec)
+//    {
+//      // Special code for Array<bool>
+//      for (auto n : vec)
+//      {
+//        comet_debug() << n << " ";
+//      }
+//      comet_debug() << "\n";
+//    }
 
     void print_vector_value(std::vector<Value> vec)
     {
@@ -303,6 +314,15 @@ namespace mlir
       }
       return ret;
     }
+
+    template unsigned int findIndexInVector<int>(std::vector<int> const &vec, int e);
+    /*
+    * Reference:
+    * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
+    *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
+    * 2. How can I avoid linker errors with my template functions?
+    *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
+    */
 
     bool isDense(std::string s, std::string delim)
     {

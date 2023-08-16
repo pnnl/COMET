@@ -36,6 +36,7 @@ def main() {
     # var ntri = SUM((L1[i,k] * L2[k,j]) .* L0[i,j]);
     ## 
     C[i, j]<L0, push> = L1[i, k] * L2[k, j];  # L0 is the mask, using push-based method.
+                                              # valid options: {push, pull, auto}
     var ntri = SUM(C[i, j]);
     
     print(ntri);
