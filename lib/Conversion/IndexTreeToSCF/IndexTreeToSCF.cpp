@@ -262,6 +262,28 @@ struct SymbolicInfo {
 };
 
 /// ----------------- ///
+/// Remove an operantion's user who is a memref.store
+/// This is very ad-hoc, just to avoid segmentation fault for old very large C.val array and C.col array.
+/// ----------------- ///
+void removeMemrefStoreUser(Value &opd) {
+  {
+    comet_vdump(opd);
+  }
+  std::vector<Operation *> users;
+  for (Operation *user : opd.getUsers()) {
+    if (isa<memref::StoreOp>(user)) {
+      users.push_back(user);
+      {
+        comet_pdump(user);
+      }
+    }
+  }
+  for (Operation *user : users) {
+    user->erase();
+  }
+}
+
+/// ----------------- ///
 /// Find all users of the old_Value, and replace those users' corresponding operand to new_Value. For example,
 /// "ta.print"(%old_Value)  =>  "ta.print"(%new_Value)
 /// ----------------- ///
@@ -421,6 +443,7 @@ void genSymbolicInitMarkArrayByMask(std::vector<OpsTree *> &three_index_ancestor
                                   ValueRange{j_idx});
 #endif
   {
+    comet_vdump(store_mark);
     comet_vdump(for_loop);
   }
   /// Restore the insertion point
@@ -488,6 +511,7 @@ void genNumericInitMarkArrayByMask(std::vector<scf::ForOp> &forLoops /* numeric 
 #endif
 
   {
+    comet_vdump(store_mark);
     comet_vdump(for_loop);
   }
   /// Restore the insertion point
@@ -1518,6 +1542,14 @@ void reallocMtxCColAndVal(Value &mtxC_val_size,
   builder.create<memref::DeallocOp>(loc, mtxC_val);
 #endif
 
+  /// -------------- ///
+  /// Remove mtxC_col's user who is a memref.store operation
+  /// This is very ad-hoc, just to avoid segmentation fault for old very large C.val array and C.col array.
+  /// -------------- ///
+  removeMemrefStoreUser(mtxC_col);
+  removeMemrefStoreUser(mtxC_val);
+
+
   /// %C_col_new = memref.alloc(%mtxC_val_size) {alignment = 8 : i64} : memref<?xindex>
   /// %mtxC_val_new = memref.alloc(%mtxC_val_size) {alignment = 8 : i64} : memref<?xf64>
   MemRefType memTy_alloc_dynamic_index = MemRefType::get({ShapedType::kDynamic}, builder.getIndexType());
@@ -1624,6 +1656,7 @@ void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
                                                                 C_col_size_alloc,
                                                                 ValueRange{const_index_0});
   comet_vdump(C_col_size_alloc);
+  comet_vdump(store_C_col_size_alloc);
 #else
   builder.create<memref::StoreOp>(loc,
                                   mtxC_val_size,
@@ -1642,6 +1675,7 @@ void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
                                                                 C_val_size_alloc,
                                                                 ValueRange{const_index_0});
   comet_vdump(C_val_size_alloc);
+  comet_vdump(store_C_val_size_alloc);
 #else
   builder.create<memref::StoreOp>(loc,
                                   mtxC_val_size,
@@ -2909,22 +2943,23 @@ void genIfStatementElseRegionNumeric(
 //                                  allValueAccessIdx[lhs_loc]);
 
 
-    /// main_tensors_all_Allocs[lhs_loc].back() is W_data
-    /// ATTENTION: this is tested only for NO_MASKING and PUSH_BASED_MASKING.
+  /// main_tensors_all_Allocs[lhs_loc].back() is W_data
+  /// ATTENTION: this is tested only for NO_MASKING and PUSH_BASED_MASKING.
 
-    Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoadsElse[lhs_loc], elementWiseResult,
-                                             compressedWorkspace);
+  Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoadsElse[lhs_loc], elementWiseResult,
+                                           compressedWorkspace);
 
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-    auto store_sum = builder.create<memref::StoreOp>(loc,
-                                                     reduceResult,
-                                                     main_tensors_all_Allocs[lhs_loc].back(),
-                                                     allValueAccessIdx[lhs_loc]);
+  auto store_sum = builder.create<memref::StoreOp>(loc,
+                                                   reduceResult,
+                                                   main_tensors_all_Allocs[lhs_loc].back(),
+                                                   allValueAccessIdx[lhs_loc]);
+  comet_vdump(store_sum);
 #else
-    builder.create<memref::StoreOp>(loc,
-                                    reduceResult,
-                                    main_tensors_all_Allocs[lhs_loc].back(),
-                                    allValueAccessIdx[lhs_loc]);
+  builder.create<memref::StoreOp>(loc,
+                                  reduceResult,
+                                  main_tensors_all_Allocs[lhs_loc].back(),
+                                  allValueAccessIdx[lhs_loc]);
 #endif
 
 //  if (NO_MASKING == maskingInfo.mask_type) {
