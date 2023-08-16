@@ -63,8 +63,8 @@ namespace mlir
     unsigned int findIndexInVector(std::vector<T> const &vec, T e);
     template <typename T>
     void print_vector(std::vector<T> vec);
-    template <>
-    void print_vector<bool>(std::vector<bool> vec);
+//    template <>
+//    void print_vector<bool>(std::vector<bool> vec);
     void print_vector_value(std::vector<Value> vec);
 
     std::string dump2str(Value t);
