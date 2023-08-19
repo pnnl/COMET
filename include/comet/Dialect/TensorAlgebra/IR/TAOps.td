@@ -180,6 +180,24 @@ def SparseTensorDeclOp : TA_Op<"sparse_tensor_decl", [Pure]> {
   // The constant operation returns a single value of TensorType.
   let results = (outs AnyTensor);
 
+  let extraClassDeclaration = [{
+    unsigned int getParameterCount() {
+        return (getNumOperands() * 6) + 1;
+    }
+
+    unsigned int getDimArrayCount() {
+        return getNumOperands() * 4;
+    }
+
+    unsigned int getValueArrayPos() {
+        return (getNumOperands() * 4) + 1;
+    }
+
+    unsigned int getTotalArrayCount() {
+        return (getNumOperands() * 4) + 1;
+    }
+  }];
+
   // Invoke a static verify method to verify this constant operation.
   
   //TODO(gkestor): add verifier
@@ -298,11 +316,38 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
   //Aval_size (size of value array) 
   //dim1_size, dim2_size (size of each dimension in sparse tensor) 
   //TODO(gkestor): might be better to have a struct with all the data elements
-  let arguments = (ins Variadic<AnyType>:$indices);
+  let arguments = (ins Variadic<AnyType>:$indices, I32Attr:$tensor_rank);
   let results = (outs TA_AnyTensor:$output);
 
   let assemblyFormat = [{
     `(` $indices `)` attr-dict `:` `(` type($indices) `)` `->` `(` type($output) `)`
+  }];
+
+  // TODO(pflynn) This may need to be adjusted
+  // This works for the moment; the idea is that each rank has a tiling
+  // dimension per dimension.
+  let extraClassDeclaration = [{
+    int getTotalParamCount() {
+      return (getTensorRank() * 6) + 1;
+    }
+
+    int getDimArrayCount() {
+      return getTensorRank() * 4;
+    }
+
+    int getTotalDimArrayCount() {
+      return (getTensorRank() * 4) + 1;
+    }
+
+    int getValueArrayPos() {
+      // Value position- technically +1, but since we start at 0,
+      // we do not need to add anything
+      return getTensorRank() * 4;
+    }
+
+    int getIndexValueSize() {
+      return (getTensorRank() * 8) + 1;
+    }
   }];
 
   //TODO(gkestor): add verifier
