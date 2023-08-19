@@ -59,10 +59,49 @@ namespace mlir
     void insertInitialize(Location loc, Value cst_init, Value alloc_op, OpBuilder &builder);
     bool hasFuncDeclaration(ModuleOp &module, std::string funcName);
     //bool isFuncInMod(std::string funcname, ModuleOp module);
+
+    /*
+    * We should put template function definition in the header rather than in the cpp file.
+    * Reference:
+    * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
+    *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
+    * 2. How can I avoid linker errors with my template functions?
+    *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
+    */
     template <class T>
-    unsigned int findIndexInVector(std::vector<T> const &vec, T e);
+    unsigned int findIndexInVector(std::vector<T> const &vec, T e) {
+      // Check if element e exists in vector
+      auto it = std::find(vec.begin(), vec.end(), e);
+
+      // It accepts a range and an element to search in the given range. If element is found then
+      // it returns an iterator to the first element in the given range that’s equal to given element,
+      // else it returns an end of the list.
+      unsigned int ret = 0;
+      if (it != vec.end())
+      {
+        ret = std::distance(vec.begin(), it);
+        comet_debug() << " Element Found and its index location: " << ret << " \n";
+      }
+      else
+      {
+        comet_debug() << " Element Not Found\n";
+        ret = vec.size();
+      }
+      return ret;
+    }
+
     template <typename T>
-    void print_vector(std::vector<T> vec);
+    void print_vector(std::vector<T> vec) {
+      for (auto n : vec)
+      {
+        comet_debug() << n << " ";
+      }
+      comet_debug() << "\n";
+    }
+    // template <class T>
+    // unsigned int findIndexInVector(std::vector<T> const &vec, T e);
+    // template <typename T>
+    // void print_vector(std::vector<T> vec);
 //    template <>
 //    void print_vector<bool>(std::vector<bool> vec);
     void print_vector_value(std::vector<Value> vec);
