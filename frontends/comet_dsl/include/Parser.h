@@ -146,6 +146,55 @@ namespace tensorAlgebra
       return std::make_unique<ReturnExprAST>(std::move(loc), std::move(expr));
     }
 
+    // C[i, j]<M, push> = ...
+    std::unique_ptr<ExprAST> parseMaskExpr()
+    {
+      comet_debug() << "in parseMaskExpr\n";
+      auto loc = lexer.getLastLocation();
+      lexer.consume(Token(tok_mask_open));
+
+      std::string theMaskVar(lexer.getId());
+      comet_debug() << "The MaskVar is: " << theMaskVar << "\n";
+      lexer.getNextToken(); // eat var-name
+
+      // handle optional case, where the user does not specifies maskType
+      if (lexer.getCurToken() == ',')
+        lexer.getNextToken(); // eat comma
+
+      //if ((lexer.getCurToken() != tok_maskPush) || (lexer.getCurToken() != tok_maskPull) || (lexer.getCurToken() != tok_maskAuto))
+      //  return parseError<ExprAST>("<push,pull,auto> or <", "in mask expression");
+      std::string theMaskType = "";
+      if (lexer.getCurToken() == tok_maskPush) 
+      {
+        theMaskType = "push";
+        lexer.getNextToken(); // eat masktype
+      }
+      else if (lexer.getCurToken() == tok_maskPull)
+      {
+        theMaskType = "pull";
+        lexer.getNextToken(); // eat masktype
+      }
+      else if (lexer.getCurToken() == tok_maskAuto)
+      {
+        theMaskType = "auto";
+        lexer.getNextToken(); // eat masktype
+      }
+      else // no mask type specified by user: A[i,j]<M> = ...
+      {
+        theMaskType = "auto";  // default
+      }
+      comet_debug() << "the maskType is: " << theMaskType << "\n";
+      
+      // End: '>'
+      if (lexer.getCurToken() == tok_mask_close)
+        lexer.getNextToken(); // eat '>'
+      else
+        return parseError<ExprAST>(">", " in mask expression.");
+      
+      return std::make_unique<MaskExprAST>(std::move(loc), theMaskVar, theMaskType);
+
+    }
+
     /// Parse a literal array expression.
     /// tensorLiteral ::= [ literalList ] | number
     /// literalList ::= tensorLiteral | tensorLiteral, literalList
@@ -153,7 +202,7 @@ namespace tensorAlgebra
     {
       comet_debug() << "in parseTensorLiteralExpr\n";
       auto loc = lexer.getLastLocation();
-      lexer.consume(Token('['));
+      lexer.consume(Token(tok_sbracket_open));
 
       // Hold the list of values at this nesting level.
       std::vector<std::unique_ptr<ExprAST>> values;
@@ -162,7 +211,7 @@ namespace tensorAlgebra
       do
       {
         // We can have either another nested array or a number literal.
-        if (lexer.getCurToken() == '[')
+        if (lexer.getCurToken() == tok_sbracket_open)
         {
           values.push_back(parseTensorLiteralExpr());
           if (!values.back())
@@ -176,7 +225,7 @@ namespace tensorAlgebra
         }
 
         // End of this list on ']'
-        if (lexer.getCurToken() == ']')
+        if (lexer.getCurToken() == tok_sbracket_close)
           break;
 
         // Elements are separated by a comma.
@@ -230,9 +279,9 @@ namespace tensorAlgebra
       if (!v)
         return nullptr;
 
-      if (lexer.getCurToken() != ')')
+      if (lexer.getCurToken() != tok_parenthese_close)
         return parseError<ExprAST>(")", "to close expression with parentheses");
-      lexer.consume(Token(')'));
+      lexer.consume(Token(tok_parenthese_close));
       return v;
     }
 
@@ -515,19 +564,19 @@ namespace tensorAlgebra
         comet_debug() << " is tok_number\n ";
         return parseNumberExpr();
       }
-      case '(':
+      case tok_parenthese_open:
         return parseParenExpr();
-      case '[':
+      case tok_sbracket_open:
         return parseTensorLiteralExpr();
-      case ';':
+      case tok_semicolon:
         return nullptr;
-      case '}':
+      case tok_bracket_close:
         return nullptr;
       case tok_transpose:
         return ParseTranspose();
       case tok_for:
         return parseForLoop();
-      case ':':  // for
+      case tok_colon:  // for
         return nullptr;
       case tok_end:
         return parseForLoopEnd();
@@ -1209,8 +1258,8 @@ namespace tensorAlgebra
                                                     labels);
     }
 
-    // %t = ta.tc(a, b)
-    // ta.set_op(%t, c) // src, dest  ta.tc(rhs1, rhs2, lhs)
+    // %t = ta.mul(a, b)
+    // ta.set_op(%t, c) // src, dest  ta.mul(rhs1, rhs2, lhs)
     // ta.transpose(src, dest)
 
     /// tensor_expression
@@ -1239,6 +1288,16 @@ namespace tensorAlgebra
       // TODO(gkestor): add ast support for `-=` op
       TensorOpKind op;
       int beta = 0;
+      std::unique_ptr<ExprAST> mask = nullptr;
+      bool maskAvailable = false;  // mask is an optional input
+      if (lexer.getCurToken() == '<')  // mask
+      {
+        comet_debug() << "doing mask from op expression\n";
+        mask = parseMaskExpr();
+        maskAvailable = true;
+        op = TensorOpKind::Tensor_Set;
+        beta = 0;
+      }
       if (lexer.getCurToken() == '=')
       {
         op = TensorOpKind::Tensor_Set;
@@ -1258,6 +1317,11 @@ namespace tensorAlgebra
       }
       else
         return parseError<ExprAST>("= or +=", "in tensor expression");
+
+      if (!maskAvailable) // if the user has not provided the mask input, then set default.
+      {
+        mask = std::make_unique<MaskExprAST>(loc, "", "none"); // default 
+      }
 
       lexer.getNextToken(); // consume op
 
@@ -1280,7 +1344,7 @@ namespace tensorAlgebra
         //TransposeExprAST *call = llvm::cast<TransposeExprAST>(RHS.get());
       }
       return std::make_unique<TensorOpExprAST>(std::move(loc), op, std::move(LHS),
-                                               std::move(RHS), beta);
+                                               std::move(RHS), std::move(mask), beta);
     }
 
     /// var_expression
@@ -1354,10 +1418,10 @@ namespace tensorAlgebra
             exprList->push_back(std::move(decl));
           }
         }
-        else if (lexer.getCurToken() == tok_tensor)
+        else if (lexer.getCurToken() == tok_tensor)  // 'Tensor' keyword
         {
           // Tensor declaration
-          // comet_debug() << "ParseTensorDeclaration\n";
+          comet_debug() << "ParseTensorDeclaration\n";
           auto tensorDecl = ParseTensorDeclaration();
           if (!tensorDecl)
             return nullptr;

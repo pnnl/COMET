@@ -55,15 +55,16 @@ namespace mlir
     MemRefType convertTensorToMemRef(TensorType type);
     Value insertAllocAndDealloc(MemRefType memtype, Location loc, PatternRewriter &rewriter);
     Value insertAllocAndInitialize(Location loc, MemRefType memtype, ValueRange allocValueRange, PatternRewriter &rewriter);
-    void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter);
+//    void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter);
+    void insertInitialize(Location loc, Value cst_init, Value alloc_op, OpBuilder &builder);
     bool hasFuncDeclaration(ModuleOp &module, std::string funcName);
     //bool isFuncInMod(std::string funcname, ModuleOp module);
     template <class T>
     unsigned int findIndexInVector(std::vector<T> const &vec, T e);
     template <typename T>
     void print_vector(std::vector<T> vec);
-    template <>
-    void print_vector<bool>(std::vector<bool> vec);
+//    template <>
+//    void print_vector<bool>(std::vector<bool> vec);
     void print_vector_value(std::vector<Value> vec);
 
     std::string dump2str(Value t);

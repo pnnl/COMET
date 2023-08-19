@@ -33,6 +33,6 @@ def main() {
 # CHECK-NEXT: data = 
 # CHECK-NEXT: 0,2,4,5,7,9,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 0,3,1,4,2,0,3,1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+# CHECK-NEXT: 0,3,1,4,2,0,3,1,4,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 1,1,2,2,3,4,4,5,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+# CHECK-NEXT: 1,1,2,2,3,4,4,5,5,
