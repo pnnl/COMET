@@ -88,8 +88,7 @@ namespace tensorAlgebra
       Expr_PrintElapsed,
       Expr_GetTime,
       Expr_ForLoop,
-      Expr_ForEnd,
-      Expr_Mask
+      Expr_ForEnd
     };
 
     ExprAST(ExprASTKind kind, Location location)
@@ -323,41 +322,18 @@ namespace tensorAlgebra
     }
   };
 
-  /// Expression class to support masking based operations.
-  class MaskExprAST : public ExprAST
-  {
-    std::string tensor_name;
-    std::string maskType;
-
-  public:
-    MaskExprAST(Location loc, const std::string &tensor_name,
-                         const std::string &maskType)
-        : ExprAST(Expr_Mask, loc), tensor_name(tensor_name),
-          maskType(maskType) {}
-
-    const llvm::StringRef getTensorName() { return tensor_name; }
-    const llvm::StringRef getMaskType() { return maskType; }
-
-    /// LLVM style RTTI
-    static bool classof(const ExprAST *C)
-    {
-      return C->getKind() == Expr_Mask;
-    }
-  };
-
   class TensorOpExprAST : public ExprAST
   {
     TensorOpKind Op;
     std::unique_ptr<ExprAST> LHS;
     std::unique_ptr<ExprAST> RHS;
-    std::unique_ptr<ExprAST> Mask;
     int beta;
 
   public:
     TensorOpExprAST(Location loc, TensorOpKind Op, std::unique_ptr<ExprAST> LHS,
-                    std::unique_ptr<ExprAST> RHS, std::unique_ptr<ExprAST> Mask, int in_beta = 1)
+                    std::unique_ptr<ExprAST> RHS, int in_beta = 1)
         : ExprAST(Expr_Tensor, loc), Op(Op), LHS(std::move(LHS)),
-          RHS(std::move(RHS)), Mask(std::move(Mask)), beta(in_beta) {}
+          RHS(std::move(RHS)), beta(in_beta) {}
 
     TensorOpKind getOp() { return Op; }
     std::string getOpStr()
@@ -379,7 +355,6 @@ namespace tensorAlgebra
     }
     ExprAST *getLHS() { return LHS.get(); }
     ExprAST *getRHS() { return RHS.get(); }
-    ExprAST *getMask() { return Mask.get(); }
     int getBeta() { return beta; }
 
     /// LLVM style RTTI

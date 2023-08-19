@@ -2559,25 +2559,3 @@ extern "C" void quick_sort(int sizes_rank, void *sizes_ptr, int length)
   auto *desc_ptr = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
   std::qsort(desc_ptr->data, length, sizeof(int64_t), qsort_comp);
 }
-
-
-//===----------------------------------------------------------------------===//
-// Sort a vector within a range [first, last).
-//===----------------------------------------------------------------------===//
-
-extern "C" void _milr_ciface_comet_sort(UnrankedMemRefType<int64_t> *M, int64_t index_first, int64_t index_last)
-{
-  cometSortIndex(*M, index_first, index_last);
-}
-
-extern "C" void comet_sort_index(int64_t rank, void *ptr, int64_t index_first, int64_t index_last)
-{
-  UnrankedMemRefType<int64_t> descriptor = {rank, ptr};
-  _milr_ciface_comet_sort(&descriptor, index_first, index_last);
-
-//  auto *desc_ptr = static_cast<StridedMemRefType<int64_t, 1> *>(ptr);
-//  std::sort(desc_ptr->data + index_first, desc_ptr->data + index_last);
-
-//  auto *desc_ptr = static_cast<StridedMemRefType<int64_t, 1> *>(ptr);
-//  std::qsort(desc_ptr->data + index_first, index_last - index_first, sizeof(int64_t), qsort_comp);
-}

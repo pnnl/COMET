@@ -225,13 +225,3 @@ void UnitExpression::setSemiring(const llvm::StringRef &Semiring)
 {
   semiring = Semiring;
 }
-
-const llvm::StringRef &UnitExpression::getMaskType() const
-{
-  return maskType;
-}
-
-void UnitExpression::setMaskType(const llvm::StringRef &MaskType)
-{
-  maskType = MaskType;
-}

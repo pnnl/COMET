@@ -29,14 +29,14 @@
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
-#include "blis.h"
+#include "comet/blis/blis.h"
 #endif
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push 
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wtype-limits"
-#include "blis.h"
+#include "comet/blis/blis.h"
 #endif
 
 #ifdef _WIN32
@@ -67,12 +67,3 @@ _mlir_ciface_linalg_matmul_viewsxsxf64_viewsxsxf64_viewsxsxf64(
 #endif
 
 #endif // COMET_BLIS_INTERFACE_H_
-
-
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
-#define bli_dgemm_asm_6x8 bli_dgemm_x86_asm_6x8
-#elif defined(__aarch64__) || defined(__arm__) || defined(_M_ARM) || defined(_ARCH_PPC)
-#define bli_dgemm_asm_6x8 bli_dgemm_arm_asm_6x8
-#else
-#define bli_dgemm_asm_6x8 dgemm_generic_noopt_mxn
-#endif

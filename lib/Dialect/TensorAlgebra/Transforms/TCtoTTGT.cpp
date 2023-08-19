@@ -29,16 +29,17 @@
 #include "comet/Dialect/Utils/Utils.h"
 
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+// #include "mlir/Dialect/Linalg/IR/LinalgTypes.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-#include "mlir/IR/BuiltinTypes.h"
+// #include "mlir/Dialect/Func/IR/FuncOps.h"
 
+// #include "mlir/EDSC/Builders.h"
 
 #include <limits>
 #include <map>
@@ -48,8 +49,9 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
+// using namespace mlir::edsc;
+// using namespace mlir::edsc::intrinsics;
 using namespace mlir::linalg;
-using namespace mlir::arith;
 using namespace mlir::bufferization;
 
 using namespace mlir::tensorAlgebra;
@@ -74,7 +76,7 @@ using namespace mlir::tensorAlgebra;
 #endif
 // *********** For debug purpose *********//
 
-const StringLiteral kLinalgTransformMarker = "__with_tiling__";
+const StringLiteral tensorAlgMarker = "__with_tiling__";
 
 template <typename T>
 static bool arePermutations(const std::vector<T> &vec1,
@@ -97,6 +99,45 @@ static bool arePermutations(const std::vector<T> &vec1,
       return false;
     }
     taken[std::distance(vec2.begin(), it)] = true;
+  }
+  return true;
+}
+
+/// Return true if the reassociation specification is valid, false otherwise.
+/// When false, the `invalidIndex` integer pointer is optionally filled with the
+/// index of the offending reassociation map.
+static bool isReassociationValid(ArrayRef<AffineMap> reassociation,
+                                 int *invalidIndex = nullptr)
+{
+  if (reassociation.empty())
+    return true;
+  unsigned nDims = reassociation[0].getNumDims();
+  unsigned nextExpectedDim = 0;
+  for (auto it : llvm::enumerate(reassociation))
+  {
+    auto m = it.value();
+    if (m.getNumDims() != nDims || m.getNumSymbols() != 0)
+    {
+      if (invalidIndex)
+        *invalidIndex = it.index();
+      return false;
+    }
+    for (auto e : m.getResults())
+    {
+      auto d = e.dyn_cast<AffineDimExpr>();
+      if (!d || d.getPosition() != nextExpectedDim++)
+      {
+        if (invalidIndex)
+          *invalidIndex = it.index();
+        return false;
+      }
+    }
+  }
+  if (nextExpectedDim != nDims)
+  {
+    if (invalidIndex)
+      *invalidIndex = reassociation.size() - 1;
+    return false;
   }
   return true;
 }
@@ -135,79 +176,74 @@ static IndexVector getIndexRange(unsigned lo, unsigned hi, unsigned step = 1)
   return result;
 }
 
+/// Compute the MemRefType obtained by applying the `reassociation` (which is
+/// expected to be valid) to `type`.
+/// If `type` is Contiguous MemRefType, this always produce a contiguous
+/// MemRefType.
+static MemRefType
+computeReshapeCollapsedType(MemRefType type,
+                            ArrayRef<AffineMap> reassociation)
+{
+  auto sizes = type.getShape();
+  AffineExpr offset;
+  SmallVector<AffineExpr, 4> strides;
+  auto status = getStridesAndOffset(type, strides, offset);
+  (void)status;
+  assert(succeeded(status) && "expected strided memref");
 
-// /// Compute the MemRefType obtained by applying the `reassociation` (which is
-// /// expected to be valid) to `type`.
-// /// If `type` is Contiguous MemRefType, this always produce a contiguous
-// /// MemRefType.
-// static MemRefType
-// computeReshapeCollapsedType(MemRefType type,
-//                             ArrayRef<AffineMap> reassociation)
-// {
-//   auto sizes = type.getShape();
-//   // AffineExpr offset;
-//   // SmallVector<AffineExpr, 4> strides;
+  SmallVector<int64_t, 4> newSizes;
+  newSizes.reserve(reassociation.size());
+  SmallVector<AffineExpr, 4> newStrides;
+  newStrides.reserve(reassociation.size());
 
-//   int64_t offset = 0;
-//   SmallVector<int64_t, 5> strides;
-//   auto status = getStridesAndOffset(type, strides, offset);
-//   // (void)status;
-//   assert(succeeded(status) && "expected strided memref");
+  // Use the fact that reassociation is valid to simplify the logic: only use
+  // each map's rank.
+  assert(isReassociationValid(reassociation) && "invalid reassociation");
+  unsigned currentDim = 0;
+  for (AffineMap m : reassociation)
+  {
+    unsigned dim = m.getNumResults();
+    int64_t size = 1;
+    AffineExpr stride = strides[currentDim + dim - 1];
+    if (!isReshapableDimBand(currentDim, dim, sizes, strides))
+    {
+      size = ShapedType::kDynamic;
+      stride = AffineExpr();
+    }
+    else
+    {
+      for (unsigned d = 0; d < dim; ++d)
+        size *= sizes[currentDim + d];
+    }
+    newSizes.push_back(size);
+    newStrides.push_back(stride);
+    currentDim += dim;
+  }
 
-//   SmallVector<int64_t, 4> newSizes;
-//   newSizes.reserve(reassociation.size());
-//   SmallVector<int64_t, 4> newStrides;
-//   newStrides.reserve(reassociation.size());
+  // Early-exit: if `type` is contiguous, the result must be contiguous.
+  if (canonicalizeStridedLayout(type).getAffineMaps().empty())
+    return MemRefType::Builder(type).setShape(newSizes).setAffineMaps({});
 
-//   // Use the fact that reassociation is valid to simplify the logic: only use
-//   // each map's rank.
-//   assert(isReassociationValid(reassociation) && "invalid reassociation");
-//   unsigned currentDim = 0;
-//   for (AffineMap m : reassociation)
-//   {
-//     unsigned dim = m.getNumResults();
-//     int64_t size = 1;
-//     int64_t stride = strides[currentDim + dim - 1];
-//     if (!isReshapableDimBand(currentDim, dim, sizes, strides))
-//     {
-//       size = ShapedType::kDynamic;
-//       stride = 1;
-//     }
-//     else
-//     {
-//       for (unsigned d = 0; d < dim; ++d)
-//         size *= sizes[currentDim + d];
-//     }
-//     newSizes.push_back(size);
-//     newStrides.push_back(stride);
-//     currentDim += dim;
-//   }
-
-//   // Early-exit: if `type` is contiguous, the result must be contiguous.
-//   if (canonicalizeStridedLayout(type).getLayout().getAffineMap().empty())
-//     return MemRefType::Builder(type).setShape(newSizes).setLayout({});
-
-//   // Convert back to int64_t because we don't have enough information to create
-//   // new strided layouts from AffineExpr only. This corresponds to a case where
-//   // copies may be necessary.
-  
-//   //int64_t intOffset = ShapedType::kDynamic;
-//   //if (auto o = offset.dyn_cast<AffineConstantExpr>())
-//   //  intOffset = o.getValue();
-//   SmallVector<int64_t, 4> intStrides;
-//   intStrides.reserve(strides.size());
-//   for (auto stride : newStrides)
-//   {
-//     //if (auto cst = stride.dyn_cast_or_null<AffineConstantExpr>())
-//       intStrides.push_back(stride);
-//     //else
-//     //  intStrides.push_back(ShapedType::kDynamic);
-//   }
-//   auto layout =
-//       makeStridedLinearLayoutMap(intStrides, offset, type.getContext());
-//   return canonicalizeStridedLayout(
-//       MemRefType::Builder(type).setShape(newSizes).setLayout({AffineMapAttr::get(layout)}));
-// }
+  // Convert back to int64_t because we don't have enough information to create
+  // new strided layouts from AffineExpr only. This corresponds to a case where
+  // copies may be necessary.
+  int64_t intOffset = ShapedType::kDynamicStrideOrOffset;
+  if (auto o = offset.dyn_cast<AffineConstantExpr>())
+    intOffset = o.getValue();
+  SmallVector<int64_t, 4> intStrides;
+  intStrides.reserve(strides.size());
+  for (auto stride : newStrides)
+  {
+    if (auto cst = stride.dyn_cast_or_null<AffineConstantExpr>())
+      intStrides.push_back(cst.getValue());
+    else
+      intStrides.push_back(ShapedType::kDynamicStrideOrOffset);
+  }
+  auto layout =
+      makeStridedLinearLayoutMap(intStrides, intOffset, type.getContext());
+  return canonicalizeStridedLayout(
+      MemRefType::Builder(type).setShape(newSizes).setAffineMaps({layout}));
+}
 
 //===----------------------------------------------------------------------===//
 // TAEarlyLoweringTTGTPass
@@ -255,8 +291,6 @@ namespace
 
       ArrayAttr indexMaps = multop.getIndexingMaps();
       std::vector<std::vector<unsigned>> allPerms;
-
-
       // Find summation indices
       for (const auto &map : indexMaps)
       {
@@ -303,9 +337,9 @@ namespace
       comet_vdump(setnewop);
       comet_debug() << "\n";
 
-      Value rhs1Memref = rhs1Tensor.getMemref();
-      Value rhs2Memref = rhs2Tensor.getMemref();
-      Value lhsMemref = lhsTensor.getMemref();
+      Value rhs1Memref = rhs1Tensor.memref();
+      Value rhs2Memref = rhs2Tensor.memref();
+      Value lhsMemref = lhsTensor.memref();
 
       auto rhs1MemrefType = rhs1Memref.getType().cast<MemRefType>();
       auto rhs2MemrefType = rhs2Memref.getType().cast<MemRefType>();
@@ -320,8 +354,8 @@ namespace
 
       // computeBestPermutations identifies the optimal index permutation for TTGT
       // it should enable and disable to heuristic
-      IndexVector rhs1OutPerm, rhs2OutPerm, lhsOutPerm;
-      std::tie(rhs1OutPerm, rhs2OutPerm, lhsOutPerm) = plan.computePermutations(isSelectBestPerm, whatPerm);
+      IndexVector rhs1Perm, rhs2Perm, lhsPerm;
+      std::tie(rhs1Perm, rhs2Perm, lhsPerm) = plan.computePermutations(isSelectBestPerm, whatPerm);
 
       comet_debug() << "Best permutation : " << plan.bestPermStr_ << "\n";
 
@@ -335,37 +369,30 @@ namespace
                           lhsIndices.begin(), lhsIndices.end(),
                           std::inserter(sumIndices, sumIndices.begin()));
 
-      std::vector<unsigned int> rhs1InPerm = getIdentityPermutation(allPerms[0].size());
-      std::vector<unsigned int> rhs2InPerm = getIdentityPermutation(allPerms[1].size());
-      std::vector<unsigned int> lhsInPerm = getIdentityPermutation(allPerms[2].size());
-
-      AffineMapAttr rhs1OutMapAttr = AffineMapAttr::get(AffineMap::getPermutationMap(rhs1OutPerm, ctx));
-      AffineMap rhs1InMap = AffineMap::getPermutationMap(rhs1InPerm, ctx);
-      AffineMap rhs1OutMap = AffineMap::getPermutationMap(rhs1OutPerm, ctx);
+      AffineMapAttr rhs1OutMapAttr = AffineMapAttr::get(AffineMap::getPermutationMap(rhs1Perm, ctx));
+      AffineMap rhs1InMap = AffineMap::getPermutationMap(getIdentityPermutation(allPerms[0].size()), ctx);
+      AffineMap rhs1OutMap = AffineMap::getPermutationMap(rhs1Perm, ctx);
 
       AffineMapAttr rhs2OutMapAttr =
-          AffineMapAttr::get(AffineMap::getPermutationMap(rhs2OutPerm, ctx));
-      AffineMap rhs2InMap = AffineMap::getPermutationMap(rhs2InPerm, ctx);
-      AffineMap rhs2OutMap = AffineMap::getPermutationMap(rhs2OutPerm, ctx);
+          AffineMapAttr::get(AffineMap::getPermutationMap(rhs2Perm, ctx));
+      AffineMap rhs2InMap = AffineMap::getPermutationMap(getIdentityPermutation(allPerms[1].size()), ctx);
+      AffineMap rhs2OutMap = AffineMap::getPermutationMap(rhs2Perm, ctx);
 
       AffineMapAttr lhsOutMapAttr =
-          AffineMapAttr::get(AffineMap::getPermutationMap(lhsOutPerm, ctx));
-      AffineMap lhsInMap = AffineMap::getPermutationMap(lhsInPerm, ctx);
-      AffineMap lhsOutMap = AffineMap::getPermutationMap(lhsOutPerm, ctx);
+          AffineMapAttr::get(AffineMap::getPermutationMap(lhsPerm, ctx));
+      AffineMap lhsInMap = AffineMap::getPermutationMap(
+          getIdentityPermutation(allPerms[2].size()), ctx);
+      AffineMap lhsOutMap = AffineMap::getPermutationMap(lhsPerm, ctx);
 
       Value rhs1Alloc = rhs1Memref;
       Value rhs2Alloc = rhs2Memref;
       Value lhsAlloc = lhsMemref;
 
-      std::vector<int64_t> rhs1OutPerm_int64(rhs1OutPerm.begin(), rhs1OutPerm.end());
-      std::vector<int64_t> rhs2OutPerm_int64(rhs2OutPerm.begin(), rhs2OutPerm.end());
-      std::vector<int64_t> lhsOutPerm_int64(lhsOutPerm.begin(), lhsOutPerm.end());
-
       // Do transpose if needed
       if (!rhs1OutMapAttr.getValue().isIdentity())
       {
         std::vector<int64_t> rhs1Dims;
-        for (auto idx : rhs1OutPerm)
+        for (auto idx : rhs1Perm)
         {
           auto shape = rhs1MemrefType.getShape();
           rhs1Dims.push_back(shape[idx]);
@@ -376,18 +403,18 @@ namespace
             rewriter);
 
 #ifdef DEBUG_MODE_TTGT
-        auto rhs1LinalgCopy = rewriter.create<linalg::TransposeOp>(loc, rhs1Memref, rhs1Alloc, llvm::ArrayRef<int64_t>(rhs1OutPerm_int64));
+        auto rhs1LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
         comet_debug() << "\n";
         comet_vdump(rhs1LinalgCopy);
 #else
-        rewriter.create<linalg::TransposeOp>(loc, rhs1Memref, rhs1Alloc, llvm::ArrayRef<int64_t>(rhs1OutPerm_int64));
+        rewriter.create<linalg::CopyOp>(loc, rhs1Memref, rhs1Alloc, rhs1InMap, rhs1OutMap);
 #endif
       }
 
       if (!rhs2OutMapAttr.getValue().isIdentity())
       {
         std::vector<int64_t> rhs2Dims;
-        for (auto idx : rhs2OutPerm)
+        for (auto idx : rhs2Perm)
         {
           auto shape = rhs2MemrefType.getShape();
           rhs2Dims.push_back(shape[idx]);
@@ -397,13 +424,11 @@ namespace
             MemRefType::get(rhs2Dims, rhs2MemrefType.getElementType()), loc,
             rewriter);
 #ifdef DEBUG_MODE_TTGT
-        auto rhs2LinalgCopy = rewriter.create<linalg::TransposeOp>(loc, rhs2Memref, rhs2Alloc, llvm::ArrayRef<int64_t>(rhs2OutPerm_int64));
+        auto rhs2LinalgCopy = rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
         comet_debug() << " rhs2LinalgCopy op: " << __LINE__ << "\n";
         comet_vdump(rhs2LinalgCopy);
 #else
-        rewriter.create<linalg::TransposeOp>(loc, rhs2Memref, rhs2Alloc, llvm::ArrayRef<int64_t>(rhs2OutPerm_int64));
-        
-
+        rewriter.create<linalg::CopyOp>(loc, rhs2Memref, rhs2Alloc, rhs2InMap, rhs2OutMap);
 #endif
       }
 
@@ -411,7 +436,7 @@ namespace
       if (!lhsOutMapAttr.getValue().isIdentity())
       {
         std::vector<int64_t> lhsDims;
-        for (auto idx : lhsOutPerm)
+        for (auto idx : lhsPerm)
         {
           auto shape = lhsMemrefType.getShape();
           lhsDims.push_back(shape[idx]);
@@ -422,10 +447,10 @@ namespace
             rewriter);
         useLHSTranspose = true;
         // TODO(gkestor): we might need this copy if we support update C[] += A[] * B[]
-        rewriter.create<linalg::TransposeOp>(loc, lhsMemref, lhsAlloc, llvm::ArrayRef<int64_t>(lhsOutPerm_int64));
+        rewriter.create<linalg::CopyOp>(loc, lhsMemref, lhsAlloc, lhsInMap, lhsOutMap);
       }
 
-      RankedTensorType collapsedTensorType;
+      MemRefType collapsedMemrefType;
 
       Value rhs1Reshape = rhs1Alloc;
       Value rhs2Reshape = rhs2Alloc;
@@ -450,12 +475,13 @@ namespace
 
         SmallVector<AffineMap, 2> rhs1IndexingMap{rhs1AffineMap};
 
+        collapsedMemrefType = computeReshapeCollapsedType(
+            rhs1Alloc.getType().cast<MemRefType>(), rhs1IndexingMap);
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs1IndexingMap);
-
         comet_debug() << "\n";
-        rhs1Reshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, rhs1Alloc, reassociationIndices);
+        rhs1Reshape = rewriter.create<linalg::ReshapeOp>(
+            loc, collapsedMemrefType, rhs1Alloc, reassociationIndices);
         comet_vdump(rhs1Reshape);
       }
       else if (rhs1MemrefType.getShape().size() != 2)
@@ -484,17 +510,20 @@ namespace
 
         rhs1IndexingMap.push_back(rhs1Subset0);
         rhs1IndexingMap.push_back(rhs1Subset1);
-
+        collapsedMemrefType = computeReshapeCollapsedType(
+            rhs1Alloc.getType().cast<MemRefType>(), rhs1IndexingMap);
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs1IndexingMap);
-
+        comet_debug() << " collapsedMemrefType:"
+                      << "\n";
+        comet_vdump(collapsedMemrefType);
         comet_debug() << "\n";
         comet_debug() << " rhs1Alloc: \n";
         comet_vdump(rhs1Alloc);
         comet_vdump(rhs1MemrefType);
 
-        rhs1Reshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, rhs1Alloc, reassociationIndices);
+        rhs1Reshape = rewriter.create<linalg::ReshapeOp>(
+            loc, collapsedMemrefType, rhs1Alloc, reassociationIndices);
         comet_debug() << " Before rhs1Reshape: \n";
         comet_vdump(rhs1Reshape);
         comet_debug() << " After rhs1Reshape: \n";
@@ -510,14 +539,16 @@ namespace
 
         SmallVector<AffineMap, 2> rhs2IndexingMap{rhs2AffineMap};
 
+        collapsedMemrefType = computeReshapeCollapsedType(
+            rhs2Alloc.getType().cast<MemRefType>(), rhs2IndexingMap);
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs2IndexingMap);
-        
-        rhs2Reshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, rhs2Alloc, reassociationIndices);
+        rhs2Reshape = rewriter.create<linalg::ReshapeOp>(
+            loc, collapsedMemrefType, rhs2Alloc, reassociationIndices);
 
         comet_debug() << "\n";
         comet_vdump(rhs2Reshape);
+        // } else if (rhs2MemrefType.getShape().size() != 2) {
       }
       else if (rhs2MemrefType.getShape().size() != 2 && rhs2MemrefType.getShape().size() != 1)
       {
@@ -547,20 +578,15 @@ namespace
         rhs2IndexingMap.push_back(rhs2Subset0);
         rhs2IndexingMap.push_back(rhs2Subset1);
 
+        collapsedMemrefType = computeReshapeCollapsedType(
+            rhs2Alloc.getType().cast<MemRefType>(), rhs2IndexingMap);
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs2IndexingMap);
-
-        rhs2Reshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, rhs2Alloc, reassociationIndices);
-
+        rhs2Reshape = rewriter.create<linalg::ReshapeOp>(
+            loc, collapsedMemrefType, rhs2Alloc, reassociationIndices);
         comet_debug() << "\n";
         comet_vdump(rhs2Reshape);
       }
-
-      bool expandLHS = false;
-      // Keep the reassociation indices that will be used for collapsing the LHS tensor
-      // The exact same indices can be used to re-expand it back to its original rank (after the potential transpose operation)
-      SmallVector<ReassociationIndices> lhsReassociationIndices;
 
       comet_debug() << "\n";
       // if (isRHS1SumPermutation || isRHS2SumPermutation) {
@@ -574,17 +600,14 @@ namespace
 
         SmallVector<AffineMap, 2> lhsIndexingMap{lhsAffineMap};
 
+        collapsedMemrefType = computeReshapeCollapsedType(
+            lhsAlloc.getType().cast<MemRefType>(), lhsIndexingMap);
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(lhsIndexingMap);
-
-        //TODO(gkestor): should it be expandop?
-        lhsReshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, lhsAlloc, reassociationIndices);
-
+        lhsReshape = rewriter.create<linalg::ReshapeOp>(
+            loc, collapsedMemrefType, lhsAlloc, reassociationIndices);
         comet_debug() << "\n";
         comet_vdump(lhsReshape);
-        expandLHS = true;
-        lhsReassociationIndices = reassociationIndices;
       }
       else if (lhsMemrefType.getShape().size() != 2 && lhsMemrefType.getShape().size() != 1)
       {
@@ -613,17 +636,14 @@ namespace
         lhsIndexingMap.push_back(lhsSubset0);
         lhsIndexingMap.push_back(lhsSubset1);
 
+        collapsedMemrefType = computeReshapeCollapsedType(
+            lhsAlloc.getType().cast<MemRefType>(), lhsIndexingMap);
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(lhsIndexingMap);
-
-        //TODO(gkestor): should it be expandOp?
-        lhsReshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, lhsAlloc, reassociationIndices);
+        lhsReshape = rewriter.create<linalg::ReshapeOp>(
+            loc, collapsedMemrefType, lhsAlloc, reassociationIndices);
         comet_debug() << "\n";
         comet_vdump(lhsReshape);
-
-        expandLHS = true;
-        lhsReassociationIndices = reassociationIndices;
       }
 
       comet_debug() << "\n";
@@ -644,7 +664,8 @@ namespace
         matvecop.getOperation()->setAttr("__beta__", betaAttr);
 
         // Add attribute to the linalg.matvec operations
-        // matvecop.setAttr(kLinalgTransformMarker, rewriter.getStringAttr(kLinalgTransformMarker));
+        // matvecop.setAttr(LinalgTransforms::kLinalgTransformMarker,
+        // rewriter.getStringAttr(tensorAlgMarker));
       }
       else if (isRHS2SumPermutation)
       {
@@ -662,7 +683,8 @@ namespace
         matvecop.getOperation()->setAttr("__beta__", betaAttr);
 
         // Add attribute to the linalg.matvec operations
-        // matvecop.setAttr(kLinalgTransformMarker, rewriter.getStringAttr(kLinalgTransformMarker));
+        // matvecop.setAttr(LinalgTransforms::kLinalgTransformMarker,
+        // rewriter.getStringAttr(tensorAlgMarker));
       }
       else
       {
@@ -689,24 +711,10 @@ namespace
         }
         comet_debug() << "\n";
         // Add attribute to the linalg.matmul operations
-        matmulop.getOperation()->setAttr(kLinalgTransformMarker,
-                                         rewriter.getStringAttr(kLinalgTransformMarker));
+        matmulop.getOperation()->setAttr(LinalgTransforms::kLinalgTransformMarker,
+                                         rewriter.getStringAttr(tensorAlgMarker));
         matmulop.getOperation()->setAttr("__alpha__", alphaAttr);
         matmulop.getOperation()->setAttr("__beta__", betaAttr);
-      }
-
-      Value lhsExpand = lhsReshape;
-      if(expandLHS) // LHS tensor was collapsed and now needs to be re-expanded using the same reassociation indices
-      {        
-        auto expandedTensorType = MemRefType::get(lhsAlloc.getType().cast<MemRefType>().getShape(), lhsAlloc.getType().cast<MemRefType>().getElementType());
-
-        comet_debug() << "\nExpanded:\n";
-        lhsExpand = rewriter.create<memref::ExpandShapeOp>(
-            loc, expandedTensorType, lhsReshape, lhsReassociationIndices);
-#ifdef DEBUG_MODE_TTGT
-        comet_debug() << "\n";
-        comet_vdump(lhsExpand);
-#endif
       }
 
       // Copy back the result if needed
@@ -714,12 +722,11 @@ namespace
       {
 #ifdef DEBUG_MODE_TTGT
         auto lhsFinalCopy =
-              rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(lhsOutPerm_int64));
+            rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
         comet_debug() << "\n";
         comet_vdump(lhsFinalCopy);
 #else
-        rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(lhsOutPerm_int64)); // (A^T)^T = A, so we use lhsOutPerm_int64 to bring the result array to its original format
-   
+        rewriter.create<linalg::CopyOp>(loc, lhsAlloc, lhsMemref, lhsOutMap, lhsInMap);
 #endif
       }
 
@@ -732,7 +739,7 @@ namespace
         auto end = endTime.getResult(0);
 
         Value totalTimeValue =
-            rewriter.create<SubFOp>(loc, f64Type, end, start);
+            rewriter.create<mlir::SubFOp>(loc, f64Type, end, start);
 
         double opNums = 2.0 * plan.m_size_ * plan.n_size_ * plan.k_size_;
 
@@ -818,7 +825,7 @@ void TALoweringTTGTPass::runOnOperation()
 /// Create a pass for lowering operations in the `LinAlg` and `Std` dialects,
 /// for a subset of the TA IR (e.g. matmul).
 /// ordering of permutation starts with one
-std::unique_ptr<Pass> mlir::comet::createLoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops)
+std::unique_ptr<Pass> mlir::tensorAlgebra::createLoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops)
 {
   return std::make_unique<TALoweringTTGTPass>(isSelectBestPerm, whatPerm, printFlops);
 }

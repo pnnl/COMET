@@ -196,10 +196,9 @@ namespace mlir
     }
 
     // TODO(gkestor): review this code
-//    void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter)
-    void insertInitialize(Location loc, Value cst_init, Value alloc_op, OpBuilder &builder)
+    void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter)
     {
-      auto lowerBound = builder.create<ConstantIndexOp>(loc, 0);
+      auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
       MemRefType resultMemTy = alloc_op.getDefiningOp()->getResult(0).getType().cast<MemRefType>();
       std::vector<Value> cur_indices;
       std::vector<int64_t> cur_memref;
@@ -215,23 +214,23 @@ namespace mlir
       assert(cur_memref.size() == 1 && " Only handle 1-D vector currently\n");
       if (cur_memref[0] == 1)
       { // Only 1 element in the array, no need to generate for loop
-        auto const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
-        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
+        auto const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
+        rewriter.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
       }
       else
       {
-        auto upperBound = builder.create<ConstantIndexOp>(loc, cur_memref[0]);
-        auto step = builder.create<ConstantIndexOp>(loc, 1);
-        auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-        auto insertPt = builder.saveInsertionPoint();
-        builder.setInsertionPointToStart(loop.getBody());
+        auto upperBound = rewriter.create<ConstantIndexOp>(loc, cur_memref[0]);
+        auto step = rewriter.create<ConstantIndexOp>(loc, 1);
+        auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
+        auto insertPt = rewriter.saveInsertionPoint();
+        rewriter.setInsertionPointToStart(loop.getBody());
 
         // Build loop body
         std::vector<Value> indices = {loop.getInductionVar()};
-        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{indices});
+        rewriter.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{indices});
 
         // need to restore the insertion point to the previous point
-        builder.restoreInsertionPoint(insertPt);
+        rewriter.restoreInsertionPoint(insertPt);
         comet_debug() << " insertAllocAndInitialize loop "
                       << "\n";
         comet_vdump(loop);
@@ -248,27 +247,16 @@ namespace mlir
       comet_debug() << "\n";
     }
 
-    template void print_vector<int>(std::vector<int> vec);
-
-    template void print_vector<bool>(std::vector<bool> vec);
-    /*
-     * Reference:
-     * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
-     *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
-     * 2. How can I avoid linker errors with my template functions?
-     *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
-     */
-
-//    template <>
-//    void print_vector<bool>(std::vector<bool> vec)
-//    {
-//      // Special code for Array<bool>
-//      for (auto n : vec)
-//      {
-//        comet_debug() << n << " ";
-//      }
-//      comet_debug() << "\n";
-//    }
+    template <>
+    void print_vector<bool>(std::vector<bool> vec)
+    {
+      // Special code for Array<bool>
+      for (auto n : vec)
+      {
+        comet_debug() << n << " ";
+      }
+      comet_debug() << "\n";
+    }
 
     void print_vector_value(std::vector<Value> vec)
     {
@@ -314,15 +302,6 @@ namespace mlir
       }
       return ret;
     }
-
-    template unsigned int findIndexInVector<int>(std::vector<int> const &vec, int e);
-    /*
-    * Reference:
-    * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
-    *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
-    * 2. How can I avoid linker errors with my template functions?
-    *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
-    */
 
     bool isDense(std::string s, std::string delim)
     {
@@ -2115,12 +2094,10 @@ namespace mlir
       comet_debug() << " formatAttr: " << formatAttr << "\n";
 
       auto SemiringAttr = rewriter.getStringAttr("none");
-      auto MaskingAttr = rewriter.getStringAttr("none");
       auto tc = rewriter.create<tensorAlgebra::TensorMultOp>(loc, lhsTensor.getType(),
                                                              rhs1Tensor, rhs2Tensor,
                                                              lhsLabels, affineMapArrayAttr,
-                                                             formatAttr, SemiringAttr, MaskingAttr,
-                                                             nullptr); //TODO: masking is an optional operand
+                                                             formatAttr, SemiringAttr);
       tc.getOperation()->setAttr("__alpha__", rewriter.getF64FloatAttr(alpha));
       tc.getOperation()->setAttr("__beta__", rewriter.getF64FloatAttr(beta));
       comet_debug() << " ";

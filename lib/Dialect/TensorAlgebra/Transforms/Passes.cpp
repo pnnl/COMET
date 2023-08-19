@@ -512,10 +512,8 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
 
       auto SemiringAttr = builder.getStringAttr("plusxy_times");
-      auto MaskingAttr = builder.getStringAttr("none");
       Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
-                                                               newSumLabels, affineMapArrayAttr, strAttr, SemiringAttr,
-                                                               MaskingAttr, nullptr);  //TODO: masking is an optional operand
+                                                               newSumLabels, affineMapArrayAttr, strAttr, SemiringAttr);
       tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
       tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
 

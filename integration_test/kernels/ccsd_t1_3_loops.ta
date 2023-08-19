@@ -1,5 +1,5 @@
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm  %s &> ccsd_t1_3_loops.llvm
-# RUN: mlir-cpu-runner ccsd_t1_3_loops.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops %s &> ccsd_t1_3_loops.mlir
+# RUN: mlir-cpu-runner ccsd_t1_3_loops.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {
     #IndexLabel Declarations

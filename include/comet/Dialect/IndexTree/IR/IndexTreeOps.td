@@ -89,8 +89,7 @@ def IndexTreeComputeOp : IndexTree_Op<"Compute", [Pure]>{
   }];
 
   //TODO(gkestor): rethink the use of comp_worksp_opt, should we decouple that?
-  // MaskType attribute: {push, pull, auto, none}
-  let arguments = (ins Variadic<AnyType>:$rhs, AnyType:$lhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring, StrAttr:$MaskType);
+  let arguments = (ins Variadic<AnyType>:$rhs, AnyType:$lhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring); 
 
   let results = (outs I64:$output);
 

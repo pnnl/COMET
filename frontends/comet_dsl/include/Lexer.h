@@ -76,8 +76,6 @@ namespace tensorAlgebra
     tok_bracket_close = '}',
     tok_sbracket_open = '[',
     tok_sbracket_close = ']',
-    tok_mask_open = '<',
-    tok_mask_close = '>',
     tok_quotation = '"',
     tok_eof = -1,
 
@@ -103,10 +101,7 @@ namespace tensorAlgebra
     tok_semiring = -16,
     tok_monoid = -17,
     tok_for = -18, // for loop
-    tok_end = -19,  // for loop-body end
-    tok_maskPush = -20, // push keyword for masking support
-    tok_maskPull = -21, // pull keyword for masking support
-    tok_maskAuto = -22  // auto keyword for masking support
+    tok_end = -19  // for loop-body end
   };
 
   enum SemiringOp : int
@@ -355,12 +350,6 @@ namespace tensorAlgebra
           return tok_for;
         if (IdentifierStr == "end")
           return tok_end;
-        if (IdentifierStr == "push")
-          return tok_maskPush;
-        if (IdentifierStr == "pull")
-          return tok_maskPull;
-        if (IdentifierStr == "auto")
-          return tok_maskAuto;
 
         comet_debug() << "Identifier:" << IdentifierStr << "\n";
         return tok_identifier;
@@ -420,7 +409,7 @@ namespace tensorAlgebra
         while (LastChar != tok_quotation)
         {
           comet_debug() << IdentifierStr << "\n";
-          if (LastChar == tok_semicolon || LastChar == tok_colon || LastChar == tok_parenthese_open || LastChar == tok_parenthese_close || LastChar == tok_bracket_open || LastChar == tok_bracket_close || LastChar == tok_sbracket_open || LastChar == tok_sbracket_close || LastChar == tok_mask_open || LastChar == tok_mask_close)
+          if (LastChar == tok_semicolon || LastChar == tok_colon || LastChar == tok_parenthese_open || LastChar == tok_parenthese_close || LastChar == tok_bracket_open || LastChar == tok_bracket_close || LastChar == tok_sbracket_open || LastChar == tok_sbracket_close)
           {
             comet_debug() << "not allow special tokens in strings\n";
             llvm::errs() << "Special tokens in strings are not allowed, source location (" << curLineNum << ", " << curCol << ")\n";

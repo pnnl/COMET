@@ -919,7 +919,6 @@ void IndexTreeKernelFusionPass::insertTensorReset(
   //  auto comp_worksp_opt = builder.getBoolAttr(true);
   auto comp_worksp_opt = builder.getBoolAttr(false);
   mlir::StringAttr semiring = builder.getStringAttr("noop_times");
-  mlir::StringAttr maskType = builder.getStringAttr("none");
 
   // TODO(zpeng): here is I64 not F64? But it is F64 for ComputeRHS and ComputeLHS?
   IntegerType i64Type = IntegerType::get(builder.getContext(), 64);
@@ -929,8 +928,7 @@ void IndexTreeKernelFusionPass::insertTensorReset(
       compute_rhs,
       compute_lhs,
       comp_worksp_opt,
-      semiring,
-      maskType);
+      semiring);
   { // test
     comet_debug() << "compute_op\n";
     comet_vdump(compute_op);
