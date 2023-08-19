@@ -238,19 +238,19 @@ namespace mlir
       }
     }
 
-    template <typename T>
-    void print_vector(std::vector<T> vec)
-    {
-      for (auto n : vec)
-      {
-        comet_debug() << n << " ";
-      }
-      comet_debug() << "\n";
-    }
+    // template <typename T>
+    // void print_vector(std::vector<T> vec)
+    // {
+    //   for (auto n : vec)
+    //   {
+    //     comet_debug() << n << " ";
+    //   }
+    //   comet_debug() << "\n";
+    // }
 
-    template void print_vector<int>(std::vector<int> vec);
+    // template void print_vector<int>(std::vector<int> vec);
 
-    template void print_vector<bool>(std::vector<bool> vec);
+    // template void print_vector<bool>(std::vector<bool> vec);
     /*
      * Reference:
      * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
@@ -292,30 +292,30 @@ namespace mlir
       return rso.str();
     }
 
-    template <class T>
-    unsigned int findIndexInVector(std::vector<T> const &vec, T e)
-    {
-      // Check if element e exists in vector
-      auto it = std::find(vec.begin(), vec.end(), e);
+    // template <class T>
+    // unsigned int findIndexInVector(std::vector<T> const &vec, T e)
+    // {
+    //   // Check if element e exists in vector
+    //   auto it = std::find(vec.begin(), vec.end(), e);
 
-      // It accepts a range and an element to search in the given range. If element is found then
-      // it returns an iterator to the first element in the given range that’s equal to given element,
-      // else it returns an end of the list.
-      unsigned int ret = 0;
-      if (it != vec.end())
-      {
-        ret = std::distance(vec.begin(), it);
-        comet_debug() << " Element Found and its index location: " << ret << " \n";
-      }
-      else
-      {
-        comet_debug() << " Element Not Found\n";
-        ret = vec.size();
-      }
-      return ret;
-    }
+    //   // It accepts a range and an element to search in the given range. If element is found then
+    //   // it returns an iterator to the first element in the given range that’s equal to given element,
+    //   // else it returns an end of the list.
+    //   unsigned int ret = 0;
+    //   if (it != vec.end())
+    //   {
+    //     ret = std::distance(vec.begin(), it);
+    //     comet_debug() << " Element Found and its index location: " << ret << " \n";
+    //   }
+    //   else
+    //   {
+    //     comet_debug() << " Element Not Found\n";
+    //     ret = vec.size();
+    //   }
+    //   return ret;
+    // }
 
-    template unsigned int findIndexInVector<int>(std::vector<int> const &vec, int e);
+    // template unsigned int findIndexInVector<int>(std::vector<int> const &vec, int e);
     /*
     * Reference:
     * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
