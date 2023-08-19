@@ -281,6 +281,18 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Generate the index tree IR
     optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass());
 
+    if (OptKernelFusion)
+    {
+      // Apply partial fusion on index tree dialect for some compound expressions.
+      optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
+    }
+
+    if (OptWorkspace)
+    {
+      // Optimized workspace transformations, reduce iteration space for nonzero elements
+      optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
+    }
+
     // Dump index tree dialect.
     if (emitIT)
     {
@@ -288,18 +300,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
         return 4;
       return 0;
     }
-  }
-
-  if (OptKernelFusion)
-  {
-    // Apply partial fusion on index tree dialect for some compound expressions.
-    optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
-  }
-
-  if (OptWorkspace)
-  {
-    // Optimized workspace transformations, reduce iteration space for nonzero elements
-    optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
   }
 
   // =============================================================================
