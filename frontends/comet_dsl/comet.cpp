@@ -38,6 +38,7 @@
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/MemRef/Transforms/Passes.h"
 
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
@@ -282,6 +283,18 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Generate the index tree IR
     optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass());
 
+    if (OptKernelFusion)
+    {
+      // Apply partial fusion on index tree dialect for some compound expressions.
+      optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
+    }
+
+    if (OptWorkspace)
+    {
+      // Optimized workspace transformations, reduce iteration space for nonzero elements
+      optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
+    }
+
     // Dump index tree dialect.
     if (emitIT)
     {
@@ -289,18 +302,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
         return 4;
       return 0;
     }
-  }
-
-  if (OptKernelFusion)
-  {
-    // Apply partial fusion on index tree dialect for some compound expressions.
-    optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
-  }
-
-  if (OptWorkspace)
-  {
-    // Optimized workspace transformations, reduce iteration space for nonzero elements
-    optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
   }
 
   // =============================================================================
@@ -314,7 +315,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // sparse input tensor declaration lowering, also generate sparse_output_tensor declaration if needed
   // input and output sparse tensor declaration lowering are distant and need different information
   optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass());
-  // optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createTensorFillLoweringPass());
 
@@ -324,7 +324,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (IsLoweringTCtoTTGT)
   {
     // Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
-    // optPM.addPass(mlir::tensorAlgebra::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
+    optPM.addPass(mlir::comet::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
   }
 
   // =============================================================================
@@ -359,7 +359,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     //puts("comet.cpp- Loop 6");
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
     optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass()); // lowers dense input/output tensor declaration
-    // optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass()); // lowers sparse tensor declaration. Create sparse output tensor declaration
     optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass()); // lowering for sparse output tensor declarations
                                                                             //(sparse_output_tensor_decl and temp_sparse_output_tensor_decl)
     // The partial Fusion pass might add new tensor.fill operations
@@ -392,8 +391,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::comet::createLateLoweringPass());
-  //if (mlir::failed(pm.run(*module))) {puts("FAIL"); return 3;}{return 0;}
-  // optPM.addPass(mlir::tensorAlgebra::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================
 
@@ -402,6 +399,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     //puts("comet.cpp- Loop 7");
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertSCFToCFPass());
+    pm.addPass(mlir::memref::createExpandStridedMetadataPass()); // Needed for memref.expand_shape
     pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createArithToLLVMConversionPass());
     pm.addPass(mlir::createConvertFuncToLLVMPass());

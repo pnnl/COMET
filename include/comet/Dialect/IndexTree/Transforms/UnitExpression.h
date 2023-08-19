@@ -28,11 +28,13 @@
 
 class UnitExpression {
   Tensor* output = nullptr;
+  Tensor* mask   = nullptr;
   vector<Tensor*> operands;
   vector<UnitExpression*> users;
   mlir::Operation* operation;
   string opType;
   llvm::StringRef semiring;
+  llvm::StringRef maskType;
   int numOps = 2;
 
   bool traceDomainCompute = false;
@@ -56,8 +58,22 @@ public:
       : output(output), opType(op) {
   }
 
+  UnitExpression(Tensor* output,
+                 Tensor* operand1,
+                 Tensor* operand2, 
+                 Tensor* mask, 
+                 string op)
+      : output(output), mask(mask), opType(op) {
+    operands.push_back(operand1);
+    operands.push_back(operand2);
+  } // constructor with mask operand
+
   Tensor* getLHS() {
     return output;
+  }
+
+  Tensor* getMask() {
+    return mask;
   }
 
   int getNumOfOperands() {
@@ -125,6 +141,8 @@ public:
   void setOpType(const string &OpType);
   const llvm::StringRef &getSemiring() const;
   void setSemiring(const llvm::StringRef &Semiring);
+  const llvm::StringRef &getMaskType() const;
+  void setMaskType(const llvm::StringRef &MaskType);
 };
 
 #endif //INDEXTREE_UNITEXPRESSION_H

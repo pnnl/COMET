@@ -151,6 +151,7 @@ void doTensorMultOp(TensorMultOp op)
   Value rhs1_tensor = getRealRhs(op.getRhs1().getDefiningOp());
   Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
   Value lhs_tensor = getRealLhs(op);
+  Value mask_tensor = op.getMask();
 
   comet_debug() << "LowerTensorAlgebraToIndexTreePass: doTensorMultOp\n";
   comet_debug() << "rhs1-tensor\n";
@@ -159,19 +160,35 @@ void doTensorMultOp(TensorMultOp op)
   comet_vdump(rhs2_tensor);
   comet_debug() << "lhs-tensor\n";
   comet_vdump(lhs_tensor);
+  comet_debug() << "mask-tensor\n";
+  comet_vdump(mask_tensor);
 
   auto allPerms = getAllPerms(op.getIndexingMaps());
   auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
   auto SemiringOp = op.getSemiringAttr();
+  auto MaskingTypeAttr = op.getMaskTypeAttr();
 
   assert(allPerms.size() == 3);
 
   auto B = tree->getOrCreateTensor(rhs1_tensor, allFormats[0]);
   auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
   auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
+  Tensor* M;
+  std::unique_ptr<UnitExpression> e;
+  if (mask_tensor != nullptr) // mask is an optional input
+  {
+    comet_debug() << "mask input provided by user\n";
+    M = tree->getOrCreateTensor(mask_tensor, allFormats[2]); // format same as lhs_tensor
+    e = make_unique<UnitExpression>(A, B, C, M, "*");
+  }
+  else
+  {
+    comet_debug() << "no mask input provided by user\n";
+    e = make_unique<UnitExpression>(A, B, C, "*");
+  } 
 
-  auto e = make_unique<UnitExpression>(A, B, C, "*");
   e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue());
+  e->setMaskType(MaskingTypeAttr.cast<mlir::StringAttr>().getValue());
 
   e->setOperation(op);
   buildDefUseInfo(e.get());
@@ -224,6 +241,7 @@ void doElementWiseOp(T op)
   auto allPerms = getAllPerms(op.getIndexingMaps());
   auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
   auto SemiringOp = op.getSemiringAttr();
+  auto maskAttr = "none";
 
   assert(allPerms.size() == 3);
 
@@ -235,6 +253,7 @@ void doElementWiseOp(T op)
 
   e->setOperation(op);
   e->setSemiring(SemiringOp.template cast<mlir::StringAttr>().getValue()); // for element-wise multiplication
+  e->setMaskType(maskAttr); // for element-wise multiplication
   buildDefUseInfo(e.get());
 
   auto inputDomains = e->computeInputIterDomains();
@@ -339,17 +358,26 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
     t_rhs.push_back(o->getValue());
   }
 
+  // check if mask exists and add to t_rhs
+  if (expr->getMask() != nullptr) 
+  {
+    comet_debug() << "user has provided mask input\n";
+    t_rhs.push_back(expr->getMask()->getValue()); // add mask to IndexTreeComputeRHSOp
+  }
+
   Value leafop_rhs = builder.create<indexTree::IndexTreeComputeRHSOp>(loc,
                                                                       mlir::UnrankedTensorType::get(builder.getF64Type()), t_rhs,
                                                                       builder.getArrayAttr(allIndices_rhs),
                                                                       builder.getArrayAttr(allFormats_rhs));
+  comet_vdump(leafop_rhs);
   Value leafop_lhs = builder.create<indexTree::IndexTreeComputeLHSOp>(loc,
                                                                       mlir::UnrankedTensorType::get(builder.getF64Type()), t_lhs,
                                                                       builder.getArrayAttr(allIndices_lhs),
                                                                       builder.getArrayAttr(allFormats_lhs));
   bool comp_worksp_opt = false; // non-compressed workspace, this is a place-holder and it is updated in workspace transform pass.
   llvm::StringRef semiring = expr->getSemiring();
-  auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getBoolAttr(comp_worksp_opt), builder.getStringAttr(semiring));
+  llvm::StringRef maskType = expr->getMaskType();
+  auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getBoolAttr(comp_worksp_opt), builder.getStringAttr(semiring), builder.getStringAttr(maskType));
 
   comet_pdump(leafop);
   return leafop;

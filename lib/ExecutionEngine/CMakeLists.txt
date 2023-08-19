@@ -6,7 +6,5 @@ add_llvm_library(comet_runner_utils
   TransposeUtils.cpp
 )
 
-
 target_compile_definitions(comet_runner_utils PRIVATE comet_runner_utils_EXPORTS comet_blis_interface_EXPORTS)
-target_link_libraries(comet_runner_utils COMET_BLIS)
-
+target_link_libraries(comet_runner_utils ${BLAS_LIBRARIES} LLVMSupport)

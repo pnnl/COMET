@@ -296,4 +296,19 @@ void cometMemset(UnrankedMemRefType<T> &M)
     RTmemset(DynamicMemRefType<T>(M));
 }
 
+//===----------------------------------------------------------------------===//
+// Small runtime support library for std::sort indices
+//===----------------------------------------------------------------------===//
+
+template <typename T>
+void RTSortIndex(const DynamicMemRefType<T> &M, int64_t index_first, int64_t index_last)
+{
+  std::sort(M.data + index_first, M.data + index_last);
+}
+
+template <typename T>
+void cometSortIndex(UnrankedMemRefType<T> &M, int64_t index_first, int64_t index_last)
+{
+  RTSortIndex(DynamicMemRefType<T>(M), index_first, index_last);
+}
 #endif // COMET_EXECUTIONENGINE_RUNNERUTILS_H_

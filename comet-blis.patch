@@ -1,0 +1,477 @@
+diff -ruN blis/frame/base/bli_cpuid.h blis-comet/frame/base/bli_cpuid.h
+--- blis/frame/base/bli_cpuid.h	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/frame/base/bli_cpuid.h	2023-06-27 15:58:44.000000000 -0700
+@@ -51,7 +51,7 @@
+ #ifndef BLIS_CPUID_H
+ #define BLIS_CPUID_H
+ 
+-arch_t bli_cpuid_query_id( void );
++BLIS_EXPORT_BLIS arch_t bli_cpuid_query_id( void );
+ 
+ // Intel
+ bool bli_cpuid_is_skx( uint32_t family, uint32_t model, uint32_t features );
+diff -ruN blis/kernels/armsve/3/bli_gemm_armsve_asm_c2vx10_unindexed.c blis-comet/kernels/armsve/3/bli_gemm_armsve_asm_c2vx10_unindexed.c
+--- blis/kernels/armsve/3/bli_gemm_armsve_asm_c2vx10_unindexed.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/armsve/3/bli_gemm_armsve_asm_c2vx10_unindexed.c	2023-06-27 15:48:44.000000000 -0700
+@@ -43,7 +43,7 @@
+ #include "armsve_asm_2vx10cmplx.h"
+ 
+ 
+-void bli_cgemm_armsve_asm_2vx10_unindexed
++BLIS_EXPORT_BLIS void bli_cgemm_armsve_asm_2vx10_unindexed
+      (
+              dim_t      m, \
+              dim_t      n, \
+diff -ruN blis/kernels/armsve/3/bli_gemm_armsve_asm_d2vx10_unindexed.c blis-comet/kernels/armsve/3/bli_gemm_armsve_asm_d2vx10_unindexed.c
+--- blis/kernels/armsve/3/bli_gemm_armsve_asm_d2vx10_unindexed.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/armsve/3/bli_gemm_armsve_asm_d2vx10_unindexed.c	2023-06-27 15:48:50.000000000 -0700
+@@ -43,7 +43,7 @@
+ #include "armsve_asm_2vx10.h"
+ 
+ 
+-void bli_dgemm_armsve_asm_2vx10_unindexed
++BLIS_EXPORT_BLIS void bli_dgemm_armsve_asm_2vx10_unindexed
+      (
+              dim_t      m, \
+              dim_t      n, \
+diff -ruN blis/kernels/armsve/3/bli_gemm_armsve_asm_s2vx10_unindexed.c blis-comet/kernels/armsve/3/bli_gemm_armsve_asm_s2vx10_unindexed.c
+--- blis/kernels/armsve/3/bli_gemm_armsve_asm_s2vx10_unindexed.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/armsve/3/bli_gemm_armsve_asm_s2vx10_unindexed.c	2023-06-27 15:48:57.000000000 -0700
+@@ -43,7 +43,7 @@
+ #include "armsve_asm_2vx10.h"
+ 
+ 
+-void bli_sgemm_armsve_asm_2vx10_unindexed
++BLIS_EXPORT_BLIS void bli_sgemm_armsve_asm_2vx10_unindexed
+      (
+              dim_t      m, \
+              dim_t      n, \
+diff -ruN blis/kernels/armsve/3/bli_gemm_armsve_asm_z2vx10_unindexed.c blis-comet/kernels/armsve/3/bli_gemm_armsve_asm_z2vx10_unindexed.c
+--- blis/kernels/armsve/3/bli_gemm_armsve_asm_z2vx10_unindexed.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/armsve/3/bli_gemm_armsve_asm_z2vx10_unindexed.c	2023-06-27 15:49:04.000000000 -0700
+@@ -43,7 +43,7 @@
+ #include "armsve_asm_2vx10cmplx.h"
+ 
+ 
+-void bli_zgemm_armsve_asm_2vx10_unindexed
++BLIS_EXPORT_BLIS void bli_zgemm_armsve_asm_2vx10_unindexed
+      (
+              dim_t      m, \
+              dim_t      n, \
+diff -ruN blis/kernels/armv7a/3/bli_gemm_armv7a_asm_d4x4.c blis-comet/kernels/armv7a/3/bli_gemm_armv7a_asm_d4x4.c
+--- blis/kernels/armv7a/3/bli_gemm_armv7a_asm_d4x4.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/armv7a/3/bli_gemm_armv7a_asm_d4x4.c	2023-06-27 15:49:51.000000000 -0700
+@@ -57,7 +57,7 @@
+ 
+ 
+ 
+-void bli_sgemm_armv7a_asm_4x4
++BLIS_EXPORT_BLIS void bli_sgemm_armv7a_asm_4x4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -79,7 +79,7 @@
+ }
+ 
+ 
+-void bli_dgemm_armv7a_asm_4x4
++BLIS_EXPORT_BLIS void bli_dgemm_armv7a_asm_4x4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -101,7 +101,7 @@
+ }
+ 
+ 
+-void bli_cgemm_armv7a_asm_2x2
++BLIS_EXPORT_BLIS void bli_cgemm_armv7a_asm_2x2
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -122,7 +122,7 @@
+ 	GEMM_UKR_FLUSH_CT( c );
+ }
+ 
+-void bli_zgemm_armv7a_asm_2x2
++BLIS_EXPORT_BLIS void bli_zgemm_armv7a_asm_2x2
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/armv7a/3/bli_gemm_armv7a_int_d4x4.c blis-comet/kernels/armv7a/3/bli_gemm_armv7a_int_d4x4.c
+--- blis/kernels/armv7a/3/bli_gemm_armv7a_int_d4x4.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/armv7a/3/bli_gemm_armv7a_int_d4x4.c	2023-06-27 15:50:05.000000000 -0700
+@@ -35,7 +35,7 @@
+ #include "blis.h"
+ #include "arm_neon.h"
+ 
+-void bli_sgemm_armv7a_int_4x4
++BLIS_EXPORT_BLIS void bli_sgemm_armv7a_int_4x4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -247,7 +247,7 @@
+     GEMM_UKR_FLUSH_CT( s );
+ }
+ 
+-void bli_dgemm_armv7a_int_4x4
++BLIS_EXPORT_BLIS void bli_dgemm_armv7a_int_4x4
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/armv8a/3/bli_gemm_armv8a_asm_d6x8.c blis-comet/kernels/armv8a/3/bli_gemm_armv8a_asm_d6x8.c
+--- blis/kernels/armv8a/3/bli_gemm_armv8a_asm_d6x8.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/armv8a/3/bli_gemm_armv8a_asm_d6x8.c	2023-06-27 15:50:25.000000000 -0700
+@@ -65,7 +65,7 @@
+  * Tested on 1s Altra Max. Arnd 5,800 GFLOPS. 128 x N2 cores @ 3.0 GHz
+ */
+ 
+-void bli_sgemm_armv8a_asm_8x12
++BLIS_EXPORT_BLIS void bli_sgemm_armv8a_asm_8x12
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -788,7 +788,7 @@
+  * Tested on 1s Altra, Around 1,700 GFLOPS,  80 x N2 cores @ 3.0 GHz
+  * Tested on 1s Altra Max,  ~ 2,600 GFLOPS, 128 x N2 cores @ 3.0 GHz
+  */
+-void bli_dgemm_armv8a_asm_6x8
++BLIS_EXPORT_BLIS void bli_dgemm_armv8a_asm_6x8
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/armv8a/3/bli_gemm_armv8a_asm_d8x6r.c blis-comet/kernels/armv8a/3/bli_gemm_armv8a_asm_d8x6r.c
+--- blis/kernels/armv8a/3/bli_gemm_armv8a_asm_d8x6r.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/armv8a/3/bli_gemm_armv8a_asm_d8x6r.c	2023-06-27 15:50:43.000000000 -0700
+@@ -132,7 +132,7 @@
+ " prfm PLDL1KEEP, ["#CADDR", "#LASTB"] \n\t" \
+ " add  "#CADDR", "#CADDR", "#RSC"      \n\t"
+ 
+-void bli_sgemm_armv8a_asm_12x8r
++BLIS_EXPORT_BLIS void bli_sgemm_armv8a_asm_12x8r
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -377,7 +377,7 @@
+  * Differences from the col-major 6x8 in HW modeling:
+  * * Stream HW prefetcher is assumed s.t. PRFM instructions for packed A&B are omitted.
+  */
+-void bli_dgemm_armv8a_asm_8x6r
++BLIS_EXPORT_BLIS void bli_dgemm_armv8a_asm_8x6r
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/bgq/3/bli_gemm_bgq_int_8x8.c blis-comet/kernels/bgq/3/bli_gemm_bgq_int_8x8.c
+--- blis/kernels/bgq/3/bli_gemm_bgq_int_8x8.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/bgq/3/bli_gemm_bgq_int_8x8.c	2023-06-27 15:51:03.000000000 -0700
+@@ -54,7 +54,7 @@
+  * we could (maybe) theoretically hit 100% of peak with this instruction mix
+ */
+ 
+-void bli_dgemm_bgq_int_8x8
++BLIS_EXPORT_BLIS void bli_dgemm_bgq_int_8x8
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -224,7 +224,7 @@
+     printf("%4.3f\t%4.3f\t%4.3f\t%4.3f\n", a, b, c, d);
+ }
+ 
+-void bli_zgemm_bgq_int_4x4
++BLIS_EXPORT_BLIS void bli_zgemm_bgq_int_4x4
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/bulldozer/3/bli_gemm_bulldozer_asm_d4x6_fma4.c blis-comet/kernels/bulldozer/3/bli_gemm_bulldozer_asm_d4x6_fma4.c
+--- blis/kernels/bulldozer/3/bli_gemm_bulldozer_asm_d4x6_fma4.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/bulldozer/3/bli_gemm_bulldozer_asm_d4x6_fma4.c	2023-06-27 15:51:33.000000000 -0700
+@@ -88,7 +88,7 @@
+ 	vmovss(xmm3, mem(rdx, r13, 1))\
+ 
+ 
+-void bli_sgemm_bulldozer_asm_8x8_fma4
++BLIS_EXPORT_BLIS void bli_sgemm_bulldozer_asm_8x8_fma4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -583,7 +583,7 @@
+ 		vmovaps(mem(rbx, 16*8), xmm3)\
+ 		add(imm(24*8), rbx)
+ 
+-void bli_dgemm_bulldozer_asm_4x6_fma4
++BLIS_EXPORT_BLIS void bli_dgemm_bulldozer_asm_4x6_fma4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -806,7 +806,7 @@
+ 	vfmaddps(ymm8, ymm1, ymm5, ymm8)\
+ 	vperm2f128(imm(0x3), ymm3, ymm3, ymm5)\
+ 
+-void bli_cgemm_bulldozer_asm_8x4_fma4
++BLIS_EXPORT_BLIS void bli_cgemm_bulldozer_asm_8x4_fma4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -1330,7 +1330,7 @@
+ 	vaddsubpd(ymm(j),  ymm(i), ymm(i))\
+ 
+ 
+-void bli_zgemm_bulldozer_asm_4x4_fma4
++BLIS_EXPORT_BLIS void bli_zgemm_bulldozer_asm_4x4_fma4
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/haswell/3/bli_gemm_haswell_asm_d6x8.c blis-comet/kernels/haswell/3/bli_gemm_haswell_asm_d6x8.c
+--- blis/kernels/haswell/3/bli_gemm_haswell_asm_d6x8.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/haswell/3/bli_gemm_haswell_asm_d6x8.c	2023-06-27 15:51:55.000000000 -0700
+@@ -77,7 +77,7 @@
+ 	vpermilps(imm(0x39), xmm2, xmm1) \
+ 	vmovss(xmm1, mem(rcx, r10, 1))
+ 
+-void bli_sgemm_haswell_asm_6x16
++BLIS_EXPORT_BLIS void bli_sgemm_haswell_asm_6x16
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -757,7 +757,7 @@
+ 	vmovlpd(xmm1, mem(rcx, r13, 2)) \
+ 	vmovhpd(xmm1, mem(rcx, r10, 1))*/
+ 
+-void bli_dgemm_haswell_asm_6x8
++BLIS_EXPORT_BLIS void bli_dgemm_haswell_asm_6x8
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -1316,7 +1316,7 @@
+ 	vmulps(ymm2, ymm3, ymm3) \
+ 	vaddsubps(ymm3, ymm0, ymm0)
+ 
+-void bli_cgemm_haswell_asm_3x8
++BLIS_EXPORT_BLIS void bli_cgemm_haswell_asm_3x8
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -1709,7 +1709,7 @@
+ 	vmulpd(ymm2, ymm3, ymm3) \
+ 	vaddsubpd(ymm3, ymm0, ymm0)
+ 
+-void bli_zgemm_haswell_asm_3x4
++BLIS_EXPORT_BLIS void bli_zgemm_haswell_asm_3x4
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/haswell/3/bli_gemm_haswell_asm_d8x6.c blis-comet/kernels/haswell/3/bli_gemm_haswell_asm_d8x6.c
+--- blis/kernels/haswell/3/bli_gemm_haswell_asm_d8x6.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/haswell/3/bli_gemm_haswell_asm_d8x6.c	2023-06-27 15:52:17.000000000 -0700
+@@ -76,7 +76,7 @@
+ 	vpermilps(imm(0x39), xmm2, xmm1) \
+ 	vmovss(xmm1, mem(rcx, r10, 1))
+ 
+-void bli_sgemm_haswell_asm_16x6
++BLIS_EXPORT_BLIS void bli_sgemm_haswell_asm_16x6
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -460,7 +460,7 @@
+ 	vmovlpd(xmm1, mem(rcx, r13, 2)) \
+ 	vmovhpd(xmm1, mem(rcx, r10, 1))*/
+ 
+-void bli_dgemm_haswell_asm_8x6
++BLIS_EXPORT_BLIS void bli_dgemm_haswell_asm_8x6
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -830,7 +830,7 @@
+ 	vmulps(ymm2, ymm3, ymm3) \
+ 	vaddsubps(ymm3, ymm0, ymm0)
+ 
+-void bli_cgemm_haswell_asm_8x3
++BLIS_EXPORT_BLIS void bli_cgemm_haswell_asm_8x3
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -1221,7 +1221,7 @@
+ 	vmulpd(ymm2, ymm3, ymm3) \
+ 	vaddsubpd(ymm3, ymm0, ymm0)
+ 
+-void bli_zgemm_haswell_asm_4x3
++BLIS_EXPORT_BLIS void bli_zgemm_haswell_asm_4x3
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/haswell/3/bli_gemmtrsm_l_haswell_asm_d6x8.c blis-comet/kernels/haswell/3/bli_gemmtrsm_l_haswell_asm_d6x8.c
+--- blis/kernels/haswell/3/bli_gemmtrsm_l_haswell_asm_d6x8.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/haswell/3/bli_gemmtrsm_l_haswell_asm_d6x8.c	2023-06-27 15:52:36.000000000 -0700
+@@ -56,7 +56,7 @@
+ 	vmovss(xmm1, mem(rcx, r10, 1))
+ 
+ 
+-void bli_sgemmtrsm_l_haswell_asm_6x16
++BLIS_EXPORT_BLIS void bli_sgemmtrsm_l_haswell_asm_6x16
+      (
+              dim_t      m, \
+              dim_t      n, \
+@@ -847,7 +847,7 @@
+ 	vmovlpd(xmm1, mem(rcx, r13, 2)) \
+ 	vmovhpd(xmm1, mem(rcx, r10, 1))*/
+ 
+-void bli_dgemmtrsm_l_haswell_asm_6x8
++BLIS_EXPORT_BLIS void bli_dgemmtrsm_l_haswell_asm_6x8
+      (
+              dim_t      m, \
+              dim_t      n, \
+diff -ruN blis/kernels/haswell/3/bli_gemmtrsm_u_haswell_asm_d6x8.c blis-comet/kernels/haswell/3/bli_gemmtrsm_u_haswell_asm_d6x8.c
+--- blis/kernels/haswell/3/bli_gemmtrsm_u_haswell_asm_d6x8.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/haswell/3/bli_gemmtrsm_u_haswell_asm_d6x8.c	2023-06-27 15:52:50.000000000 -0700
+@@ -56,7 +56,7 @@
+ 	vmovss(xmm1, mem(rcx, r10, 1))
+ 
+ 
+-void bli_sgemmtrsm_u_haswell_asm_6x16
++BLIS_EXPORT_BLIS void bli_sgemmtrsm_u_haswell_asm_6x16
+      (
+              dim_t      m, \
+              dim_t      n, \
+@@ -852,7 +852,7 @@
+ 	vmovlpd(xmm1, mem(rcx, r13, 2)) \
+ 	vmovhpd(xmm1, mem(rcx, r10, 1))*/
+ 
+-void bli_dgemmtrsm_u_haswell_asm_6x8
++BLIS_EXPORT_BLIS void bli_dgemmtrsm_u_haswell_asm_6x8
+      (
+              dim_t      m, \
+              dim_t      n, \
+diff -ruN blis/kernels/knc/3/bli_dgemm_knc_asm_30x8.c blis-comet/kernels/knc/3/bli_dgemm_knc_asm_30x8.c
+--- blis/kernels/knc/3/bli_dgemm_knc_asm_30x8.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/knc/3/bli_dgemm_knc_asm_30x8.c	2023-06-27 15:53:10.000000000 -0700
+@@ -254,7 +254,7 @@
+ 
+ //#define MONITORS
+ //#define LOOPMON
+-void bli_dgemm_knc_asm_30x8
++BLIS_EXPORT_BLIS void bli_dgemm_knc_asm_30x8
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/knc/3/bli_sgemm_knc_asm_30x16.c blis-comet/kernels/knc/3/bli_sgemm_knc_asm_30x16.c
+--- blis/kernels/knc/3/bli_sgemm_knc_asm_30x16.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/knc/3/bli_sgemm_knc_asm_30x16.c	2023-06-27 15:53:17.000000000 -0700
+@@ -254,7 +254,7 @@
+ 
+ //#define MONITORS
+ //#define LOOPMON
+-void bli_sgemm_knc_asm_30x16
++BLIS_EXPORT_BLIS void bli_sgemm_knc_asm_30x16
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/knl/3/bli_dgemm_knl_asm_24x8.c blis-comet/kernels/knl/3/bli_dgemm_knl_asm_24x8.c
+--- blis/kernels/knl/3/bli_dgemm_knl_asm_24x8.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/knl/3/bli_dgemm_knl_asm_24x8.c	2023-06-27 15:53:43.000000000 -0700
+@@ -183,7 +183,7 @@
+ 
+ //#define MONITORS
+ //#define LOOPMON
+-void bli_dgemm_knl_asm_24x8
++BLIS_EXPORT_BLIS void bli_dgemm_knl_asm_24x8
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/knl/3/bli_sgemm_knl_asm_24x16.c blis-comet/kernels/knl/3/bli_sgemm_knl_asm_24x16.c
+--- blis/kernels/knl/3/bli_sgemm_knl_asm_24x16.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/knl/3/bli_sgemm_knl_asm_24x16.c	2023-06-27 15:53:47.000000000 -0700
+@@ -180,7 +180,7 @@
+ 
+ //#define MONITORS
+ //#define LOOPMON
+-void bli_sgemm_knl_asm_24x16
++BLIS_EXPORT_BLIS void bli_sgemm_knl_asm_24x16
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/sandybridge/3/bli_gemm_sandybridge_asm_d8x4.c blis-comet/kernels/sandybridge/3/bli_gemm_sandybridge_asm_d8x4.c
+--- blis/kernels/sandybridge/3/bli_gemm_sandybridge_asm_d8x4.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/sandybridge/3/bli_gemm_sandybridge_asm_d8x4.c	2023-06-27 15:54:21.000000000 -0700
+@@ -40,7 +40,7 @@
+ #define BLIS_ASM_SYNTAX_ATT
+ #include "bli_x86_asm_macros.h"
+ 
+-void bli_sgemm_sandybridge_asm_8x8
++BLIS_EXPORT_BLIS void bli_sgemm_sandybridge_asm_8x8
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -532,7 +532,7 @@
+ 	GEMM_UKR_FLUSH_CT( s );
+ }
+ 
+-void bli_dgemm_sandybridge_asm_8x4
++BLIS_EXPORT_BLIS void bli_dgemm_sandybridge_asm_8x4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -994,7 +994,7 @@
+ 	GEMM_UKR_FLUSH_CT( d );
+ }
+ 
+-void bli_cgemm_sandybridge_asm_8x4
++BLIS_EXPORT_BLIS void bli_cgemm_sandybridge_asm_8x4
+      (
+              dim_t      m,
+              dim_t      n,
+@@ -1697,7 +1697,7 @@
+ 
+ 
+ 
+-void bli_zgemm_sandybridge_asm_4x4
++BLIS_EXPORT_BLIS void bli_zgemm_sandybridge_asm_4x4
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/sandybridge/3/bli_gemm_sandybridge_int_d8x4.c blis-comet/kernels/sandybridge/3/bli_gemm_sandybridge_int_d8x4.c
+--- blis/kernels/sandybridge/3/bli_gemm_sandybridge_int_d8x4.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/sandybridge/3/bli_gemm_sandybridge_int_d8x4.c	2023-06-27 15:54:28.000000000 -0700
+@@ -36,7 +36,7 @@
+ #include <immintrin.h>
+ #include "blis.h"
+ 
+-void bli_dgemm_sandybridge_int_8x4
++BLIS_EXPORT_BLIS void bli_dgemm_sandybridge_int_8x4
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/skx/3/bli_dgemm_skx_asm_16x12_l2.c blis-comet/kernels/skx/3/bli_dgemm_skx_asm_16x12_l2.c
+--- blis/kernels/skx/3/bli_dgemm_skx_asm_16x12_l2.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/skx/3/bli_dgemm_skx_asm_16x12_l2.c	2023-06-27 15:54:44.000000000 -0700
+@@ -289,7 +289,7 @@
+ #endif
+ 
+ 
+-void bli_dgemm_skx_asm_16x12_l2
++BLIS_EXPORT_BLIS void bli_dgemm_skx_asm_16x12_l2
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/skx/3/bli_dgemm_skx_asm_16x14.c blis-comet/kernels/skx/3/bli_dgemm_skx_asm_16x14.c
+--- blis/kernels/skx/3/bli_dgemm_skx_asm_16x14.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/skx/3/bli_dgemm_skx_asm_16x14.c	2023-06-27 15:54:52.000000000 -0700
+@@ -155,7 +155,7 @@
+     { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15};
+ #endif
+ 
+-void bli_dgemm_skx_asm_16x14
++BLIS_EXPORT_BLIS void bli_dgemm_skx_asm_16x14
+      (
+              dim_t      m,
+              dim_t      n,
+diff -ruN blis/kernels/skx/3/bli_sgemm_skx_asm_32x12_l2.c blis-comet/kernels/skx/3/bli_sgemm_skx_asm_32x12_l2.c
+--- blis/kernels/skx/3/bli_sgemm_skx_asm_32x12_l2.c	2023-06-27 15:47:26.000000000 -0700
++++ blis-comet/kernels/skx/3/bli_sgemm_skx_asm_32x12_l2.c	2023-06-27 15:55:02.000000000 -0700
+@@ -319,7 +319,7 @@
+     { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15};
+ #endif
+ 
+-void bli_sgemm_skx_asm_32x12_l2
++BLIS_EXPORT_BLIS void bli_sgemm_skx_asm_32x12_l2
+      (
+              dim_t      m,
+              dim_t      n,

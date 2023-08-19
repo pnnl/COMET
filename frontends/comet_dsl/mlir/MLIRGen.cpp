@@ -1159,6 +1159,7 @@ namespace
         }
 
         mlir::StringAttr SemiringAttr;
+        mlir::StringAttr MaskingAttr;
         // Derive the operation name from the binary operator. At the moment we
         // only support '+', '-','*'.
         switch (binop.getOp())
@@ -1166,13 +1167,17 @@ namespace
         case '+':
           comet_debug() << "creating TensorAddOp\n";
           SemiringAttr = builder.getStringAttr("noop_plusxy"); // this is for standard elementwise addition
+          MaskingAttr = builder.getStringAttr("none"); // default for standard elementwise addition
           return builder.create<TensorAddOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                             labels, affineMapArrayAttr, strAttr, SemiringAttr);
+                                             labels, affineMapArrayAttr, strAttr, SemiringAttr, 
+                                             MaskingAttr);
         case '-':
           comet_debug() << "creating TensorSubtractOp\n";
           SemiringAttr = builder.getStringAttr("noop_minus"); // this is for standard elementwise subtraction
+          MaskingAttr = builder.getStringAttr("none"); // default for standard elementwise subtraction
           return builder.create<TensorSubtractOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                                  labels, affineMapArrayAttr, strAttr, SemiringAttr);
+                                                  labels, affineMapArrayAttr, strAttr, SemiringAttr,
+                                                  MaskingAttr);
         case '*':
         {
           comet_vdump(lhs_tensor);
@@ -1181,8 +1186,10 @@ namespace
           comet_vdump(rhs_tensor);
           comet_debug() << "\n";
           SemiringAttr = builder.getStringAttr("plusxy_times"); // this is for standard matrix multiplication
+          MaskingAttr = builder.getStringAttr("none"); // default for standard matrix multiplication
           mlir::Value tcop = builder.create<TensorMultOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                                          labels, affineMapArrayAttr, strAttr, SemiringAttr);
+                                                          labels, affineMapArrayAttr, strAttr, SemiringAttr,
+                                                          MaskingAttr, nullptr);  //TODO: masking is an optional operand
           tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
           tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
 
@@ -1199,8 +1206,10 @@ namespace
           comet_vdump(rhs_tensor);
           comet_debug() << "\n";
           auto SemiringAttr = builder.getStringAttr("noop_times"); // this is for standard element-wise multiplication
+          MaskingAttr = builder.getStringAttr("none"); // default for standard element-wise multiplication
           mlir::Value tcop = builder.create<TensorElewsMultOp>(location, ret_tensor_type, tensors[0], tensors[1], labels,
-                                                               affineMapArrayAttr, strAttr, SemiringAttr);
+                                                               affineMapArrayAttr, strAttr, SemiringAttr,
+                                                               MaskingAttr);
 
           comet_vdump(tcop);
           return tcop;
@@ -2272,7 +2281,7 @@ namespace
               continue;
             }
             else if ((tensor_op->getRHS()->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor &&
-                      tensor_op->getRHS()->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor))
+                      tensor_op->getLHS()->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor)) // TODO: we should not reach this case
             {
 
               if (mlir::failed(mlirGenTensorarithexprs(*tensor_op)))
@@ -2556,6 +2565,51 @@ namespace
       std::string SemiringOperators = SemiringOp1str + "_" + SemiringOp2str;
       auto SemiringAttr = builder.getStringAttr(SemiringOperators);
 
+      // masking support: determine type (push/pull/auto/none) and variable (DenseTensorDeclOp or SparseTensorDeclOp)
+      // NOTE: mask is optional and not required, so we will populate with default values where necessary.
+      MaskExprAST *mask = nullptr;
+      std::string MaskingName;
+      std::string MaskingVar_name;
+      mlir::Value maskVal;  // this may not be found in symbol table.
+                            // if not found, mask will not be included as an operand.
+
+      if (tensor_op.getMask() != nullptr) {
+
+        mask = llvm::cast<MaskExprAST>(tensor_op.getMask());
+        MaskingName = mask->getMaskType();
+        MaskingVar_name = mask->getTensorName();
+
+        mlir::Value maskLT_op;
+        // find the variable name in symbol table
+        if ((maskLT_op = symbolTable.lookup(MaskingVar_name)) != NULL)
+        {  
+          comet_debug() << "Masking variable found!\n";
+          if (isa<DenseTensorDeclOp>(maskLT_op.getDefiningOp()))
+          {
+            comet_debug() << " is DenseTensorDeclOp\n";
+            maskVal = dyn_cast<DenseTensorDeclOp>(maskLT_op.getDefiningOp());
+          }
+          else if (isa<SparseTensorDeclOp>(maskLT_op.getDefiningOp()))
+          {
+            comet_debug() << " is SparseTensorDeclOp\n";
+            maskVal = dyn_cast<SparseTensorDeclOp>(maskLT_op.getDefiningOp());
+          }
+          else
+          {
+            comet_debug() << " not TensorDeclOp\n";
+          }
+        }
+        comet_debug() << "masking name: " << MaskingName << "\n";
+        comet_debug() << "masking var: " << MaskingVar_name << "\n";
+        comet_vdump(maskVal);
+      }
+      else
+      {
+        comet_debug() << "No mask input provided by user!\n";
+        MaskingName = "none";
+      }
+      auto MaskingAttr = builder.getStringAttr(MaskingName);
+
       auto lhs_lbls = lhsLT->getLabelNames();
       auto rhs1_lbls = rhs1LT->getLabelNames();
       auto rhs2_lbls = rhs2LT->getLabelNames();
@@ -2659,11 +2713,12 @@ namespace
                                               tensors[0], tensors[1],
                                               lhs_lbls_value,
                                               affineMapArrayAttr,
-                                              strAttr, SemiringAttr);
+                                              strAttr, SemiringAttr,
+                                              MaskingAttr);
 
         comet_vdump(op);
         // source is 1st parameter, dest is the second
-        auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
+        builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
       }
       else if (binop == '-')
       {
@@ -2673,10 +2728,11 @@ namespace
                                                    tensors[0], tensors[1],
                                                    lhs_lbls_value,
                                                    affineMapArrayAttr,
-                                                   strAttr, SemiringAttr);
+                                                   strAttr, SemiringAttr,
+                                                   MaskingAttr);
         comet_vdump(op);
         // source is 1st parameter, dest is the second
-        auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
+        builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
       }
       else if (binop == '*' || binop == tok_semiring)
       {
@@ -2685,7 +2741,8 @@ namespace
                                                tensors[0], tensors[1],
                                                lhs_lbls_value,
                                                affineMapArrayAttr,
-                                               strAttr, SemiringAttr);
+                                               strAttr, SemiringAttr,
+                                               MaskingAttr, maskVal);
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
@@ -2695,7 +2752,7 @@ namespace
       }
       else if (binop == tok_elews || binop == tok_monoid)
       {
-        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], lhs_lbls_value, affineMapArrayAttr, strAttr, SemiringAttr);
+        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], lhs_lbls_value, affineMapArrayAttr, strAttr, SemiringAttr, MaskingAttr);
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 

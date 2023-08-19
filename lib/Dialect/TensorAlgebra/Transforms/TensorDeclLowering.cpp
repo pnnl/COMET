@@ -1825,8 +1825,6 @@ namespace
         llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
         signalPassFailure();
       }
-
-      //function.dump();
     }
   };
 
@@ -1855,7 +1853,6 @@ namespace
       target.addLegalOp<tensorAlgebra::PrintOp,
                         tensorAlgebra::GetTimeOp,
                         tensorAlgebra::PrintElapsedTimeOp,
-                        // tensorAlgebra::TAReturnOp,
                         tensorAlgebra::ReduceOp,
                         tensorAlgebra::TransposeOp,
                         tensorAlgebra::TensorFillOp,
@@ -1867,8 +1864,6 @@ namespace
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::IndexLabelDynamicOp,
                         func::CallOp
-                        // func::FuncOp,
-                        // func::ReturnOp
                         >();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
