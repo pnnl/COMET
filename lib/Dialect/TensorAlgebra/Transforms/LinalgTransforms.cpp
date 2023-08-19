@@ -467,25 +467,6 @@ namespace
 //   };
 // } // end anonymous namespace
 
-namespace
-{
-  class LowerLinAlgFillOpPass : public PassWrapper<LowerLinAlgFillOpPass, OperationPass<func::FuncOp>>
-  {
-  public:
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerLinAlgFillOpPass)
-    void runOnOperation() override
-    {
-      func::FuncOp func = getOperation();
-      MLIRContext *ctx = func.getContext();
-
-      RewritePatternSet patterns(&getContext());
-
-      // Add the patterns to the list lower linalg fill operation
-      // patterns.insert<LinalgLoweringPattern<FillOp>>(ctx, LinalgLoweringType::Loops);
-      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
-    }
-  };
-} // end anonymous namespace
 
 /// Create a pass to optimize LinAlg Matmul Op with tiling
 std::unique_ptr<mlir::Pass> mlir::comet::createLinAlgMatmulTilingPass()
@@ -509,8 +490,3 @@ std::unique_ptr<mlir::Pass> mlir::comet::createLinAlgMatmulMicroKernelPass()
 //   return std::make_unique<OptDenseTransposePass>(tile_size, seperate_tiles);
 // }
 
-/// Create a pass to convert linalg.fill to loops
-std::unique_ptr<mlir::Pass> mlir::comet::createLowerLinAlgFillPass()
-{
-  return std::make_unique<LowerLinAlgFillOpPass>();
-}
