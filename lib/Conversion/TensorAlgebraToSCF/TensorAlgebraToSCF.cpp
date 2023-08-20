@@ -314,18 +314,14 @@ namespace
 
         for (unsigned int n = 0; n < tensors_num; n++)
         {
-          auto tensor_rank_attr = tensors[n].getDefiningOp()->getAttr("tensor_rank");
-          auto tensor_rank_int_attr = cast<IntegerAttr>(tensor_rank_attr);
-          unsigned int tensor_rank = tensor_rank_int_attr.getValue().getLimitedValue();
-          comet_debug() << "ATTR_Val: " << tensor_rank << "\n";
-
-          //unsigned int tensor_rank = (tensors[n].getDefiningOp()->getNumOperands() - 2) / 5;
+          // TODO(gkestor): get tensor ranks by functions
+          unsigned int tensor_rank = (tensors[n].getDefiningOp()->getNumOperands() - 2) / 5;
           comet_debug() << " tensor_rank: " << tensor_rank << "\n";
           comet_debug() << " tensor[n]: "
                         << "\n";
           comet_pdump(tensors[n].getDefiningOp());
 
-          for (unsigned int i = 0; i < 4 * tensor_rank + 1; i++)
+          for (unsigned int i = 0; i < 2 * tensor_rank + 1; i++)
           {
             auto tensorload_op = tensors[n].getDefiningOp()->getOperand(i);
             comet_debug() << " tensorload_op "
@@ -337,7 +333,7 @@ namespace
                           << "\n";
             comet_vdump(alloc_op);
 
-            if (i < 4 * tensor_rank)
+            if (i < 2 * tensor_rank)
             {
               // indexes crd's
               mlir::Value v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, alloc_op);
@@ -367,14 +363,9 @@ namespace
         comet_vdump(sparse_tensor_desc);
 
         // TODO(gkestor): get tensor ranks by functions
-        //auto rank_size = (tensors[0].getDefiningOp()->getNumOperands() - 2) / 5;
-        auto tensor_rank_attr = tensors[0].getDefiningOp()->getAttr("tensor_rank");
-        auto tensor_rank_int_attr = cast<IntegerAttr>(tensor_rank_attr);
-        unsigned int rank_size = tensor_rank_int_attr.getValue().getLimitedValue();
-        comet_debug() << "ATTR_Val: Rank_size: " << rank_size << "\n";
+        auto rank_size = (tensors[0].getDefiningOp()->getNumOperands() - 2) / 5;
 
         // dim format of input tensor
-        comet_debug() << "formats_strIn: " << formats_strIn << "\n";
         std::vector<Value>
             dim_formatIn = mlir::tensorAlgebra::getFormatsValueInt(formats_strIn, rank_size, rewriter, loc, i32Type);
 
@@ -384,20 +375,7 @@ namespace
 
         if (rank_size == 2)
         { // 2D
-          auto transpose2DF64Func = FunctionType::get(ctx,
-                            {i32Type, i32Type, i32Type, i32Type,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_f64,
-                            i32Type, i32Type, i32Type, i32Type,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_f64,
-                            unrankedMemrefType_index},
+          auto transpose2DF64Func = FunctionType::get(ctx, {i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, unrankedMemrefType_index},
                                                       {});
 
           std::string func_name = "transpose_2D_f64";
@@ -407,52 +385,19 @@ namespace
             transpose_func.setPrivate();
             module.push_back(transpose_func);
           }
-          comet_debug() << "alloc_sizes_vec: " << alloc_sizes_cast_vecs.size() << "\n";
-          comet_debug() << "alloc_sizes_vec[0]: " << alloc_sizes_cast_vecs[0].size() << "\n";
-          comet_debug() << "alloc_sizes_vec[1]: " << alloc_sizes_cast_vecs[1].size() << "\n";
-          comet_debug() << "dim_formatIn: " << dim_formatIn.size() << "\n";
-          comet_debug() << "dim_formatOut: " << dim_formatOut.size() << "\n";
 
           rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{},
-                                        ValueRange{dim_formatIn[0], dim_formatIn[1], dim_formatIn[2], dim_formatIn[3],
-                                                   alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
-                                                   alloc_sizes_cast_vecs[0][2], alloc_sizes_cast_vecs[0][3],
-                                                   alloc_sizes_cast_vecs[0][4], alloc_sizes_cast_vecs[0][5],
-                                                   alloc_sizes_cast_vecs[0][6], alloc_sizes_cast_vecs[0][7],
-                                                   alloc_sizes_cast_vecs[0][8],
-                                                   dim_formatOut[0], dim_formatOut[1], dim_formatOut[2], dim_formatOut[3],
-                                                   alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
-                                                   alloc_sizes_cast_vecs[1][2], alloc_sizes_cast_vecs[1][3],
-                                                   alloc_sizes_cast_vecs[1][4], alloc_sizes_cast_vecs[1][5],
-                                                   alloc_sizes_cast_vecs[1][6], alloc_sizes_cast_vecs[1][7],
-                                                   alloc_sizes_cast_vecs[1][8],
+                                        ValueRange{dim_formatIn[0], dim_formatIn[1], alloc_sizes_cast_vecs[0][0],
+                                                   alloc_sizes_cast_vecs[0][1], alloc_sizes_cast_vecs[0][2],
+                                                   alloc_sizes_cast_vecs[0][3], alloc_sizes_cast_vecs[0][4],
+                                                   dim_formatOut[0], dim_formatOut[1], alloc_sizes_cast_vecs[1][0],
+                                                   alloc_sizes_cast_vecs[1][1], alloc_sizes_cast_vecs[1][2],
+                                                   alloc_sizes_cast_vecs[1][3], alloc_sizes_cast_vecs[1][4],
                                                    sparse_tensor_desc});
         }
         else if (rank_size == 3)
         { // 3D
-          auto transpose3DF64Func = FunctionType::get(ctx, 
-                                          {i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_f64,
-                                          i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_f64,
-                                          unrankedMemrefType_index},
+          auto transpose3DF64Func = FunctionType::get(ctx, {i32Type, i32Type, i32Type, i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, i32Type, i32Type, i32Type, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_index, unrankedMemrefType_f64, unrankedMemrefType_index},
                                                       {});
 
           std::string func_name = "transpose_3D_f64";
@@ -464,25 +409,14 @@ namespace
           }
 
           rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{},
-                                        ValueRange{input_perm_num, output_perm_num,
-                                                   dim_formatIn[0], dim_formatIn[1], dim_formatIn[2],
-                                                   dim_formatIn[3], dim_formatIn[4], dim_formatIn[5],
+                                        ValueRange{input_perm_num, output_perm_num, dim_formatIn[0], dim_formatIn[1], dim_formatIn[2],
                                                    alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
                                                    alloc_sizes_cast_vecs[0][2], alloc_sizes_cast_vecs[0][3],
                                                    alloc_sizes_cast_vecs[0][4], alloc_sizes_cast_vecs[0][5],
-                                                   alloc_sizes_cast_vecs[0][6], alloc_sizes_cast_vecs[0][7],
-                                                   alloc_sizes_cast_vecs[0][8], alloc_sizes_cast_vecs[0][9],
-                                                   alloc_sizes_cast_vecs[0][10], alloc_sizes_cast_vecs[0][11],
-                                                   alloc_sizes_cast_vecs[0][12],
-                                                   dim_formatOut[0], dim_formatOut[1], dim_formatOut[2],
-                                                   dim_formatOut[3], dim_formatOut[4], dim_formatOut[5],
-                                                   alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
+                                                   alloc_sizes_cast_vecs[0][6], dim_formatOut[0], dim_formatOut[1],
+                                                   dim_formatOut[2], alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
                                                    alloc_sizes_cast_vecs[1][2], alloc_sizes_cast_vecs[1][3],
-                                                   alloc_sizes_cast_vecs[1][4], alloc_sizes_cast_vecs[1][5],
-                                                   alloc_sizes_cast_vecs[1][6], alloc_sizes_cast_vecs[1][7],
-                                                   alloc_sizes_cast_vecs[1][8], alloc_sizes_cast_vecs[1][9],
-                                                   alloc_sizes_cast_vecs[1][10], alloc_sizes_cast_vecs[1][11],
-                                                   alloc_sizes_cast_vecs[1][12],
+                                                   alloc_sizes_cast_vecs[1][4], alloc_sizes_cast_vecs[1][5], alloc_sizes_cast_vecs[1][6],
                                                    sparse_tensor_desc});
         }
         else
@@ -573,21 +507,16 @@ namespace
 
         comet_pdump(op);
         assert(isa<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp()));
-        tensorAlgebra::SparseTensorConstructOp sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp());
 
         // TODO(gkestor): get tensor ranks by functions
-        //int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
-        //int tensorRanks = 2;
-        int tensorRanks = sp_op.getTensorRank();
+        int tensorRanks = (op->getOperand(0).getDefiningOp()->getNumOperands() - 2) / 5;
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
         comet_debug() << "Tensor to reduce:\n";
         comet_pdump(op->getOperand(0).getDefiningOp());
 
         // TODO(gkestor): need a better way to acces information from SparseTensorConstructOp
         //  create the lowerBound, upperbound and step for loop
-        //int indexValueSize = (tensorRanks * 4) + 1; // 4 corresponding to pos, crd, crd_size, pos_size
-        //int indexValueSize = 17;
-        int indexValueSize = sp_op.getIndexValueSize();
+        int indexValueSize = (tensorRanks * 4) + 1; // 4 corresponding to pos, crd, crd_size, pos_size
         comet_debug() << "indexValueSize in SparseTensorConstructOp:" << indexValueSize << "\n";
 
         auto loadOpForNNZ = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
@@ -613,10 +542,7 @@ namespace
         else
         {
           // size of value array comes from read_input_sizes_2D_f64, and alloc dimsize can be only expected size
-          //auto expectedMemRefSize = 13;//tensorRanks * 2 + tensorRanks + 1; //"2" is corresponding the pos, crd per dimension, "1" is for value array
-          auto expectedMemRefSize = sp_op.getTotalParamCount();
-          comet_debug() << "tensorRanks: " << tensorRanks << "\n";
-          comet_debug() << "expectedMemRefSize: " << expectedMemRefSize << "\n";
+          auto expectedMemRefSize = tensorRanks * 2 + tensorRanks + 1; //"2" is corresponding the pos, crd per dimension, "1" is for value array
           assert(memRefDimSize == expectedMemRefSize);
           upperBound = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
         }
@@ -632,7 +558,7 @@ namespace
         rewriter.setInsertionPointToStart(loop.getBody());
 
         // Build loop body
-        int indexValuePtr = (tensorRanks * 4); // 2 corresponding to pos, crd
+        int indexValuePtr = (tensorRanks * 2); // 2 corresponding to pos, crd
         auto alloc_op = op->getOperand(0).getDefiningOp()->getOperand(indexValuePtr).getDefiningOp()->getOperand(0);
         comet_debug() << " ValueAllocOp";
         comet_vdump(alloc_op);
