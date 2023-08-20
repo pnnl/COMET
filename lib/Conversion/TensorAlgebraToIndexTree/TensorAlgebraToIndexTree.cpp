@@ -136,10 +136,11 @@ void buildDefUseInfo(UnitExpression *e)
 
 IndicesType getUnion(IndicesType indices1, IndicesType indices2)
 {
+
   sort(indices1.begin(), indices1.end());
   sort(indices2.begin(), indices2.end());
 
-  IndicesType allIndices(indices1.size() * 4);
+  IndicesType allIndices(indices1.size() * 2);
 
   IndicesType::iterator it = set_union(indices1.begin(), indices1.end(), indices2.begin(), indices2.end(), allIndices.begin());
   allIndices.resize(it - allIndices.begin());

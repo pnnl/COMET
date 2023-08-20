@@ -83,143 +83,81 @@ enum SparseFormatAttribute
 /**************************************/
 
 // Read matrices and tensors
-extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f32(int32_t fileID,
-                                                                 int32_t A1format, int32_t A1_tile_format,
-                                                                 int32_t A2format, int32_t A2_tile_format,
+extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f32(int32_t fileID, int32_t A1format, int32_t A2format,
                                                                  int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
-extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f32(int32_t fileID,
-                                                           int32_t A1format, int32_t A1_tile_format,
-                                                           int32_t A2format, int32_t A2_tile_format,
+extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f32(int32_t fileID, int32_t A1format, int32_t A2format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                           int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr, 
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
-extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f64(int32_t fileID,
-                                                                int32_t A1format, int32_t A1_tile_format,
-                                                                int32_t A2format, int32_t A2_tile_format,
-                                                                // int A1pos_rank, void *A1pos_ptr, char *filename, int32_t readMode);
+extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f64(int32_t fileID, int32_t A1format, int32_t A2format,
+//                                                                 int A1pos_rank, void *A1pos_ptr, char *filename, int32_t readMode);
                                                                  int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
-extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f64(int32_t fileID,
-                                                           int32_t A1format, int32_t A1_tile_format,
-                                                           int32_t A2format, int32_t A2_tile_format,
+extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f64(int32_t fileID, int32_t A1format, int32_t A2format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                           int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr, 
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
-extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_3D_f32(int32_t fileID,
-                                                                 int32_t A1format, int32_t A1_tile_format,
-                                                                 int32_t A2format, int32_t A2_tile_format,
-                                                                 int32_t A3format, int32_t A3_tile_format,
-                                                                 int A1pos_rank, void *A1pos_ptr, int32_t readMode);
+extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_3D_f32(int32_t fileID, int32_t A1format, int32_t A2format,
+                                                                 int32_t A3format, int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
-extern "C" COMET_RUNNERUTILS_EXPORT void read_input_3D_f32(int32_t fileID,
-                                                           int32_t A1format, int32_t A1_tile_format,
-                                                           int32_t A2format, int32_t A2_tile_format,
-                                                           int32_t A3format, int32_t A3_tile_format,
+extern "C" COMET_RUNNERUTILS_EXPORT void read_input_3D_f32(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                           int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
                                                            int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                           int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
-extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_3D_f64(int32_t fileID,
-                                                                 int32_t A1format, int32_t A1_tile_format,
-                                                                 int32_t A2format, int32_t A2_tile_format,
-                                                                 int32_t A3format, int32_t A3_tile_format,
+extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_3D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
                                                                  int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
-extern "C" COMET_RUNNERUTILS_EXPORT void read_input_3D_f64(int32_t fileID,
-                                                           int32_t A1format, int32_t A1_tile_format,
-                                                           int32_t A2format, int32_t A2_tile_format,
-                                                           int32_t A3format, int32_t A3_tile_format,
+extern "C" COMET_RUNNERUTILS_EXPORT void read_input_3D_f64(int32_t fileID, int32_t A1format, int32_t A2format, int32_t A3format,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                           int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
                                                            int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                           int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 // Transpose operations
-extern "C" COMET_RUNNERUTILS_EXPORT void transpose_2D_f32(int32_t A1format, int32_t A1tile_format, int32_t A2format, int32_t A2tile_format,
+extern "C" COMET_RUNNERUTILS_EXPORT void transpose_2D_f32(int32_t A1format, int32_t A2format,
                                                           int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                          int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                                           int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                          int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
-                                                          int Aval_rank, void *Aval_ptr,
-                                                          int32_t B1format, int32_t B1tile_format, int32_t B2format, int32_t B2tile_format,
+                                                          int Aval_rank, void *Aval_ptr, int32_t B1format, int32_t B2format,
                                                           int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
-                                                          int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
                                                           int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
-                                                          int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
-                                                          int Bval_rank, void *Bval_ptr,
-                                                          int sizes_rank, void *sizes_ptr);
+                                                          int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
 
-extern "C" COMET_RUNNERUTILS_EXPORT void transpose_3D_f32(int32_t input_permutation, int32_t output_permutation,
-                                                        int32_t A1format, int32_t A1tile_format,
-                                                        int32_t A2format, int32_t A2tile_format,
-                                                        int32_t A3format, int32_t A3tile_format,
-                                                        int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                        int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
-                                                        int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                        int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
-                                                        int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                        int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
-                                                        int Aval_rank, void *Aval_ptr,
-                                                        int32_t B1format, int32_t B1tile_format,
-                                                        int32_t B2format, int32_t B2tile_format,
-                                                        int32_t B3format, int32_t B3tile_format,
-                                                        int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
-                                                        int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
-                                                        int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
-                                                        int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
-                                                        int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
-                                                        int B3tile_pos_rank, void *B3tile_pos_ptr, int B3tile_crd_rank, void *B3tile_crd_ptr,
-                                                        int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
-
-extern "C" COMET_RUNNERUTILS_EXPORT void transpose_2D_f64(int32_t A1format, int32_t A1tile_format, int32_t A2format, int32_t A2tile_format,
+extern "C" COMET_RUNNERUTILS_EXPORT void transpose_3D_f32(int32_t radix_sum1, int32_t radix_sum2,
+                                                          int32_t A1format, int32_t A2format, int32_t A3format,
                                                           int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                          int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                                           int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                          int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
+                                                          int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
                                                           int Aval_rank, void *Aval_ptr,
-                                                          int32_t B1format, int32_t B1tile_format, int32_t B2format, int32_t B2tile_format,
+                                                          int32_t B1format, int32_t B2format, int32_t B3format,
                                                           int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
-                                                          int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
                                                           int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
-                                                          int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
-                                                          int Bval_rank, void *Bval_ptr,
-                                                          int sizes_rank, void *sizes_ptr);
+                                                          int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
+                                                          int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
 
-extern "C" COMET_RUNNERUTILS_EXPORT void transpose_3D_f64(int32_t input_permutation, int32_t output_permutation,
-                                                        int32_t A1format, int32_t A1tile_format,
-                                                        int32_t A2format, int32_t A2tile_format,
-                                                        int32_t A3format, int32_t A3tile_format,
-                                                        int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                        int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
-                                                        int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                        int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
-                                                        int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                        int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
-                                                        int Aval_rank, void *Aval_ptr,
-                                                        int32_t B1format, int32_t B1tile_format,
-                                                        int32_t B2format, int32_t B2tile_format,
-                                                        int32_t B3format, int32_t B3tile_format,
-                                                        int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
-                                                        int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
-                                                        int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
-                                                        int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
-                                                        int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
-                                                        int B3tile_pos_rank, void *B3tile_pos_ptr, int B3tile_crd_rank, void *B3tile_crd_ptr,
-                                                        int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
+extern "C" COMET_RUNNERUTILS_EXPORT void transpose_2D_f64(int32_t A1format, int32_t A2format,
+                                                          int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                                          int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                                          int Aval_rank, void *Aval_ptr, int32_t B1format, int32_t B2format,
+                                                          int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                                                          int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                                                          int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
+
+extern "C" COMET_RUNNERUTILS_EXPORT void transpose_3D_f64(int32_t radix_sum1, int32_t radix_sum2,
+                                                          int32_t A1format, int32_t A2format, int32_t A3format,
+                                                          int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                                          int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                                          int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                                                          int Aval_rank, void *Aval_ptr,
+                                                          int32_t B1format, int32_t B2format, int32_t B3format,
+                                                          int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                                                          int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                                                          int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
+                                                          int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
 
 //===----------------------------------------------------------------------===//
 // Small runtime support library for timing execution, printing elapse time, printing GFLOPS
@@ -252,9 +190,6 @@ void printData(std::ostream &os, T *base, int64_t dim,
 template <typename T>
 void cometPrint(const DynamicMemRefType<T> &M)
 {
-    if (M.sizes[0] <= 0) {
-        return;
-    }
     std::cout << "data = " << std::endl;
     printData(std::cout, M.data, M.rank, M.rank, M.offset,
               M.sizes, M.strides);
