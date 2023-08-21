@@ -162,6 +162,9 @@ if (NOT LLVM_ENABLE_IDE)
                            COMPONENT comet-headers)
 endif()
 
+set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/install/lib/")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # Set RPATH to $ORIGIN on all targets.
 function(set_rpath_all_targets dir)
   get_property(subdirectories DIRECTORY ${dir} PROPERTY SUBDIRECTORIES)
