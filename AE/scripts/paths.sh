@@ -10,6 +10,12 @@ else
   ulimit -s unlimited  # Set stack size as unlimited
 fi
 
+
+################################################################
+# All relative paths are referred to AE/, NOT AE/scripts/, and #
+# all command should run under AE/.                            #
+################################################################
+
 #
 # Data
 export DATA_DIR="./data"
