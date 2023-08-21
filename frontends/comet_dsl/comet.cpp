@@ -38,6 +38,7 @@
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/MemRef/Transforms/Passes.h"
 
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
@@ -321,7 +322,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (IsLoweringTCtoTTGT)
   {
     // Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
-    // optPM.addPass(mlir::tensorAlgebra::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
+    optPM.addPass(mlir::comet::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
   }
 
   // =============================================================================
@@ -386,7 +387,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::comet::createLateLoweringPass());
-  optPM.addPass(mlir::comet::createLowerLinAlgFillPass());
   optPM.addPass(mlir::createCSEPass());
   // =============================================================================
 
@@ -394,6 +394,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertSCFToCFPass());
+    pm.addPass(mlir::memref::createExpandStridedMetadataPass()); // Needed for memref.expand_shape
     pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createArithToLLVMConversionPass());
     pm.addPass(mlir::createConvertFuncToLLVMPass());
