@@ -28,7 +28,7 @@ after some optimizations.
 
 ```
 $ git clone https://github.com/pnnl/COMET.git
-$ export COMET_SRC=`pwd`\COMET
+$ export COMET_SRC=`pwd`/COMET
 $ cd $COMET_SRC
 $ git submodule init
 $ git submodule update
@@ -67,6 +67,7 @@ $ ./configure --prefix=$COMET_SRC/install auto
 $ make [-j]
 $ make check [-j]
 $ make install [-j]
+$ export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$COMET_SRC/install/lib"  # You may also add this to .bashrc
 ```
 
 6) **Build and test COMET:**
