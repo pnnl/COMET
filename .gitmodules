@@ -4,3 +4,6 @@
 [submodule "blis"]
 	path = blis
 	url = https://github.com/flame/blis.git
+[submodule "AE/LAGraph"]
+	path = AE/LAGraph
+	url = https://github.com/johnpzh/LAGraph.git
