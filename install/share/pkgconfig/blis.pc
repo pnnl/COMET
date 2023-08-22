@@ -1,0 +1,11 @@
+prefix=/Users/flyn908/Projects/COMET/install
+exec_prefix=/Users/flyn908/Projects/COMET/install
+libdir=/Users/flyn908/Projects/COMET/install/lib
+includedir=/Users/flyn908/Projects/COMET/install/include
+
+Name: BLIS
+Description: BLAS-like Library Instantiation Software Framework
+Version: 0.9.0
+Libs: -L${libdir} -lblis
+Libs.private:  -lm -lpthread
+Cflags: -I${includedir}/blis
