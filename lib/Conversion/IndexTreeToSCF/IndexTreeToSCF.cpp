@@ -2467,6 +2467,7 @@ void genForOps(std::vector<Value> &tensors,
 
         std::vector<Value> crd_indices = {loop.getInductionVar()};
         auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
+        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
           opstree->forOps.push_back(loop);
           opstree->accessIdx.push_back(get_index);
@@ -4643,6 +4644,7 @@ void genNewSparseTensorToPrint(OpBuilder &builder,
             auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
             std::vector<Value> upper_indices = {index_0};
             auto upperBound = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[i][4 * d], upper_indices);
+            auto upperBound = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[i][4 * d], upper_indices);
             comet_vdump(upperBound);
             valueAccessIdx_part = builder.create<MulIOp>(loc, upperBound, valueAccessIdx_part);
             last_d = d;
@@ -4982,6 +4984,7 @@ void genNewSparseTensorToPrint(OpBuilder &builder,
                                                                       1];
               comet_debug() << " ";
               comet_vdump(crd_index);
+              Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];   //-2
               Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];   //-2
               comet_debug() << " ";
               comet_vdump(lhs_2crd);
