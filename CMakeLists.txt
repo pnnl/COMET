@@ -77,10 +77,10 @@ set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
 #-------------------------------------------------------------------------------
 # BLIS Configuration
 #-------------------------------------------------------------------------------
-#  set(BLA_STATIC ON) #linking with BLIS static library
-#  set(BLA_VENDOR FLAME)
-#  set(BLA_PREFER_PKGCONFIG TRUE)
-#  set(BLA_PKGCONFIG_BLAS blis)
+  set(BLA_STATIC ON) #linking with BLIS static library
+  set(BLA_VENDOR FLAME)
+  set(BLA_PREFER_PKGCONFIG TRUE)
+  set(BLA_PKGCONFIG_BLAS blis)
   set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/install")
   find_package(BLAS REQUIRED)
 
@@ -161,6 +161,9 @@ if (NOT LLVM_ENABLE_IDE)
                            DEPENDS comet-headers
                            COMPONENT comet-headers)
 endif()
+
+set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/install/lib/")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Set RPATH to $ORIGIN on all targets.
 function(set_rpath_all_targets dir)
