@@ -80,11 +80,11 @@ namespace mlir
       if (it != vec.end())
       {
         ret = std::distance(vec.begin(), it);
-//        comet_debug() << " Element Found and its index location: " << ret << " \n";
+        //comet_debug() << " Element Found and its index location: " << ret << " \n";
       }
       else
       {
-//        comet_debug() << " Element Not Found\n";
+        //comet_debug() << " Element Not Found\n";
         ret = vec.size();
       }
       return ret;
@@ -94,9 +94,9 @@ namespace mlir
     void print_vector(std::vector<T> vec) {
       for (auto n : vec)
       {
-//        comet_debug() << n << " ";
+        //comet_debug() << n << " ";
       }
-//      comet_debug() << "\n";
+      //comet_debug() << "\n";
     }
     // template <class T>
     // unsigned int findIndexInVector(std::vector<T> const &vec, T e);
