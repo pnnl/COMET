@@ -78,6 +78,9 @@ using llvm::StringRef;
 // #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
 // #define DEBUG_MODE_LowerIndexTreeToSCFPass
 // #endif
+// #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
+// #define DEBUG_MODE_LowerIndexTreeToSCFPass
+// #endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -2061,6 +2064,7 @@ std::vector<Value> getAllocs(Value &tensor) {
     auto defop = tensor.getDefiningOp<tensorAlgebra::SparseTensorConstructOp>();
 
     for (unsigned int n = 0; n < defop.getTotalDimArrayCount(); n++) {
+    for (unsigned int n = 0; n < defop.getTotalDimArrayCount(); n++) {
       comet_vdump(defop.getIndices()[n]);
       Operation *tensorload = defop.getIndices()[n].getDefiningOp<ToTensorOp>();
       auto alloc_op = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
@@ -2242,7 +2246,6 @@ void genForOps(std::vector<Value> &tensors,
         lowerBound = builder.create<ConstantIndexOp>(loc, 0);
         auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
         std::vector<Value> upper_indices = {index_0};
-        upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
 
         auto step = builder.create<ConstantIndexOp>(loc, 1);
         auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
@@ -2345,11 +2348,9 @@ void genForOps(std::vector<Value> &tensors,
       if (tensor.getType().cast<tensorAlgebra::SparseTensorType>()) {
         auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
         std::vector<Value> lower_indices = {index_0};
-        lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
 
         auto index_1 = builder.create<ConstantIndexOp>(loc, 1);
         std::vector<Value> upper_indices = {index_1};
-        upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
         auto step = builder.create<ConstantIndexOp>(loc, 1);
         auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
@@ -2359,8 +2360,6 @@ void genForOps(std::vector<Value> &tensors,
         builder.setInsertionPoint(loop.getBody()->getTerminator());
 
         std::vector<Value> crd_indices = {loop.getInductionVar()};
-        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
-        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
         opstree->forOps.push_back(loop);
         opstree->accessIdx.push_back(get_index);
@@ -2383,7 +2382,6 @@ void genForOps(std::vector<Value> &tensors,
         }
 
         std::vector<Value> crd_indices = {last_forop.getInductionVar()};
-        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
         /// Adding one iteration loop to provide consistency with the corresponding index tree.
         /// Index tree includes an index node for the dimension but "S" format for this dimension
@@ -3664,24 +3662,18 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
           for (unsigned d = 0; d < rhsPerms[sparse_inputtensor_id].size(); d++) {
             Value crd = allAccessIdx[sparse_inputtensor_id][d];
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-            auto store_coo_crd = builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1],
-                                                                 Cnnz_index);
             comet_debug() << " COO StoreOp: ";
             comet_vdump(store_coo_crd);
 #else
-            builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1], Cnnz_index);
 #endif
           }
         } else if (sparse_format.compare("CSR") == 0 || sparse_format.compare("DCSR") == 0) {
           for (unsigned int d = forLoops.size() - 1; d < rhsPerms[sparse_inputtensor_id].size(); d++) {
             Value crd = allAccessIdx[sparse_inputtensor_id][d];
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-            auto store_csr_crd = builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1],
-                                                                 Cnnz_index);
             comet_debug() << " CSR or DCSR StoreOp: ";
             comet_vdump(store_csr_crd);
 #else
-            builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1], Cnnz_index);
 #endif
           }
         }
@@ -3735,13 +3727,11 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
         comet_vdump(arg0_next);
 
         Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
-        builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); //2
 
         builder.setInsertionPointAfter(forLoops[1]);
         // Update C2pos[0]
         comet_debug() << "Update C2pos[0]\n";
         std::vector<Value> insert_loc_0 = {const_index_0};
-        builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0); //2
 
         // Update C1pos[0]
         comet_debug() << "Update C1pos[0]\n";
@@ -3767,7 +3757,6 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
             comet_vdump(arg0_next);
 
             Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
-            builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); // C2pos //2
             Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
             Value idx_i = allAccessIdx[sparse_inputtensor_id][0];
             builder.create<memref::StoreOp>(loc, /*i*/ idx_i, main_tensors_all_Allocs[2][1], Cnnz_row_index); // C1crd
@@ -3784,7 +3773,6 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
           // Update C2pos[0]
           std::vector<Value> insert_loc_0 = {const_index_0};
-          builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0); //2
 
           // Update C1pos[0], C1pos[1]
           Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
