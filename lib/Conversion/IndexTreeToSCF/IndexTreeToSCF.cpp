@@ -78,9 +78,6 @@ using llvm::StringRef;
 // #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
 // #define DEBUG_MODE_LowerIndexTreeToSCFPass
 // #endif
-// #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
-// #define DEBUG_MODE_LowerIndexTreeToSCFPass
-// #endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -2356,10 +2353,8 @@ void genForOps(std::vector<Value> &tensors,
 
         std::vector<Value> lower_indices = {index_lower};
         lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
-        lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
 
         std::vector<Value> upper_indices = {index_upper};
-        upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
         upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
         auto step = builder.create<ConstantIndexOp>(loc, 1);
         auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
@@ -2383,7 +2378,6 @@ void genForOps(std::vector<Value> &tensors,
         auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
         std::vector<Value> lower_indices = {index_0};
         lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
-        lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
 
         auto index_1 = builder.create<ConstantIndexOp>(loc, 1);
         std::vector<Value> upper_indices = {index_1};
@@ -2397,6 +2391,7 @@ void genForOps(std::vector<Value> &tensors,
         builder.setInsertionPoint(loop.getBody()->getTerminator());
 
         std::vector<Value> crd_indices = {loop.getInductionVar()};
+        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
         auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
         opstree->forOps.push_back(loop);
@@ -3805,7 +3800,6 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
             Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
             builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); // C2pos //2
-            builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); // C2pos //2
             Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
             Value idx_i = allAccessIdx[sparse_inputtensor_id][0];
             builder.create<memref::StoreOp>(loc, /*i*/ idx_i, main_tensors_all_Allocs[2][1], Cnnz_row_index); // C1crd
@@ -3822,7 +3816,6 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
           // Update C2pos[0]
           std::vector<Value> insert_loc_0 = {const_index_0};
-          builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0); //2
           builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0); //2
 
           // Update C1pos[0], C1pos[1]
@@ -4471,6 +4464,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
             auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
             std::vector<Value> upper_indices = {index_0};
             auto upperBound = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[i][4 * d], upper_indices);
+            auto upperBound = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[i][4 * d], upper_indices);
             comet_vdump(upperBound);
             valueAccessIdx_part = builder.create<MulIOp>(loc, upperBound, valueAccessIdx_part);
             last_d = d;
@@ -4580,6 +4574,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
         auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(lhs.getDefiningOp());
         int lhs_ranks = sp_op.getTensorRank();
 
+        // TODO(patrick): Fix this
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
         unsigned int lhs_val_size_loc = 8 * lhs_ranks + 1;    // 17 (2d)  // 15
         unsigned int lhs_2crd_size_loc = 7 * lhs_ranks;       // 14 (2d)  // 12
@@ -4786,6 +4781,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                                                                       1];
               comet_debug() << " ";
               comet_vdump(crd_index);
+              Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];   //-2
               Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];   //-2
               comet_debug() << " ";
               comet_vdump(lhs_2crd);
