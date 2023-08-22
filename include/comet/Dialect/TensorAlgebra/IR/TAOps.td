@@ -305,6 +305,33 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
     `(` $indices `)` attr-dict `:` `(` type($indices) `)` `->` `(` type($output) `)`
   }];
 
+  // TODO(pflynn) This may need to be adjusted
+  // This works for the moment; the idea is that each rank has a tiling
+  // dimension per dimension.
+  let extraClassDeclaration = [{
+    int getTotalParamCount() {
+      return (getTensorRank() * 6) + 1;
+    }
+
+    int getDimArrayCount() {
+      return getTensorRank() * 4;
+    }
+
+    unsigned int getTotalDimArrayCount() {
+      return (getTensorRank() * 4) + 1;
+    }
+
+    int getValueArrayPos() {
+      // Value position- technically +1, but since we start at 0,
+      // we do not need to add anything
+      return getTensorRank() * 4;
+    }
+
+    int getIndexValueSize() {
+      return (getTensorRank() * 8) + 1;
+    }
+  }];
+
   //TODO(gkestor): add verifier
   //let hasVerifier = 1;
   
