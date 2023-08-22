@@ -335,7 +335,7 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
       return getTensorRank() * 4;
     }
 
-    int getTotalDimArrayCount() {
+    unsigned int getTotalDimArrayCount() {
       return (getTensorRank() * 4) + 1;
     }
 
