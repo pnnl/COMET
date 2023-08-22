@@ -78,9 +78,6 @@ using llvm::StringRef;
 // #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
 // #define DEBUG_MODE_LowerIndexTreeToSCFPass
 // #endif
-// #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
-// #define DEBUG_MODE_LowerIndexTreeToSCFPass
-// #endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -2348,6 +2345,7 @@ void genForOps(std::vector<Value> &tensors,
       if (tensor.getType().cast<tensorAlgebra::SparseTensorType>()) {
         auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
         std::vector<Value> lower_indices = {index_0};
+        lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
 
         auto index_1 = builder.create<ConstantIndexOp>(loc, 1);
         std::vector<Value> upper_indices = {index_1};
@@ -2360,6 +2358,7 @@ void genForOps(std::vector<Value> &tensors,
         builder.setInsertionPoint(loop.getBody()->getTerminator());
 
         std::vector<Value> crd_indices = {loop.getInductionVar()};
+        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
         opstree->forOps.push_back(loop);
         opstree->accessIdx.push_back(get_index);
@@ -3757,6 +3756,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
             comet_vdump(arg0_next);
 
             Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
+            builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); // C2pos //2
             Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
             Value idx_i = allAccessIdx[sparse_inputtensor_id][0];
             builder.create<memref::StoreOp>(loc, /*i*/ idx_i, main_tensors_all_Allocs[2][1], Cnnz_row_index); // C1crd
@@ -3773,6 +3773,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
           // Update C2pos[0]
           std::vector<Value> insert_loc_0 = {const_index_0};
+          builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0); //2
 
           // Update C1pos[0], C1pos[1]
           Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
