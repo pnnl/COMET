@@ -2125,21 +2125,18 @@ namespace
       comet_debug() << " getAllocs() -  it is sparse\n";
       auto defop = tensor.getDefiningOp<tensorAlgebra::SparseTensorConstructOp>();
 
-      for (unsigned int n = 0; n < defop.getTotalDimArrayCount(); n++)
-      {
-        comet_vdump(defop.getIndices()[n]);
-        Operation *tensorload = defop.getIndices()[n].getDefiningOp<ToTensorOp>();
-        auto alloc_op = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
-        allocs.push_back(alloc_op);
-        comet_vdump(alloc_op);
-      }
+    for (unsigned int n = 0; n < defop.getTotalDimArrayCount(); n++) {
+      comet_vdump(defop.getIndices()[n]);
+      Operation *tensorload = defop.getIndices()[n].getDefiningOp<ToTensorOp>();
+      auto alloc_op = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
+      allocs.push_back(alloc_op);
+      comet_vdump(alloc_op);
     }
-    else if (dyn_cast<ConstantOp>(tensor.getDefiningOp()))
-    { // ConstantOp
-      allocs.push_back(tensor);
-    }
-    return allocs;
+  } else if (dyn_cast<ConstantOp>(tensor.getDefiningOp())) { // ConstantOp
+    allocs.push_back(tensor);
   }
+  return allocs;
+}
 
   std::vector<std::vector<Value>> getAllAllocs(std::vector<Value> &tensors)
   {
@@ -2339,10 +2336,10 @@ namespace
         {
           comet_debug() << "cur_idx is in tensor " << i << "\n";
 
-          lowerBound = builder.create<ConstantIndexOp>(loc, 0);
-          auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
-          std::vector<Value> upper_indices = {index_0};
-          upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
+        lowerBound = builder.create<ConstantIndexOp>(loc, 0);
+        auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
+        std::vector<Value> upper_indices = {index_0};
+        upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
 
           auto step = builder.create<ConstantIndexOp>(loc, 1);
           auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
@@ -2398,11 +2395,11 @@ namespace
               comet_debug() << " parent upperBound alloc\n";
               comet_vdump(alloc_parent_bounds);
 
-              comet_debug() << " child upperBound:\n";
-              comet_vdump(allAllocs[i][4 * id]);
-              auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
-              comet_debug() << " child upperBound alloc\n";
-              comet_vdump(alloc_child_bounds);
+            comet_debug() << " child upperBound:\n";
+            comet_vdump(allAllocs[i][4 * id]);
+            auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
+            comet_debug() << " child upperBound alloc\n";
+            comet_vdump(alloc_child_bounds);
 
               if (alloc_child_bounds == alloc_parent_bounds) // m is the nearest loop induction variable
               {
@@ -2428,50 +2425,47 @@ namespace
           comet_debug() << " AddIOps (index_upper):";
           comet_vdump(index_upper);
 
-          std::vector<Value> lower_indices = {index_lower};
-          lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
+        std::vector<Value> lower_indices = {index_lower};
+        lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
 
-          std::vector<Value> upper_indices = {index_upper};
-          upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
-          auto step = builder.create<ConstantIndexOp>(loc, 1);
-          auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
+        std::vector<Value> upper_indices = {index_upper};
+        upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
+        auto step = builder.create<ConstantIndexOp>(loc, 1);
+        auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
           comet_debug() << " CU Loop\n";
           comet_vdump(loop);
 
           builder.setInsertionPoint(loop.getBody()->getTerminator());
 
-          std::vector<Value> crd_indices = {loop.getInductionVar()};
-          auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
+        std::vector<Value> crd_indices = {loop.getInductionVar()};
+        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
-          comet_debug() << "CU loop generated\n";
-          comet_vdump(loop);
-          opstree->forOps.push_back(loop);
-          opstree->accessIdx.push_back(get_index);
-        }
+        comet_debug() << "CU loop generated\n";
+        comet_vdump(loop);
+        opstree->forOps.push_back(loop);
+        opstree->accessIdx.push_back(get_index);
       }
-      else if (format.compare(0, 2, "CN") == 0)
-      {
-        // Generate for(int m = pos[0]; m < pos[1]; m++){int i = crd[m];}
-        if (tensor.getType().cast<tensorAlgebra::SparseTensorType>())
-        {
-          auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
-          std::vector<Value> lower_indices = {index_0};
-          lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
+    } else if (format.compare(0, 2, "CN") == 0) {
+      // Generate for(int m = pos[0]; m < pos[1]; m++){int i = crd[m];}
+      if (tensor.getType().cast<tensorAlgebra::SparseTensorType>()) {
+        auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
+        std::vector<Value> lower_indices = {index_0};
+        lowerBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], lower_indices);
 
-          auto index_1 = builder.create<ConstantIndexOp>(loc, 1);
-          std::vector<Value> upper_indices = {index_1};
-          upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
-          auto step = builder.create<ConstantIndexOp>(loc, 1);
-          auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
+        auto index_1 = builder.create<ConstantIndexOp>(loc, 1);
+        std::vector<Value> upper_indices = {index_1};
+        upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
+        auto step = builder.create<ConstantIndexOp>(loc, 1);
+        auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
           comet_debug() << " CN Loop\n";
           comet_vdump(loop);
 
           builder.setInsertionPoint(loop.getBody()->getTerminator());
 
-          std::vector<Value> crd_indices = {loop.getInductionVar()};
-          auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
+        std::vector<Value> crd_indices = {loop.getInductionVar()};
+        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
           opstree->forOps.push_back(loop);
           opstree->accessIdx.push_back(get_index);
@@ -2499,8 +2493,8 @@ namespace
               last_forop = opstree->parent->forOps[opstree->parent->forOps.size() - 1];
           }
 
-          std::vector<Value> crd_indices = {last_forop.getInductionVar()};
-          auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
+        std::vector<Value> crd_indices = {last_forop.getInductionVar()};
+        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
           /// Adding one iteration loop to provide consistency with the corresponding index tree.
           /// Index tree includes an index node for the dimension but "S" format for this dimension
@@ -3860,12 +3854,12 @@ namespace
             {
               Value crd = allAccessIdx[sparse_inputtensor_id][d];
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-              auto store_coo_crd = builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1],
-                                                                   Cnnz_index);
-              comet_debug() << " COO StoreOp: ";
-              comet_vdump(store_coo_crd);
+            auto store_coo_crd = builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1],
+                                                                 Cnnz_index);
+            comet_debug() << " COO StoreOp: ";
+            comet_vdump(store_coo_crd);
 #else
-              builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1], Cnnz_index);
+            builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1], Cnnz_index);
 #endif
             }
           }
@@ -3875,12 +3869,12 @@ namespace
             {
               Value crd = allAccessIdx[sparse_inputtensor_id][d];
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-              auto store_csr_crd = builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1],
-                                                                   Cnnz_index);
-              comet_debug() << " CSR or DCSR StoreOp: ";
-              comet_vdump(store_csr_crd);
+            auto store_csr_crd = builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1],
+                                                                 Cnnz_index);
+            comet_debug() << " CSR or DCSR StoreOp: ";
+            comet_vdump(store_csr_crd);
 #else
-              builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1], Cnnz_index);
+            builder.create<memref::StoreOp>(loc, crd, main_tensors_all_Allocs[2][4 * d + 1], Cnnz_index);
 #endif
             }
           }
@@ -3938,14 +3932,14 @@ namespace
           comet_debug() << "AddIOp (arg0_next): ";
           comet_vdump(arg0_next);
 
-          Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
-          builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); // 2
+        Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
+        builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); //2
 
-          builder.setInsertionPointAfter(forLoops[1]);
-          // Update C2pos[0]
-          comet_debug() << "Update C2pos[0]\n";
-          std::vector<Value> insert_loc_0 = {const_index_0};
-          builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0); // 2
+        builder.setInsertionPointAfter(forLoops[1]);
+        // Update C2pos[0]
+        comet_debug() << "Update C2pos[0]\n";
+        std::vector<Value> insert_loc_0 = {const_index_0};
+        builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0); //2
 
           // Update C1pos[0]
           comet_debug() << "Update C1pos[0]\n";
@@ -3974,25 +3968,25 @@ namespace
               comet_debug() << "AddIOp (arg0_next): ";
               comet_vdump(arg0_next);
 
-              Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
-              builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); // C2pos //2
-              Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
-              Value idx_i = allAccessIdx[sparse_inputtensor_id][0];
-              builder.create<memref::StoreOp>(loc, /*i*/ idx_i, main_tensors_all_Allocs[2][1], Cnnz_row_index); // C1crd
-              Value Cnnz_row_index_new = builder.create<AddIOp>(loc, Cnnz_row_index, const_index_1);
-              comet_debug() << "AddIOp (Cnnz_row_index_new): ";
-              comet_vdump(Cnnz_row_index_new);
-              builder.create<memref::StoreOp>(loc, Cnnz_row_index_new, alloc_Cnnz_row,
-                                              alloc_Cnnz_insert_loc); // Update Cnnz_row
-            }
+            Value Cnnz_index_final = builder.create<memref::LoadOp>(loc, alloc_Cnnz, alloc_Cnnz_insert_loc);
+            builder.create<memref::StoreOp>(loc, Cnnz_index_final, main_tensors_all_Allocs[2][4], arg0_next); // C2pos //2
+            Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
+            Value idx_i = allAccessIdx[sparse_inputtensor_id][0];
+            builder.create<memref::StoreOp>(loc, /*i*/ idx_i, main_tensors_all_Allocs[2][1], Cnnz_row_index); // C1crd
+            Value Cnnz_row_index_new = builder.create<AddIOp>(loc, Cnnz_row_index, const_index_1);
+            comet_debug() << "AddIOp (Cnnz_row_index_new): ";
+            comet_vdump(Cnnz_row_index_new);
+            builder.create<memref::StoreOp>(loc, Cnnz_row_index_new, alloc_Cnnz_row,
+                                            alloc_Cnnz_insert_loc); // Update Cnnz_row
+          }
 
             builder.setInsertionPointAfter(forLoops[1]);
             Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
             std::vector<Value> insert_loc_1 = {const_index_1};
 
-            // Update C2pos[0]
-            std::vector<Value> insert_loc_0 = {const_index_0};
-            builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0); // 2
+          // Update C2pos[0]
+          std::vector<Value> insert_loc_0 = {const_index_0};
+          builder.create<memref::StoreOp>(loc, const_index_0, main_tensors_all_Allocs[2][4], insert_loc_0); //2
 
             // Update C1pos[0], C1pos[1]
             Value Cnnz_row_index = builder.create<memref::LoadOp>(loc, alloc_Cnnz_row, alloc_Cnnz_insert_loc);
@@ -4631,46 +4625,40 @@ namespace
       if (main_tensors_all[i].getType().isa<tensorAlgebra::SparseTensorType>())
       { // sparse tensor
 
-        // Find the last sparse index m, then loop_arg * all dense loop args
-        unsigned lastSparseIndexLoc = allPerms[i].size();
-        for (int d = (int)allPerms[i].size() - 1; d >= 0; d--)
-        {
-          if (allFormats[i][d].compare(0, 1, "D") != 0 &&
-              allFormats[i][d].compare(0, 1, "S") != 0)
-          { // sparse dimension and has a loop, i.e. "CU" or "CN"
-            lastSparseIndexLoc = d;
-            break;
+      // Find the last sparse index m, then loop_arg * all dense loop args
+      unsigned lastSparseIndexLoc = allPerms[i].size();
+      for (int d = (int) allPerms[i].size() - 1; d >= 0; d--) {
+        if (allFormats[i][d].compare(0, 1, "D") != 0 &&
+            allFormats[i][d].compare(0, 1, "S") != 0) { // sparse dimension and has a loop, i.e. "CU" or "CN"
+          lastSparseIndexLoc = d;
+          break;
+        }
+      }
+      // Calculate for ModeGeneric style format: [CN, S, D (, ... ) ]
+      auto valueAccessIdx_part = allLoopsArg[i][lastSparseIndexLoc];
+      if (lastSparseIndexLoc < allPerms[i].size() - 1) { // There is dense index after the sparse index
+        unsigned int last_d = lastSparseIndexLoc + 1;
+        for (unsigned int d = lastSparseIndexLoc + 1; d < allPerms[i].size(); d++) { // i=0
+          if (allFormats[i][d].compare(0, 1, "D") == 0) {
+            // Get dense dim size
+            auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
+            std::vector<Value> upper_indices = {index_0};
+            auto upperBound = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[i][4 * d], upper_indices);
+            comet_vdump(upperBound);
+            valueAccessIdx_part = builder.create<MulIOp>(loc, upperBound, valueAccessIdx_part);
+            last_d = d;
           }
         }
-        // Calculate for ModeGeneric style format: [CN, S, D (, ... ) ]
-        auto valueAccessIdx_part = allLoopsArg[i][lastSparseIndexLoc];
-        if (lastSparseIndexLoc < allPerms[i].size() - 1)
-        { // There is dense index after the sparse index
-          unsigned int last_d = lastSparseIndexLoc + 1;
-          for (unsigned int d = lastSparseIndexLoc + 1; d < allPerms[i].size(); d++)
-          { // i=0
-            if (allFormats[i][d].compare(0, 1, "D") == 0)
-            {
-              // Get dense dim size
-              auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
-              std::vector<Value> upper_indices = {index_0};
-              auto upperBound = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[i][4 * d], upper_indices);
-              comet_vdump(upperBound);
-              valueAccessIdx_part = builder.create<MulIOp>(loc, upperBound, valueAccessIdx_part);
-              last_d = d;
-            }
-          }
-          if (allFormats[i][last_d].compare(0, 1, "D") == 0)
-          {
-            comet_debug() << " ";
-            comet_vdump(allLoopsArg[i][allLoopsArg[i].size() - 1]);
-            comet_vdump(valueAccessIdx_part);
-            valueAccessIdx_part = builder.create<AddIOp>(loc, allLoopsArg[i][allLoopsArg[i].size() - 1],
-                                                         valueAccessIdx_part);
-            comet_debug() << " AddIOps (valueAccessIdx_part): ";
-            comet_vdump(valueAccessIdx_part);
-          }
+        if (allFormats[i][last_d].compare(0, 1, "D") == 0) {
+          comet_debug() << " ";
+          comet_vdump(allLoopsArg[i][allLoopsArg[i].size() - 1]);
+          comet_vdump(valueAccessIdx_part);
+          valueAccessIdx_part = builder.create<AddIOp>(loc, allLoopsArg[i][allLoopsArg[i].size() - 1],
+                                                       valueAccessIdx_part);
+          comet_debug() << " AddIOps (valueAccessIdx_part): ";
+          comet_vdump(valueAccessIdx_part);
         }
+      }
 
         allValueAccessIdx[i].push_back(valueAccessIdx_part);
       }
@@ -4775,15 +4763,19 @@ namespace
         else if (lhs.getType().isa<tensorAlgebra::SparseTensorType>())
         {
 
-          // Get tensor ranks
-          auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(lhs.getDefiningOp());
-          int lhs_ranks = sp_op.getTensorRank();
+        // TODO(gkestor): get tensor ranks by functions
+        //unsigned int lhs_ranks = (lhs.getDefiningOp()->getNumOperands() - 2) / 5;
+        // TODO(patrick): Change to actual function
+        unsigned int lhs_ranks = 2;
 
-          // TODO(patrick): Fix this
-          //[0...2d,2d+1...4d+1,4d+2...5d+1]
-          unsigned int lhs_val_size_loc = 8 * lhs_ranks + 1;  // 17 (2d)  // 15
-          unsigned int lhs_2crd_size_loc = 7 * lhs_ranks;     // 14 (2d)  // 12
-          unsigned int lhs_2pos_size_loc = 7 * lhs_ranks - 1; // 13 (2d)  // 11
+        // TODO(patrick): Fix this
+        //[0...2d,2d+1...4d+1,4d+2...5d+1]
+        //unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
+        //unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;
+        //unsigned int lhs_2pos_size_loc = 4 * lhs_ranks - 1;
+        unsigned int lhs_val_size_loc = 15;
+        unsigned int lhs_2crd_size_loc = 12;
+        unsigned int lhs_2pos_size_loc = 11;
 
           // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
           comet_debug() << " ";
@@ -4983,18 +4975,17 @@ namespace
 
               builder.create<memref::StoreOp>(loc, rhs_value, lhs_val, lhs_accessIndex);
 
-              /// update pos/crd arrays
-              // Fill C2crd in CSR format, parent loop's accessIdx
-              /// Check format j in the output
-              if (allFormats[lhs_loc][allFormats[lhs_loc].size() - 1].compare(0, 2, "CU") == 0)
-              {
-                Value crd_index = allAccessIdx[allAccessIdx.size() - 1][allAccessIdx[allAccessIdx.size() - 1].size() -
-                                                                        1];
-                comet_debug() << " ";
-                comet_vdump(crd_index);
-                Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4]; //-2
-                comet_debug() << " ";
-                comet_vdump(lhs_2crd);
+            /// update pos/crd arrays
+            // Fill C2crd in CSR format, parent loop's accessIdx
+            /// Check format j in the output
+            if (allFormats[lhs_loc][allFormats[lhs_loc].size() - 1].compare(0, 2, "CU") == 0) {
+              Value crd_index = allAccessIdx[allAccessIdx.size() - 1][allAccessIdx[allAccessIdx.size() - 1].size() -
+                                                                      1];
+              comet_debug() << " ";
+              comet_vdump(crd_index);
+              Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];   //-2
+              comet_debug() << " ";
+              comet_vdump(lhs_2crd);
 
                 builder.create<memref::StoreOp>(loc, crd_index, lhs_2crd, lhs_accessIndex);
               }
@@ -5078,10 +5069,10 @@ namespace
             Value c2crd_size_alloc = cast<memref::AllocOp>(c2crd_size_load.getMemRef().getDefiningOp()); // index
             Value c2crd_size_nnz = builder.create<memref::LoadOp>(loc, c2crd_size_alloc, ValueRange{cst_0_index});
 
-            // store crd_size into pos
-            Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 5]; // -3
-            comet_debug() << " ";
-            comet_vdump(lhs_2pos);
+          // store crd_size into pos
+          Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 5]; // -3
+          comet_debug() << " ";
+          comet_vdump(lhs_2pos);
 
             builder.create<memref::StoreOp>(loc, c2crd_size_nnz, lhs_2pos, ValueRange{c2pos_size_value});
 
