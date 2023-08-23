@@ -29,9 +29,9 @@ export LAGRAPH_EXE_DIR="/benchmark"
 #export GRAPHX_BUILD_DIR="../build"
 export COMET_OPT="/bin/comet/comet-opt"
 export COMET_OPT_OPTIONS="--opt-comp-workspace \
-                          --convert-ta-to-it \
-                          --convert-to-loops \
-                          --convert-to-llvm"
+--convert-ta-to-it \
+--convert-to-loops \
+--convert-to-llvm"
 
 #
 # LLVM and MLIR
@@ -43,11 +43,11 @@ export SHARED_LIBS="/lib/comet/libcomet_runner_utils.${EXT},\
 
 export MLIR_OPT="/bin/llvm/mlir-opt"
 export MLIR_OPT_OPTIONS="-lower-affine \
-                         -memref-expand \
-                         -convert-scf-to-cf \
-                         -convert-cf-to-llvm \
-                         -convert-vector-to-llvm \
-                         -finalize-memref-to-llvm \
-                         -convert-func-to-llvm \
-                         -reconcile-unrealized-casts"
+-memref-expand \
+-convert-scf-to-cf \
+-convert-cf-to-llvm \
+-convert-vector-to-llvm \
+-finalize-memref-to-llvm \
+-convert-func-to-llvm \
+-reconcile-unrealized-casts"
 
