@@ -24,7 +24,7 @@ It downloads all dataset under `AE/data/`.
 ## Quick Start
 After datasets are ready, run
 ```shell
-$ bash benchmarks/run0.quick_run.sh
+$ bash benchmarks/run0.quick_run.sh test
 ```
 It runs the Masked SpGEMM benchmarks of GraphX and LAGraph using 8 small matrices, and generates a png figure under `AE/results/`.
 Depending on the machines, this quick start takes about 10 minutes.
@@ -32,16 +32,16 @@ Depending on the machines, this quick start takes about 10 minutes.
 ## Main Results
 For full results of Masked SpGEMM with 10 matrices (8 small ones plus 2 large ones), run
 ```shell
-$ bash benchmarks/run1.masked_spgemm.sh
+$ bash benchmarks/run1.masked_spgemm.sh test
 ```
 
 For results of Triangle Counting, run
 ```shell
-$ bash benchmarks/run2.triangle_counting.sh
+$ bash benchmarks/run2.triangle_counting.sh test
 ```
 
 For results of Breadth-First Search (BFS), run
 ```shell
-$ bash benchmarks/run3.bfs.sh
+$ bash benchmarks/run3.bfs.sh test
 ```
 Each benchmark will generates a png figure under `AE/results/`.
