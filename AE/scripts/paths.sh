@@ -14,7 +14,7 @@ blis_path="/lib/comet"
 llvm_path="/lib/llvm"
 graphblas_path="/lib/graphblas"
 if [[ "${LD_LIBRARY_PATH}" != *"${blis_path}"* ]]; then
-    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${blis_path}:${llvm_path}"
+    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${blis_path}:${llvm_path}:${graphblas_path}"
 fi
 
 #
