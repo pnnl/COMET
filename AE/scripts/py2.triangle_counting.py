@@ -40,28 +40,36 @@ def get_elapsed_time(columns: list) -> float:
 #
 # Run a given GraphX code
 def run_GraphX_code(input_ta: str,
+                    input_scf: str,
                     matrices: list,
                     runtimes: list,
                     num_rounds: int):
-    basename = os.path.basename(input_ta)
-    command1 = F"{COMET_OPT} {COMET_OPT_OPTIONS} {input_ta} &> results/{basename}.llvm"
+    ta_file = os.path.basename(input_ta)
+    command1 = F"{COMET_OPT} {COMET_OPT_OPTIONS} {input_ta} &> results/{ta_file}.llvm"
     subprocess.run(command1, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    command3 = F"{MLIR_CPU_RUNNER} results/{basename}.llvm -O3 -e main -entry-point-result=void -shared-libs={SHARED_LIBS}"
+    scf_file = os.path.basename(input_scf)
+    command2 = F"{MLIR_OPT} {MLIR_OPT_OPTIONS} {input_scf} &> results/{scf_file}.llvm"
+    subprocess.run(command2, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    command3 = F"{MLIR_CPU_RUNNER} results/{ta_file}.llvm -O3 -e main -entry-point-result=void -shared-libs={SHARED_LIBS}"
+    command4 = F"{MLIR_CPU_RUNNER} results/{scf_file}.llvm -O3 -e main -entry-point-result=void -shared-libs={SHARED_LIBS}"
 
     # Get the runtime for every matrix
     for mtx in matrices:
+        if mtx not in ["com-Orkut", "com-LiveJournal"]:
+            cmd = command3
+        else:
+            cmd = command4
         input_matrix = F"{DATA_DIR}/{mtx}/{mtx}.mtx"
         env_vars = os.environ
         env_vars["SPARSE_FILE_NAME0"] = input_matrix
         env_vars["SPARSE_FILE_NAME1"] = input_matrix
         env_vars["SPARSE_FILE_NAME2"] = input_matrix
 
-        print(F"\n#### GraphX: {basename} ####")
+        print(F"\n#### GraphX: {os.path.splitext(ta_file)[0]} ####")
 
         total_time = 0
         for r_i in range(num_rounds):
-            result = subprocess.run(command3, env=env_vars, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(cmd, env=env_vars, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             columns = result.stdout.decode("utf-8").split()
             runtime = get_elapsed_time(columns)
             print(F"round: {r_i + 1} runtime: {runtime}")  # test
@@ -76,15 +84,20 @@ def run_GraphX_code(input_ta: str,
 # Run GraphX
 #######################
 def run_GraphX(TC_Burkhardt_ta: str,
+               TC_Burkhardt_scf: str,
                TC_Cohen_ta: str,
+               TC_Cohen_scf: str,
                TC_Sandia_LL_ta: str,
+               TC_Sandia_LL_scf: str,
                TC_Sandia_UU_ta: str,
+               TC_Sandia_UU_scf: str,
                matrices: list,
                runtimes: list,
                num_rounds: int):
     # Burkhardt
     rt_list = []
     run_GraphX_code(input_ta=TC_Burkhardt_ta,
+                    input_scf=TC_Burkhardt_scf,
                     matrices=matrices,
                     runtimes=rt_list,
                     num_rounds=num_rounds)
@@ -93,6 +106,7 @@ def run_GraphX(TC_Burkhardt_ta: str,
     # Cohen
     rt_list = []
     run_GraphX_code(input_ta=TC_Cohen_ta,
+                    input_scf=TC_Cohen_scf,
                     matrices=matrices,
                     runtimes=rt_list,
                     num_rounds=num_rounds)
@@ -101,6 +115,7 @@ def run_GraphX(TC_Burkhardt_ta: str,
     # Sandia_LL
     rt_list = []
     run_GraphX_code(input_ta=TC_Sandia_LL_ta,
+                    input_scf=TC_Sandia_LL_scf,
                     matrices=matrices,
                     runtimes=rt_list,
                     num_rounds=num_rounds)
@@ -109,6 +124,7 @@ def run_GraphX(TC_Burkhardt_ta: str,
     #Sandia_UU
     rt_list = []
     run_GraphX_code(input_ta=TC_Sandia_UU_ta,
+                    input_scf=TC_Sandia_UU_scf,
                     matrices=matrices,
                     runtimes=rt_list,
                     num_rounds=num_rounds)
@@ -167,18 +183,24 @@ def run_GraphBLAS(exe: str,
 
 
 def main():
-    if len(sys.argv) != 7:
+    if len(sys.argv) != 11:
         print(F"Usage: python3 {sys.argv[0]} "
-              F"<GraphX_TC_Burkhardt.ta> <GraphX_TC_Cohen.ta> "
-              F"<GraphX_TC_Sandia_LL.ta> <GraphX_TC_Sandia_UU.ta> "
+              F"<GraphX_TC_Burkhardt.ta> <GraphX_TC_Burkhardt.scf> "
+              F"<GraphX_TC_Cohen.ta> <GraphX_TC_Cohen.scf>"
+              F"<GraphX_TC_Sandia_LL.ta> <GraphX_TC_Sandia_LL.scf>"
+              F"<GraphX_TC_Sandia_UU.ta> <GraphX_TC_Sandia_UU.scf>"
               F"<output.csv> <LAGraph_exe>")
         exit(-1)
     GraphX_TC_Burkhardt_ta = sys.argv[1]
-    GraphX_TC_Cohen_ta = sys.argv[2]
-    GraphX_TC_Sandia_LL_ta = sys.argv[3]
-    GraphX_TC_Sandia_UU_ta = sys.argv[4]
-    output_csv = sys.argv[5]
-    LAGraph_exe = sys.argv[6]
+    GraphX_TC_Burkhardt_scf = sys.argv[2]
+    GraphX_TC_Cohen_ta = sys.argv[3]
+    GraphX_TC_Cohen_scf = sys.argv[4]
+    GraphX_TC_Sandia_LL_ta = sys.argv[5]
+    GraphX_TC_Sandia_LL_scf = sys.argv[6]
+    GraphX_TC_Sandia_UU_ta = sys.argv[7]
+    GraphX_TC_Sandia_UU_scf = sys.argv[8]
+    output_csv = sys.argv[9]
+    LAGraph_exe = sys.argv[10]
 
     all_matrices = ["bcsstk17",
                     "pdb1HYS",
@@ -191,23 +213,24 @@ def main():
                     "com-Orkut",
                     "com-LiveJournal"]
     num_rounds = 4
-    # all_matrices = ["com-LiveJournal",
-    #                 "com-Orkut"]
+
+    # Test
     # all_matrices = ["bcsstk17",
-    #                 "pdb1HYS",
-    #                 "rma10",
-    #                 "cant",
-    #                 "consph",
-    #                 "shipsec1",
-    #                 "cop20k_A",
-    #                 "scircuit"]
+    #                 "com-LiveJournal",
+    #                 "com-Orkut"]
+    # num_rounds = 1
+    # End Test
 
     # Run GraphX
     runtimes_graphx = []
     run_GraphX(TC_Burkhardt_ta=GraphX_TC_Burkhardt_ta,
+               TC_Burkhardt_scf=GraphX_TC_Burkhardt_scf,
                TC_Cohen_ta=GraphX_TC_Cohen_ta,
+               TC_Cohen_scf=GraphX_TC_Cohen_scf,
                TC_Sandia_LL_ta=GraphX_TC_Sandia_LL_ta,
+               TC_Sandia_LL_scf=GraphX_TC_Sandia_LL_scf,
                TC_Sandia_UU_ta=GraphX_TC_Sandia_UU_ta,
+               TC_Sandia_UU_scf=GraphX_TC_Sandia_UU_scf,
                matrices=all_matrices,
                runtimes=runtimes_graphx,
                num_rounds=num_rounds)

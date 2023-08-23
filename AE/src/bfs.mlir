@@ -21,7 +21,7 @@ module  {
 
     %0 = memref.alloc() : memref<7xindex>
     %1 = memref.cast %0 : memref<7xindex> to memref<*xindex>
-    call @read_input_sizes_2D_f64(%c0_i32, %c0, %c1, %1, %c0_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, memref<*xindex>, i32) -> ()
+    func.call @read_input_sizes_2D_f64(%c0_i32, %c0, %c1, %1, %c0_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, memref<*xindex>, i32) -> ()
     %2 = memref.load %0[%c0] : memref<7xindex>
     %3 = memref.load %0[%c1] : memref<7xindex>
     %4 = memref.load %0[%c2] : memref<7xindex>
@@ -54,7 +54,7 @@ module  {
       memref.store %cst_0, %17[%arg0] : memref<?xf64>
     }
     %18 = memref.cast %17 : memref<?xf64> to memref<*xf64>
-    call @read_input_2D_f64(%c0_i32, %c0, %c1, %10, %12, %14, %16, %18, %c0_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
+    func.call @read_input_2D_f64(%c0_i32, %c0, %c1, %10, %12, %14, %16, %18, %c0_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
 
     %frt_size = memref.alloc() : memref<1xindex> // fronter.size
     %frt_col = memref.alloc(%7) {alignment = 32 : i64} : memref<?xindex> // frontier.col
@@ -83,7 +83,7 @@ module  {
     // memref.store %c1, %count[%c0] : memref<1xindex>
 
     // timing start
-    %time_start = call @getTime() : () -> f64
+    %time_start = func.call @getTime() : () -> f64
 
     //scf.for %arg0 = %c1 to %c2_N step %c1 {    // repeat loop
     %level_bound = arith.addi %8, %c1 : index
@@ -91,7 +91,7 @@ module  {
 
         // /// Test
         // %21 = memref.cast %l_level : memref<?xindex> to memref<*xindex>
-        // call @comet_print_memref_i64(%21) : (memref<*xindex>) -> ()
+        // func.call @comet_print_memref_i64(%21) : (memref<*xindex>) -> ()
         // /// End test
       
       %9027 = memref.load %frt_size[%c0] : memref<1xindex>
@@ -130,10 +130,10 @@ module  {
             // %ivalue = memref.cast %ibuffer : memref<1xindex> to memref<*xindex>
 
             // memref.store %f_col_id, %ibuffer[%c0] : memref<1xindex>
-            // call @comet_print_memref_i64(%ivalue) : (memref<*xindex>) -> ()
+            // func.call @comet_print_memref_i64(%ivalue) : (memref<*xindex>) -> ()
 
             // memref.store %A_col_id, %ibuffer[%c0] : memref<1xindex>
-            // call @comet_print_memref_i64(%ivalue) : (memref<*xindex>) -> ()
+            // func.call @comet_print_memref_i64(%ivalue) : (memref<*xindex>) -> ()
             // /// End print f_col_id, A_col_id
           
 
@@ -162,13 +162,13 @@ module  {
             // %ivalue = memref.cast %ibuffer : memref<1xindex> to memref<*xindex>
 
             // memref.store %row_i, %ibuffer[%c0] : memref<1xindex>
-            // call @comet_print_memref_i64(%ivalue) : (memref<*xindex>) -> ()
+            // func.call @comet_print_memref_i64(%ivalue) : (memref<*xindex>) -> ()
             // /// End print the row_i
         }
       }
 
       // %21 = memref.cast %l_level : memref<?xindex> to memref<*xindex>
-      // call @comet_print_memref_i64(%21) : (memref<*xindex>) -> ()
+      // func.call @comet_print_memref_i64(%21) : (memref<*xindex>) -> ()
 
       // %count_tmp = memref.load %count[%c0] : memref<1xindex>
       // %count_new = addi %count_tmp, %c1 : index
@@ -178,15 +178,15 @@ module  {
       } // End if not zero
     }
     // timing end
-    %time_end = call @getTime() : () -> f64
-    call @printElapsedTime(%time_start, %time_end) : (f64, f64) -> ()
+    %time_end = func.call @getTime() : () -> f64
+    func.call @printElapsedTime(%time_start, %time_end) : (f64, f64) -> ()
 
     // %21 = memref.cast %l_level : memref<?xindex> to memref<*xindex>
-    // call @comet_print_memref_i64(%21) : (memref<*xindex>) -> ()
+    // func.call @comet_print_memref_i64(%21) : (memref<*xindex>) -> ()
 
     // // Count
     // %count_val = memref.cast %count : memref<1xindex> to memref<*xindex>
-    // call @comet_print_memref_i64(%count_val) : (memref<*xindex>) -> ()
+    // func.call @comet_print_memref_i64(%count_val) : (memref<*xindex>) -> ()
     return
   }
   func.func private @read_input_2D_f64(i32, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32)

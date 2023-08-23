@@ -1,1 +1,1 @@
-python -m pip install -U matplotlib pandas palettable
+python3 -m pip install -U matplotlib pandas palettable psutil
