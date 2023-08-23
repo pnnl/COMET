@@ -18,7 +18,6 @@
 // GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
 
 // TODO(gkestor): check these header files
 #include "mlir/Pass/Pass.h"
@@ -84,7 +83,7 @@ using namespace tensorAlgebra;
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
   n.dump()
 #else
-#define comet_debug() llvm::nulls()
+#define comet_debug() if(true){}else llvm::errs()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif

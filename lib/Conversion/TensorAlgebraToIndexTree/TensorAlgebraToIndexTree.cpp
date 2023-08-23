@@ -52,7 +52,7 @@ using namespace mlir::tensorAlgebra;
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
   n.dump()
 #else
-#define comet_debug() llvm::nulls()
+#define comet_debug() if(true){}else llvm::errs()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -60,7 +60,6 @@ using namespace mlir::tensorAlgebra;
 
 using namespace mlir;
 
-unique_ptr<Index_Tree> tree;
 namespace
 {
 
@@ -147,7 +146,7 @@ IndicesType getUnion(IndicesType indices1, IndicesType indices2)
   return allIndices;
 }
 
-void doTensorMultOp(TensorMultOp op)
+void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree>& tree)
 {
   Value rhs1_tensor = getRealRhs(op.getRhs1().getDefiningOp());
   Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
@@ -225,7 +224,7 @@ void doTensorMultOp(TensorMultOp op)
 }
 
 template <typename T>
-void doElementWiseOp(T op)
+void doElementWiseOp(T op, unique_ptr<Index_Tree>& tree)
 {
   Value rhs1_tensor = getRealRhs(op.getRhs1().getDefiningOp());
   Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
@@ -459,7 +458,7 @@ void treeToDialect(Index_Tree *tree)
 
 void LowerTensorAlgebraToIndexTreePass::runOnOperation()
 {
-  assert(tree == nullptr);
+  unique_ptr<Index_Tree> tree;
   func::FuncOp func = getOperation();
 
   tree = Index_Tree::createTreeWithRoot();
@@ -472,12 +471,12 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
     {
       if (isa<TensorMultOp>(&op))
       {
-        doTensorMultOp(cast<TensorMultOp>(&op));
+        doTensorMultOp(cast<TensorMultOp>(&op), tree);
         formIndexTreeDialect = true;
       }
       else if (isa<TensorElewsMultOp>(&op))
       {
-        doElementWiseOp<TensorElewsMultOp>(cast<TensorElewsMultOp>(&op));
+        doElementWiseOp<TensorElewsMultOp>(cast<TensorElewsMultOp>(&op), tree);
         formIndexTreeDialect = true;
       }
       else if (isa<TensorAddOp>(&op) || isa<TensorSubtractOp>(&op))
@@ -485,12 +484,12 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
         // elementwise addition and subtraction
         if (isa<TensorAddOp>(&op))
         {
-          doElementWiseOp<TensorAddOp>(cast<TensorAddOp>(&op));
+          doElementWiseOp<TensorAddOp>(cast<TensorAddOp>(&op), tree);
         }
 
         if (isa<TensorSubtractOp>(&op))
         {
-          doElementWiseOp<TensorSubtractOp>(cast<TensorSubtractOp>(&op));
+          doElementWiseOp<TensorSubtractOp>(cast<TensorSubtractOp>(&op), tree);
         }
         formIndexTreeDialect = true;
       }
