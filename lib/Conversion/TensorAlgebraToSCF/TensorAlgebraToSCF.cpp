@@ -38,7 +38,6 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
-
 #include "mlir/IR/BuiltinOps.h"
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -65,7 +64,7 @@ using namespace mlir::tensorAlgebra;
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
   n.dump()
 #else
-#define comet_debug() llvm::nulls()
+#define comet_debug() if(true){}else llvm::errs()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -704,12 +703,15 @@ namespace
 void LowerTensorAlgebraToSCFPass::runOnOperation()
 {
   mlir::func::FuncOp function = getOperation();
-
-  //  Verify that the given main has no inputs and results.
-  if (function.getNumArguments() || function.getFunctionType().getNumResults())
+  
+  if (function.getName() == "main")
   {
-    function.emitError("expected 'main' to have 0 inputs and 0 results");
-    return signalPassFailure();
+    //  Verify that the given main has no inputs and results.
+    if (function.getNumArguments() || function.getFunctionType().getNumResults())
+    {
+      function.emitError("expected 'main' to have 0 inputs and 0 results");
+      return signalPassFailure();
+    }
   }
 
   // The first thing to define is the conversion target. This will define the

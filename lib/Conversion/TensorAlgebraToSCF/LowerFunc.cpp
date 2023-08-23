@@ -1,4 +1,3 @@
-
 #include "mlir/IR/BuiltinDialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
