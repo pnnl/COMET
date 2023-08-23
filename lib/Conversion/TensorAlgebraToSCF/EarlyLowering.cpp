@@ -43,7 +43,6 @@
 #include <map>
 #include <set>
 #include <unordered_map>
-
 #include "llvm/Support/Debug.h"
 
 using namespace mlir;
@@ -69,7 +68,7 @@ using namespace mlir::indexTree;
   llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
-#define comet_debug() llvm::nulls()
+#define comet_debug() if(true){}else llvm::errs()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -1620,7 +1619,8 @@ namespace
                     ConversionPatternRewriter &rewriter) const final
     {
       // We only lower the main function as we expect that all other functions
-      // have been inlined.
+      // have been inlined. 
+      // [TODO] Make sure this is indeed the case
       if (op.getName() != "main")
         return failure();
 

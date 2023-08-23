@@ -57,7 +57,7 @@ using namespace mlir::tensorAlgebra;
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
   n.dump()
 #else
-#define comet_debug() llvm::nulls()
+#define comet_debug() if(true){}else llvm::errs()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -479,7 +479,7 @@ namespace
       RewritePatternSet patterns(&getContext());
 
       // Add the patterns to the list lower linalg fill operation
-      patterns.insert<LinalgLoweringPattern<FillOp>>(ctx, LinalgLoweringType::Loops);
+      patterns.insert<mlir::LinalgLoweringPattern<FillOp>>(ctx, LinalgLoweringType::Loops);
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   };

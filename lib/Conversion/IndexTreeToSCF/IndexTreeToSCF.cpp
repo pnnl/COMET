@@ -87,7 +87,7 @@ using llvm::StringRef;
   llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
-#define comet_debug() llvm::nulls()
+#define comet_debug() if(true){}else llvm::errs()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -2263,8 +2263,14 @@ void LowerIndexTreeToSCFPass::runOnOperation()
 
   IndexType indexType = IndexType::get(ctx);
   auto quickSortFunc = FunctionType::get(ctx, {mlir::UnrankedMemRefType::get(indexType, 0), indexType}, {});
-
-  if (!hasFuncDeclaration(module, "quick_sort"))
+  std::string_view func_name = function.getName();
+  
+  // In the presence of multiple functions, llvm will use threading to lower them concurrently
+  // thus, !hasFuncDeclaration(module, "quick_sort") could return true in more than own thread
+  // causing error of "multiple declarations of quick_sort".
+  //
+  // To avoid this issue, only the thread that lowers the main function should generate this declaration.
+  if (func_name == "main" && !hasFuncDeclaration(module, "quick_sort"))
   {
     mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "quick_sort",
                                                           quickSortFunc, ArrayRef<NamedAttribute>{});

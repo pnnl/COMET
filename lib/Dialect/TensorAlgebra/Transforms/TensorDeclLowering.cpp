@@ -70,7 +70,8 @@ using namespace mlir::indexTree;
   llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
-#define comet_debug() llvm::nulls()
+#define comet_debug() if(true){}else llvm::errs()
+// #define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif

@@ -65,7 +65,6 @@ class IterDomain
   IterDomain *right = nullptr;
 
 public:
-  static std::vector<unique_ptr<IterDomain>> domains;
   static IterDomain *makeDomain(Tensor *tensor, int dim);
 
   IterDomain(Tensor *tensor, int dim) : tensor(tensor), dim(dim){};
