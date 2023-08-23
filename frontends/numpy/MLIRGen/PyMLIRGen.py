@@ -45,17 +45,18 @@ class Tensor_Decl_Builder:
 
     tensor_decl_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        + ' = "ta.dense_tensor_decl"{{dims_tuple}}'
-        + '{format = "Dense"} : '
+        + ' = "ta.{{decl}}_tensor_decl"{{dims_tuple}}'
+        + '{format = {{format}}} : '
         +"{{ranges_tuple}} -> "
         + "{{inputtype}}"
         + "\n" ,
         undefined=jinja2.StrictUndefined,
     )
 
-    def __init__(self, decl_vars:list, inputtype: str)->None:
+    def __init__(self, decl_vars:list, inputtype: str, format: str)->None:
         self.inputtype = inputtype
         self.decl_vars = decl_vars
+        self.format = format
 
 
     def build_tensor(self):
@@ -67,12 +68,18 @@ class Tensor_Decl_Builder:
 
         dims_tuple += self.decl_vars[-1] +  ")"
         ranges_tuple += "!ta.range)"
+        format = self.format
+        if self.format == "CSR" or self.format == "COO" or self.format == "CSC":
+            format = '"{}" , temporal_tensor = false'.format(self.format)
+        else:
+            format = '"{}"'.format(self.format)
 
         return self.tensor_decl_wrapper_text.render(
             dims_tuple = dims_tuple,
             ranges_tuple = ranges_tuple,
-            inputtype = self.inputtype
-
+            format = format,
+            inputtype = self.inputtype,
+            decl = "dense" if self.format == "Dense" else "sparse"
         )
 
 
@@ -86,7 +93,7 @@ class TC_and_TrPose_Builder:
         + ' = "ta.mul"{{operators}}'
         + '{__alpha__ = 1.000000e+00 : f64, '
         +"__beta__ = {{beta}} : f64,"
-        + 'formats = ["Dense", "Dense", "Dense"],'
+        + 'formats = [{{formats}}],'
         +'indexing_maps = {{indexing_maps}}, semiring = "plusxy_times"} : '
         +"{{types_range_str}}"
         +"-> {{outputtype}}"
@@ -112,7 +119,7 @@ class TC_and_TrPose_Builder:
         + ' = "ta.transpose"{{operators}}'
         + '{__alpha__ = 1.000000e+00 : f64, '
         +"__beta__ = {{beta}} : f64,"
-        + 'formats = ["Dense", "Dense", "Dense"],'
+        + 'formats = [{{formats}}],'
         +'indexing_maps = {{indexing_maps}},semiring = "plusxy_times"} : '
         +"{{types_range_str}}"
         +"-> {{outputtype}}"
@@ -121,7 +128,7 @@ class TC_and_TrPose_Builder:
     )
 
     def __init__(self, input_tensors:list, dimslbls_to_map:list, input_array_dims_lbls:list, 
-                            target_dims_lbls:list,tensor_types:list,tc_indices:list,opr_type:str,op:str) -> None:
+                            target_dims_lbls:list,tensor_types:list,tc_indices:list,opr_type:str,op:str, formats:list) -> None:
         self.operators = input_tensors
         self.dimslbls_to_map = dimslbls_to_map
         self.input_array_dims_lbls = input_array_dims_lbls
@@ -130,6 +137,7 @@ class TC_and_TrPose_Builder:
         self.tc_indices = tc_indices
         self.opr_type = opr_type
         self.op = op
+        self.formats = formats
 
     def build_tc(self):
 
@@ -155,7 +163,8 @@ class TC_and_TrPose_Builder:
                 indexing_maps = indexing_maps,
                 types_range_str = types_range_str,
                 outputtype = out_tensor_type,
-                beta =  self.beta_val
+                beta =  self.beta_val,
+                formats = '"{}", "{}", "{}"'.format(*self.formats)
             )
         elif(self.opr_type == "elewise_mult"):
             return self.elewisemult_wrapper_text.render(
@@ -165,13 +174,15 @@ class TC_and_TrPose_Builder:
                 outputtype = out_tensor_type,
                 beta =  self.beta_val
             )
+        # Transpose
         else:
             return self.tranpose_wrapper_text.render(
                 operators = self.operators,
                 indexing_maps = indexing_maps,
                 types_range_str = types_range_str,
                 outputtype = out_tensor_type,
-                beta =  self.beta_val
+                beta =  self.beta_val,
+                formats = '"{}", "{}"'.format(*self.formats)
             )
 
     def get_beta_val(op):
@@ -255,7 +266,7 @@ class ele_wise_fill_Builder:
         return self.ele_wise_fill_wrapper_text.render(
             lbtensor_op_var = self.lbtensor_op_var,
             const_op_var = self.const_op_var,
-            assigned_val = self.assigned_val.tolist(),
+            assigned_val = "self.assigned_val.tolist()", #[TODO]
             tensor_type = self.tensor_type,
             dims_tensor_tuple = dims_tensor_tuple,
             ranges_tuple = ranges_tuple
@@ -315,7 +326,7 @@ class MLIRFunctionBuilder:
     default_indentation_size = 4
     indentation_delta_size = 2
     module_wrapper_text = jinja2.Template(
-        "{{ aliases }}module {\n   {{ body }}\n}\n",
+        "{{ aliases }}module {\n   {{ body }}\nfunc.func private @quick_sort(memref<*xindex>, index)\n}\n",
         undefined=jinja2.StrictUndefined,
     )
     function_wrapper_text = jinja2.Template(
@@ -419,8 +430,7 @@ class MLIRFunctionBuilder:
         return_type = ", ".join(str(rt) for rt in self.return_types)
         if len(self.return_types) != 1:
             return_type = f"({return_type})"
-
-        signature = ", ".join(f"{var[0].replace('%','%arg_')}: {var[1].replace('tensor', 'memref')}" for var in self.inputs)
+        signature = ", ".join(f"{ var[0].replace('%','%arg_')}: {var[1].replace('tensor', 'memref')}" if 'tensor' in var[1] else f"{ var[0]}: {var[1]}" for var in self.inputs)
 
         return needed_function_definitions + self.function_wrapper_text.render(
             private_func=make_private,
