@@ -28,6 +28,7 @@ class HashTable:
         self.dims_table = self.create_buckets()
         self.indexlbls_table = self.create_buckets()
         self.gen_table = self.create_buckets()
+        self.formats_table = self.create_buckets()
   
     def create_buckets(self):
         return [[] for _ in range(self.size)]
@@ -55,6 +56,24 @@ class HashTable:
         else:
             bucket.append((key, val))
 
+
+    def set_format(self, key, matrix_type ):
+        
+        hashed_key = hash(key) % self.size      
+        bucket = self.formats_table[hashed_key]
+  
+        found_key = False
+        for index, record in enumerate(bucket):
+            record_key, _ = record
+              
+            if record_key == key:
+                found_key = True
+                break
+  
+        if found_key:
+            bucket[index] = (key, matrix_type)
+        else:
+            bucket.append((key, matrix_type))
 
     def set_dims(self, key, val:list):
         
@@ -185,6 +204,33 @@ class HashTable:
           
         # Get the bucket corresponding to index
         bucket = self.indexlbls_table[hashed_key]
+  
+        found_key = False
+        for index, record in enumerate(bucket):
+            record_key, record_val = record
+              
+            # check if the bucket has same key as 
+            # the key being searched
+            if record_key == key:
+                found_key = True
+                break
+  
+        # If the bucket has same key as the key being searched,
+        # Return the value found
+        # Otherwise indicate there was no record found
+        if found_key:
+            return record_val
+        else:
+            return "No record found"
+        
+    def get_format(self, key):
+        
+        # Get the index from the key using
+        # hash function
+        hashed_key = hash(key) % self.size
+          
+        # Get the bucket corresponding to index
+        bucket = self.formats_table[hashed_key]
   
         found_key = False
         for index, record in enumerate(bucket):
