@@ -44,8 +44,10 @@ def run_GraphX(input_ta: str,
                num_rounds: int):
 
     basename = os.path.basename(input_ta)
-    command1 = F"{COMET_OPT} {COMET_OPT_OPTIONS} {input_ta} &> results/{basename}.llvm"
-    subprocess.run(command1, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    command1 = F"{COMET_OPT} {COMET_OPT_OPTIONS} {input_ta}"
+    result = subprocess.run(command1, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    with open(F"results/{basename}.llvm", "w") as fout:
+        fout.write(result.stdout.decode("utf-8"))
 
     command3 = F"{MLIR_CPU_RUNNER} results/{basename}.llvm -O3 -e main -entry-point-result=void -shared-libs={SHARED_LIBS}"
     
@@ -61,7 +63,7 @@ def run_GraphX(input_ta: str,
     
         total_time = 0
         for r_i in range(num_rounds):
-            result = subprocess.run(command3, env=env_vars, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(command3, env=env_vars, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             columns = result.stdout.decode("utf-8").split()
             runtime = get_elapsed_time(columns)
             print(F"round: {r_i + 1} runtime: {runtime}")  # test
@@ -85,7 +87,7 @@ def run_GraphBLAS(exe: str,
         print(F"\n#### GraphBLAS: {exe} ####")
 
         command = F"{LAGRAPH_EXE_DIR}/{exe} {input_matrix} {input_matrix}"
-        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         print_out = result.stdout.decode("utf-8")
         print(print_out)
         columns = print_out.split()

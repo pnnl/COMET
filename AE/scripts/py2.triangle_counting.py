@@ -45,11 +45,15 @@ def run_GraphX_code(input_ta: str,
                     runtimes: list,
                     num_rounds: int):
     ta_file = os.path.basename(input_ta)
-    command1 = F"{COMET_OPT} {COMET_OPT_OPTIONS} {input_ta} &> results/{ta_file}.llvm"
-    subprocess.run(command1, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    command1 = F"{COMET_OPT} {COMET_OPT_OPTIONS} {input_ta}"
+    result = subprocess.run(command1, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    with open(F"results/{ta_file}.llvm", "w") as fout:
+        fout.write(result.stdout.decode("utf-8"))
     scf_file = os.path.basename(input_scf)
-    command2 = F"{MLIR_OPT} {MLIR_OPT_OPTIONS} {input_scf} &> results/{scf_file}.llvm"
-    subprocess.run(command2, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    command2 = F"{MLIR_OPT} {MLIR_OPT_OPTIONS} {input_scf}"
+    result = subprocess.run(command2, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    with open(F"results/{scf_file}.llvm", "w") as fout:
+        fout.write(result.stdout.decode("utf-8"))
     command3 = F"{MLIR_CPU_RUNNER} results/{ta_file}.llvm -O3 -e main -entry-point-result=void -shared-libs={SHARED_LIBS}"
     command4 = F"{MLIR_CPU_RUNNER} results/{scf_file}.llvm -O3 -e main -entry-point-result=void -shared-libs={SHARED_LIBS}"
 
@@ -69,7 +73,7 @@ def run_GraphX_code(input_ta: str,
 
         total_time = 0
         for r_i in range(num_rounds):
-            result = subprocess.run(cmd, env=env_vars, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(cmd, env=env_vars, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             columns = result.stdout.decode("utf-8").split()
             runtime = get_elapsed_time(columns)
             print(F"round: {r_i + 1} runtime: {runtime}")  # test
@@ -149,7 +153,7 @@ def run_GraphBLAS(exe: str,
         print(F"\n#### GraphBLAS: {exe} ####")
 
         command = F"{LAGRAPH_EXE_DIR}/{exe} {input_matrix} {input_matrix}"
-        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         print_out = result.stdout.decode("utf-8")
         print(print_out)
         rows = print_out.split("\n")

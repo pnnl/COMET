@@ -38,16 +38,18 @@ def get_elapsed_time(columns: list) -> float:
 #######################
 # Run GraphX
 #######################
-def run_GraphX(input_ta: str,
+def run_GraphX(input_scf: str,
                matrices: list,
                runtimes: list,
                num_rounds: int):
 
-    basename = os.path.basename(input_ta)
+    basename = os.path.basename(input_scf)
     # command1 = F"{COMET_OPT} {COMET_OPT_OPTIONS} {input_ta} &> results/{basename}.llvm"
-    # subprocess.run(command1, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    command2 = F"{MLIR_OPT} {MLIR_OPT_OPTIONS} {input_ta} &> results/{basename}.llvm"
-    subprocess.run(command2, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # subprocess.run(command1, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    command2 = F"{MLIR_OPT} {MLIR_OPT_OPTIONS} {input_scf}"
+    result = subprocess.run(command2, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    with open(F"results/{basename}.llvm", "w") as fout:
+        fout.write(result.stdout.decode("utf-8"))
     command3 = F"{MLIR_CPU_RUNNER} results/{basename}.llvm -O3 -e main -entry-point-result=void -shared-libs={SHARED_LIBS}"
     
     # Get the runtime for every matrix
@@ -62,7 +64,7 @@ def run_GraphX(input_ta: str,
     
         total_time = 0
         for r_i in range(num_rounds):
-            result = subprocess.run(command3, env=env_vars, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(command3, env=env_vars, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             columns = result.stdout.decode("utf-8").split()
             runtime = get_elapsed_time(columns)
             print(F"round: {r_i + 1} runtime: {runtime}")  # test
@@ -84,7 +86,7 @@ def run_GraphBLAS(exe: str,
         print(F"\n#### GraphBLAS: {exe} ####")
 
         command = F"{LAGRAPH_EXE_DIR}/{exe} {input_matrix} {input_matrix}"
-        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         print_out = result.stdout.decode("utf-8")
         print(print_out)
         columns = print_out.split()
@@ -96,9 +98,9 @@ def run_GraphBLAS(exe: str,
 
 def main():
     if len(sys.argv) != 4:
-        print(F"Usage: python3 {sys.argv[0]} <input.ta> <output.csv> <LAGraph_exe>")
+        print(F"Usage: python3 {sys.argv[0]} <input.scf> <output.csv> <LAGraph_exe>")
         exit(-1)
-    input_ta = sys.argv[1]
+    input_scf = sys.argv[1]
     output_csv = sys.argv[2]
     LAGraph_exe = sys.argv[3]
 
@@ -116,7 +118,7 @@ def main():
 
     # Run GraphX
     runtimes_graphx = []
-    run_GraphX(input_ta=input_ta,
+    run_GraphX(input_scf=input_scf,
                matrices=all_matrices,
                runtimes=runtimes_graphx,
                num_rounds=num_rounds)
