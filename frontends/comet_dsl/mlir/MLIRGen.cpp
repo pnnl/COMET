@@ -1116,16 +1116,35 @@ namespace
           {
             comet_debug() << " is TransposeOp\n";
 
-            // infer the format
-            mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<mlir::tensorAlgebra::TransposeOp>(e.getDefiningOp()).getFormats();
-            unsigned int i = opFormatsArrayAttr.size() - 1;
-            std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
+            // get the real transpose op output via the set op.
+            mlir::Value transposeOut;
+            mlir::Operation *firstUser = e.getDefiningOp()->getNextNode();
+            if (isa<TensorSetOp>(firstUser))
+            {
+              TensorSetOp setOp = cast<TensorSetOp>(firstUser);
+              transposeOut = setOp.getOperand(1);
+            }
+            else
+            {
+              assert(false && "Transpose has no set_op after it!");
+            }
 
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-
-            tensors.push_back(dyn_cast<mlir::tensorAlgebra::TransposeOp>(e.getDefiningOp()).getOperation()->getResult(0));
+            // get the format of transposeOut tensor
+            if (isa<DenseTensorDeclOp>(transposeOut.getDefiningOp()))
+            {
+              auto denseFormat = dyn_cast<DenseTensorDeclOp>(transposeOut.getDefiningOp()).getFormat(); 
+              formats.push_back(denseFormat);
+            }
+            else if (isa<SparseTensorDeclOp>(transposeOut.getDefiningOp()))
+            {
+              auto sparseFormat = dyn_cast<SparseTensorDeclOp>(transposeOut.getDefiningOp()).getFormat(); 
+              formats.push_back(sparseFormat);
+            }
+            else
+            {
+              assert(false && "Can not determine tensor format with transpose op");
+            }
+            tensors.push_back(transposeOut);
           }
           else
           {
@@ -1154,7 +1173,7 @@ namespace
         comet_debug() << " formats.size(): " << formats.size() << "\n";
         auto strAttr = builder.getStrArrayAttr(formats);
 
-        assert(tensors.size() == 2 && " less than 2 input tensors for ta.tc or ta.elews_mul\n");
+        assert(tensors.size() == 2 && " less than 2 input tensors for ta.mul or ta.elews_mul\n");
 
         std::vector<mlir::Value> labels;
         for (auto i : ret_lbls)
