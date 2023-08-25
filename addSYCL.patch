@@ -1,0 +1,1304 @@
+diff --git a/llvm/include/llvm/InitializePasses.h b/llvm/include/llvm/InitializePasses.h
+index 2924b02774bd..0e1b8b89c153 100644
+--- a/llvm/include/llvm/InitializePasses.h
++++ b/llvm/include/llvm/InitializePasses.h
+@@ -386,6 +386,7 @@ void initializeUnifyFunctionExitNodesLegacyPassPass(PassRegistry &);
+ void initializeUnifyLoopExitsLegacyPassPass(PassRegistry &);
+ void initializeUnpackMachineBundlesPass(PassRegistry&);
+ void initializeUnreachableBlockElimLegacyPassPass(PassRegistry&);
++void initializeVXXIRDowngraderLegacyPass(PassRegistry&);
+ void initializeUnreachableMachineBlockElimPass(PassRegistry&);
+ void initializeVerifierLegacyPassPass(PassRegistry&);
+ void initializeVirtRegMapPass(PassRegistry&);
+diff --git a/llvm/lib/Passes/PassBuilder.cpp b/llvm/lib/Passes/PassBuilder.cpp
+index e68d94ddbf8e..ea035ec22191 100644
+--- a/llvm/lib/Passes/PassBuilder.cpp
++++ b/llvm/lib/Passes/PassBuilder.cpp
+@@ -224,6 +224,8 @@
+ #include "llvm/Transforms/Scalar/TLSVariableHoist.h"
+ #include "llvm/Transforms/Scalar/TailRecursionElimination.h"
+ #include "llvm/Transforms/Scalar/WarnMissedTransforms.h"
++#include "../../tools/opt/VXXIRDowngrader.h"
++#include "../../tools/opt/InSPIRation.h"
+ #include "llvm/Transforms/Utils/AddDiscriminators.h"
+ #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
+ #include "llvm/Transforms/Utils/BreakCriticalEdges.h"
+diff --git a/llvm/lib/Passes/PassRegistry.def b/llvm/lib/Passes/PassRegistry.def
+index 36700574c166..d63cb0d97b8b 100644
+--- a/llvm/lib/Passes/PassRegistry.def
++++ b/llvm/lib/Passes/PassRegistry.def
+@@ -118,6 +118,8 @@ MODULE_PASS("synthetic-counts-propagation", SyntheticCountsPropagation())
+ MODULE_PASS("trigger-crash", TriggerCrashPass())
+ MODULE_PASS("verify", VerifierPass())
+ MODULE_PASS("view-callgraph", CallGraphViewerPass())
++MODULE_PASS("inspiration", InSPIRationPass())
++MODULE_PASS("vxx-ir-downgrade", VXXIRDowngraderPass())
+ MODULE_PASS("wholeprogramdevirt", WholeProgramDevirtPass())
+ MODULE_PASS("dfsan", DataFlowSanitizerPass())
+ MODULE_PASS("module-inline", ModuleInlinerPass())
+diff --git a/llvm/tools/opt/CMakeLists.txt b/llvm/tools/opt/CMakeLists.txt
+index 6b2d6b4d18a8..4532d92c8a0a 100644
+--- a/llvm/tools/opt/CMakeLists.txt
++++ b/llvm/tools/opt/CMakeLists.txt
+@@ -33,6 +33,9 @@ add_llvm_tool(opt
+   AnalysisWrappers.cpp
+   BreakpointPrinter.cpp
+   NewPMDriver.cpp
++  SYCLUtils.cpp
++  VXXIRDowngrader.cpp
++  InSPIRation.cpp
+   opt.cpp
+ 
+   DEPENDS
+diff --git a/llvm/tools/opt/InSPIRation.cpp b/llvm/tools/opt/InSPIRation.cpp
+new file mode 100644
+index 000000000000..adb7a4fa16d6
+--- /dev/null
++++ b/llvm/tools/opt/InSPIRation.cpp
+@@ -0,0 +1,394 @@
++// Taken from https://github.com/triSYCL/sycl/blob/sycl/unified/master/llvm/lib/SYCL/InSPIRation.cpp
++
++//===- InSPIRation.cpp                                      ---------------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++///
++/// \file
++/// Rewrite the kernels and functions so that they are compatible with SPIR
++/// representation as described in "The SPIR Specification Version 2.0 -
++/// Provisional" from Khronos Group.
++///
++// ===---------------------------------------------------------------------===//
++
++#include <cstddef>
++#include <regex>
++#include <string>
++
++#include "llvm/ADT/SmallVector.h"
++#include "llvm/ADT/Statistic.h"
++//#include "llvm/ADT/Triple.h"
++#include "llvm/Demangle/Demangle.h"
++#include "llvm/IR/Argument.h"
++#include "llvm/IR/CallingConv.h"
++#include "llvm/IR/Constants.h"
++#include "llvm/IR/Function.h"
++#include "llvm/IR/InstIterator.h"
++#include "llvm/IR/Instructions.h"
++#include "llvm/IR/Intrinsics.h"
++#include "llvm/IR/Metadata.h"
++#include "llvm/IR/Module.h"
++#include "llvm/IR/Type.h"
++#include "llvm/Pass.h"
++#include "InSPIRation.h"
++#include "llvm/Support/CommandLine.h"
++#include "llvm/Support/Debug.h"
++#include "llvm/Support/ErrorHandling.h"
++#include "llvm/Support/raw_ostream.h"
++
++#include "SYCLUtils.h"
++
++using namespace llvm;
++
++// Put the code in an anonymous namespace to avoid polluting the global
++// namespace
++namespace {
++// avoid recreation of regex's we won't alter at runtime
++
++    struct Prefix {
++        std::string Str;
++        std::regex Matcher;
++    };
++
++// matches number between Z and _ (\d+)(?=_)
++    static const std::regex matchZVal{R"((\d+)(?=_))"};
++
++// matches reqd_work_group_size based on it's current template parameter list of
++// 3 digits, doesn't care what the next adjoining type is or however many there
++// are in this case. Technically the demangler enforces spacing between the
++// commas but just in case it ever changes.
++    static const std::regex matchReqdWorkGroupSize{
++            R"(cl::sycl::xilinx::reqd_work_group_size<\d+,\s?\d+,\s?\d+,)"};
++
++// Just matches integers
++    static const std::regex matchSomeNaturalInteger{R"(\d+)"};
++
++/// Transform the SYCL kernel functions into v++ SPIR-compatible kernels
++    struct InSPIRationState {
++        /// This function currently works by checking for certain prefixes, and
++        /// removing them from the mangled name, this currently is used for
++        /// get_global_id etc. (as we forcefully prefix it with __spir_ocl_), and
++        /// the math builtins which are prefixed with __spirv_ocl_. An example is:
++        ///   Z24__spir_ocl_get_global_idj - > Z13get_global_idj
++
++        /// Note: running this call on real SPIRV builtins is unlikely to yield a
++        /// working SPIR builtin as they 1) May not be named the same/have a SPIR
++        /// equivalent 2) Are not necessarily function calls, but possibly a magic
++        /// variable like __spirv_BuiltInGlobalSize, something more complex would be
++        /// required.
++        void removePrefixFromMangling(Function &F, const std::regex Match,
++                                      const std::string Namespace) {
++            const auto funcName = F.getName().str();
++
++            auto regexName = std::regex_replace(funcName, Match, "");
++            if (funcName != regexName) {
++                std::smatch capture;
++                if (std::regex_search(funcName, capture, matchZVal)) {
++                    auto zVal = std::stoi(capture[0]);
++
++                    // The poor man's mangling to a spir builtin, we know that the function
++                    // type itself is fine, we just need to work out the _Z mangling as spir
++                    // built-ins are not prefixed with __spirv_ocl_ or __spir_ocl_. All
++                    // _Z is in this case is the number of characters in the functions name
++                    // which we can work out by removing the number of characters in the
++                    // prefix e.g. __spirv_ocl_ (12 characters)/__spir_ocl_ (11 characters)
++                    // or from the original mangled names _Z value SPIR manglings for
++                    // reference:
++                    // https://github.com/KhronosGroup/SPIR-Tools/wiki/SPIR-2.0-built-in-functions
++                    F.setName("_Z" + std::to_string(zVal - Namespace.size()) + regexName);
++                }
++            }
++        }
++
++        /// remap spirv builtins towards function present in vitis libspir.
++        void remapBuiltin(Function *F) {
++            /// according to the opencl 2.1 spec fmax_common and max are the same except
++            /// on nans and infinity where fmax_common will output undefined value
++            /// whereas fmax has rules to follow.
++            /// because of this it is legal to replace a fmax_common by fmax.
++            static std::pair<StringRef, StringRef> Mapping[] = {
++                    {"_Z11fmax_common", "_Z4fmax"},
++                    {"_Z3Dot", "_Z3dot"},
++            };
++            for (std::pair<StringRef, StringRef> Elem : Mapping)
++                if (F->getName().startswith(Elem.first))
++                    return F->setName(Elem.second +
++                                      F->getName().drop_front(Elem.first.size()));
++        }
++
++        /// Do transforms on a SPIR function called by a SPIR kernel
++        void kernelCallFuncSPIRify(Function &F) {
++            // no op at the moment
++        }
++
++        /// Do transforms on a SPIR Kernel
++        void kernelSPIRify(Function &F) {
++            // no op at the moment
++        }
++
++        /// Retrieves the ReqdWorkGroupSize values from a demangled function name
++        /// using regex.
++        SmallVector<llvm::Metadata *, 8>
++        getReqdWorkGroupSize(const std::string &demangledName, LLVMContext &Ctx) {
++            SmallVector<llvm::Metadata *, 8> reqdWorkGroupSize;
++            std::smatch capture;
++
++            // If we're here we have captured at least one reqd_work_group_size
++            // we only really care about the first application, because multiple
++            // uses of this property on one kernel are invalid.
++            if (std::regex_search(demangledName, capture, matchReqdWorkGroupSize)) {
++                /// \todo: Enforce the use of a single reqd_work_group_size in the
++                /// template interface in someway at compile time
++                auto Int32Ty = llvm::Type::getInt32Ty(Ctx);
++                std::string s = capture[0];
++                std::sregex_token_iterator workGroupSizes{s.begin(), s.end(),
++                                                          matchSomeNaturalInteger};
++                // only really care about the first 3 values, anymore and the
++                // reqd_work_group_size interface is incorrect
++                for (unsigned i = 0;
++                     i < 3 && workGroupSizes != std::sregex_token_iterator{};
++                     ++i, ++workGroupSizes) {
++                    reqdWorkGroupSize.push_back(llvm::ConstantAsMetadata::get(
++                            llvm::ConstantInt::get(Int32Ty, std::stoi(*workGroupSizes))));
++                }
++
++                if (reqdWorkGroupSize.size() != 3)
++                    report_fatal_error("The reqd_work_group_size properties dimensions are "
++                                       "not equal to 3");
++            }
++
++            return reqdWorkGroupSize;
++        }
++
++        /// In SYCL, kernel names are defined by types and in our current
++        /// implementation we wrap our SYCL kernel names with properties that are
++        /// defined as template types. For example ReqdWorkGroupSize is defined as
++        /// one of these when the kernel name is translated from type to kernel name
++        /// the information is retained and we can retrieve it in this LLVM pass by
++        /// using regex on it.
++        /// This is something we can improve on in the future, but the concept works
++        /// for the moment.
++        void applyKernelProperties(Function &F) {
++            auto &ctx = F.getContext();
++
++            auto funcMangledName = F.getName().str();
++            auto demangledName = llvm::demangle(funcMangledName);
++            auto reqdWorkGroupSize = getReqdWorkGroupSize(demangledName, ctx);
++
++            if (!reqdWorkGroupSize.empty())
++                F.setMetadata("reqd_work_group_size",
++                              llvm::MDNode::get(ctx, reqdWorkGroupSize));
++        }
++
++        /// Add metadata for the SPIR 2.0 version
++        void setSPIRVersion(Module &M) {
++            /* Get InSPIRation from SPIRTargetCodeGenInfo::emitTargetMD in
++               tools/clang/lib/CodeGen/TargetInfo.cpp */
++            auto &Ctx = M.getContext();
++            auto Int32Ty = llvm::Type::getInt32Ty(Ctx);
++            // SPIR v2.0 s2.12 - The SPIR version used by the module is stored in the
++            // opencl.spir.version named metadata.
++            llvm::Metadata *SPIRVerElts[] = {
++                    llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(Int32Ty, 2)),
++                    llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(Int32Ty, 0))};
++            M.getOrInsertNamedMetadata("opencl.spir.version")
++                    ->addOperand(llvm::MDNode::get(Ctx, SPIRVerElts));
++        }
++
++        /// Add metadata for the OpenCL 1.2 version
++        void setOpenCLVersion(Module &M) {
++            auto &Ctx = M.getContext();
++            auto Int32Ty = llvm::Type::getInt32Ty(Ctx);
++            // SPIR v2.0 s2.13 - The OpenCL version used by the module is stored in the
++            // opencl.ocl.version named metadata node.
++            llvm::Metadata *OCLVerElts[] = {
++                    llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(Int32Ty, 1)),
++                    llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(Int32Ty, 2))};
++            llvm::NamedMDNode *OCLVerMD =
++                    M.getOrInsertNamedMetadata("opencl.ocl.version");
++            OCLVerMD->addOperand(llvm::MDNode::get(Ctx, OCLVerElts));
++        }
++
++        /// Remove extra SPIRV metadata for now, doesn't really crash v++ but its
++        /// not required. Another method would just be to modify the SYCL Clang
++        /// frontend to generate the actual SPIR/OCL metadata we need rather than
++        /// always SPIRV/CL++ metadata
++        void removeOldMetadata(Module &M) {
++            llvm::NamedMDNode *Old = M.getOrInsertNamedMetadata("spirv.Source");
++            if (Old)
++                M.eraseNamedMetadata(Old);
++        }
++
++        /// Set the output Triple to SPIR
++        void setSPIRTriple(Module &M) { M.setTargetTriple("spir64"); }
++
++        /// Test if a function is a non-intrinsic SPIR function, indicating that it is
++        /// a user created function that the SYCL compiler has transitively generated
++        /// or one that comes from an existing library of SPIR functions (HLS SPIR
++        /// libraries)
++        bool isTransitiveNonIntrinsicFunc(const Function &F) {
++            if (!F.isIntrinsic())
++                return true;
++            return false;
++        }
++
++        // Hopeful list/probably impractical asks for v++:
++        // 1) Make XML generator/reader a little kinder towards arguments with no
++        //   names if possible
++        // 2) Allow -k all for LLVM IR input/SPIR-df so it can search for all
++        //    SPIR_KERNEL's in a binary
++        // 3) Be a little more name mangle friendly when reading in input e.g.
++        //    accept: $_
++
++        /// This pass should ideally be run after all your optimization passes,
++        /// including anything aimed at fixing address spaces or simplifying
++        /// load/stores. This is mainly as we would like to make the SSDM address
++        /// space fixers job as simple as possible (if it gets overly complex or there
++        /// needs to be some reorganization of passes detach it into a separate pass).
++        ///
++        /// However, it should be run prior to KernelPropGen as that
++        /// pass relies on the kernel names generated here for now to fuel the driver
++        /// script.
++        bool runOnModule(Module &M) {
++            // funcCount is for naming new name for each function called in kernel
++            int FuncCount = 0;
++
++            std::vector<Function *> Declarations;
++            for (auto &F : M.functions()) {
++                if (sycl::isKernelFunc(&F)) {
++                    kernelSPIRify(F);
++                    applyKernelProperties(F);
++                    sycl::giveNameToArguments(F);
++
++                    /// \todo Possible: We don't modify declarations right now as this
++                    /// will destroy the names of SPIR/CL intrinsics as they aren't
++                    /// actually considered intrinsics by LLVM IR. If there is ever a need
++                    /// to modify declarations in someway then the best way to do it would
++                    /// be to have a comprehensive list of mangled SPIR intrinsic names
++                    /// and check against it. Note: This is only relevant if we still
++                    /// modify the name of every function to be sycl_func_x, if v++ ever
++                    /// gets a little friendlier to spir input, probably not required.
++                } else if (isTransitiveNonIntrinsicFunc(F) && !F.isDeclaration()) {
++                    // After kernels code selection, there are only two kinds of functions
++                    // left: funcions called by kernels or LLVM intrinsic functions.
++                    // For functions called in SYCL kernels, put SPIR calling convention.
++                    kernelCallFuncSPIRify(F);
++
++                    // Modify the name of funcions called by SYCL kernel since function
++                    // names with $ sign would choke Xilinx v++.
++                    // And in Xilinx v++, there are passes splitting a function to new
++                    // functions. These new function names will come from some of the
++                    // basic block names in the original function.
++                    // So function and basic block names need to be modified to avoid
++                    // containing $ sign
++
++                    // Rename function name
++                    F.addFnAttr("src_name", F.getName());
++                    F.setName("sycl_func_" + Twine{FuncCount++});
++
++                    // While functions do come "named" it's in the form %0, %1 and v++
++                    // doesn't like this for the moment. v++ demands function arguments
++                    // be either unnamed or named non-numerically. This is a separate
++                    // issue from the reason we name kernel arguments (which is more
++                    // related to HLS needing names to generate XML).
++                    //
++                    // It doesn't require application to the SPIR intrinsics as we're
++                    // linking against the HLS SPIR library, which is already conformant.
++                    sycl::giveNameToArguments(F);
++                } else if (isTransitiveNonIntrinsicFunc(F) && F.isDeclaration()) {
++                    // push back intrinsics to make sure we handle naming after changing the
++                    // name of all functions to sycl_func.
++                    // Note: if we do not rename all the functions to sycl_func_N, a more
++                    // complex modification to this pass may be required that makes sure all
++                    // functions on the device with the same name as a built-in are changed
++                    // so they have no conflict with the built-in functions.
++                    Declarations.push_back(&F);
++                }
++            }
++
++            static Prefix prefix[] = {
++                    {"__spirv_ocl_u_", std::regex(R"((_Z\d+__spirv_ocl_u_))")},
++                    {"__spirv_ocl_s_", std::regex(R"((_Z\d+__spirv_ocl_s_))")},
++                    {"__spirv_ocl_", std::regex(R"((_Z\d+__spirv_ocl_))")},
++                    {"__spir_ocl_", std::regex(R"((_Z\d+__spir_ocl_))")},
++                    {"__spirv_", std::regex(R"((_Z\d+__spirv_))")},
++                    {"__spir_", std::regex(R"((_Z\d+__spir_))")},
++            };
++
++            for (auto F : Declarations) {
++                // aims to catch things preceded by a namespace of the style:
++                // _Z16__spirv_ocl_ and use the end section as a SPIR call
++                // _Z24__spir_ocl_
++                // _Z18__spirv_ocl_u_
++                // _Z18__spirv_ocl_s_
++
++                // This seems like a lazy brute force way to do things.
++                // Perhaps there is a more elegant solution that can be implemented in the
++                // future. I don't believe too much effort should be put into this until
++                // the builtin implementation stabilizes
++                for (Prefix p : prefix)
++                    removePrefixFromMangling(*F, p.Matcher, p.Str);
++
++                remapBuiltin(F);
++            }
++
++            removeOldMetadata(M);
++            //if (!Triple(M.getTargetTriple()).isXilinxHLS()) {
++
++                setSPIRVersion(M);
++
++                setOpenCLVersion(M);
++
++                // setSPIRTriple(M);
++
++                /// TODO: Set appropriate layout so the linker doesn't always complain,
++                /// this change may be better/more easily applied as something in the
++                /// Frontend as we'd be lying about the layout if we didn't enforce it
++                /// accurately in this pass. Which is potentially a good way to come
++                /// across some weird runtime bugs.
++                // setSPIRLayout(M);
++            //}
++
++            // The module probably changed
++            return true;
++        }
++    };
++
++    void runInSPIRation(Module &M) {
++        InSPIRationState S;
++        S.runOnModule(M);
++    }
++
++} // namespace
++
++PreservedAnalyses InSPIRationPass::run(Module &M, ModuleAnalysisManager &AM) {
++    runInSPIRation(M);
++    return PreservedAnalyses::none();
++}
++
++struct InSPIRationLegacy : public ModulePass {
++
++    static char ID; // Pass identification, replacement for typeid
++
++    InSPIRationLegacy() : ModulePass(ID) {}
++    bool runOnModule(Module &M) override {
++        runInSPIRation(M);
++        return true;
++    }
++};
++
++namespace llvm {
++    void initializeInSPIRationLegacyPass(PassRegistry & Registry);
++}
++
++INITIALIZE_PASS(InSPIRationLegacy, "inSPIRation",
++                "pass to make functions and kernels SPIR-compatible", false,
++                false)
++ModulePass *llvm::createInSPIRationLegacyPass() { return new InSPIRationLegacy(); }
++
++char InSPIRationLegacy::ID = 0;
+diff --git a/llvm/tools/opt/InSPIRation.h b/llvm/tools/opt/InSPIRation.h
+new file mode 100644
+index 000000000000..6550a5b37ee6
+--- /dev/null
++++ b/llvm/tools/opt/InSPIRation.h
+@@ -0,0 +1,33 @@
++// Taken from https://github.com/triSYCL/sycl/blob/sycl/unified/master/llvm/include/llvm/SYCL/InSPIRation.h
++
++//===- InSPIRation.h - SYCL SPIR fixer pass       -------------------------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// Rewrite the kernels and functions so that they are compatible with SPIR
++// representation as described in "The SPIR Specification Version 2.0 -
++// Provisional" from Khronos Group.
++// ===---------------------------------------------------------------------===//
++
++#ifndef LLVM_SYCL_INSPIRATION_H
++#define LLVM_SYCL_INSPIRATION_H
++
++#include "llvm/IR/PassManager.h"
++#include "llvm/Pass.h"
++
++namespace llvm {
++
++    struct InSPIRationPass : PassInfoMixin<InSPIRationPass> {
++        PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
++    };
++
++    ModulePass *createInSPIRationLegacyPass();
++
++}
++
++#endif
+\ No newline at end of file
+diff --git a/llvm/tools/opt/SYCLUtils.cpp b/llvm/tools/opt/SYCLUtils.cpp
+new file mode 100644
+index 000000000000..62fc485ce332
+--- /dev/null
++++ b/llvm/tools/opt/SYCLUtils.cpp
+@@ -0,0 +1,241 @@
++// Taken from https://github.com/triSYCL/sycl/blob/sycl/unified/next/llvm/lib/SYCL/SYCLUtils.cpp
++
++//===- SYCLUtils.cpp ------------------------------------------------------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// Shared utilities between the various SYCL passes.
++//
++// ===---------------------------------------------------------------------===//
++
++#include "llvm/ADT/StringExtras.h"
++#include "llvm/TargetParser/Triple.h"
++#include "llvm/IR/Attributes.h"
++#include "llvm/IR/Function.h"
++#include "llvm/IR/Instructions.h"
++#include "llvm/IR/Module.h"
++#include "llvm/IR/Operator.h"
++#include "llvm/Support/FormatVariadic.h"
++
++#include "SYCLUtils.h"
++
++namespace llvm {
++    namespace sycl {
++
++/// Remove a list of attributes from an IR module.
++        void removeAttributes(Module &M, ArrayRef<Attribute::AttrKind> Kinds) {
++            for (auto &F : M.functions())
++                for (auto Kind : Kinds) {
++                    F.removeAttributeAtIndex(AttributeList::FunctionIndex, Kind);
++                    F.removeAttributeAtIndex(AttributeList::ReturnIndex, Kind);
++                    for (auto &P : F.args())
++                        P.removeAttr(Kind);
++                    for (User *U : F.users()) {
++                        if (BitCastOperator* BC = dyn_cast<BitCastOperator>(U)) {
++                            assert(BC->getNumUses() == 1);
++                            U = BC->use_begin()->getUser();
++                        }
++                        if (CallBase *CB = dyn_cast<CallBase>(U)) {
++                            CB->removeAttributeAtIndex(AttributeList::FunctionIndex, Kind);
++                            CB->removeAttributeAtIndex(AttributeList::ReturnIndex, Kind);
++                            for (unsigned int i = 0; i < CB->arg_size(); ++i) {
++                                CB->removeParamAttr(i, Kind);
++                            }
++                        }
++                    }
++                }
++        }
++
++/// Remove a global metadata from a module.
++        void removeMetadata(Module &M, StringRef MetadataName) {
++            llvm::NamedMDNode *Old = M.getOrInsertNamedMetadata(MetadataName);
++            if (Old)
++                M.eraseNamedMetadata(Old);
++        }
++
++/// Replace the function named OldN by the function named NewN then delete the
++/// function named OldN.
++        void replaceFunction(Module &M, StringRef OldN, StringRef NewN) {
++            Function *Old = M.getFunction(OldN);
++            Function *New = M.getFunction(NewN);
++            if (!Old)
++                return;
++            assert(New);
++            assert(Old->getFunctionType() == New->getFunctionType() &&
++                   "replacement is not possible");
++            Old->replaceAllUsesWith(New);
++            Old->eraseFromParent();
++        }
++
++/// Test if a function is a kernel
++        bool isKernelFunc(const Function *F) {
++            return F->getCallingConv() == CallingConv::SPIR_KERNEL ||
++                   F->hasFnAttribute("fpga.top.func");
++        }
++
++        bool isArgBuffer(Argument *Arg) {
++            bool SyclHlsFlow = true;
++                    //Triple(Arg->getParent()->getParent()->getTargetTriple()).isXilinxHLS();
++            /// We consider that pointer arguments that are not byval or pipes are
++            /// buffers.
++            if (sycl::isPipe(Arg))
++                return false;
++            if (Arg->getType()->isPointerTy() &&
++                (SyclHlsFlow || Arg->getType()->getPointerAddressSpace() == 1 ||
++                 Arg->getType()->getPointerAddressSpace() == 2)) {
++                return !Arg->hasByValAttr();
++            }
++            return false;
++        }
++
++        void annotateKernelFunc(Function *F) {
++            F->addFnAttr("fpga.top.func", F->getName());
++            F->addFnAttr("fpga.demangled.name", F->getName());
++            F->setCallingConv(CallingConv::C);
++            F->setLinkage(llvm::GlobalValue::ExternalLinkage);
++        }
++
++        void removeKernelFuncAnnotation(Function *F) {
++            F->removeFnAttr("fpga.top.func");
++            F->removeFnAttr("fpga.demangled.name");
++            F->setCallingConv(CallingConv::C);
++            F->setLinkage(llvm::GlobalValue::PrivateLinkage);
++        }
++
++/// Pipe are represented with 3 string attributes with the following names:
++        constexpr const char *xilinx_pipe_type =
++                "sycl_xilinx_pipe_type"; // value is "read" or "write"
++        constexpr const char *xilinx_pipe_id =
++                "sycl_xilinx_pipe_id"; // value is the unique ID of the pipe
++        constexpr const char *xilinx_pipe_depth =
++                "sycl_xilinx_pipe_depth"; // value is the depth of the pipe
++
++        constexpr const char *xilinx_ddr_bank =
++                "sycl_xilinx_ddr_bank";
++        constexpr const char *xilinx_hbm_bank =
++                "sycl_xilinx_hbm_bank";
++        constexpr const char *xilinx_plram_bank =
++                "sycl_xilinx_plram_bank";
++
++/// getAttributeAtIndex(0, ...) is the attribute on the return. The first argument
++/// starts at 1
++
++        bool isWritePipe(Argument *Arg) {
++            return Arg->getParent()
++                           ->getAttributeAtIndex(Arg->getArgNo() + 1, sycl::xilinx_pipe_type)
++                           .getValueAsString() == "write";
++        }
++
++        bool isReadPipe(Argument *Arg) {
++            return Arg->getParent()
++                           ->getAttributeAtIndex(Arg->getArgNo() + 1, sycl::xilinx_pipe_type)
++                           .getValueAsString() == "read";
++        }
++
++        StringRef getPipeID(Argument *Arg) {
++            assert(isPipe(Arg));
++            return Arg->getParent()
++                    ->getAttributeAtIndex(Arg->getArgNo() + 1, sycl::xilinx_pipe_id)
++                    .getValueAsString();
++        }
++
++        int getPipeDepth(Argument *Arg) {
++            assert(isPipe(Arg));
++            int val;
++            llvm::to_integer(
++                    Arg->getParent()
++                            ->getAttributeAtIndex(Arg->getArgNo() + 1, sycl::xilinx_pipe_depth)
++                            .getValueAsString(),
++                    val);
++            return val;
++        }
++
++        static void annotatePipe(Argument *Arg, StringRef Op, StringRef Id, int Depth) {
++            Arg->addAttr(
++                    Attribute::get(Arg->getContext(), sycl::xilinx_pipe_type, Op));
++            Arg->addAttr(
++                    Attribute::get(Arg->getContext(), sycl::xilinx_pipe_id, Id));
++            Arg->addAttr(
++                    Attribute::get(Arg->getContext(), sycl::xilinx_pipe_depth, llvm::formatv("{0}", Depth).str()));
++        }
++
++        void annotateReadPipe(Argument *Arg, StringRef Id, int Depth) {
++            annotatePipe(Arg, "read", Id, Depth);
++        }
++
++        void annotateWritePipe(Argument *Arg, StringRef Id, int Depth) {
++            annotatePipe(Arg, "write", Id, Depth);
++        }
++
++        void removePipeAnnotation(Argument *Arg) {
++            Arg->getParent()->removeParamAttr(Arg->getArgNo(), sycl::xilinx_pipe_id);
++            Arg->getParent()->removeParamAttr(Arg->getArgNo(), sycl::xilinx_pipe_type);
++            Arg->getParent()->removeParamAttr(Arg->getArgNo(), sycl::xilinx_pipe_depth);
++        }
++
++/// This function gives llvm::function arguments with no name
++/// a default name e.g. arg_0, arg_1..
++///
++/// This is because if your arguments have no name v++ will commit seppuku
++/// when generating XML. Perhaps it's possible to move this to the Clang
++/// Frontend by generating the name from the accessor/capture the arguments
++/// come from, but I believe it requires a special compiler invocation option
++/// to keep arg names from the frontend in the LLVM bitcode.
++        void giveNameToArguments(Function &F) {
++            int Counter = 0;
++            for (auto &Arg : F.args()) {
++                if (!Arg.hasName())
++                    Arg.setName("arg_" + Twine{Counter++});
++            }
++        }
++
++        void annotateMemoryBank(Argument *Arg, MemBankSpec Bank) {
++            const auto mem_type = [&Bank] {
++                if (Bank.MemType == MemoryType::ddr)
++                    return sycl::xilinx_ddr_bank;
++                if (Bank.MemType == MemoryType::hbm)
++                    return sycl::xilinx_hbm_bank;
++                if (Bank.MemType == MemoryType::plram)
++                    return sycl::xilinx_plram_bank;
++            }();
++            Arg->addAttr(Attribute::get(Arg->getContext(),
++                                        mem_type,
++                                        llvm::formatv("{0}", Bank.BankID).str()));
++        }
++
++        void removeBankAnnotation(Argument *Arg) {
++            Arg->getParent()->removeParamAttr(Arg->getArgNo(), sycl::xilinx_ddr_bank);
++            Arg->getParent()->removeParamAttr(Arg->getArgNo(), sycl::xilinx_hbm_bank);
++            Arg->getParent()->removeParamAttr(Arg->getArgNo(), sycl::xilinx_plram_bank);
++        }
++
++        static int getBankVal(Argument *Arg, StringRef Str) {
++            Attribute Attr =
++                    Arg->getParent()->getAttributeAtIndex(Arg->getArgNo() + 1, Str);
++            if (!Attr.isValid())
++                return -1;
++            int Val;
++            llvm::to_integer(Attr.getValueAsString(), Val);
++            return Val;
++        }
++
++        MemBankSpec getMemoryBank(Argument *Arg) {
++            int Res = getBankVal(Arg, sycl::xilinx_ddr_bank);
++            if (Res != -1)
++                return {MemoryType::ddr, (unsigned)Res};
++            Res = getBankVal(Arg, sycl::xilinx_hbm_bank);
++            if (Res != -1)
++                return {MemoryType::hbm, (unsigned)Res};
++            Res = getBankVal(Arg, sycl::xilinx_plram_bank);
++            if (Res != -1)
++                return {MemoryType::plram, (unsigned)Res};
++            return {MemoryType::unspecified, 0};
++        }
++
++    } // namespace sycl
++} // namespace llvm
+\ No newline at end of file
+diff --git a/llvm/tools/opt/SYCLUtils.h b/llvm/tools/opt/SYCLUtils.h
+new file mode 100644
+index 000000000000..8e19dd86c29b
+--- /dev/null
++++ b/llvm/tools/opt/SYCLUtils.h
+@@ -0,0 +1,95 @@
++// Taken from https://github.com/triSYCL/sycl/blob/sycl/unified/next/llvm/include/llvm/SYCL/SYCLUtils.h
++
++//===- SYCLUtils.h --------------------------------------------------------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// Shared utilities between the various SYCL passes.
++//
++// ===---------------------------------------------------------------------===//
++
++#ifndef LLVM_SYCL_SYCLUTILS_H
++#define LLVM_SYCL_SYCLUTILS_H
++
++#include "llvm/IR/Attributes.h"
++#include "llvm/IR/Function.h"
++#include "llvm/IR/Instructions.h"
++#include "llvm/IR/Module.h"
++
++namespace llvm {
++    namespace sycl {
++
++/// Remove a list of attributes from an IR module.
++        void removeAttributes(Module &M, ArrayRef<Attribute::AttrKind> Kinds);
++
++/// Remove a global metadata from a module.
++        void removeMetadata(Module &M, StringRef MetadataName);
++
++/// Replace the function named OldN by the function named NewN then delete the
++/// function named OldN.
++        void replaceFunction(Module &M, StringRef OldN, StringRef NewN);
++
++/// Test if a function is a kernel
++        bool isKernelFunc(const Function *F);
++
++/// Test if the argument is a buffer in the OpenCL sense
++        bool isArgBuffer(Argument *Arg);
++
++/// Add annotation such that F is considered a Kernel by our passes and
++/// Vitis's HLS
++        void annotateKernelFunc(Function *F);
++
++/// Remove annotation that make F a kernel
++        void removeKernelFuncAnnotation(Function *F);
++
++/// Return true iff Arg is a pipe for writing
++        bool isWritePipe(Argument *Arg);
++
++/// Return true iff Arg is a pipe for reading
++        bool isReadPipe(Argument *Arg);
++
++/// Return true iff Arg is a pipe
++        inline bool isPipe(Argument *Arg) {
++            return isWritePipe(Arg) || isReadPipe(Arg);
++        }
++
++/// Return the Identifier of a pipe
++        StringRef getPipeID(Argument *Arg);
++
++/// Return the Depth of a pipe
++        int getPipeDepth(Argument *Arg);
++
++/// Add annotation such that Arg is considered a read pipe
++        void annotateReadPipe(Argument *Arg, StringRef Id, int Depth);
++
++/// Add annotation such that Arg is considered a write pipe
++        void annotateWritePipe(Argument *Arg, StringRef Id, int Depth);
++
++/// Remove annotations that make Arg a pipe
++        void removePipeAnnotation(Argument *Arg);
++
++/// Rename arguments to comply with Vitis's HLS
++        void giveNameToArguments(Function &F);
++
++        enum struct MemoryType { unspecified, ddr, hbm, plram };
++
++        struct MemBankSpec {
++            MemoryType MemType;
++            unsigned BankID;
++            operator bool() const { return MemType != MemoryType::unspecified; }
++        };
++
++        void annotateMemoryBank(Argument *Arg, MemBankSpec Val);
++        void removeMemoryBankAnnotation(Argument *Arg);
++
++        MemBankSpec getMemoryBank(Argument *Arg);
++
++    } // namespace sycl
++} // namespace llvm
++
++#endif
+diff --git a/llvm/tools/opt/VXXIRDowngrader.cpp b/llvm/tools/opt/VXXIRDowngrader.cpp
+new file mode 100644
+index 000000000000..1cd00eccc046
+--- /dev/null
++++ b/llvm/tools/opt/VXXIRDowngrader.cpp
+@@ -0,0 +1,404 @@
++// Taken from https://github.com/triSYCL/sycl/blob/sycl/unified/next/llvm/lib/SYCL/VXXIRDowngrader.cpp
++
++//===- VXXIRDowngrader.cpp                                      ---------------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// Erases and modifies IR incompatibilities with v++ backend
++//
++// ===---------------------------------------------------------------------===//
++
++#include <cstddef>
++#include <functional>
++#include <regex>
++#include <string>
++
++#include "llvm/ADT/MapVector.h"
++#include "llvm/ADT/SetVector.h"
++#include "llvm/ADT/StringRef.h"
++#include "llvm/IR/Attributes.h"
++#include "llvm/IR/Function.h"
++#include "llvm/IR/IRBuilder.h"
++#include "llvm/IR/InstIterator.h"
++#include "llvm/IR/InstVisitor.h"
++#include "llvm/IR/InstrTypes.h"
++#include "llvm/IR/Instructions.h"
++#include "llvm/IR/IntrinsicInst.h"
++#include "llvm/IR/Intrinsics.h"
++#include "llvm/IR/LLVMContext.h"
++#include "llvm/IR/Module.h"
++#include "llvm/Pass.h"
++#include "VXXIRDowngrader.h"
++#include "llvm/Support/FileSystem.h"
++#include "llvm/Support/Path.h"
++#include "llvm/Support/raw_ostream.h"
++#include "llvm/Support/ModRef.h"
++
++#include "SYCLUtils.h"
++
++/// This should theoretically not be accessed from outside of the IR directory.
++/// But using it is the most reliable way to do some of the IR transformation we
++/// are doing in this file.
++#include "llvm/../../lib/IR/LLVMContextImpl.h"
++
++using namespace llvm;
++
++#undef DEBUG_TYPE
++#define DEBUG_TYPE "VXXDownGrade"
++
++// Put the code in an anonymous namespace to avoid polluting the global
++// namespace
++namespace {
++
++/// As a rule of thumb, if a pass to downgrade a part of the IR is added it
++/// should have the LLVM version and date of patch/patch (if possible) that it
++/// was added in so it can eventually be removed as v++ catches up
++    struct VXXIRDowngrader {
++
++        /// Removes byval bitcode function parameter attribute that is applied to
++        /// pointer arguments of functions to state that they should technically be
++        /// passed by value.
++        ///
++        /// While this attribute has been long standing and has been around since
++        /// Clang/LLVM 7 it's diverged in the patch: D62319 which is the tail end of
++        /// Clang/LLVM 9.
++        ///
++        /// This LLVM patch primarily added byval <Type> syntax in the IR. And a new
++        /// attribute type, which is not to be confused with anything related to the
++        /// type system. It basically just states the attribute is carrying around
++        /// some Type/Value information rather than string/int/enum and gives it
++        /// somewhere to store it.
++        ///
++        /// However now the bitcode writer will write out some different bitcode for
++        /// byval that is unreadable by v++ and the bitcode reader upgrades any byval
++        /// attributes to the new byval <Type> syntax. The way we currently work
++        /// around this is:
++        /// 1) Delete the ByVal attribute, erasing any byval <Type> syntax in the IR
++        /// and then re-adding the old byval with no <Type> Syntax.
++        /// 2) In the SYCL v++ script when we run this pass with opt we make sure we
++        /// emit LLVM IR assembly language format and not bitcode format after this
++        /// pass so that it doesn't run through the bitcode writer.
++        /// 3) Inside the script we run it through an earlier LLVM assembler to create
++        /// our bitcode, in this case the one packaged with v++ as it's easily
++        /// accessible and we don't wish to carry around our own precompiled
++        /// assemblers for every architecture in existence. Plus the bitcode it
++        /// generates will always be bitcode compatible with v++..
++        /// 4) Feed it to v++ and be happy that it can consume it.
++        ///
++        /// The downside to this rather painful hack is that we're tied to the LLVM
++        /// assembler that's packaged with v++, which means newer LLVM IR may not be
++        /// compatible with it. Which may lead to more problems in the future, one
++        /// currently example of this problem is the renameBasicBlocks function inside
++        /// this pass that renames all blocks to make the assembler happy. Without it
++        /// the v++ llvm-as will die.
++        ///
++        /// An alternative to this would be to make our own alterations to the Bitcode
++        /// writer so that it will optionally output the old bitcode encoding style of
++        /// byval so that v++ can still read it in.
++        ///
++        /// Sadly we cannot just remove the byval attribute and ignore all the hacky
++        /// workaround that come with keeping it as even though v++ will allow it to
++        /// compile the resulting binary is not compatible with the XRT runtime. It
++        /// will kill its execution when the kernel is launched, even for simple
++        /// kernels.
++        void resetByVal(Module &M) {
++            for (auto &F : M.functions()) {
++                for (auto &P : F.args()) {
++                    if (P.hasAttribute(llvm::Attribute::ByVal)) {
++                        P.removeAttr(llvm::Attribute::ByVal);
++                        P.addAttr(Attribute::get(M.getContext(), llvm::Attribute::ByVal,
++                                                 nullptr));
++                    }
++                }
++
++                // These appear on Call/Invoke Instructions as well
++                for (auto &I : instructions(F))
++                    if (CallBase *CB = dyn_cast<CallBase>(&I)) {
++                        for (unsigned int i = 0; i < CB->arg_size(); ++i) {
++                            if (CB->paramHasAttr(i, llvm::Attribute::ByVal)) {
++                                CB->removeParamAttr(i, llvm::Attribute::ByVal);
++                                CB->addParamAttr(i,
++                                                 Attribute::get(M.getContext(),
++                                                                llvm::Attribute::ByVal, nullptr));
++                            }
++                        }
++                    }
++            }
++        }
++
++        /// This is part of the resetByVal work around, as we're using the v++
++        /// assember to assemble our code to bitcode we have to rename all the basic
++        /// blocks. As the LLVM IR numbering of blocks seems to be a little too new
++        /// for v++'s tastes.
++        void renameBasicBlocks(Module &M) {
++            int count;
++            for (auto &F : M.functions()) {
++                count = 0;
++                for (auto &B : F)
++                    B.setName("label_" + Twine{count++});
++            }
++        }
++
++        /// At this point in the pipeline Annotations intrinsic have all been
++        /// converted into what they need to be. But they can still be present and
++        /// have pointer on pointer as arguments which v++ can't deal with.
++        void removeAnnotations(Module &M) {
++            SmallVector<Instruction *, 16> ToRemove;
++            for (Function &F : M.functions())
++                if (F.getIntrinsicID() == Intrinsic::annotation ||
++                    F.getIntrinsicID() == Intrinsic::ptr_annotation ||
++                    F.getIntrinsicID() == Intrinsic::var_annotation)
++                    for (User *U : F.users())
++                        if (auto *I = dyn_cast<Instruction>(U))
++                            ToRemove.push_back(I);
++            for (Instruction *I : ToRemove)
++                I->eraseFromParent();
++            GlobalVariable *Annot = M.getGlobalVariable("llvm.global.annotations");
++            if (Annot)
++                Annot->eraseFromParent();
++        }
++
++        /// Remove Freeze instruction because v++ can't deal with them.
++        /// FIXME: This is not a safe transformation but since LLVM survived with bugs
++        /// caused by absence of freeze for many years, so I guess it is good enough
++        /// for a prototype.
++        void removeFreezeInst(Module &M) {
++            SmallVector<Instruction*, 16> ToRemove;
++            for (auto& F : M.functions())
++                for (auto& I : instructions(F))
++                    if (auto* Freeze = dyn_cast<FreezeInst>(&I)) {
++                        Freeze->replaceAllUsesWith(Freeze->getOperand(0));
++                        ToRemove.push_back(Freeze);
++                    }
++            for (auto* I : ToRemove)
++                I->eraseFromParent();
++        }
++
++        void removeFNegInst(Module& M) {
++            SmallVector<Instruction*, 16> ToRemove;
++            for (auto &F : M.functions())
++                for (auto &I : instructions(F))
++                    if (auto *U = dyn_cast<UnaryOperator>(&I))
++                        if (U->getOpcode() == Instruction::FNeg) {
++                            Instruction* Sub = BinaryOperator::Create(BinaryOperator::FSub,
++                                                                      ConstantFP::getZeroValueForNegation(
++                                                                              U->getOperand(0)->getType()),
++                                                                      U->getOperand(0));
++                            U->replaceAllUsesWith(Sub);
++                            Sub->insertBefore(U);
++                            ToRemove.push_back(U);
++                        }
++            for (auto *I : ToRemove)
++                I->eraseFromParent();
++        }
++
++        /// Lower all llvm.abs into select(a < 0, -a, a)
++        void lowerAbsIntrinsic(Module &M) {
++            IRBuilder<> B(M.getContext());
++            SmallVector<Instruction *, 16> ToProcess;
++            for (auto &F : M.functions())
++                for (auto &I : instructions(F))
++                    if (auto *CI = dyn_cast<CallBase>(&I))
++                        ToProcess.push_back(&I);
++            for (auto *I : ToProcess) {
++                if (auto *CI = dyn_cast<CallBase>(I)) {
++                    if (CI->getIntrinsicID() != Intrinsic::abs)
++                        continue;
++                    B.SetInsertPoint(CI->getNextNode());
++                    Value *Cmp = B.CreateICmpSLT(
++                            CI->getArgOperand(0),
++                            ConstantInt::getNullValue(CI->getArgOperand(0)->getType()));
++                    Value *Sub = B.CreateSub(
++                            ConstantInt::getNullValue(CI->getArgOperand(0)->getType()),
++                            CI->getArgOperand(0));
++                    Value *ABS = B.CreateSelect(Cmp, Sub, CI->getArgOperand(0));
++                    CI->replaceAllUsesWith(ABS);
++                    CI->eraseFromParent();
++                }
++            }
++        }
++
++        /// Poison is a special value that was added to LLVM but is not present in the
++        /// HLS backend. This function removes all poison values by converting them
++        /// into zeros.
++        void convertPoisonToZero(Module &M) {
++            /// We are iterating over every poison value that is stored by this module.
++            for (auto &PV : M.getContext().pImpl->PVConstants) {
++                Type* Ty = PV.second->getType();
++                /// Here we can get poison values that are unreachable by "normal" IR
++                /// traversal because we are traversing through the module's
++                /// implementation. So we do some basic sanity checks to make sure that we
++                /// can turn this value into a null.
++                if (PV.second->use_empty() || Ty->isVoidTy() || Ty->isFunctionTy() ||
++                    Ty->isLabelTy() || Ty->isMetadataTy())
++                    continue;
++                PV.second.get()->replaceAllUsesWith(
++                        Constant::getNullValue(PV.second.get()->getType()));
++            }
++        }
++
++        /// This function removes values of type metadata because they are not
++        /// supported by the HLS backend.
++        void removeMetaDataValues(Module &M) {
++            SmallVector<Instruction *, 16> ToDelete;
++            for (auto &F : M.functions()) {
++                if (llvm::none_of(F.args(), [&](Argument &A) {
++                    return A.getType()->isMetadataTy();
++                }))
++                    continue;
++                for (auto &U : F.uses()) {
++                    CallBase *CB = cast<CallBase>(U.getUser());
++                    assert(cast<FunctionType>(CB->getCalledFunction()->getType()->getPointerElementType())
++                                   ->getReturnType()
++                                   ->isVoidTy());
++                    ToDelete.push_back(CB);
++                }
++            }
++            for (auto *I : ToDelete)
++                I->eraseFromParent();
++        }
++
++        /// This will remove every call to the function named Str assuming it returns
++        /// void. Also erase the function from the module.
++        void removeFunction(Module &M, StringRef Str) {
++            Function *F = M.getFunction(Str);
++            if (!F)
++                return;
++            SmallVector<std::reference_wrapper<Use>, 16> ToDelete;
++            ToDelete.append(F->use_begin(), F->use_end());
++            for (Use &U : ToDelete) {
++                assert(U.getUser()->use_empty() &&
++                       "this should only be used on functions returning void");
++                if (auto *I = dyn_cast<Instruction>(U.getUser()))
++                    I->eraseFromParent();
++                else
++                    U.set(UndefValue::get(U->getType()));
++            }
++            F->eraseFromParent();
++        }
++
++        struct CleanerVisitor : InstVisitor<CleanerVisitor> {
++            void visitCallBase (CallBase& CB) {
++                if (CB.hasMetadata(llvm::LLVMContext::MD_range)) {
++                    CB.setMetadata(llvm::LLVMContext::MD_range, nullptr);
++                }
++            }
++        };
++
++        /// Visit the IR and emit warnings about construct not handled by the backend
++        /// The IR has no debug info so we cannot say where in the source code the
++        /// error happend.
++        struct WarnVisitor : InstVisitor<WarnVisitor> {
++            /// This is used for dedupping warnings.
++            MapVector<std::string, int, StringMap<int>> DiagMap;
++            /// Add a warning to be emmitted
++            template <typename T, typename... Ts> void warn(T P, Ts... Ps) {
++                std::string str;
++                raw_string_ostream os(str);
++                os << P;
++                (void)std::initializer_list<int>{(os << Ps, 0)...};
++                DiagMap[str]++;
++            }
++            /// This will be called by the visitor on every instruction in the module.
++            void visitInstruction(Instruction& I) {
++                switch (I.getOpcode()) {
++                    case Instruction::IntToPtr:
++                    case Instruction::PtrToInt:
++                    case Instruction::AddrSpaceCast:
++                        warn("instruction not supported by backend: \"", I.getOpcodeName(), "\"");
++                }
++            }
++            /// This will do the actual printing of warnings to the console.
++            void emit() {
++                if (DiagMap.empty())
++                    return;
++                llvm::errs() << "\n";
++                for (auto &Elem : DiagMap)
++                    llvm::errs() << raw_ostream::MAGENTA << "warning:" << raw_ostream::RESET
++                                 << " " << Elem.first << " : " << Elem.second
++                                 << " occurrences\n";
++                llvm::errs() << "\n";
++            }
++        };
++
++        /// Traverse the IR in the module and warn about IR constructs unsupported by
++        /// the backend.
++        void warnForIssues(Module &M) {
++            WarnVisitor Visitor;
++            Visitor.visit(M);
++            Visitor.emit();
++        }
++
++        bool runOnModule(Module &M) {
++            resetByVal(M);
++            llvm::sycl::removeAttributes(
++                    M, {Attribute::WillReturn, Attribute::NoFree, Attribute::ImmArg,
++                        Attribute::NoSync, Attribute::MustProgress, Attribute::NoUndef,
++                        Attribute::StructRet, Attribute::NoCallback, Attribute::Memory});
++            removeAnnotations(M);
++            renameBasicBlocks(M);
++            removeFreezeInst(M);
++            removeFNegInst(M);
++
++            lowerAbsIntrinsic(M);
++            removeMetaDataValues(M);
++            /// __assert_fail doesn't exist on device and takes its arguments in
++            /// addressspace 0 causing addresspace cast.
++            removeFunction(M, "__assert_fail");
++            // Added for COMET
++            // llvm.assume intrinsic does not have any semantic value for HLS
++            removeFunction(M, "llvm.assume");
++
++            convertPoisonToZero(M);
++            //if (Triple(M.getTargetTriple()).getArch() == llvm::Triple::fpga64)
++                M.setTargetTriple("fpga64-xilinx-none");
++            //else
++                //M.setTargetTriple("fpga32-xilinx-none");
++            // The module probably changed
++
++            CleanerVisitor CV{};
++            CV.visit(M);
++            warnForIssues(M);
++
++            return true;
++        }
++    };
++
++    void runVXXIRDowngrader(Module& M) {
++        VXXIRDowngrader VID;
++        VID.runOnModule(M);
++    }
++
++}
++
++PreservedAnalyses VXXIRDowngraderPass::run(Module &M, ModuleAnalysisManager &AM) {
++    runVXXIRDowngrader(M);
++    return PreservedAnalyses::none();
++}
++
++struct VXXIRDowngraderLegacy : public ModulePass {
++
++    static char ID; // Pass identification, replacement for typeid
++
++    VXXIRDowngraderLegacy() : ModulePass(ID) {}
++    bool runOnModule(Module &M) override {
++        runVXXIRDowngrader(M);
++        return true;
++    }
++};
++
++namespace llvm {
++    void initializeVXXIRDowngraderLegacyPass(PassRegistry &Registry);
++}
++
++INITIALIZE_PASS(VXXIRDowngraderLegacy, "vxxIRDowngrader",
++"pass that downgrades modern LLVM IR to something compatible with current v++"
++"backend LLVM IR", false, false)
++ModulePass *llvm::createVXXIRDowngraderLegacyPass() {return new VXXIRDowngraderLegacy();}
++
++char VXXIRDowngraderLegacy::ID = 0;
+diff --git a/llvm/tools/opt/VXXIRDowngrader.h b/llvm/tools/opt/VXXIRDowngrader.h
+new file mode 100644
+index 000000000000..d45a70c2a271
+--- /dev/null
++++ b/llvm/tools/opt/VXXIRDowngrader.h
+@@ -0,0 +1,34 @@
++// Taken from https://github.com/triSYCL/sycl/blob/sycl/unified/next/llvm/include/llvm/SYCL/VXXIRDowngrader.h
++
++//===- VXXIRDowngrader.h - SYCL V++ IR Downgrader pass  -----------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// Pass for modifying certain LLVM IR incompatabilities with the Xilinx v++
++// backend we use for SYCL
++//
++// ===---------------------------------------------------------------------===//
++
++#ifndef LLVM_SYCL_VXX_IR_DOWNGRADER_H
++#define LLVM_SYCL_VXX_IR_DOWNGRADER_H
++
++#include "llvm/IR/Module.h"
++#include "llvm/IR/PassManager.h"
++#include "llvm/Pass.h"
++
++namespace llvm {
++
++    class VXXIRDowngraderPass : public PassInfoMixin<VXXIRDowngraderPass> {
++    public:
++        PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
++    };
++
++    ModulePass *createVXXIRDowngraderLegacyPass();
++}
++
++#endif
+\ No newline at end of file
+diff --git a/llvm/tools/opt/opt.cpp b/llvm/tools/opt/opt.cpp
+index 1b07bbe09416..aa988ea158a7 100644
+--- a/llvm/tools/opt/opt.cpp
++++ b/llvm/tools/opt/opt.cpp
+@@ -464,6 +464,7 @@ int main(int argc, char **argv) {
+   initializeWasmEHPreparePass(Registry);
+   initializeWriteBitcodePassPass(Registry);
+   initializeReplaceWithVeclibLegacyPass(Registry);
++  initializeVXXIRDowngraderLegacyPass(Registry);
+   initializeJMCInstrumenterPass(Registry);
+ 
+   SmallVector<PassPlugin, 1> PluginList;
