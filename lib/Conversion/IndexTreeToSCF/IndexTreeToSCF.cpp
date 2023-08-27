@@ -4122,20 +4122,15 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
       }
         // Cij = Wj
       else if (lhs.getType().isa<tensorAlgebra::SparseTensorType>()) {
+        
+        // Get tensor ranks
+        auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(lhs.getDefiningOp());
+        int lhs_ranks = sp_op.getTensorRank();
 
-        // TODO(gkestor): get tensor ranks by functions
-        //unsigned int lhs_ranks = (lhs.getDefiningOp()->getNumOperands() - 2) / 5;
-        // TODO(patrick): Change to actual function
-        unsigned int lhs_ranks = 2;
-
-        // TODO(patrick): Fix this
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
-        unsigned int lhs_val_size_loc = 7 * lhs_ranks + 1;
-        unsigned int lhs_2crd_size_loc = 6 * lhs_ranks;
-        unsigned int lhs_2pos_size_loc = 6 * lhs_ranks - 1;
-        //unsigned int lhs_val_size_loc = 15;
-        //unsigned int lhs_2crd_size_loc = 12;
-        //unsigned int lhs_2pos_size_loc = 11;
+        unsigned int lhs_val_size_loc = 8 * lhs_ranks + 1;    // 17 (2d)  // 15
+        unsigned int lhs_2crd_size_loc = 7 * lhs_ranks;       // 14 (2d)  // 12
+        unsigned int lhs_2pos_size_loc = 7 * lhs_ranks - 1;   // 13 (2d)  // 11
 
         // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
         comet_debug() << " ";
