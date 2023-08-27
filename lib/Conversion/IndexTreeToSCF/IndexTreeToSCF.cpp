@@ -781,7 +781,6 @@ void genSymbolicForLoops(indexTree::IndexTreeComputeOp &cur_op,
 
   /// Get the number of rows of mtxA
   num_rows = mtxA.getDefiningOp()->getOperand(18);    //10
-  num_rows = mtxA.getDefiningOp()->getOperand(18);    //10
   {
     comet_vdump(num_rows);
   }
@@ -842,7 +841,6 @@ void getNumOfCols(indexTree::IndexTreeComputeOp &cur_op,
                   Value &num_cols /* output */) {
   Value cur_RHS = cur_op.getRhs()[0];
   Value mtxB = cur_RHS.getDefiningOp()->getOperand(1);
-  num_cols = mtxB.getDefiningOp()->getOperand(19);    // 11
   num_cols = mtxB.getDefiningOp()->getOperand(19);    // 11
   {
     comet_vdump(cur_op);
@@ -1675,39 +1673,6 @@ sptensor_construct(
     17) Aval_size,
     18) dim1_size,
     19) dim2_size,
-    0) A1pos,  /// number of rows
-    1) A1crd,  /// discard
-    2) A2pos,  /// rowptr array
-    3) A2crd,  /// col_id array
-    4) Aval, /// data array
-    5) A1pos_size,
-    6) A1crd_size,
-    7) A2pos_size,
-    8) A2crd_size,
-    9) Aval_size,
-    10) dim1_size,
-    11) dim2_size,
-    ------------------------------
-    0) A1pos,  /// number of rows
-    1) A1crd,  /// discard
-    2) A1tile_pos,
-    3) A1tile_crd,
-    4) A2pos,  /// rowptr array
-    5) A2crd,  /// col_id array
-    6) A2tile_pos,
-    7) A2tile_crd,
-    8) Aval, /// data array
-    9) A1pos_size,
-    10) A1crd_size,
-    11) A1tile_pos_size,
-    12) A1tile_crd_size,
-    13) A2pos_size,
-    14) A2crd_size,
-    15) A2tile_pos_size,
-    16) A2tile_crd_size,
-    17) Aval_size,
-    18) dim1_size,
-    19) dim2_size,
 )
 */
 void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
@@ -2125,6 +2090,7 @@ void getAncestorsOps(OpsTree *opstree, std::vector<OpsTree *> &ret) {
 
 /// Generate scf.for op for indices
 /// The index is the "idx"th index of "tensor"
+// TODO: CHECK OPS HERE
 void genForOps(std::vector<Value> &tensors,
                std::vector<unsigned int> &ids,
                std::vector<std::string> &formats,
@@ -3863,26 +3829,6 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 /// ----------------- ///
 /**
 sptensor_construct(
-    0) A1pos,  /// number of rows
-    1) A1crd,  /// discard
-    2) A1tile_pos,
-    3) A1tile_crd,
-    4) A2pos,  /// rowptr array
-    5) A2crd,  /// col_id array
-    6) A2tile_pos,
-    7) A2tile_crd,
-    8) Aval, /// data array
-    9) A1pos_size,
-    10) A1crd_size,
-    11) A1tile_pos_size,
-    12) A1tile_crd_size,
-    13) A2pos_size,
-    14) A2crd_size,
-    15) A2tile_pos_size,
-    16) A2tile_crd_size,
-    17) Aval_size,
-    18) dim1_size,
-    19) dim2_size,
     0) A1pos,  /// number of rows
     1) A1crd,  /// discard
     2) A1tile_pos,
