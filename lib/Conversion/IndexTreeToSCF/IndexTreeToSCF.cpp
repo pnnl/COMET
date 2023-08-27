@@ -2081,6 +2081,7 @@ void getAncestorsOps(OpsTree *opstree, std::vector<OpsTree *> &ret) {
 
 /// Generate scf.for op for indices
 /// The index is the "idx"th index of "tensor"
+// TODO: CHECK OPS HERE
 void genForOps(std::vector<Value> &tensors,
                std::vector<unsigned int> &ids,
                std::vector<std::string> &formats,
@@ -3498,15 +3499,14 @@ void genNewSparseTensorToPrint(OpBuilder &builder,
                   mtxC.getDefiningOp()->getOperands().end());
   operands[5] = mtxC_col_buffer;  // 3 (A2crd)
   operands[8] = mtxC_val_buffer;  // 4 (AVal)
-  SmallVector<Type, 20> elementTypes;
+  SmallVector<Type, 12> elementTypes;
   for (Value &opd : operands) {
     elementTypes.push_back(opd.getType());
   }
   auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
   Value sptensor = builder.create<tensorAlgebra::SparseTensorConstructOp>(loc,
                                                                           ty,
-                                                                          operands,
-                                                                          tensorRanks);
+                                                                          operands, 2);   // TODO: Fix
   {
     comet_vdump(mtxC_col_buffer);
     comet_vdump(mtxC_val_buffer);
@@ -4192,12 +4192,12 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
 
         // TODO(patrick): Fix this
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
-        //unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
-        //unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;
-        //unsigned int lhs_2pos_size_loc = 4 * lhs_ranks - 1;
-        unsigned int lhs_val_size_loc = 15;
-        unsigned int lhs_2crd_size_loc = 12;
-        unsigned int lhs_2pos_size_loc = 11;
+        unsigned int lhs_val_size_loc = 7 * lhs_ranks + 1;
+        unsigned int lhs_2crd_size_loc = 6 * lhs_ranks;
+        unsigned int lhs_2pos_size_loc = 6 * lhs_ranks - 1;
+        //unsigned int lhs_val_size_loc = 15;
+        //unsigned int lhs_2crd_size_loc = 12;
+        //unsigned int lhs_2pos_size_loc = 11;
 
         // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
         comet_debug() << " ";
