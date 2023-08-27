@@ -2081,7 +2081,6 @@ void getAncestorsOps(OpsTree *opstree, std::vector<OpsTree *> &ret) {
 
 /// Generate scf.for op for indices
 /// The index is the "idx"th index of "tensor"
-// TODO: CHECK OPS HERE
 void genForOps(std::vector<Value> &tensors,
                std::vector<unsigned int> &ids,
                std::vector<std::string> &formats,
@@ -3499,14 +3498,15 @@ void genNewSparseTensorToPrint(OpBuilder &builder,
                   mtxC.getDefiningOp()->getOperands().end());
   operands[5] = mtxC_col_buffer;  // 3 (A2crd)
   operands[8] = mtxC_val_buffer;  // 4 (AVal)
-  SmallVector<Type, 12> elementTypes;
+  SmallVector<Type, 20> elementTypes;
   for (Value &opd : operands) {
     elementTypes.push_back(opd.getType());
   }
   auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
   Value sptensor = builder.create<tensorAlgebra::SparseTensorConstructOp>(loc,
                                                                           ty,
-                                                                          operands, 2);   // TODO: Fix
+                                                                          operands,
+                                                                          tensorRanks);
   {
     comet_vdump(mtxC_col_buffer);
     comet_vdump(mtxC_val_buffer);
