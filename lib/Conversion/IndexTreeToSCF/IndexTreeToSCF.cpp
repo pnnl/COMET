@@ -407,17 +407,17 @@ namespace
   {
     Value &mask_tensor = maskingInfo.mask_tensor;
 
-    // A2pos
-    Value mask_rowtpr_buff = mask_tensor.getDefiningOp()->getOperand(4); // 2
-    maskingInfo.mask_rowptr = mask_rowtpr_buff.getDefiningOp()->getOperand(0);
+  // A2pos
+  Value mask_rowtpr_buff = mask_tensor.getDefiningOp()->getOperand(4);    // 2
+  maskingInfo.mask_rowptr = mask_rowtpr_buff.getDefiningOp()->getOperand(0);
 
-    // A2crd
-    Value mask_col_buff = mask_tensor.getDefiningOp()->getOperand(5); // 3
-    maskingInfo.mask_col = mask_col_buff.getDefiningOp()->getOperand(0);
+  // A2crd
+  Value mask_col_buff = mask_tensor.getDefiningOp()->getOperand(5);   // 3
+  maskingInfo.mask_col = mask_col_buff.getDefiningOp()->getOperand(0);
 
-    // Aval
-    Value mask_val_buff = mask_tensor.getDefiningOp()->getOperand(8); // 4
-    maskingInfo.mask_val = mask_val_buff.getDefiningOp()->getOperand(0);
+  // Aval
+  Value mask_val_buff = mask_tensor.getDefiningOp()->getOperand(8);   // 4
+  maskingInfo.mask_val = mask_val_buff.getDefiningOp()->getOperand(0);
 
     {
       comet_vdump(mask_tensor);
@@ -605,121 +605,119 @@ namespace
     builder.setInsertionPointToStart(for_loop_0.getBody());
   }
 
+/// ----------------- ///
+/// Generate the 2nd level of symbolic for-loop.
+/// ----------------- ///
+void genSymbolicForLoopsLevel2(Value &mtxA,
+                               OpBuilder &builder,
+                               Location &loc,
+                               std::vector<OpsTree *> &three_index_ancestors /* output: three_index_ancestors[1] */) {
   /// ----------------- ///
-  /// Generate the 2nd level of symbolic for-loop.
+  /// Generate the 2nd level of for-loop.
+  /// for (every A[i, k] in A[i, :])
   /// ----------------- ///
-  void genSymbolicForLoopsLevel2(Value &mtxA,
-                                 OpBuilder &builder,
-                                 Location &loc,
-                                 std::vector<OpsTree *> &three_index_ancestors /* output: three_index_ancestors[1] */)
+  /// %i_idx_plus_1 = arith.addi %i_idx, %c1 : index
+  /// %k_loc_start = memref.load %A_rowptr[%i_idx] : memref<?xindex>
+  /// %k_loc_bound = memref.load %A_rowptr[%i_idx_plus_1] : memref<?xindex>
+  /// scf.for %k_loc = %k_loc_start to %k_loc_bound step %c1 {
+  ///     %k_idx = memref.load %A_col[%k_loc] : memref<?xindex>
+  /// ----------------- ///
+  /// mtxA.A2pos is A_rowptr, the 2nd operand of mtxA. mtxA.A2crd is A_col, the 3nd operand of mtxA.
+  /// %12 = bufferization.to_tensor %alloc_22 : memref<?xindex>
+  /// %15 = ta.sptensor_construct(%10, %11, %12, %13, %14, %3, %4, %5, %6, %7, %8, %9) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+  Value A_rowptr_buffer = mtxA.getDefiningOp()->getOperand(4);  //2
+  Value A_rowptr_alloc = A_rowptr_buffer.getDefiningOp()->getOperand(0);
+  Value &i_idx = three_index_ancestors[2]->symbolicAccessIdx[0];
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  auto i_idx_plus_1 = builder.create<AddIOp>(loc, i_idx, const_index_1);
   {
-    /// ----------------- ///
-    /// Generate the 2nd level of for-loop.
-    /// for (every A[i, k] in A[i, :])
-    /// ----------------- ///
-    /// %i_idx_plus_1 = arith.addi %i_idx, %c1 : index
-    /// %k_loc_start = memref.load %A_rowptr[%i_idx] : memref<?xindex>
-    /// %k_loc_bound = memref.load %A_rowptr[%i_idx_plus_1] : memref<?xindex>
-    /// scf.for %k_loc = %k_loc_start to %k_loc_bound step %c1 {
-    ///     %k_idx = memref.load %A_col[%k_loc] : memref<?xindex>
-    /// ----------------- ///
-    /// mtxA.A2pos is A_rowptr, the 2nd operand of mtxA. mtxA.A2crd is A_col, the 3nd operand of mtxA.
-    /// %12 = bufferization.to_tensor %alloc_22 : memref<?xindex>
-    /// %15 = ta.sptensor_construct(%10, %11, %12, %13, %14, %3, %4, %5, %6, %7, %8, %9) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
-    Value A_rowptr_buffer = mtxA.getDefiningOp()->getOperand(4); // 2
-    Value A_rowptr_alloc = A_rowptr_buffer.getDefiningOp()->getOperand(0);
-    Value &i_idx = three_index_ancestors[2]->symbolicAccessIdx[0];
-    Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
-    auto i_idx_plus_1 = builder.create<AddIOp>(loc, i_idx, const_index_1);
-    {
-      comet_vdump(A_rowptr_buffer);
-      comet_vdump(A_rowptr_alloc);
-      comet_vdump(i_idx_plus_1);
-    }
-    auto k_loc_start = builder.create<memref::LoadOp>(loc, A_rowptr_alloc, ValueRange{i_idx});
-    auto k_loc_bound = builder.create<memref::LoadOp>(loc, A_rowptr_alloc, ValueRange{i_idx_plus_1});
-    auto for_loop_1 = builder.create<scf::ForOp>(loc,
-                                                 k_loc_start /* lowerBound */,
-                                                 k_loc_bound /* upperBound */,
-                                                 const_index_1 /* step */);
-    builder.setInsertionPointToStart(for_loop_1.getBody());
-    {
-      comet_vdump(k_loc_start);
-      comet_vdump(k_loc_bound);
-      comet_vdump(for_loop_1);
-    }
-    Value k_loc = for_loop_1.getInductionVar();
-    Value A_col_buffer = mtxA.getDefiningOp()->getOperand(5); // 3
-    Value A_col_alloc = A_col_buffer.getDefiningOp()->getOperand(0);
-    Value k_idx = builder.create<memref::LoadOp>(loc, A_col_alloc, ValueRange{k_loc});
-    {
-      comet_vdump(A_col_buffer);
-      comet_vdump(A_col_alloc);
-      comet_vdump(k_idx);
-    }
-    three_index_ancestors[1]->symbolicForOps.push_back(for_loop_1);
-    three_index_ancestors[1]->symbolicAccessIdx.push_back(k_idx);
-    {
-      comet_vdump(for_loop_1);
-    }
+    comet_vdump(A_rowptr_buffer);
+    comet_vdump(A_rowptr_alloc);
+    comet_vdump(i_idx_plus_1);
   }
+  auto k_loc_start = builder.create<memref::LoadOp>(loc, A_rowptr_alloc, ValueRange{i_idx});
+  auto k_loc_bound = builder.create<memref::LoadOp>(loc, A_rowptr_alloc, ValueRange{i_idx_plus_1});
+  auto for_loop_1 = builder.create<scf::ForOp>(loc,
+                                               k_loc_start /* lowerBound */,
+                                               k_loc_bound /* upperBound */,
+                                               const_index_1 /* step */);
+  builder.setInsertionPointToStart(for_loop_1.getBody());
+  {
+    comet_vdump(k_loc_start);
+    comet_vdump(k_loc_bound);
+    comet_vdump(for_loop_1);
+  }
+  Value k_loc = for_loop_1.getInductionVar();
+  Value A_col_buffer = mtxA.getDefiningOp()->getOperand(5); //3
+  Value A_col_alloc = A_col_buffer.getDefiningOp()->getOperand(0);
+  Value k_idx = builder.create<memref::LoadOp>(loc, A_col_alloc, ValueRange{k_loc});
+  {
+    comet_vdump(A_col_buffer);
+    comet_vdump(A_col_alloc);
+    comet_vdump(k_idx);
+  }
+  three_index_ancestors[1]->symbolicForOps.push_back(for_loop_1);
+  three_index_ancestors[1]->symbolicAccessIdx.push_back(k_idx);
+  {
+    comet_vdump(for_loop_1);
+  }
+}
 
+/// ----------------- ///
+/// Generate the 3rd level of symbolic for-loop.
+/// ----------------- ///
+void genSymbolicForLoopsLevel3(Value &mtxB,
+                               OpBuilder &builder,
+                               Location &loc,
+                               std::vector<OpsTree *> &three_index_ancestors /* output: three_index_ancestors[0] */) {
   /// ----------------- ///
-  /// Generate the 3rd level of symbolic for-loop.
+  /// Generate the 3rd level of for-loop.
+  /// for (every B[k, j] in B[k, :])
   /// ----------------- ///
-  void genSymbolicForLoopsLevel3(Value &mtxB,
-                                 OpBuilder &builder,
-                                 Location &loc,
-                                 std::vector<OpsTree *> &three_index_ancestors /* output: three_index_ancestors[0] */)
+  /// %k_idx_plus_1 = arith.addi %k_idx, %c1 : index
+  /// %j_loc_start = memref.load %B_rowptr[%k_idx] : memref<?xindex>
+  /// %j_loc_bound = memref.load %B_rowptr[%k_idx_plus_1] : memref<?xindex>
+  /// scf.for %j_loc = %j_loc_start to %j_loc_bound step %c1 {
+  ///     %j_idx = memref.load %B_col[%j_loc] : memref<?xindex>
+  /// mtxB.A2pos is B_rowptr, the 2nd operand of mtxB. mtxB.A2crd is B_col, the 3nd operand of mtxB.
+  Value B_rowptr_buffer = mtxB.getDefiningOp()->getOperand(4);    // 2
+  Value B_rowptr_alloc = B_rowptr_buffer.getDefiningOp()->getOperand(0);
+  Value k_idx = three_index_ancestors[1]->symbolicAccessIdx[0];
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  auto k_idx_plus_1 = builder.create<AddIOp>(loc, k_idx, const_index_1);
   {
-    /// ----------------- ///
-    /// Generate the 3rd level of for-loop.
-    /// for (every B[k, j] in B[k, :])
-    /// ----------------- ///
-    /// %k_idx_plus_1 = arith.addi %k_idx, %c1 : index
-    /// %j_loc_start = memref.load %B_rowptr[%k_idx] : memref<?xindex>
-    /// %j_loc_bound = memref.load %B_rowptr[%k_idx_plus_1] : memref<?xindex>
-    /// scf.for %j_loc = %j_loc_start to %j_loc_bound step %c1 {
-    ///     %j_idx = memref.load %B_col[%j_loc] : memref<?xindex>
-    /// mtxB.A2pos is B_rowptr, the 2nd operand of mtxB. mtxB.A2crd is B_col, the 3nd operand of mtxB.
-    Value B_rowptr_buffer = mtxB.getDefiningOp()->getOperand(4); // 2
-    Value B_rowptr_alloc = B_rowptr_buffer.getDefiningOp()->getOperand(0);
-    Value k_idx = three_index_ancestors[1]->symbolicAccessIdx[0];
-    Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
-    auto k_idx_plus_1 = builder.create<AddIOp>(loc, k_idx, const_index_1);
-    {
-      comet_vdump(B_rowptr_buffer);
-      comet_vdump(B_rowptr_alloc);
-      comet_vdump(k_idx_plus_1);
-    }
-    auto j_loc_start = builder.create<memref::LoadOp>(loc, B_rowptr_alloc, ValueRange{k_idx});
-    auto j_loc_bound = builder.create<memref::LoadOp>(loc, B_rowptr_alloc, ValueRange{k_idx_plus_1});
-    auto for_loop_2 = builder.create<scf::ForOp>(loc,
-                                                 j_loc_start /* lowerBound */,
-                                                 j_loc_bound /* upperBound */,
-                                                 const_index_1 /* step */);
-    builder.setInsertionPointToStart(for_loop_2.getBody());
-    {
-      comet_vdump(j_loc_start);
-      comet_vdump(j_loc_bound);
-      comet_vdump(for_loop_2);
-    }
-    Value j_loc = for_loop_2.getInductionVar();
-    Value B_col_buffer = mtxB.getDefiningOp()->getOperand(5); // 3
-    Value B_col_alloc = B_col_buffer.getDefiningOp()->getOperand(0);
-    Value j_idx = builder.create<memref::LoadOp>(loc, B_col_alloc, ValueRange{j_loc});
-    {
-      comet_vdump(B_col_buffer);
-      comet_vdump(B_col_alloc);
-      comet_vdump(j_idx);
-    }
-    three_index_ancestors[0]->symbolicForOps.push_back(for_loop_2);
-    three_index_ancestors[0]->symbolicAccessIdx.push_back(j_idx);
-    {
-      comet_vdump(for_loop_2);
-      comet_vdump(three_index_ancestors[2]->symbolicForOps[0]);
-    }
+    comet_vdump(B_rowptr_buffer);
+    comet_vdump(B_rowptr_alloc);
+    comet_vdump(k_idx_plus_1);
   }
+  auto j_loc_start = builder.create<memref::LoadOp>(loc, B_rowptr_alloc, ValueRange{k_idx});
+  auto j_loc_bound = builder.create<memref::LoadOp>(loc, B_rowptr_alloc, ValueRange{k_idx_plus_1});
+  auto for_loop_2 = builder.create<scf::ForOp>(loc,
+                                               j_loc_start /* lowerBound */,
+                                               j_loc_bound /* upperBound */,
+                                               const_index_1 /* step */);
+  builder.setInsertionPointToStart(for_loop_2.getBody());
+  {
+    comet_vdump(j_loc_start);
+    comet_vdump(j_loc_bound);
+    comet_vdump(for_loop_2);
+  }
+  Value j_loc = for_loop_2.getInductionVar();
+  Value B_col_buffer = mtxB.getDefiningOp()->getOperand(5);   //3
+  Value B_col_alloc = B_col_buffer.getDefiningOp()->getOperand(0);
+  Value j_idx = builder.create<memref::LoadOp>(loc, B_col_alloc, ValueRange{j_loc});
+  {
+    comet_vdump(B_col_buffer);
+    comet_vdump(B_col_alloc);
+    comet_vdump(j_idx);
+  }
+  three_index_ancestors[0]->symbolicForOps.push_back(for_loop_2);
+  three_index_ancestors[0]->symbolicAccessIdx.push_back(j_idx);
+  {
+    comet_vdump(for_loop_2);
+    comet_vdump(three_index_ancestors[2]->symbolicForOps[0]);
+  }
+}
 
   /// ----------------- ///
   /// Generate symbolic for-loops
@@ -815,11 +813,11 @@ namespace
     /// Do reduce mtxC.rowptr here
     */
 
-    /// Get the number of rows of mtxA
-    num_rows = mtxA.getDefiningOp()->getOperand(18); // 10
-    {
-      comet_vdump(num_rows);
-    }
+  /// Get the number of rows of mtxA
+  num_rows = mtxA.getDefiningOp()->getOperand(18);    //10
+  {
+    comet_vdump(num_rows);
+  }
 
     /// ----------------- ///
     /// Generate the 1st level (outermost) for-loops.
@@ -853,39 +851,38 @@ namespace
     builder.restoreInsertionPoint(last_insertion_point);
   }
 
-  /// ----------------- ///
-  /// Get the number of columns of B in C = A * B.
-  /// cur_op is the compute node. cur_op.RHS is A * B.
-  /// B is a sparse matrix,
-  ///     sptensor_construct(
-  ///         A1pos,  /// number of rows
-  ///         A1crd,  /// discard
-  ///         A2pos,  /// rowptr array
-  ///         A2crd,  /// col_id array
-  ///         Aval, /// data array
-  ///         A1pos_size,
-  ///         A1crd_size,
-  ///         A2pos_size,
-  ///         A2crd_size,
-  ///         Aval_size,
-  ///         dim1_size,
-  ///         dim2_size,
-  ///     )
-  /// Therefore, num_cols = B.getOperand(11)
-  /// ----------------- ///
-  void getNumOfCols(indexTree::IndexTreeComputeOp &cur_op,
-                    Value &num_cols /* output */)
+/// ----------------- ///
+/// Get the number of columns of B in C = A * B.
+/// cur_op is the compute node. cur_op.RHS is A * B.
+/// B is a sparse matrix,
+///     sptensor_construct(
+///         A1pos,  /// number of rows
+///         A1crd,  /// discard
+///         A2pos,  /// rowptr array
+///         A2crd,  /// col_id array
+///         Aval, /// data array
+///         A1pos_size,
+///         A1crd_size,
+///         A2pos_size,
+///         A2crd_size,
+///         Aval_size,
+///         dim1_size,
+///         dim2_size,
+///     )
+/// Therefore, num_cols = B.getOperand(11)
+/// ----------------- ///
+void getNumOfCols(indexTree::IndexTreeComputeOp &cur_op,
+                  Value &num_cols /* output */) {
+  Value cur_RHS = cur_op.getRhs()[0];
+  Value mtxB = cur_RHS.getDefiningOp()->getOperand(1);
+  num_cols = mtxB.getDefiningOp()->getOperand(19);    // 11
   {
-    Value cur_RHS = cur_op.getRhs()[0];
-    Value mtxB = cur_RHS.getDefiningOp()->getOperand(1);
-    num_cols = mtxB.getDefiningOp()->getOperand(19); // 11
-    {
-      comet_vdump(cur_op);
-      comet_vdump(cur_RHS);
-      comet_vdump(mtxB);
-      comet_vdump(num_cols);
-    }
+    comet_vdump(cur_op);
+    comet_vdump(cur_RHS);
+    comet_vdump(mtxB);
+    comet_vdump(num_cols);
   }
+}
 
   /// ----------------- ///
   /// Generate the variable mark and initialize it to 0.
@@ -1194,51 +1191,52 @@ namespace
       comet_vdump(cmp_op.getRhs()[0]);
     }
 
-    /// cmp_op is %57,
-    /// cmp_LHS is %56
-    /// %57 = "it.Compute"(%42, %56) {comp_worksp_opt = true, semiring = "plusxy_times"} : (tensor<*xf64>, tensor<*xf64>) -> i64
-    /// %56 = "it.ComputeLHS"(%55) {allFormats = [["D", "CU"]], allPerms = [[0, 2]]} : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>) -> tensor<*xf64>
-    /// %55 = ta.sptensor_construct(%45, %46, %47, %48, %49, %50, %51, %52, %53, %54, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
-    /**
-    sptensor_construct(
-        A1pos,  /// number of rows
-        A1crd,  /// discard
-        A2pos,  /// rowptr array
-        A2crd,  /// col_id array
-        Aval, /// data array
-        A1pos_size,
-        A1crd_size,
-        A2pos_size,
-        A2crd_size,
-        Aval_size,
-        dim1_size,
-        dim2_size,
-    )
-    */
-    /// Therefore, mtxC is %55, and mtxC.rowptr is %47, mtxC.col is %48, mtxC.val is %49.
-    /// %56 = "it.ComputeLHS"(%55) {allFormats = [["D", "CU"]], allPerms = [[0, 2]]} : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>) -> tensor<*xf64>
-    /// %55 = ta.sptensor_construct(%45, %46, %47, %48, %49, %50, %51, %52, %53, %54, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
-    /// %47 = bufferization.to_tensor %alloc_100 : memref<?xindex>
-    Value cmp_LHS = cmp_op.getLhs();
-    Value mtxC = cmp_LHS.getDefiningOp()->getOperand(0);
-    Value rowptr_buffer = mtxC.getDefiningOp()->getOperand(4); // 2
-    symbolicInfo.mtxC_rowptr = rowptr_buffer.getDefiningOp()->getOperand(0);
-    Value col_buffer = mtxC.getDefiningOp()->getOperand(5); // 3
-    symbolicInfo.mtxC_col = col_buffer.getDefiningOp()->getOperand(0);
-    Value val_buffer = mtxC.getDefiningOp()->getOperand(8); // 4
-    symbolicInfo.mtxC_val = val_buffer.getDefiningOp()->getOperand(0);
-    symbolicInfo.mtxC = mtxC;
-    {
-      comet_vdump(cmp_LHS);
-      comet_vdump(mtxC);
-      comet_vdump(rowptr_buffer);
-      comet_vdump(symbolicInfo.mtxC_rowptr);
-      comet_vdump(col_buffer);
-      comet_vdump(symbolicInfo.mtxC_col);
-      comet_vdump(val_buffer);
-      comet_vdump(symbolicInfo.mtxC_val);
-    }
+  /// cmp_op is %57,
+  /// cmp_LHS is %56
+  /// %57 = "it.Compute"(%42, %56) {comp_worksp_opt = true, semiring = "plusxy_times"} : (tensor<*xf64>, tensor<*xf64>) -> i64
+  /// %56 = "it.ComputeLHS"(%55) {allFormats = [["D", "CU"]], allPerms = [[0, 2]]} : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>) -> tensor<*xf64>
+  /// %55 = ta.sptensor_construct(%45, %46, %47, %48, %49, %50, %51, %52, %53, %54, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+  /**
+  sptensor_construct(
+      A1pos,  /// number of rows
+      A1crd,  /// discard
+      A2pos,  /// rowptr array
+      A2crd,  /// col_id array
+      Aval, /// data array
+      A1pos_size,
+      A1crd_size,
+      A2pos_size,
+      A2crd_size,
+      Aval_size,
+      dim1_size,
+      dim2_size,
+  )
+  */
+  /// Therefore, mtxC is %55, and mtxC.rowptr is %47, mtxC.col is %48, mtxC.val is %49.
+  /// %56 = "it.ComputeLHS"(%55) {allFormats = [["D", "CU"]], allPerms = [[0, 2]]} : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>) -> tensor<*xf64>
+  /// %55 = ta.sptensor_construct(%45, %46, %47, %48, %49, %50, %51, %52, %53, %54, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+  /// %47 = bufferization.to_tensor %alloc_100 : memref<?xindex>
+  Value cmp_LHS = cmp_op.getLhs();
+  Value mtxC = cmp_LHS.getDefiningOp()->getOperand(0);
+  Value rowptr_buffer = mtxC.getDefiningOp()->getOperand(4);  //2
+  symbolicInfo.mtxC_rowptr = rowptr_buffer.getDefiningOp()->getOperand(0);
+  Value col_buffer = mtxC.getDefiningOp()->getOperand(5);   //3
+  symbolicInfo.mtxC_col = col_buffer.getDefiningOp()->getOperand(0);
+  Value val_buffer = mtxC.getDefiningOp()->getOperand(8);   //4
+  symbolicInfo.mtxC_val = val_buffer.getDefiningOp()->getOperand(0);
+  symbolicInfo.mtxC = mtxC;
+  {
+    comet_vdump(cmp_LHS);
+    comet_vdump(mtxC);
+    comet_vdump(rowptr_buffer);
+    comet_vdump(symbolicInfo.mtxC_rowptr);
+    comet_vdump(col_buffer);
+    comet_vdump(symbolicInfo.mtxC_col);
+    comet_vdump(val_buffer);
+    comet_vdump(symbolicInfo.mtxC_val);
   }
+}
+
 
   /// ----------------- ///
   /// Generate ws_col_list_size before the 1st-level for-loop.
@@ -1686,59 +1684,60 @@ namespace
     //  }
   }
 
-  /// ----------------- ///
-  /// Change the old value in C_col_size (A2crd_size) and C_val_size (Aval_size) to new mtxC_val_size.
-  /// ----------------- ///
-  /// %68 = ta.sptensor_construct(%58, %59, %60, %61, %62, %63, %64, %65, %66, %67, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
-  /// ----------------- ///
-  /**
-  sptensor_construct(
-      0) A1pos,  /// number of rows
-      1) A1crd,  /// discard
-      2) A2pos,  /// rowptr array
-      3) A2crd,  /// col_id array
-      4) Aval, /// data array
-      5) A1pos_size,
-      6) A1crd_size,
-      7) A2pos_size,
-      8) A2crd_size,
-      9) Aval_size,
-      10) dim1_size,
-      11) dim2_size,
-      ------------------------------
-      0) A1pos,  /// number of rows
-      1) A1crd,  /// discard
-      2) A1tile_pos,
-      3) A1tile_crd,
-      4) A2pos,  /// rowptr array
-      5) A2crd,  /// col_id array
-      6) A2tile_pos,
-      7) A2tile_crd,
-      8) Aval, /// data array
-      9) A1pos_size,
-      10) A1crd_size,
-      11) A1tile_pos_size,
-      12) A1tile_crd_size,
-      13) A2pos_size,
-      14) A2crd_size,
-      15) A2tile_pos_size,
-      16) A2tile_crd_size,
-      17) Aval_size,
-      18) dim1_size,
-      19) dim2_size,
-  )
-  */
-  void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
-                                          OpBuilder &builder,
-                                          Location &loc,
-                                          SymbolicInfo &symbolicInfo)
-  {
-    Value &mtxC = symbolicInfo.mtxC;
-    Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
 
-    /// Find the alloc of C_col_size (Arcrd_size)
-    Value C_col_size_alloc = mtxC.getDefiningOp()->getOperand(14).getDefiningOp()->getOperand(0); // 8
-    /// Store the new mtxC_val_size to C_col_size
+/// ----------------- ///
+/// Change the old value in C_col_size (A2crd_size) and C_val_size (Aval_size) to new mtxC_val_size.
+/// ----------------- ///
+/// %68 = ta.sptensor_construct(%58, %59, %60, %61, %62, %63, %64, %65, %66, %67, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+/// ----------------- ///
+/**
+sptensor_construct(
+    0) A1pos,  /// number of rows
+    1) A1crd,  /// discard
+    2) A2pos,  /// rowptr array
+    3) A2crd,  /// col_id array
+    4) Aval, /// data array
+    5) A1pos_size,
+    6) A1crd_size,
+    7) A2pos_size,
+    8) A2crd_size,
+    9) Aval_size,
+    10) dim1_size,
+    11) dim2_size,
+    ------------------------------
+    0) A1pos,  /// number of rows
+    1) A1crd,  /// discard
+    2) A1tile_pos,
+    3) A1tile_crd,
+    4) A2pos,  /// rowptr array
+    5) A2crd,  /// col_id array
+    6) A2tile_pos,
+    7) A2tile_crd,
+    8) Aval, /// data array
+    9) A1pos_size,
+    10) A1crd_size,
+    11) A1tile_pos_size,
+    12) A1tile_crd_size,
+    13) A2pos_size,
+    14) A2crd_size,
+    15) A2tile_pos_size,
+    16) A2tile_crd_size,
+    17) Aval_size,
+    18) dim1_size,
+    19) dim2_size,
+)
+*/
+void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
+                                        OpBuilder &builder,
+                                        Location &loc,
+                                        SymbolicInfo &symbolicInfo) {
+  Value &mtxC = symbolicInfo.mtxC;
+  Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+
+  /// Find the alloc of C_col_size (Arcrd_size)
+  ///     %66 = memref.load %alloc_153[%c0_128] : memref<1xindex>
+  Value C_col_size_alloc = mtxC.getDefiningOp()->getOperand(14).getDefiningOp()->getOperand(0);    //8
+  /// Store the new mtxC_val_size to C_col_size
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
     auto store_C_col_size_alloc = builder.create<memref::StoreOp>(loc,
                                                                   mtxC_val_size,
@@ -1753,9 +1752,10 @@ namespace
                                     ValueRange{const_index_0});
 #endif
 
-    /// Find the alloc of C_val_size (Aval_size)
-    Value C_val_size_alloc = mtxC.getDefiningOp()->getOperand(17).getDefiningOp()->getOperand(0); // 9
-    /// Store the new mtxC_val_size to C_val_size
+  /// Find the alloc of C_val_size (Aval_size)
+  ///     %67 = memref.load %alloc_154[%c0_128] : memref<1xindex>
+  Value C_val_size_alloc = mtxC.getDefiningOp()->getOperand(17).getDefiningOp()->getOperand(0);  //9
+  /// Store the new mtxC_val_size to C_val_size
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
     auto store_C_val_size_alloc = builder.create<memref::StoreOp>(loc,
                                                                   mtxC_val_size,
@@ -1796,18 +1796,21 @@ namespace
   {
     Value &mtxC = symbolicInfo.mtxC;
 
-    /// Find the alloc of old_C_col (A2crd)
-    ///     %61 = bufferization.to_tensor %alloc_142 : memref<?xindex>
-    Value old_C_col = mtxC.getDefiningOp()->getOperand(5).getDefiningOp()->getOperand(0); // 3
-    /// Replace old_C_col with the new mtxC_col
-    replaceOldValueToNewValue(old_C_col, symbolicInfo.mtxC_col);
+  /// Find the alloc of old_C_col (A2crd)
+  ///     %61 = bufferization.to_tensor %alloc_142 : memref<?xindex>
+  Value old_C_col = mtxC.getDefiningOp()->getOperand(5).getDefiningOp()->getOperand(0);   // 3
+  /// Replace old_C_col with the new mtxC_col
+  replaceOldValueToNewValue(old_C_col, symbolicInfo.mtxC_col);
 
-    /// Find the allod of old_C_val (Aval)
-    ///     %62 = bufferization.to_tensor %alloc_146 : memref<?xf64>
-    Value old_C_val = mtxC.getDefiningOp()->getOperand(8).getDefiningOp()->getOperand(0); // 4
-    /// Replace old_C_val with the new mtxC_val
-    replaceOldValueToNewValue(old_C_val, symbolicInfo.mtxC_val);
-  }
+  /// Find the allod of old_C_val (Aval)
+  ///     %62 = bufferization.to_tensor %alloc_146 : memref<?xf64>
+  Value old_C_val = mtxC.getDefiningOp()->getOperand(8).getDefiningOp()->getOperand(0);   // 4
+  /// Replace old_C_val with the new mtxC_val
+  replaceOldValueToNewValue(old_C_val, symbolicInfo.mtxC_val);
+
+}
+
+
 
   /// ----------------- ///
   /// Generate Symbolic Phase kernel inside the for-loops
@@ -2159,30 +2162,28 @@ namespace
     }
   }
 
-  /// Generate scf.for op for indices
-  /// The index is the "idx"th index of "tensor"
-  // TODO: CHECK OPS HERE
-  void genForOps(std::vector<Value> &tensors,
-                 std::vector<unsigned int> &ids,
-                 std::vector<std::string> &formats,
-                 indexTree::IndexTreeOp rootOp,
-                 //               PatternRewriter &rewriter,
-                 OpBuilder &builder,
-                 OpsTree *opstree)
-  {
-    comet_debug() << " genForOps indexTreeOp\n";
-    comet_vdump(rootOp);
-    Location loc = rootOp.getLoc();
-    /// The insertion location should be "the end of the body of parent loop"
-    std::vector<OpsTree *> ancestorsOps;
-    getAncestorsOps(opstree, ancestorsOps);
-    comet_debug() << " genForOps ancestorsOps.size(): " << ancestorsOps.size() << "\n";
-    for (unsigned int i = 0; i < ancestorsOps.size(); i++)
-    {
-      comet_debug() << " ancestorsOps[" << i << "]->forOps.size(): " << ancestorsOps[i]->forOps.size()
-                    << ", ancestorsOps->id: "
-                    << ancestorsOps[i]->id << "\n";
-    }
+/// Generate scf.for op for indices
+/// The index is the "idx"th index of "tensor"
+// TODO: CHECK OPS HERE
+void genForOps(std::vector<Value> &tensors,
+               std::vector<unsigned int> &ids,
+               std::vector<std::string> &formats,
+               indexTree::IndexTreeOp rootOp,
+//               PatternRewriter &rewriter,
+               OpBuilder &builder,
+               OpsTree *opstree) {
+  comet_debug() << " genForOps indexTreeOp\n";
+  comet_vdump(rootOp);
+  Location loc = rootOp.getLoc();
+  /// The insertion location should be "the end of the body of parent loop"
+  std::vector<OpsTree *> ancestorsOps;
+  getAncestorsOps(opstree, ancestorsOps);
+  comet_debug() << " genForOps ancestorsOps.size(): " << ancestorsOps.size() << "\n";
+  for (unsigned int i = 0; i < ancestorsOps.size(); i++) {
+    comet_debug() << " ancestorsOps[" << i << "]->forOps.size(): " << ancestorsOps[i]->forOps.size()
+                  << ", ancestorsOps->id: "
+                  << ancestorsOps[i]->id << "\n";
+  }
 
     comet_debug() << "\n";
     /// If parent is for loop, insert into the body, How to get end of body?
@@ -4028,41 +4029,41 @@ namespace
     }
   }
 
-  /// ----------------- ///
-  /// Generate the new ta.sptensor_construct() using the newly allocated C_col and C_val
-  /// Find the ta.print().
-  /// Change the ta.print()'s operand to the new sparse tensor.
-  /// ----------------- ///
-  /// %55 = ta.sptensor_construct(%45, %46, %47, %48, %49, %50, %51, %52, %53, %54, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
-  /// ----------------- ///
-  /**
-  sptensor_construct(
-      0) A1pos,  /// number of rows
-      1) A1crd,  /// discard
-      2) A1tile_pos,
-      3) A1tile_crd,
-      4) A2pos,  /// rowptr array
-      5) A2crd,  /// col_id array
-      6) A2tile_pos,
-      7) A2tile_crd,
-      8) Aval, /// data array
-      9) A1pos_size,
-      10) A1crd_size,
-      11) A1tile_pos_size,
-      12) A1tile_crd_size,
-      13) A2pos_size,
-      14) A2crd_size,
-      15) A2tile_pos_size,
-      16) A2tile_crd_size,
-      17) Aval_size,
-      18) dim1_size,
-      19) dim2_size,
-  )
-  */
-  void genNewSparseTensorToPrint(OpBuilder &builder,
-                                 Location &loc,
-                                 SymbolicInfo &symbolicInfo)
-  {
+
+/// ----------------- ///
+/// Generate the new ta.sptensor_construct() using the newly allocated C_col and C_val
+/// Find the ta.print().
+/// Change the ta.print()'s operand to the new sparse tensor.
+/// ----------------- ///
+/// %55 = ta.sptensor_construct(%45, %46, %47, %48, %49, %50, %51, %52, %53, %54, %8, %24) : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index>)
+/// ----------------- ///
+/**
+sptensor_construct(
+    0) A1pos,  /// number of rows
+    1) A1crd,  /// discard
+    2) A1tile_pos,
+    3) A1tile_crd,
+    4) A2pos,  /// rowptr array
+    5) A2crd,  /// col_id array
+    6) A2tile_pos,
+    7) A2tile_crd,
+    8) Aval, /// data array
+    9) A1pos_size,
+    10) A1crd_size,
+    11) A1tile_pos_size,
+    12) A1tile_crd_size,
+    13) A2pos_size,
+    14) A2crd_size,
+    15) A2tile_pos_size,
+    16) A2tile_crd_size,
+    17) Aval_size,
+    18) dim1_size,
+    19) dim2_size,
+)
+*/
+void genNewSparseTensorToPrint(OpBuilder &builder,
+                               Location &loc,
+                               SymbolicInfo &symbolicInfo) {
 
     Value &mtxC = symbolicInfo.mtxC;
     Value &mtxC_col = symbolicInfo.mtxC_col;
@@ -4075,27 +4076,25 @@ namespace
     auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(mtxC.getDefiningOp());
     int tensorRanks = sp_op.getTensorRank();
 
-    /// Get the operands and their types for the sparse tensor ta.sptensor_construct() (which is mtxC).
-    SmallVector<Value, 20> operands;
-    operands.insert(operands.end(),
-                    mtxC.getDefiningOp()->getOperands().begin(),
-                    mtxC.getDefiningOp()->getOperands().end());
-    operands[5] = mtxC_col_buffer; // 3 (A2crd)
-    operands[8] = mtxC_val_buffer; // 4 (AVal)
-    SmallVector<Type, 20> elementTypes;
-    for (Value &opd : operands)
-    {
-      elementTypes.push_back(opd.getType());
-    }
-    auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
-    Value sptensor = builder.create<tensorAlgebra::SparseTensorConstructOp>(loc,
-                                                                            ty,
-                                                                            operands,
-                                                                            tensorRanks);
-    {
-      comet_vdump(mtxC_col_buffer);
-      comet_vdump(mtxC_val_buffer);
-      comet_vdump(sptensor);
+  /// Get the operands and their types for the sparse tensor ta.sptensor_construct() (which is mtxC).
+  SmallVector<Value, 12> operands;
+  operands.insert(operands.end(),
+                  mtxC.getDefiningOp()->getOperands().begin(),
+                  mtxC.getDefiningOp()->getOperands().end());
+  operands[3] = mtxC_col_buffer;
+  operands[4] = mtxC_val_buffer;
+  SmallVector<Type, 12> elementTypes;
+  for (Value &opd : operands) {
+    elementTypes.push_back(opd.getType());
+  }
+  auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
+  Value sptensor = builder.create<tensorAlgebra::SparseTensorConstructOp>(loc,
+                                                                          ty,
+                                                                          operands);
+  {
+    comet_vdump(mtxC_col_buffer);
+    comet_vdump(mtxC_val_buffer);
+    comet_vdump(sptensor);
 
       {
         //    comet_pdump(rootOp.getOperation()->getParentOfType<ModuleOp>());
@@ -4284,11 +4283,11 @@ namespace
 
     /// Generate current for-loop body
 
-    Value &mtxC_val = symbolicInfo.mtxC_val;
-    Value rowptr = curr_for_loop.getInductionVar();
-    builder.setInsertionPointToStart(curr_for_loop.getBody());
-    Value c_col_id = builder.create<memref::LoadOp>(loc, mtxC_col, ValueRange{rowptr});
-    Value data = builder.create<memref::LoadOp>(loc, ws_data, ValueRange{c_col_id});
+  Value &mtxC_val = symbolicInfo.mtxC_val;
+  Value rowptr = curr_for_loop.getInductionVar();
+  builder.setInsertionPointToStart(curr_for_loop.getBody());
+  Value c_col_id = builder.create<memref::LoadOp>(loc, mtxC_col, ValueRange{rowptr});
+  Value data = builder.create<memref::LoadOp>(loc, ws_data, ValueRange{c_col_id});
 
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
 
@@ -4770,12 +4769,12 @@ namespace
 
         // TODO(patrick): Fix this
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
-        //unsigned int lhs_val_size_loc = 4 * lhs_ranks + 1;
-        //unsigned int lhs_2crd_size_loc = 4 * lhs_ranks;
-        //unsigned int lhs_2pos_size_loc = 4 * lhs_ranks - 1;
-        unsigned int lhs_val_size_loc = 15;
-        unsigned int lhs_2crd_size_loc = 12;
-        unsigned int lhs_2pos_size_loc = 11;
+        unsigned int lhs_val_size_loc = 7 * lhs_ranks + 1;
+        unsigned int lhs_2crd_size_loc = 6 * lhs_ranks;
+        unsigned int lhs_2pos_size_loc = 6 * lhs_ranks - 1;
+        //unsigned int lhs_val_size_loc = 15;
+        //unsigned int lhs_2crd_size_loc = 12;
+        //unsigned int lhs_2pos_size_loc = 11;
 
           // [0...2d, 2d+1...4d+1, 4d+2...5d+1]
           comet_debug() << " ";
