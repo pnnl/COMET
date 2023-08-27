@@ -4600,9 +4600,15 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
         // Get tensor ranks
         auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(lhs.getDefiningOp());
         int lhs_ranks = sp_op.getTensorRank();
+        
+        // Get tensor ranks
+        auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(lhs.getDefiningOp());
+        int lhs_ranks = sp_op.getTensorRank();
 
-        // TODO(patrick): Fix this
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
+        unsigned int lhs_val_size_loc = 8 * lhs_ranks + 1;    // 17 (2d)  // 15
+        unsigned int lhs_2crd_size_loc = 7 * lhs_ranks;       // 14 (2d)  // 12
+        unsigned int lhs_2pos_size_loc = 7 * lhs_ranks - 1;   // 13 (2d)  // 11
         unsigned int lhs_val_size_loc = 8 * lhs_ranks + 1;    // 17 (2d)  // 15
         unsigned int lhs_2crd_size_loc = 7 * lhs_ranks;       // 14 (2d)  // 12
         unsigned int lhs_2pos_size_loc = 7 * lhs_ranks - 1;   // 13 (2d)  // 11
