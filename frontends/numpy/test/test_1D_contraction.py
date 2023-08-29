@@ -1,20 +1,18 @@
 
 import numpy as np
-from cometpy import comet
+import comet
 
 #Testing Tensor Contractions with 1D input/output
 @comet.compile(flags=None)
 def compute_einsum_1D_comet(A,B):
     
     C = comet.einsum('ai,iam->m',A,B)
-
     return C
 
 
 def compute_einsum_1D_numpy(A,B):
     
     C_expected =  np.einsum('ai,iam->m',A,B)    
-
     return C_expected
 
 

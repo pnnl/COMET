@@ -1,8 +1,10 @@
-from cometpy import comet
+import comet
 import numpy as np
 import scipy as scp
 
-#Testing Dense tensor transpose
+# This tests fails because scipy should return a COO matrix when transposing a CSR one
+# COMET on the other hand returns a CSR
+
 @comet.compile("")
 def test_transpose(B):
    

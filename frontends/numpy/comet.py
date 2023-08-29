@@ -95,10 +95,15 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
             elif(isinstance(node.value, ast.Name)):
                 opr_no = "op" + str(node.lineno)
                 input_arrays = [target, node.value.id]
+                
+                dims_lbls = []
+                target_dims_lbls = numpy_array_info.get_dims_labels(input_arrays[0])
+                for a in input_arrays:
+                    dims_lbls.append(numpy_array_info.get_dims_labels(a))
                 if(isinstance(node.op, ast.Add)):    
-                    oprs_info(opr_no,target,input_arrays,[],[],"tensor_add", "+")
+                    oprs_info(opr_no,target,input_arrays,dims_lbls,target_dims_lbls,"tensor_add", "+")
                 elif(isinstance(node.op, ast.Sub)):
-                    oprs_info(opr_no,target,input_arrays,[],[],"tensor_sub", "-")
+                    oprs_info(opr_no,target,input_arrays,dims_lbls,target_dims_lbls,"tensor_sub", "-")
 
                 list_operations.append(opr_no)
         
@@ -122,12 +127,24 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
         #Handles the case: x[i,j] = y[i,j] + z[i,j]
         if(isinstance(node.left, ast.Name) and 
             isinstance(node.right, ast.Name)):
+
+            if(isinstance(node.op, ast.Mult)):
+                self.visit_Call_elewise_mul(node, target,'=')
+                return
+            elif(isinstance(node.op, ast.MatMult)):
+                self.visit_einsum_Call(node, target,'=')
+                return
+
             input_arrays = [node.left.id, node.right.id]
 
+            dims_lbls = []
+            target_dims_lbls = numpy_array_info.get_dims_labels(input_arrays[0])
+            for a in input_arrays:
+                dims_lbls.append(numpy_array_info.get_dims_labels(a))
             if(isinstance(node.op, ast.Add)):
-                oprs_info(opr_no,target,input_arrays,[],[],"tensor_add", "+")
+                oprs_info(opr_no,target,input_arrays, dims_lbls,target_dims_lbls,"tensor_add", "+")
             elif(isinstance(node.op, ast.Sub)):
-                oprs_info(opr_no,target,input_arrays,[],[],"tensor_sub", "-")
+                oprs_info(opr_no,target,input_arrays,dims_lbls,target_dims_lbls,"tensor_sub", "-")
         
         #Handles the case: x[i,j] = y[i,j] + comet.einsum(...)
         #P.S: The LHS here is a tensor(ast.Name)
@@ -144,10 +161,18 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
                 
                 opr_no = "opr" + str(node.lineno) + "_" + str(count)
                 input_arrays = [ast.unparse(node.left), result]   
+                
+                dims_lbls = []
+                target_dims_lbls = numpy_array_info.get_dims_labels(input_arrays[0])
+                for a in input_arrays:
+                    dims_lbls.append(numpy_array_info.get_dims_labels(a))
                 if(isinstance(node.op, ast.Add)): 
-                    oprs_info(opr_no,target,input_arrays,[],[],"tensor_add", "+")
+                    oprs_info(opr_no,target,input_arrays,dims_lbls,target_dims_lbls,"tensor_add", "+")
                 elif(isinstance(node.op, ast.Sub)):
-                    oprs_info(opr_no,target,input_arrays,[],[],"tensor_sub", "-")
+                    oprs_info(opr_no,target,input_arrays,dims_lbls,target_dims_lbls,"tensor_sub", "-")
+                elif(isinstance(node.op, ast.MatMult)):
+                    self.visit_einsum_Call(node, target,'=')
+                    return
                 
                 target_dims = numpy_array_info.get_dims(ast.unparse(node.left))
 
@@ -165,9 +190,13 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
                     numpy_array_info.set_val(result, 0.0)
                 
                 opr_no = "opr" + str(node.lineno) + "_" + str(count)
+                dims_lbls = []
+                target_dims_lbls = numpy_array_info.get_dims_labels(input_arrays[0])
+                for a in input_arrays:
+                    dims_lbls.append(numpy_array_info.get_dims_labels(a))
                 if(isinstance(node.left.op, ast.USub)):
                     input_arrays = [result,ast.unparse(node.left.operand)]
-                    oprs_info(opr_no,target,input_arrays,[],[],"tensor_sub", "-")
+                    oprs_info(opr_no,target,input_arrays,dims_lbls,target_dims_lbls,"tensor_sub", "-")
                 
                 target_dims = numpy_array_info.get_dims(ast.unparse(node.left.operand))
 
@@ -190,46 +219,108 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
         opr_no = "opr" + str(node.lineno)
         input_arrays = []
         transpose = False
-        for arg in node.args:
-            if(isinstance(arg, ast.Name)):
-                input_arrays.append(arg.id)
 
-            #Analyze the mapping to get the dimensions of the output tensor
-            elif(isinstance(arg, ast.Constant)):
-                mapping = (arg.value).split("->")
-                #If two input (comma separated) dimension labels exist in the mapping, it is a tensor contraction
-                if("," in mapping[0]):
-                    input_dim_lbls = mapping[0].split(",")
-                    input1_dims = list(input_dim_lbls[0])
-                    input2_dims = list(input_dim_lbls[1])
-                    output_dim_lbls = list(mapping[1])
-                    # input_dim_lbls = [input1_dims,input2_dims]
-                    input_dim_lbls = [list(x) for x in input_dim_lbls]
-                    opr_type = "contraction"
-                    oprs_info(opr_no,target,input_arrays,input_dim_lbls,output_dim_lbls,opr_type,op)
-                    list_operations.append(opr_no)
-                #Else it is a tensor transpose
-                else:
-                    transpose = True
-                    input_dims = list(mapping[0])
-                    output_dim_lbls = list(mapping[1])
-                    input_dim_lbls = [input_dims]
-                    opr_type = "transpose"
-                    oprs_info(opr_no,target,input_arrays,input_dim_lbls,output_dim_lbls,opr_type,op)
-                    list_operations.append(opr_no)
+        if isinstance(node, ast.BinOp): # einsum hidden as a @ operation
+            input_arrays = [node.left.id,node.right.id] 
+            labels_defined_for = []
+            input_dim_lbls = []
+            lbls0 = numpy_array_info.get_dims_labels(input_arrays[0])
+            lbls1 = numpy_array_info.get_dims_labels(input_arrays[1])
+            if len(numpy_array_info.get_dims(input_arrays[0])) > 2 or len(numpy_array_info.get_dims(input_arrays[1])) > 2:
+                   raise RuntimeError(
+                        "@ operator can only be used with arrays of rank <=2. Please use einsum for arrays of larger rank"
+                    )
+            if lbls0 == "No record found": # First occurence of this tensor before any einsum
+                dims0 = numpy_array_info.get_dims(input_arrays[0])
+                dims1 = numpy_array_info.get_dims(input_arrays[1])
+                if lbls1 == "No record found": # First occurence of this tensor before any einsum
+                    dims_lbls = []
+                    for d,dval in enumerate(dims1):
+                        label_id_map['idx'+str(node.lineno)+'d'+str(d)+'i'+str(1)] = dval
+                        dims_lbls.append('idx'+str(node.lineno)+'d'+str(d)+'i'+str(1))
+                    numpy_array_info.set_dims_labels(input_arrays[1] ,dims_lbls)
+                
+                dims_lbls = []
+                for i in range(len(dims0)-1):
+                    dval = dims0[i]
+                    d = i
+                    label_id_map['idx'+str(node.lineno)+'d'+str(d)+'i'+str(0)] = dval
+                    dims_lbls.append('idx'+str(node.lineno)+'d'+str(d)+'i'+str(0))
+                
+                dims_lbls.append(numpy_array_info.get_dims_labels(input_arrays[1])[0])
+                                 
+                numpy_array_info.set_dims_labels(input_arrays[0] ,dims_lbls)
+            else:
+                if lbls1 == "No record found": # First occurence of this tensor before any einsum
+                    dims1 = numpy_array_info.get_dims(input_arrays[1])
+                    dims_lbls = []
+                    dims_lbls.append(numpy_array_info.get_dims_labels(input_arrays[0])[-1])
+                    
+                    for i in range(1, len(dims1)):
+                        dval = dims1[i]
+                        d = i
+                        label_id_map['idx'+str(node.lineno)+'d'+str(d)+'i'+str(1)] = dval
+                        dims_lbls.append('idx'+str(node.lineno)+'d'+str(d)+'i'+str(1))
+                    
+                    numpy_array_info.set_dims_labels(input_arrays[1] ,dims_lbls)
+            output_dim_lbls = [x for x in numpy_array_info.get_dims_labels(input_arrays[0]) if x not in numpy_array_info.get_dims_labels(input_arrays[1])]
+            output_dim_lbls += [x for x in numpy_array_info.get_dims_labels(input_arrays[1]) if x not in numpy_array_info.get_dims_labels(input_arrays[0])]
+            opr_type = "contraction"
+            list_operations.append(opr_no)
+
+            for i in range(len(input_arrays)):
+                input_dim_lbls.append(numpy_array_info.get_dims_labels(input_arrays[i]))
+
+                
+            oprs_info(opr_no,target,input_arrays,input_dim_lbls,output_dim_lbls,opr_type,op)
+
+        else:
+            for arg in node.args:
+                if(isinstance(arg, ast.Name)):
+                    input_arrays.append(arg.id)
+
+                #Analyze the mapping to get the dimensions of the output tensor
+                elif(isinstance(arg, ast.Constant)):
+                    mapping = (arg.value).split("->")
+                    #If two input (comma separated) dimension labels exist in the mapping, it is a tensor contraction
+                    if("," in mapping[0]):
+                        input_dim_lbls = mapping[0].split(",")
+                        input1_dims = list(input_dim_lbls[0])
+                        input2_dims = list(input_dim_lbls[1])
+                        output_dim_lbls = list(mapping[1])
+                        # input_dim_lbls = [input1_dims,input2_dims]
+                        input_dim_lbls = [list(x) for x in input_dim_lbls]
+                        opr_type = "contraction"
+                        oprs_info(opr_no,target,input_arrays,input_dim_lbls,output_dim_lbls,opr_type,op)
+                        list_operations.append(opr_no)
+                    #Else it is a tensor transpose
+                    else:
+                        transpose = True
+                        input_dims = list(mapping[0])
+                        output_dim_lbls = list(mapping[1])
+                        input_dim_lbls = [input_dims]
+                        opr_type = "transpose"
+                        oprs_info(opr_no,target,input_arrays,input_dim_lbls,output_dim_lbls,opr_type,op)
+                        list_operations.append(opr_no)
         
-        #Map the labels in the einsum input syntax to their corresponding values stored in the hash table
-        for i,j in zip(range(len(input_arrays)), range(len(input_dim_lbls))):  
-            dim_values = numpy_array_info.get_dims(input_arrays[i])
-            dim_lbls = input_dim_lbls[j]
-            for key,value in zip(dim_lbls,dim_values):
-                label_id_map[key] = value
+            #Map the labels in the einsum input syntax to their corresponding values stored in the hash table
+            for i,j in zip(range(len(input_arrays)), range(len(input_dim_lbls))):  
+                dim_values = numpy_array_info.get_dims(input_arrays[i])
+                dim_lbls = input_dim_lbls[j]
+                for key,value in zip(dim_lbls,dim_values):
+                    label_id_map[key] = value #[TODO] What if the same index is used for different sizes in different contractions?
+                        
 
-            numpy_array_info.set_dims_labels(input_arrays[i],dim_lbls)
+                numpy_array_info.set_dims_labels(input_arrays[i],dim_lbls)
 
         if transpose:
+            # Use lookup table to extract the format of the output based on the input
             output_format = sp_mattr_conversions[numpy_array_info.get_format(input_arrays[0])]
         else: # contraction
+            if  numpy_array_info.get_format(input_arrays[0]) != "Dense" or numpy_array_info.get_format(input_arrays[1]) != "Dense":
+                global need_opt_comp_workspace 
+                need_opt_comp_workspace = True
+
             # Use lookup table to extract the format of the output based on the input
             output_format = sp_matmult_conversions[numpy_array_info.get_format(input_arrays[0])][numpy_array_info.get_format(input_arrays[1])]
             if len(input_arrays) > 2:
@@ -271,22 +362,54 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
     def visit_Call_elewise_mul(self, node, target,op):
         opr_no = "opr" + str(node.lineno)
         input_arrays = []
-    
-        for arg in node.args:
-            if(isinstance(arg, ast.Name)):
-                input_arrays.append(arg.id)
+
+
+        if(isinstance(node, ast.BinOp)): # Called from a A * B operation
+            input_arrays = [node.left.id,node.right.id] 
+        else:
+            for arg in node.args:
+                if(isinstance(arg, ast.Name)):
+                    input_arrays.append(arg.id)
 
         input_dim_labels = []
+        labels_defined_for = []
+        for i in range(len(input_arrays)):
+            lbl = numpy_array_info.get_dims_labels(input_arrays[i])
+            if lbl not in "No record found": # First occurence of this tensor before any einsum
+                labels_defined_for.append(i)
+
+        labels_known = None
+
+        if len(labels_defined_for) != len(input_arrays):
+            if numpy_array_info.get_dims_labels(target) != "No record found":
+                labels_known = numpy_array_info.get_dims_labels(target)
+            
+            for i in range(len(input_arrays)):
+                if i not in labels_defined_for:
+
+                    if labels_known == None:
+                        dims = numpy_array_info.get_dims(input_arrays[i])
+                        dims_lbls = []
+                        for d,dval in enumerate(dims):
+                            label_id_map['idx'+str(node.lineno)+'d'+str(d)+'i'+str(i)] = dval
+                            dims_lbls.append('idx'+str(node.lineno)+'d'+str(d)+'i'+str(i))
+                        numpy_array_info.set_dims_labels(input_arrays[i] ,dims_lbls)
+                        labels_known = dims_lbls
+                    else:
+                        numpy_array_info.set_dims_labels(input_arrays[i] ,labels_known)
+        
         for i in range(len(input_arrays)):
             input_dim_labels.append(numpy_array_info.get_dims_labels(input_arrays[i]))
-       
+        
         output_dim_labels = input_dim_labels[0]
         numpy_array_info.set_dims(target,numpy_array_info.get_dims(input_arrays[0]))
         numpy_array_info.set_dims_labels(target,output_dim_labels)
         
         # Currently the format of the output tensor is the same as the one of the first operand 
         # [TODO] See what scipy returns
-        numpy_array_info.set_format(target, numpy_array_info.get_format(input_arrays[0]))  
+
+        output_format = sp_elw_mult_conversions[numpy_array_info.get_format(input_arrays[0])][numpy_array_info.get_format(input_arrays[1])]
+        numpy_array_info.set_format(target, output_format)  
         oprs_info(opr_no,target,input_arrays,input_dim_labels,output_dim_labels,"elewise_mult",op)
         list_operations.append(opr_no)
 
@@ -447,7 +570,6 @@ class _Build_and_lower_mlir:
         for type in op_types:
             tensor_types.append(type)
 
-        tensor_types.append(target_type)
 
         dimslbls_to_map = []
         for lst in dimslbls_lists:
@@ -458,10 +580,11 @@ class _Build_and_lower_mlir:
             tc_indices.append(id_decl_vars_ta[dim_lbl])
 
         dimslbls_to_map.sort()
-        tc_builder_init = PyMLIRGen.TC_and_TrPose_Builder(ta_operators, dimslbls_to_map, dimslbls_lists, 
+        tensor_types.append(target_type)
+        builder_init = PyMLIRGen.ArithOp_Builder(ta_operators, dimslbls_to_map, dimslbls_lists, 
                                                                     target_dims_lbls,tensor_types,tc_indices, opr_type,op,op_formats)
         
-        return tc_builder_init
+        return builder_init
         
 
 
@@ -483,12 +606,13 @@ class _Build_and_lower_mlir:
         tc_var = ""
         for opr_no in list_operations:
             opr_type = oprs_info.get_opr_type(opr_no)
+            op = oprs_info.get_op(opr_no)
             target = oprs_info.get_einsum_target(opr_no)
+            input_arrays = oprs_info.get_input_arrays(opr_no)
             if(opr_type == "contraction" or opr_type == "transpose" or opr_type == "elewise_mult"):
-                input_arrays = oprs_info.get_input_arrays(opr_no)
                 input_array_dimslbls_lists = oprs_info.get_input_dims_lbls(opr_no)
                 target_dims_lbls = oprs_info.get_out_dims_lbls(opr_no)
-                op = oprs_info.get_op(opr_no)
+
                 target_var_ta = (tensor_vars_ta[target])[0]
                 target_type = (tensor_vars_ta[target])[1]
                 
@@ -496,15 +620,15 @@ class _Build_and_lower_mlir:
                 op1_op = tensor_vars_ta[op1][0]
                 op1_type = tensor_vars_ta[op1][1]
                 op1_dimslbls_lists = input_array_dimslbls_lists[0]
-                if len(input_arrays) == 1:
+                if len(input_arrays) == 1: # Transpose
                     tc_var = "%{}".format(last_var_assigned+count)
                     format_op1 = numpy_array_info.get_format(op1)
-                    format_target = format_op1
+                    format_target = numpy_array_info.get_format(target)
                     tc_builder_init = _Build_and_lower_mlir.build_op_helper([op1_op], [op1_type], target_type, [op1_dimslbls_lists], 
                                                                             target_dims_lbls, id_decl_vars_ta, opr_type, op, [format_op1, format_target])
-                    beta_val = PyMLIRGen.TC_and_TrPose_Builder.get_beta_val(op)
+                    beta_val = PyMLIRGen.ArithOp_Builder.get_beta_val(op)
                     
-                    tc_op_ta = tc_var + tc_builder_init.build_tc()
+                    tc_op_ta = tc_var + tc_builder_init.build()
 
                     set_op = '\n"ta.set_op"({},{}) '.format(tc_var,target_var_ta) \
                                     + "{" + "__beta__ = {} : f64".format(beta_val) +'} : ' +'({},{})'.format(target_type,target_type) + ' -> ()'
@@ -529,11 +653,14 @@ class _Build_and_lower_mlir:
 
                         format_op1 = format_target
                         format_op2 = numpy_array_info.get_format(op2)
-                        format_target = sp_matmult_conversions[format_target][format_op2]
+                        if opr_type == "contraction":
+                            format_target = sp_matmult_conversions[format_target][format_op2]
+                        elif opr_type == "elewise_mult":
+                            format_target = sp_elw_mult_conversions[format_target][format_op2]
                         tc_builder_init = _Build_and_lower_mlir.build_op_helper([op1_op,tensor_vars_ta[op2][0]], [op1_type, tensor_vars_ta[op2][1]], int_target_type, int_input_array_dimslbls_lists, 
                                                                             int_target_dims, id_decl_vars_ta, opr_type, op, [format_op1, format_op2, format_target])
                         
-                        tc_op_ta = tc_var + tc_builder_init.build_tc()
+                        tc_op_ta = tc_var + tc_builder_init.build()
 
                         op1_dimslbls_lists =  int_target_dims
                         op1_op = tc_var
@@ -541,7 +668,7 @@ class _Build_and_lower_mlir:
                         tensor_ops.append(tc_op_ta)
                         count += 1
 
-                    beta_val = PyMLIRGen.TC_and_TrPose_Builder.get_beta_val(op)
+                    beta_val = PyMLIRGen.ArithOp_Builder.get_beta_val(op)
                     set_op = '"ta.set_op"({},{}) '.format(tc_var,target_var_ta) \
                                     + "{" + "__beta__ = {} : f64".format(beta_val) +'} : ' +'({},{})'.format(target_type,target_type) + ' -> ()'
                     tensor_ops.append(set_op)
@@ -554,17 +681,19 @@ class _Build_and_lower_mlir:
 
                 target_var_ta = (tensor_vars_ta[target])[0]
                 target_type =  (tensor_vars_ta[target])[1]
-                unknown_type = 'tensor<*xf64>'
 
                 for array in input_arrays:
                     ta_operators.append((tensor_vars_ta[array])[0])
                     tensor_types.append((tensor_vars_ta[array])[1])
 
-                ta_arith_build_init = PyMLIRGen.Tensor_arithOp_builder(ta_operators,tensor_types,unknown_type,op)
+                input_array_dimslbls_lists = oprs_info.get_input_dims_lbls(opr_no)
+                target_dims_lbls = oprs_info.get_out_dims_lbls(opr_no)
+                
+                ta_arith_build_init = _Build_and_lower_mlir.build_op_helper(ta_operators, tensor_types, target_type, input_array_dimslbls_lists, target_dims_lbls, id_decl_vars_ta, opr_type, op, [numpy_array_info.get_format(input_arrays[0]), numpy_array_info.get_format(input_arrays[1]), numpy_array_info.get_format(input_arrays[0])])
                 arith_op_ta = tc_var + ta_arith_build_init.build()
                 beta_val =  0.000000e+00
                 set_op = '\n"ta.set_op"({},{})'.format(tc_var,target_var_ta) + \
-                                "{" + "__beta__ = {} : f64".format(beta_val) +'} : ' +'({},{})'.format(unknown_type,target_type) + ' -> ()'
+                                "{" + "__beta__ = {} : f64".format(beta_val) +'} : ' +'({},{})'.format(target_type,target_type) + ' -> ()'
 
                 tensor_ops.append(arith_op_ta + set_op)
         
@@ -596,23 +725,9 @@ class _Build_and_lower_mlir:
             else:    
                 if(isinstance(init_value, np.ndarray)):
                     temp_arr = init_value.reshape(1,init_value.size)
-                    if(np.all(temp_arr == temp_arr[0][0])):
-                        init_value = temp_arr[0][0]
-                        ta_fillOp = _Build_and_lower_mlir.build_tensor_fill_ta(ta_op_var,init_value, vartype)
-                        irb.add_statement(ta_fillOp)
-
-                    else:
-                        array_dims_lbls = numpy_array_info.get_dims_labels(label)
-                        list_dim_vars_ta = []
-                        if(array_dims_lbls != "No record found"):
-                            for dim_lbl in array_dims_lbls:
-                                list_dim_vars_ta.append(self.id_decl_vars_ta[dim_lbl])
-                        else:
-                            dim_vals = numpy_array_info.get_dims(label)
-                            for val in dim_vals:
-                                list_dim_vars_ta.append(self.vals_ta_idx_vars_map[val])
-                        final_var_ta,rand_init_op = _Build_and_lower_mlir.elewise_tensor_fill_ta(ta_op_var,vartype,init_value,final_tensor_decl_var,list_dim_vars_ta)
-                        irb.add_statement(rand_init_op)
+                    init_value = temp_arr[0][0]
+                    ta_fillOp = _Build_and_lower_mlir.build_tensor_fill_ta(ta_op_var,init_value, vartype)
+                    irb.add_statement(ta_fillOp)
 
                 elif(isinstance(init_value, float)):
                     ta_fillOp = _Build_and_lower_mlir.build_tensor_fill_ta(ta_op_var,init_value,vartype)
@@ -649,8 +764,16 @@ class _Build_and_lower_mlir:
 
         ta_dialect = PyMLIRGen.MLIRFunctionBuilder.compile(irb)
 
+        # If multiplying with sparse this flag is required
+        if need_opt_comp_workspace:
+            if flags:
+                flags += '--opt-comp-workspace'
+            else:
+                flags = '--opt-comp-workspace'
+        
         #Begin lowering. TODO: Correctness check for enabled flags.
         if with_jit:
+
             lowering_result = lowering.lower_dialect_with_jit(ta_dialect,list_out_dims,flags,func_name, args_vals, outputs)
         else:
             lowering_result = lowering.lower_dialect(ta_dialect,list_out_dims,flags,func_name)
@@ -667,6 +790,7 @@ def compile(flags, with_jit=True):
         def wrapper(*pos_args, **kwargs):
             global sp_matmult_conversions
             global sp_mattr_conversions
+            global sp_elw_mult_conversions
             
             # Output formats when multiply matrices of different formats
             sp_matmult_conversions = {
@@ -687,10 +811,30 @@ def compile(flags, with_jit=True):
                 }
             }
 
+            # Output formats when transposing matrices of different formats
             sp_mattr_conversions = {
                 "CSR" : "CSC",
                 "COO" : "COO",
                 "Dense" : "Dense"
+            }
+
+            # Output formats when elwise mult matrices of different formats
+            sp_elw_mult_conversions = {
+                "CSR": {
+                    "CSR" : "CSR",
+                    "COO" : "CSR",
+                    "Dense" : "COO",
+                },
+                "COO": {
+                    "CSR" : "CSR",
+                    "COO" : "CSR",
+                    "Dense" : "COO"
+                },
+                "Dense": {
+                    "CSR" : "Dense",
+                    "COO" : "Dense",
+                    "Dense" : "Dense",
+                }
             }
             func_str = inspect.getsource(func)
             parsed_func = ast.parse(func_str)
@@ -706,6 +850,9 @@ def compile(flags, with_jit=True):
             numpy_array_info = HashTable(50)
             global args_vals
             args_vals = []
+            global need_opt_comp_workspace
+            need_opt_comp_workspace = False
+
             #Parse the function body, create the AST and generate the TA dialect using the AST
             if(isinstance(parsed_func.body[0], ast.FunctionDef)):
                 func_def = parsed_func.body[0]
@@ -726,6 +873,7 @@ def compile(flags, with_jit=True):
                             )
                     else:
                         numpy_array_info.set_format(numpy_array_label, "Dense")
+                    
                     numpy_array_info.set_val(numpy_array_label, value)
                     numpy_array_info.set_dims(numpy_array_label, list(value.shape))
                     in_args.append(numpy_array_label)

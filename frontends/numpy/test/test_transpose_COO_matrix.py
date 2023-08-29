@@ -1,8 +1,7 @@
-from cometpy import comet
+import comet
 import numpy as np
 import scipy as scp
 
-#Testing Dense tensor transpose
 @comet.compile("")
 def test_transpose(B):
    

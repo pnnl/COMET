@@ -64,6 +64,7 @@ def cleanup():
     for f in files_to_cleanup:
         if os.path.exists(f):
             os.remove(f) 
+            # pass
 
 atexit.register(cleanup)
 if("macOS" in platform.platform()):
@@ -172,6 +173,8 @@ def comment_unneeded_sparse(input_, arg_vals):
 
         if "call @read_input_sizes" in input[i]:
             cast = line[line.find("(") : line.find(")")].split(",")[3].lstrip().strip()
+            # With tiles
+            # cast = line[line.find("(") : line.find(")")].split(",")[5].lstrip().strip()
             # input[i] = "//" +input[i]
             input[i] = ""
             alloc = ""
@@ -180,7 +183,7 @@ def comment_unneeded_sparse(input_, arg_vals):
                 if cast +" = memref.cast" in lline:
                     alloc = lline.split()[3].lstrip().strip()
                     # input[j] = "// from sparse" + input[j]
-                    input[j] = ""
+                    # input[j] = ""
                     for k in range(len(input[:j])):
                         if alloc + " = memref.alloc" in input[k]:
                             # input[k] = "// from sparse"+input[k]
@@ -189,6 +192,8 @@ def comment_unneeded_sparse(input_, arg_vals):
             i+=1
             found = 0
             while(found != 7):
+            # With tiles
+            # while(found != 11):
                 if "memref.load " + alloc in input[i]:
                     idx = input[i].split('=')[0].lstrip().strip()
                     indexes.append(idx)
@@ -230,7 +235,7 @@ def comment_unneeded_sparse(input_, arg_vals):
                 input[r[1]] = ""
             # input[returns[-1][1]] = "//from sparse" + input[returns[-1][1]]
             input[returns[-1][1]] = ""
-            add += "\t\tmemref.store {}, %marg{}[%c0] : memref<1xmemref<?xf64>>\n".format(returns[-1][0], 4)
+            add += "\t\tmemref.store {}, %marg{}[%c0] : memref<1xmemref<?xf64>>\n".format(returns[-1][0], len(returns)-1)
             add += "\t\treturn"
             input[i] = add
 
@@ -239,7 +244,11 @@ def comment_unneeded_sparse(input_, arg_vals):
     for i, v in enumerate(arg_vals):
         if scp.sparse.issparse(v):
             input[1] = input[1].replace(args[i], allocs[ai] +" : memref<7xindex>, " + " : memref<?xindex>, ".join([s for s in allocs[ai+1:ai+6]]) + " : memref<?xf64>")
-            ai += 6 
+            # With tiles
+            # input[1] = input[1].replace(args[i], allocs[ai] +" : memref<11xindex>, " + " : memref<?xindex>, ".join([s for s in allocs[ai+1:ai+10]]) + " : memref<?xf64>")
+            ai += 6
+            # With tiles 
+            # ai += 10 
     if len(returns) > 1:
         input[1] = input[1].replace(")", ", %marg0: memref<1xmemref<?xindex>>, %marg1: memref<1xmemref<?xindex>>, %marg2: memref<1xmemref<?xindex>>, %marg3: memref<1xmemref<?xindex>>, %marg4: memref<1xmemref<?xf64>>)")
     input[-1] = '\n  func.func @dealloc(%to_dealloc: memref<?xindex>, %to_dealloc1: memref<?xindex>, %to_dealloc2: memref<?xindex>, %to_dealloc3: memref<?xindex>, %to_dealloc4: memref<?xf64>){\n \
@@ -251,6 +260,21 @@ def comment_unneeded_sparse(input_, arg_vals):
 \t\treturn\n \
 \t}\n\
 }\n'
+    # With tiles
+    #         input[1] = input[1].replace(")", ", %marg0: memref<1xmemref<?xindex>>, %marg1: memref<1xmemref<?xindex>>, %marg2: memref<1xmemref<?xindex>>, %marg3: memref<1xmemref<?xindex>>, %marg4: memref<1xmemref<?xindex>>, %marg5: memref<1xmemref<?xindex>>, %marg6: memref<1xmemref<?xindex>>, %marg7: memref<1xmemref<?xindex>>, %marg8: memref<1xmemref<?xf64>>)")
+#     input[-1] = '\n  func.func @dealloc(%to_dealloc: memref<?xindex>, %to_dealloc1: memref<?xindex>, %to_dealloc2: memref<?xindex>, %to_dealloc3: memref<?xindex>, %to_dealloc4: memref<?xindex>, %to_dealloc5: memref<?xindex>, %to_dealloc6: memref<?xindex>, %to_dealloc7: memref<?xindex>, %to_dealloc8: memref<?xf64>){\n \
+# \t\tmemref.dealloc %to_dealloc : memref<?xindex>\n \
+# \t\tmemref.dealloc %to_dealloc1 : memref<?xindex>\n \
+# \t\tmemref.dealloc %to_dealloc2 : memref<?xindex>\n \
+# \t\tmemref.dealloc %to_dealloc3 : memref<?xindex>\n \
+# \t\tmemref.dealloc %to_dealloc4 : memref<?xindex>\n \
+# \t\tmemref.dealloc %to_dealloc5 : memref<?xindex>\n \
+# \t\tmemref.dealloc %to_dealloc6 : memref<?xindex>\n \
+# \t\tmemref.dealloc %to_dealloc7 : memref<?xindex>\n \
+# \t\tmemref.dealloc %to_dealloc8 : memref<?xf64>\n \
+# \t\treturn\n \
+# \t}\n\
+# }\n'
     for line in input:
         if line:
             output += line +"\n"
@@ -363,6 +387,10 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
             else:
                 # [TODO] The arrays used as inputs for the comet generated code need to be updated to take into account the extra tile component
                 # CSR
+                A1tile_pos = np.array([-1], dtype=np.int64)
+                A1tile_crd = np.array([-1], dtype=np.int64)
+                A2tile_pos = np.array([-1], dtype=np.int64)
+                A2tile_crd = np.array([-1], dtype=np.int64)
                 if scp.sparse.isspmatrix_csr(ndarray):
                     A1pos = np.array([ndarray.get_shape()[0]], dtype=np.int64)
                     A1crd = np.array([-1], dtype=np.int64)
@@ -371,6 +399,8 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
 
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                     llvm_args += [*np_array_to_memref(np.array([1, 1, ndarray.get_shape()[0] + 1, ndarray.getnnz(), ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
+                    # With tiles
+                    # llvm_args += [*np_array_to_memref(np.array([1, 1, 0, 0, ndarray.get_shape()[0] + 1, ndarray.getnnz(), 0, 0, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
                 # COO
                 elif scp.sparse.isspmatrix_coo(ndarray):
                     A1pos = np.array([0, ndarray.nnz], dtype=np.int64)
@@ -380,6 +410,8 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
 
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                     llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 1, ndarray.getnnz(), ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
+                    # With tiles
+                    # llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 0, 0, 1, ndarray.getnnz(), 0, 0, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
                 
                 # CSC
                 elif scp.sparse.isspmatrix_csc(ndarray):
@@ -389,16 +421,22 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                     
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                     llvm_args += [*np_array_to_memref(np.array([ndarray.get_shape()[1] + 1, ndarray.nnz, 1, 1, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
+                    # With tiles
+                    # llvm_args += [*np_array_to_memref(np.array([ndarray.get_shape()[1] + 1, ndarray.nnz, 0, 0, 1, 1, 0, 0, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
                 
                 Aval = ndarray.data.astype('float64')
 
                 # Based on the  desc_A1pos/crd, desc_A2pos/crd, desc_Aval arrays in SparseUtils.cpp: read_input_2D
                 # Expand to memrefs llvmir implementation
                 llvm_args += [*np_array_to_memref(A1pos),  *np_array_to_memref(A1crd), *np_array_to_memref(A2pos), *np_array_to_memref(A2crd), *np_array_to_memref(Aval)]
+                # With tiles
+                # llvm_args += [*np_array_to_memref(A1pos),  *np_array_to_memref(A1crd), *np_array_to_memref(A1tile_pos), *np_array_to_memref(A1tile_crd), *np_array_to_memref(A2pos), *np_array_to_memref(A2crd), *np_array_to_memref(A2tile_pos), *np_array_to_memref(A2tile_crd), *np_array_to_memref(Aval)]
                 
                 # Set the datatypes expected from the function in the shared library.
                 # If we don't define this the data are not passed correctly
-                llvm_args_types += [ctypes.POINTER(c_longlong), ctypes.POINTER(c_longlong), c_longlong, c_longlong, c_longlong] * 5 + [ctypes.POINTER(c_double), ctypes.POINTER(c_double), c_longlong, c_longlong, c_longlong]
+                llvm_args_types += [ctypes.POINTER(c_longlong), ctypes.POINTER(c_longlong), c_longlong, c_longlong, c_longlong] * 5  + [ctypes.POINTER(c_double), ctypes.POINTER(c_double), c_longlong, c_longlong, c_longlong]
+                # With tiles
+                # llvm_args_types += [ctypes.POINTER(c_longlong), ctypes.POINTER(c_longlong), c_longlong, c_longlong, c_longlong] * 9  + [ctypes.POINTER(c_double), ctypes.POINTER(c_double), c_longlong, c_longlong, c_longlong]
 
     return llvm_args, llvm_args_types, all_outputs
 
@@ -577,9 +615,7 @@ def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
 def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_name, args_vals, outputs):
     #lower TA dialect to the SCF dialect
     mlir_lower_flags = " --convert-ta-to-it --convert-to-loops "
-    for v in args_vals:
-        if scp.sparse.issparse(v):
-            mlir_lower_flags = " --opt-comp-workspace " + mlir_lower_flags
+
     if isinstance(compile_with_flags,tuple):
         for i in range(len(compile_with_flags)):
             mlir_lower_flags += compile_with_flags[i] + " "
@@ -621,3 +657,5 @@ def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_nam
     #result = execute_llvm(llvm_out_file)
 
     result,llvmir_file = translate_and_exec_llvm_with_jit(llvm_out_file,func_name, args_vals, outputs, uuid_s)
+
+    return result
