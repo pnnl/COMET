@@ -1,6 +1,6 @@
 
 import numpy as np
-from cometpy import comet
+import comet
 
 #Testing Tensor Contractions with 3D input/output
 @comet.compile(flags=None)

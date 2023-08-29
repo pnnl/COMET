@@ -1,10 +1,10 @@
 
 
 import numpy as np
-from cometpy import comet
+import comet
 
 #Testing Tensor Contractions with 2D input/output
-@comet.compile(flags="--convert-tc-to-ttgt")
+@comet.compile(flags="")
 def compute_einsum_2D_comet(A,B,E):
   
     C = comet.einsum('ij,jk->ik',A,B)

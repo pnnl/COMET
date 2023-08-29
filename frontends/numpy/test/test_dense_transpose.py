@@ -1,5 +1,5 @@
 
-from cometpy import comet
+import comet
 import numpy as np
 
 #Testing Dense tensor transpose

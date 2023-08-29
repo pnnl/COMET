@@ -84,17 +84,20 @@ class Tensor_Decl_Builder:
 
 
 
-class TC_and_TrPose_Builder:
+class ArithOp_Builder:
     indentation_size = 4
     beta_val = 0.0
 
     tc_decl_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
         + ' = "ta.mul"{{operators}}'
-        + '{__alpha__ = 1.000000e+00 : f64, '
+        + '{MaskType = "none", ' #[TODO] MaskType should not be static
+        + '__alpha__ = 1.000000e+00 : f64, '  
         +"__beta__ = {{beta}} : f64,"
         + 'formats = [{{formats}}],'
-        +'indexing_maps = {{indexing_maps}}, semiring = "plusxy_times"} : '
+        +'indexing_maps = {{indexing_maps}}, '
+        +'operand_segment_sizes = array<i32:1, 1, {{lhs_dims}}, 0>, ' #[TODO] operand_segment_sizes should not be static
+        +'semiring = "plusxy_times"} : ' 
         +"{{types_range_str}}"
         +"-> {{outputtype}}"
         + "\n" ,
@@ -106,7 +109,7 @@ class TC_and_TrPose_Builder:
         + ' = "ta.elews_mul"{{operators}}'
         + '{__alpha__ = 1.000000e+00 : f64, '
         +"__beta__ = {{beta}} : f64,"
-        + 'formats = ["Dense", "Dense", "Dense"],'
+        + 'formats = [{{formats}}],'
         +'indexing_maps = {{indexing_maps}}, semiring = "noop_times"} : '
         +"{{types_range_str}}"
         +"-> {{outputtype}}"
@@ -127,6 +130,36 @@ class TC_and_TrPose_Builder:
         undefined=jinja2.StrictUndefined,
     )
 
+    tensor_add_wrapper_text = jinja2.Template(   
+        ("" * indentation_size)
+        +' = "ta.add"{{operators}}'
+        +' {'
+        +' Masktype = "none",'
+        +' formats = [{{formats}}],'
+        +' indexing_maps = {{indexing_maps}},'
+        +' semiring = "noop_plusxy"'
+        +' }'
+        +' : {{Tensor_types_tuple}}'
+        +"-> {{outputtype}}"
+        + "\n" ,
+        undefined=jinja2.StrictUndefined,
+    )
+
+    tensor_sub_wrapper_text = jinja2.Template(   
+        ("" * indentation_size)
+        + ' = "ta.subtract"{{operators}}'
+        +' {'
+        +' Masktype = "none",'
+        +' formats = [{{formats}}],'
+        +' indexing_maps = {{indexing_maps}},'
+        +' semiring = "noop_minus"'
+        +' }'
+        +' : {{Tensor_types_tuple}}'
+        +"-> {{outputtype}}"
+        + "\n" ,
+        undefined=jinja2.StrictUndefined,
+    )
+
     def __init__(self, input_tensors:list, dimslbls_to_map:list, input_array_dims_lbls:list, 
                             target_dims_lbls:list,tensor_types:list,tc_indices:list,opr_type:str,op:str, formats:list) -> None:
         self.operators = input_tensors
@@ -139,7 +172,7 @@ class TC_and_TrPose_Builder:
         self.op = op
         self.formats = formats
 
-    def build_tc(self):
+    def build(self):
 
         out_tensor_type = self.tensor_types.pop()
         types_range_str = "("
@@ -154,8 +187,8 @@ class TC_and_TrPose_Builder:
         types_range_str += "!ta.range)"
 
         self.operators = str(tuple(self.operators)).replace("'", "")
-        indexing_maps = TC_and_TrPose_Builder.create_affine_mapping(self.dimslbls_to_map,self.input_array_dims_lbls,self.target_dims_lbls)
-        self.beta_val = TC_and_TrPose_Builder.get_beta_val(self.op)        
+        indexing_maps = ArithOp_Builder.create_affine_mapping(self.dimslbls_to_map,self.input_array_dims_lbls,self.target_dims_lbls)
+        self.beta_val = ArithOp_Builder.get_beta_val(self.op)        
 
         if(self.opr_type == "contraction"):
             return self.tc_decl_wrapper_text.render(
@@ -164,7 +197,8 @@ class TC_and_TrPose_Builder:
                 types_range_str = types_range_str,
                 outputtype = out_tensor_type,
                 beta =  self.beta_val,
-                formats = '"{}", "{}", "{}"'.format(*self.formats)
+                formats = '"{}", "{}", "{}"'.format(*self.formats),
+                lhs_dims = len(self.target_dims_lbls)
             )
         elif(self.opr_type == "elewise_mult"):
             return self.elewisemult_wrapper_text.render(
@@ -172,10 +206,11 @@ class TC_and_TrPose_Builder:
                 indexing_maps = indexing_maps,
                 types_range_str = types_range_str,
                 outputtype = out_tensor_type,
+                formats = '"{}", "{}", "{}"'.format(*self.formats),
                 beta =  self.beta_val
             )
         # Transpose
-        else:
+        elif(self.opr_type == "transpose"):
             return self.tranpose_wrapper_text.render(
                 operators = self.operators,
                 indexing_maps = indexing_maps,
@@ -184,7 +219,25 @@ class TC_and_TrPose_Builder:
                 beta =  self.beta_val,
                 formats = '"{}", "{}"'.format(*self.formats)
             )
-
+        # Add
+        elif(self.op == '+'):
+            return self.tensor_add_wrapper_text.render(
+                operators = self.operators,
+                Tensor_types_tuple = types_range_str,
+                outputtype = out_tensor_type,
+                formats = '"{}", "{}", "{}"'.format(*self.formats),
+                indexing_maps = indexing_maps
+            )
+        # Subtract
+        elif(self.op == '-'):
+            return self.tensor_sub_wrapper_text.render(
+                operators = self.operators,
+                Tensor_types_tuple = types_range_str,
+                outputtype = out_tensor_type,
+                formats = '"{}", "{}", "{}"'.format(*self.formats),
+                indexing_maps = indexing_maps
+            )
+        
     def get_beta_val(op):
         if(op == '='):
             beta_val = '0.000000e+00'
@@ -192,7 +245,8 @@ class TC_and_TrPose_Builder:
             beta_val = '1.000000e+00'
         elif(op == '-='):
             beta_val = '-1.000000e+00'
-
+        elif(op == '+' or op == '-'):
+            beta_val = '0.000000e+00'
         return beta_val
 
     
@@ -210,7 +264,7 @@ class TC_and_TrPose_Builder:
 
             if(len(d_map) == 1):
                 d_map = d_map.pop()
-                mapping_String += "affine_map<" + str(tuple(input_map.values())).replace("'", "") + "-> ({})".format(d_map.replace("'", "")) + ">,"
+                mapping_String += "affine_map<(" + ",".join(list(input_map.values())).replace("'", "") + ")-> ({})".format(d_map.replace("'", "")) + ">,"
             else:
                 mapping_String += "affine_map<" + str(tuple(input_map.values())).replace("'", "") + "->" + str(tuple(d_map)).replace("'", "") + ">,"
 
@@ -221,7 +275,7 @@ class TC_and_TrPose_Builder:
 
         if(len(d_map) == 1):
             d_map = d_map.pop()
-            mapping_String += "affine_map<{} -> ({})".format((str(tuple(input_map.values())).replace("'","")), d_map) + ">]"
+            mapping_String += "affine_map<({}) -> ({})".format(",".join(list(input_map.values())).replace("'", ""), d_map) + ">]"
         else:
             mapping_String += "affine_map<{} -> {}".format((str(tuple(input_map.values())).replace("'","")), (str(tuple(d_map)).replace("'",""))) + ">]"
 
@@ -266,60 +320,12 @@ class ele_wise_fill_Builder:
         return self.ele_wise_fill_wrapper_text.render(
             lbtensor_op_var = self.lbtensor_op_var,
             const_op_var = self.const_op_var,
-            assigned_val = "self.assigned_val.tolist()", #[TODO]
+            assigned_val = self.assigned_val.tolist(), #[TODO]
             tensor_type = self.tensor_type,
             dims_tensor_tuple = dims_tensor_tuple,
             ranges_tuple = ranges_tuple
         )
-        
-class Tensor_arithOp_builder:
 
-    indentation_size = 4
-   
-    tensor_add_wrapper_text = jinja2.Template(   
-        ("" * indentation_size)
-        + ' = "ta.add"{{operators}}'
-        +' : {{Tensor_types_tuple}}'
-        +"-> {{outputtype}}"
-        + "\n" ,
-        undefined=jinja2.StrictUndefined,
-    )
-
-    tensor_sub_wrapper_text = jinja2.Template(   
-        ("" * indentation_size)
-        + ' = "ta.subtract"{{operators}}'
-        +' : {{Tensor_types_tuple}}'
-        +"-> {{outputtype}}"
-        + "\n" ,
-        undefined=jinja2.StrictUndefined,
-    )
-
-    def __init__(self,tensor_operators:list,input_types:list,outputtype:str,op:str) -> None:
-        self.tensor_operators = tensor_operators
-        self.input_types = input_types
-        self.outputtype = outputtype
-        self.op = op
-        pass
-
-    def build(self):
-        operators_tuple = str(tuple(self.tensor_operators)).replace("'", "")
-        input_types_tuple = str(tuple(self.input_types)).replace("'", "")
-
-        if(self.op == '+'):
-            return self.tensor_add_wrapper_text.render(
-                operators = operators_tuple,
-                Tensor_types_tuple = input_types_tuple,
-                outputtype = self.outputtype
-            )
-
-        elif(self.op == '-'):
-            return self.tensor_sub_wrapper_text.render(
-                operators = operators_tuple,
-                Tensor_types_tuple = input_types_tuple,
-                outputtype = self.outputtype
-            )
-        
-        
 class MLIRFunctionBuilder:
     _ops = {}
 
