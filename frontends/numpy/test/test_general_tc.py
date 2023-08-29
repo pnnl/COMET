@@ -1,6 +1,6 @@
 
 import numpy as np
-from cometpy import comet
+import comet
 
 #Testing general tensor contractions
 @comet.compile(flags=None)

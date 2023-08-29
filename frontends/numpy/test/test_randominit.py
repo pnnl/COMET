@@ -1,8 +1,8 @@
 import numpy as np
-from cometpy import comet
+import comet
 
 #Testing random tensor initialization
-@comet.compile(flags="--convert-tc-to-ttgt")
+@comet.compile(flags="")
 def compute_randinit_comet(A,B):
    
     C = comet.einsum('ij,jk->ik',A,B)
