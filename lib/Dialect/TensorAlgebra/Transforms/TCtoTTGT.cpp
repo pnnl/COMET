@@ -712,13 +712,17 @@ namespace
       // Copy back the result if needed
       if (lhsAlloc != lhsMemref && useLHSTranspose)
       {
+        std::vector<int64_t> revLhsOutPerm(lhsOutPerm_int64.size());
+        for(size_t i = 0; i < revLhsOutPerm.size(); i++)
+          revLhsOutPerm[lhsOutPerm_int64[i]] = i;
+
 #ifdef DEBUG_MODE_TTGT
         auto lhsFinalCopy =
-              rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(lhsOutPerm_int64));
+              rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(revLhsOutPerm));
         comet_debug() << "\n";
         comet_vdump(lhsFinalCopy);
 #else
-        rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(lhsOutPerm_int64)); // (A^T)^T = A, so we use lhsOutPerm_int64 to bring the result array to its original format
+        rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(revLhsOutPerm)); 
    
 #endif
       }
