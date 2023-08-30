@@ -63,8 +63,8 @@ files_to_cleanup = []
 def cleanup():
     for f in files_to_cleanup:
         if os.path.exists(f):
-            os.remove(f) 
-            # pass
+            # os.remove(f) 
+            pass
 
 atexit.register(cleanup)
 if("macOS" in platform.platform()):
@@ -505,7 +505,10 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
                 np_values = np.ctypeslib.as_array(Aval.mem, [Aval.dim])
                 ret_outputs.append(scp.sparse.coo_matrix((np_values, (rows, cols)), copy=False))
         else:
-            ret_outputs.append(v1)
+            if v1.shape == (1,):
+                ret_outputs.append(np.squeeze(v1))
+            else:
+                ret_outputs.append(v1)
 
     if len(ret_outputs) == 1:
         out =  ret_outputs.pop()

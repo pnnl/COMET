@@ -65,7 +65,7 @@ class Tensor_Decl_Builder:
         for i in range(len(self.decl_vars)-1):
             dims_tuple += self.decl_vars[i] + ","
             ranges_tuple += "!ta.range,"
-
+        
         dims_tuple += self.decl_vars[-1] +  ")"
         ranges_tuple += "!ta.range)"
         format = self.format
@@ -325,6 +325,30 @@ class ele_wise_fill_Builder:
             dims_tensor_tuple = dims_tensor_tuple,
             ranges_tuple = ranges_tuple
         )
+    
+class TensorSumBuilder:
+    indentation_size = 4
+    tensor_sum_wrapper_text = jinja2.Template(   
+        ("" * indentation_size)
+        + ' = "ta.reduce"({{operators}})'
+        +' : ({{Tensor_types_tuple}})'
+        +"-> {{output_types}}"
+        + "\n" ,
+        undefined=jinja2.StrictUndefined,
+    )
+
+    def __init__(self, operators, input_types, output_types):
+        self.operators = operators
+        self.input_types = input_types
+        self.output_types = output_types
+
+    def build(self):
+
+        return self.tensor_sum_wrapper_text.render(
+            operators = ",".join(self.operators).replace("'",""),
+            Tensor_types_tuple = ",".join(self.input_types),
+            output_types = ",".join(self.output_types)
+        )
 
 class MLIRFunctionBuilder:
     _ops = {}
@@ -436,7 +460,7 @@ class MLIRFunctionBuilder:
         return_type = ", ".join(str(rt) for rt in self.return_types)
         if len(self.return_types) != 1:
             return_type = f"({return_type})"
-        signature = ", ".join(f"{ var[0].replace('%','%arg_')}: {var[1].replace('tensor', 'memref')}" if 'tensor' in var[1] else f"{ var[0]}: {var[1]}" for var in self.inputs)
+        signature = ", ".join(f"{ var[0].replace('%','%arg_')}: {var[1].replace('tensor', 'memref')}" if 'tensor' in var[1] else  f"{ var[0].replace('%', '%arg_') }: memref<1xf64>" if var[1] =="f64" else f"{ var[0]}: {var[1]}" for var in self.inputs)
 
         return needed_function_definitions + self.function_wrapper_text.render(
             private_func=make_private,
