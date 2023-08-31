@@ -612,6 +612,26 @@ namespace mlir
             allFormats[i].push_back("CU");
           }
         }
+        else if (formats_str.compare("ELL") == 0)
+        {
+          allFormats[i].push_back("D");
+          allFormats[i].push_back("D");
+          allFormats[i].push_back("S");
+        }
+        else if (formats_str.compare("BCSR") == 0)
+        {
+          allFormats[i].push_back("D");
+          allFormats[i].push_back("CN");
+          allFormats[i].push_back("D");
+          allFormats[i].push_back("D");
+        }
+        else if (formats_str.compare("CSB") == 0)
+        {
+          allFormats[i].push_back("D");
+          allFormats[i].push_back("D");
+          allFormats[i].push_back("CU");
+          allFormats[i].push_back("S");
+        }
         else if (formats_str.compare("COO") == 0)
         {
           assert(tensorDims > 1 && "formst is COO, should be more than 1D.\n");
@@ -722,6 +742,18 @@ namespace mlir
         format_ret = "DCSR";
       else if (format.size() == 2 && (format[0].compare("CU") == 0 && format[1].compare("CU") == 0))
         format_ret = "DCSR";
+
+            else if (format.size() == 1 && format[0].compare("ELL") == 0)
+        format_ret = "ELL";
+      // TODO: Individual attributes
+
+      else if (format.size() == 1 && format[0].compare("BCSR") == 0)
+        format_ret = "BCSR";
+      // TODO: Individual attributes
+
+      else if (format.size() == 1 && format[0].compare("CSB") == 0)
+        format_ret = "CSB";
+      // TODO: Individual attributes
 
       else if (format.size() == 3 && (format[0].compare("D") == 0 && format[1].compare("D") == 0 && format[2].compare("D") == 0))
         format_ret = "Dense";
@@ -862,6 +894,7 @@ namespace mlir
 
     std::vector<Value> getFormatsValue(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IndexType indexType)
     {
+       Value format_unk = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(-1));
       Value format_dense = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(0));
       Value format_compressed = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(1));
       Value format_compressednonunique = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(2));
@@ -877,16 +910,43 @@ namespace mlir
         if (formats_str.compare(0, 3, "CSR") == 0)
         {
           dim_format.push_back(format_dense);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 4, "DCSR") == 0)
         {
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
         { // COO
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
+        }
+          else if (formats_str.compare(0, 3, "ELL") == 0)
+        { // ELL
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
+        }
+        else if (formats_str.compare(0, 4, "BCSR") == 0)
+        { // BCSR
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+        }
+        else if (formats_str.compare(0, 3, "CSB") == 0)
+        { // CSB
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_compressed);
           dim_format.push_back(format_singleton);
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
@@ -924,20 +984,29 @@ namespace mlir
         if (formats_str.compare(0, 3, "CSF") == 0)
         {
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 11, "ModeGeneric") == 0)
         {
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_dense);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
         { // COO
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
@@ -988,6 +1057,7 @@ namespace mlir
 
     std::vector<Value> getFormatsValueInt(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IntegerType intType)
     {
+      Value format_unk = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, -1));
       Value format_dense = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 0));
       Value format_compressed = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 1));
       Value format_compressednonunique = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 2));
@@ -1003,16 +1073,43 @@ namespace mlir
         if (formats_str.compare(0, 3, "CSR") == 0)
         {
           dim_format.push_back(format_dense);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 4, "DCSR") == 0)
         {
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
         { // COO
-          dim_format.push_back(format_compressednonunique);
+           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
+        }
+          else if (formats_str.compare(0, 3, "ELL") == 0)
+        { // ELL
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
+        }
+        else if (formats_str.compare(0, 4, "BCSR") == 0)
+        { // BCSR
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+        }
+        else if (formats_str.compare(0, 3, "CSB") == 0)
+        { // CSB
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_compressed);
           dim_format.push_back(format_singleton);
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
@@ -1050,20 +1147,29 @@ namespace mlir
         if (formats_str.compare(0, 3, "CSF") == 0)
         {
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 11, "ModeGeneric") == 0)
         {
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_dense);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
         { // COO
           dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
