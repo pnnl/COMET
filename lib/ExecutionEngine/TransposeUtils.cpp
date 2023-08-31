@@ -477,12 +477,17 @@ void transpose_sort(int sort_type, vector<coo_t> &coo_ts, int sz,
  * @param sizes_ptr array of length of those arrays
  */
 template <typename T>
-void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1pos_ptr,
-                  int A1crd_rank, void *A1crd_ptr, int A2pos_rank, void *A2pos_ptr,
-                  int A2crd_rank, void *A2crd_ptr, int Aval_rank, void *Aval_ptr,
-                  int32_t B1format, int32_t B2format,
+void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int32_t A2tile_format,
+                  int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                  int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                  int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                  int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
+                  int Aval_rank, void *Aval_ptr,
+                  int32_t B1format, int32_t B1tile_format, int32_t B2format, int32_t B2tile_format,
                   int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                  int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
                   int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                  int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
                   int Bval_rank, void *Bval_ptr,
                   int sizes_rank, void *sizes_ptr)
 {
@@ -495,10 +500,14 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
   std::string Aspformat;
   std::string Bspformat;
 
-  //auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
+  auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
   auto *desc_A1crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1crd_ptr);
+  auto *desc_A1tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1tile_pos_ptr);
+  auto *desc_A1tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1tile_crd_ptr);
   auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
   auto *desc_A2crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2crd_ptr);
+  auto *desc_A2tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_pos_ptr);
+  auto *desc_A2tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_crd_ptr);
   auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
 
   auto *desc_B1pos = static_cast<StridedMemRefType<int64_t, 1> *>(B1pos_ptr);
@@ -509,10 +518,43 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
 
   auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
 
-  int rowSize = desc_sizes->data[5];
-  int colSize = desc_sizes->data[6];
+  auto *desc_B1tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(B1tile_pos_ptr);
+  auto *desc_B1tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(B1tile_crd_ptr);
+  auto *desc_B2tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(B2tile_pos_ptr);
+  auto *desc_B2tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(B2tile_crd_ptr);
+  desc_B1tile_pos->data[0] = -1;
+  desc_B1tile_crd->data[0] = -1;
+  desc_B2tile_pos->data[0] = -1;
+  desc_B2tile_crd->data[0] = -1;
 
-  if ((A1format == Compressed_nonunique && A2format == singleton) || (A1format == singleton && A2format == Compressed_nonunique))
+  desc_B1tile_pos->sizes[0] = -1;
+  desc_B1tile_crd->sizes[0] = -1;
+  desc_B2tile_pos->sizes[0] = -1;
+  desc_B2tile_crd->sizes[0] = -1;
+
+  /*
+  std::cout << "desc_sizes detail: \n"
+              << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
+              << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
+              << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
+              << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
+              << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
+              << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
+              << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n"
+              << "desc_sizes->data[7]: " << desc_sizes->data[7] << "\n"
+              << "desc_sizes->data[8]: " << desc_sizes->data[8] << "\n"
+              << "desc_sizes->data[9]: " << desc_sizes->data[9] << "\n"
+              << "desc_sizes->data[10]: " << desc_sizes->data[10] << "\n";
+  */
+
+  int rowSize = desc_sizes->data[9];
+  int colSize = desc_sizes->data[10];
+
+  if (A1format == Dense && A1tile_format == Dense && A2format == singleton)
+  {
+    Aspformat.assign("ELL");
+  }
+  else if ((A1format == Compressed_nonunique && A2format == singleton) || (A1format == singleton && A2format == Compressed_nonunique))
   {
     Aspformat.assign("COO");
   }
@@ -522,10 +564,14 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
   }
   else
   {
-    assert(false && "ERROR: At this time, only COO and CSR formats are supported for input for transpose\n");
+    assert(false && "ERROR: At this time, only ELL, COO, CSR formats are supported for input for transpose (A)\n");
   }
 
-  if ((B1format == Compressed_nonunique && B2format == singleton) || (B1format == singleton && B2format == Compressed_nonunique))
+  if (B1format == Dense && B1tile_format == Dense && B2format == singleton)
+  {
+    Bspformat.assign("ELL");
+  }
+  else if ((B1format == Compressed_nonunique && B2format == singleton) || (B1format == singleton && B2format == Compressed_nonunique))
   {
     Bspformat.assign("COO");
   }
@@ -535,18 +581,54 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
   }
   else
   {
-    assert(false && "ERROR: At this time, only COO and CSR formats are supported for output for transpose\n");
+    assert(false && "ERROR: At this time, only ELL, COO, and CSR formats are supported for output for transpose (B)\n");
+  }
+
+  if (Aspformat.compare("ELL") == 0 && Bspformat.compare("ELL") == 0)
+  {
+    // Copy A1 and A1_tile
+    desc_B1crd->data[0] = desc_A1crd->data[0];
+    desc_B1crd->sizes[0] = desc_A1crd->sizes[0];
+
+    desc_B1pos->data[0] = desc_A1pos->data[0];
+    desc_B1pos->sizes[0] = desc_A1pos->sizes[0];
+
+    desc_B1tile_crd->data[0] = desc_A1tile_crd->data[0];
+    desc_B1tile_crd->sizes[0] = desc_A1tile_crd->sizes[0];
+    
+    desc_B1tile_pos->data[0] = desc_A1tile_pos->data[0];
+    desc_B1tile_pos->sizes[0] = desc_A1tile_pos->sizes[0];
+
+    desc_B2pos->data[0] = desc_A2pos->data[0];
+    desc_B2pos->sizes[0] = desc_A2pos->sizes[0];
+
+    // Rearrange the values
+    int val_sz = desc_Aval->sizes[0];
+    int rows = desc_A1pos->data[0];
+    int cols = desc_A1tile_pos->data[0];
+    int index = 0;
+
+    for (int i = 0; i<rows; i++) {
+      for (int j = 0; j<val_sz; j++) {
+        int col = desc_A2crd->data[j];
+        if (col == i) {
+          desc_B2crd->data[j] = desc_A2crd->data[j];
+          desc_Bval->data[index] = desc_Aval->data[j];
+          ++index;
+        }
+      }
+    }
   }
 
   if (Aspformat.compare("COO") == 0 && Bspformat.compare("COO") == 0)
   {
-
     int sz = desc_Aval->sizes[0];
     // vector of coordinates
     vector<coo_t> coo_ts(sz);
 
     int m=0;
     if (selected_sort_type == NO_SORT) { // coordinates are not sorted
+
       for (int i=0; i < colSize+1; ++i) {
 	      for (int j=0; j < rowSize+1; ++j) {
 	        for (int k=0; k < sz; ++k) {
@@ -597,8 +679,8 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
     desc_B2pos->data[0] = desc_A2pos->data[0];
 
     // switch row and col size
-    desc_sizes->data[5] = colSize;
-    desc_sizes->data[6] = rowSize;
+    desc_sizes->data[9] = colSize;
+    desc_sizes->data[10] = rowSize;
   }
 
   if (Aspformat.compare("CSR") == 0 && Bspformat.compare("CSR") == 0)
@@ -608,8 +690,8 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
       // 1) not by sorting: only works for CSR/matrices
       // Atomic-based Transposition: retraverse the matrix from the transposed direction
       // B's row size == input's col size
-      int BRowSize = desc_sizes->data[6];
-      int BColSize = desc_sizes->data[5];
+      int BRowSize = desc_sizes->data[9];
+      int BColSize = desc_sizes->data[10];
 
       // B's col pos size == B's #rows + 1
       desc_B2pos->sizes[0] = BRowSize + 1;
@@ -638,8 +720,8 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
       desc_B1crd->data[0] = -1;
 
       // switch row and col size
-      desc_sizes->data[5] = colSize;
-      desc_sizes->data[6] = rowSize;
+      desc_sizes->data[9] = colSize;
+      desc_sizes->data[10] = rowSize;
     } else {
       // 2) by sorting: work for both CSR/matrices and CSF/tensors
       // CSR -> COO -> Transpose -> Sort -> COO -> CSR
@@ -709,8 +791,8 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
       }
 
       // switch row and col size
-      desc_sizes->data[5] = colSize;
-      desc_sizes->data[6] = rowSize;
+      desc_sizes->data[9] = colSize;
+      desc_sizes->data[10] = rowSize;
 
     }
   }
@@ -728,15 +810,25 @@ void transpose_2D(int32_t A1format, int32_t A2format, int A1pos_rank, void *A1po
 
 template <typename T>
 void transpose_3D(int32_t input_permutation, int32_t output_permutation,
-                  int32_t A1format, int32_t A2format, int32_t A3format,
+                  int32_t A1format, int32_t A1tile_format,
+                  int32_t A2format, int32_t A2tile_format,
+                  int32_t A3format, int32_t A3tile_format,
                   int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                  int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                   int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                  int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
                   int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                  int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
                   int Aval_rank, void *Aval_ptr,
-                  int32_t B1format, int32_t B2format, int32_t B3format,
+                  int32_t B1format, int32_t B1tile_format,
+                  int32_t B2format, int32_t B2tile_format,
+                  int32_t B3format, int32_t B3tile_format,
                   int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                  int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
                   int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                  int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
                   int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
+                  int B3tile_pos_rank, void *B3tile_pos_ptr, int B3tile_crd_rank, void *B3tile_crd_ptr,
                   int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr)
 {
   // Get sort type
@@ -799,9 +891,29 @@ void transpose_3D(int32_t input_permutation, int32_t output_permutation,
 
   auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
 
-  int mode_sz0 = desc_sizes->data[7];
-  int mode_sz1 = desc_sizes->data[8];
-  int mode_sz2 = desc_sizes->data[9];
+  auto *desc_B1tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(B1tile_pos_ptr);
+  auto *desc_B1tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(B1tile_crd_ptr);
+  auto *desc_B2tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(B2tile_pos_ptr);
+  auto *desc_B2tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(B2tile_crd_ptr);
+  auto *desc_B3tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(B3tile_pos_ptr);
+  auto *desc_B3tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(B3tile_crd_ptr);
+  desc_B1tile_pos->data[0] = -1;
+  desc_B1tile_crd->data[0] = -1;
+  desc_B2tile_pos->data[0] = -1;
+  desc_B2tile_crd->data[0] = -1;
+  desc_B3tile_pos->data[0] = -1;
+  desc_B3tile_crd->data[0] = -1;
+
+  desc_B1tile_pos->sizes[0] = -1;
+  desc_B1tile_crd->sizes[0] = -1;
+  desc_B2tile_pos->sizes[0] = -1;
+  desc_B2tile_crd->sizes[0] = -1;
+  desc_B3tile_pos->sizes[0] = -1;
+  desc_B3tile_crd->sizes[0] = -1;
+
+  int mode_sz0 = desc_sizes->data[13];
+  int mode_sz1 = desc_sizes->data[14];
+  int mode_sz2 = desc_sizes->data[15];
 
   int dim_sizes[3] = {mode_sz0, mode_sz1, mode_sz2};
   int trans_dim_sizes[3] = {mode_sz0, mode_sz1, mode_sz2}; // sizes of dimensions after transposition of dimensions
@@ -1198,85 +1310,153 @@ void transpose_3D(int32_t input_permutation, int32_t output_permutation,
 }
 
 // 2D tensors
-extern "C" void transpose_2D_f32(int32_t A1format, int32_t A2format,
-                                 int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                 int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                 int Aval_rank, void *Aval_ptr, int32_t B1format, int32_t B2format,
-                                 int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
-                                 int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
-                                 int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr)
+extern "C" void transpose_2D_f32(int32_t A1format, int32_t A1tile_format, int32_t A2format, int32_t A2tile_format,
+                                int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
+                                int Aval_rank, void *Aval_ptr,
+                                int32_t B1format, int32_t B1tile_format, int32_t B2format, int32_t B2tile_format,
+                                int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                                int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
+                                int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                                int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
+                                int Bval_rank, void *Bval_ptr,
+                                int sizes_rank, void *sizes_ptr)
 {
-  transpose_2D<float>(A1format, A2format,
+  transpose_2D<float>(A1format, A1tile_format, A2format, A2tile_format,
                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                      A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                      Aval_rank, Aval_ptr, B1format, B2format,
+                      A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
+                      Aval_rank, Aval_ptr,
+                      B1format, B1tile_format, B2format, B2tile_format,
                       B1pos_rank, B1pos_ptr, B1crd_rank, B1crd_ptr,
+                      B1tile_pos_rank, B1tile_pos_ptr, B1tile_crd_rank, B1tile_crd_ptr,
                       B2pos_rank, B2pos_ptr, B2crd_rank, B2crd_ptr,
-                      Bval_rank, Bval_ptr, sizes_rank, sizes_ptr);
+                      B2tile_pos_rank, B2tile_pos_ptr, B2tile_crd_rank, B2tile_crd_ptr,
+                      Bval_rank, Bval_ptr,
+                      sizes_rank, sizes_ptr);
 }
 
-extern "C" void transpose_2D_f64(int32_t A1format, int32_t A2format,
-                                 int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                 int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                 int Aval_rank, void *Aval_ptr, int32_t B1format, int32_t B2format,
-                                 int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
-                                 int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
-                                 int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr)
+extern "C" void transpose_2D_f64(int32_t A1format, int32_t A1tile_format, int32_t A2format, int32_t A2tile_format,
+                                int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
+                                int Aval_rank, void *Aval_ptr,
+                                int32_t B1format, int32_t B1tile_format, int32_t B2format, int32_t B2tile_format,
+                                int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                                int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
+                                int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                                int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
+                                int Bval_rank, void *Bval_ptr,
+                                int sizes_rank, void *sizes_ptr)
 {
-  transpose_2D<double>(A1format, A2format,
-                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
-                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                       Aval_rank, Aval_ptr, B1format, B2format,
-                       B1pos_rank, B1pos_ptr, B1crd_rank, B1crd_ptr,
-                       B2pos_rank, B2pos_ptr, B2crd_rank, B2crd_ptr,
-                       Bval_rank, Bval_ptr, sizes_rank, sizes_ptr);
+  transpose_2D<double>(A1format, A1tile_format, A2format, A2tile_format,
+                      A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                      A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                      A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                      A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
+                      Aval_rank, Aval_ptr,
+                      B1format, B1tile_format, B2format, B2tile_format,
+                      B1pos_rank, B1pos_ptr, B1crd_rank, B1crd_ptr,
+                      B1tile_pos_rank, B1tile_pos_ptr, B1tile_crd_rank, B1tile_crd_ptr,
+                      B2pos_rank, B2pos_ptr, B2crd_rank, B2crd_ptr,
+                      B2tile_pos_rank, B2tile_pos_ptr, B2tile_crd_rank, B2tile_crd_ptr,
+                      Bval_rank, Bval_ptr,
+                      sizes_rank, sizes_ptr);
 }
 
 // 3D tensors
 extern "C" void transpose_3D_f32(int32_t input_permutation, int32_t output_permutation,
-                                 int32_t A1format, int32_t A2format, int32_t A3format,
+                                 int32_t A1format, int32_t A1tile_format,
+                                 int32_t A2format, int32_t A2tile_format,
+                                 int32_t A3format, int32_t A3tile_format,
                                  int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                 int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                  int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                 int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
                                  int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                                 int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
                                  int Aval_rank, void *Aval_ptr,
-                                 int32_t B1format, int32_t B2format, int32_t B3format,
+                                 int32_t B1format, int32_t B1tile_format,
+                                 int32_t B2format, int32_t B2tile_format,
+                                 int32_t B3format, int32_t B3tile_format,
                                  int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                                 int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
                                  int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                                 int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
                                  int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
+                                 int B3tile_pos_rank, void *B3tile_pos_ptr, int B3tile_crd_rank, void *B3tile_crd_ptr,
                                  int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr)
 {
   transpose_3D<float>(input_permutation, output_permutation,
-                      A1format, A2format, A3format,
+                      A1format, A1tile_format,
+                      A2format, A2tile_format,
+                      A3format, A3tile_format,
                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                      A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                      A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
                       A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
-                      Aval_rank, Aval_ptr, B1format, B2format, B3format,
+                      A3tile_pos_rank, A3tile_pos_ptr, A3tile_crd_rank, A3tile_crd_ptr,
+                      Aval_rank, Aval_ptr,
+                      B1format, B1tile_format,
+                      B2format, B2tile_format,
+                      B3format, B3tile_format,
                       B1pos_rank, B1pos_ptr, B1crd_rank, B1crd_ptr,
+                      B1tile_pos_rank, B1tile_pos_ptr, B1tile_crd_rank, B1tile_crd_ptr,
                       B2pos_rank, B2pos_ptr, B2crd_rank, B2crd_ptr,
+                      B2tile_pos_rank, B2tile_pos_ptr, B2tile_crd_rank, B2tile_crd_ptr,
                       B3pos_rank, B3pos_ptr, B3crd_rank, B3crd_ptr,
-                      Bval_rank, Bval_ptr, sizes_rank, sizes_ptr);
+                      B3tile_pos_rank, B3tile_pos_ptr, B3tile_crd_rank, B3tile_crd_ptr,
+                      Bval_rank, Bval_ptr,
+                      sizes_rank, sizes_ptr);
 }
 
 extern "C" void transpose_3D_f64(int32_t input_permutation, int32_t output_permutation,
-                                 int32_t A1format, int32_t A2format, int32_t A3format,
+                                 int32_t A1format, int32_t A1tile_format,
+                                 int32_t A2format, int32_t A2tile_format,
+                                 int32_t A3format, int32_t A3tile_format,
                                  int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                 int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                  int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                 int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
                                  int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                                 int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
                                  int Aval_rank, void *Aval_ptr,
-                                 int32_t B1format, int32_t B2format, int32_t B3format,
+                                 int32_t B1format, int32_t B1tile_format,
+                                 int32_t B2format, int32_t B2tile_format,
+                                 int32_t B3format, int32_t B3tile_format,
                                  int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                                 int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
                                  int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                                 int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
                                  int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
+                                 int B3tile_pos_rank, void *B3tile_pos_ptr, int B3tile_crd_rank, void *B3tile_crd_ptr,
                                  int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr)
 {
   transpose_3D<double>(input_permutation, output_permutation,
-                       A1format, A2format, A3format,
-                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
-                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
-                       A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
-                       Aval_rank, Aval_ptr, B1format, B2format, B3format,
-                       B1pos_rank, B1pos_ptr, B1crd_rank, B1crd_ptr,
-                       B2pos_rank, B2pos_ptr, B2crd_rank, B2crd_ptr,
-                       B3pos_rank, B3pos_ptr, B3crd_rank, B3crd_ptr,
-                       Bval_rank, Bval_ptr, sizes_rank, sizes_ptr);
+                      A1format, A1tile_format,
+                      A2format, A2tile_format,
+                      A3format, A3tile_format,
+                      A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                      A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                      A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                      A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
+                      A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
+                      A3tile_pos_rank, A3tile_pos_ptr, A3tile_crd_rank, A3tile_crd_ptr,
+                      Aval_rank, Aval_ptr,
+                      B1format, B1tile_format,
+                      B2format, B2tile_format,
+                      B3format, B3tile_format,
+                      B1pos_rank, B1pos_ptr, B1crd_rank, B1crd_ptr,
+                      B1tile_pos_rank, B1tile_pos_ptr, B1tile_crd_rank, B1tile_crd_ptr,
+                      B2pos_rank, B2pos_ptr, B2crd_rank, B2crd_ptr,
+                      B2tile_pos_rank, B2tile_pos_ptr, B2tile_crd_rank, B2tile_crd_ptr,
+                      B3pos_rank, B3pos_ptr, B3crd_rank, B3crd_ptr,
+                      B3tile_pos_rank, B3tile_pos_ptr, B3tile_crd_rank, B3tile_crd_ptr,
+                      Bval_rank, Bval_ptr,
+                      sizes_rank, sizes_ptr);
 }
