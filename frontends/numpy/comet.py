@@ -321,16 +321,26 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
                 if lbls1 == "No record found": # First occurence of this tensor before any einsum
                     dims_lbls = []
                     for d,dval in enumerate(dims1):
-                        label_id_map['idx'+str(node.lineno)+'d'+str(d)+'i'+str(1)] = dval
-                        dims_lbls.append('idx'+str(node.lineno)+'d'+str(d)+'i'+str(1))
+                        key = 'idx'+str(node.lineno)+'d'+str(d)+'i'+str(1)
+                        if numpy_array_info.get_format(input_arrays[1]) != "Dense":
+                            label_id_map[key] = '?'+str(dval) #[TODO] What if the same index is used for different sizes in different contractions?
+                        else:
+                            label_id_map[key] = dval #[TODO] What if the same index is used for different sizes in different contractions?
+                        # label_id_map['idx'+str(node.lineno)+'d'+str(d)+'i'+str(1)] = dval
+                        dims_lbls.append(key)
                     numpy_array_info.set_dims_labels(input_arrays[1] ,dims_lbls)
                 
                 dims_lbls = []
                 for i in range(len(dims0)-1):
                     dval = dims0[i]
                     d = i
-                    label_id_map['idx'+str(node.lineno)+'d'+str(d)+'i'+str(0)] = dval
-                    dims_lbls.append('idx'+str(node.lineno)+'d'+str(d)+'i'+str(0))
+                    key = 'idx'+str(node.lineno)+'d'+str(d)+'i'+str(0)
+                    # label_id_map[key] = dval
+                    if numpy_array_info.get_format(input_arrays[0]) != "Dense":
+                        label_id_map[key] = '?'+str(dval) #[TODO] What if the same index is used for different sizes in different contractions?
+                    else:
+                        label_id_map[key] = dval #[TODO] What if the same index is used for different sizes in different contractions?
+                    dims_lbls.append(key)
                 
                 dims_lbls.append(numpy_array_info.get_dims_labels(input_arrays[1])[0])
                                  
@@ -344,8 +354,12 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
                     for i in range(1, len(dims1)):
                         dval = dims1[i]
                         d = i
-                        label_id_map['idx'+str(node.lineno)+'d'+str(d)+'i'+str(1)] = dval
-                        dims_lbls.append('idx'+str(node.lineno)+'d'+str(d)+'i'+str(1))
+                        key ='idx'+str(node.lineno)+'d'+str(d)+'i'+str(1)
+                        if numpy_array_info.get_format(input_arrays[1]) != "Dense":
+                            label_id_map[key] = '?'+str(dval) #[TODO] What if the same index is used for different sizes in different contractions?
+                        else:
+                            label_id_map[key] = dval #[TODO] What if the same index is used for different sizes in different contractions?
+                        dims_lbls.append(key)
                     
                     numpy_array_info.set_dims_labels(input_arrays[1] ,dims_lbls)
             output_dim_lbls = [x for x in numpy_array_info.get_dims_labels(input_arrays[0]) if x not in numpy_array_info.get_dims_labels(input_arrays[1])]
@@ -394,7 +408,11 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
                     dim_values = numpy_array_info.get_dims(input_arrays[i])
                     dim_lbls = input_dim_lbls[j]
                     for key,value in zip(dim_lbls,dim_values):
-                        label_id_map[key] = value #[TODO] What if the same index is used for different sizes in different contractions?
+
+                        if numpy_array_info.get_format(input_arrays[i]) != "Dense":
+                            label_id_map[key] = '?'+str(value) #[TODO] What if the same index is used for different sizes in different contractions?
+                        else:
+                            label_id_map[key] = value #[TODO] What if the same index is used for different sizes in different contractions?
                             
 
                     numpy_array_info.set_dims_labels(input_arrays[i],dim_lbls)
@@ -450,7 +468,11 @@ class _AnalysisNodeVisitor(ast.NodeVisitor):
         output_dim_vals = []
         for lbl in output_dim_lbls:
             if output_format == "Dense":
-                output_dim_vals.append(label_id_map[lbl])
+                val = label_id_map[lbl]
+                if isinstance(val, str):
+                    output_dim_vals.append('?')
+                else:
+                    output_dim_vals.append(label_id_map[lbl])
             else:
                 output_dim_vals.append('?')
         numpy_array_info.set_format(target,output_format)
@@ -578,7 +600,6 @@ class _Build_and_lower_mlir:
     #Actual method that builds the dimension declarations in the TA dialect
     @classmethod
     def dimensions_to_decl_ta(self,dims_label_map:dict):
-
         map_keys = dims_label_map.keys()
         for i,key in enumerate(map_keys):
 
@@ -586,19 +607,32 @@ class _Build_and_lower_mlir:
 
                 val = dims_label_map[key]
                 if i == 0:
-                    lb = "%c{} = arith.constant {} : index".format(i, i)
-                    ub = "%c{} = arith.constant {} : index".format(val, val)
-                    step = "%cst{} = arith.constant {} : index".format(1, 1)
-                    decl = '%{} = "ta.static_index_label"(%c{}, %c{}, %cst{}) : (index, index, index) -> !ta.range'.format(i,i,val,1)
+                    if isinstance(val, str) :
+                        lb = "%c{} = arith.constant {} : index".format(i, i)
+                        ub = "%c{} = arith.constant {} : index".format(1, 1)
+                        step = "%cst{} = arith.constant {} : index".format(1, 1)
+                        decl = '%{} = "ta.dynamic_index_label"(%c{}, %c{}) : (index, index) -> !ta.range'.format(i,i,1)
+                    else:
+
+                        lb = "%c{} = arith.constant {} : index".format(i, i)
+                        ub = "%c{} = arith.constant {} : index".format(val, val)
+                        step = "%cst{} = arith.constant {} : index".format(1, 1)
+                        decl = '%{} = "ta.static_index_label"(%c{}, %c{}, %cst{}) : (index, index, index) -> !ta.range'.format(i,i,val,1)
                 
                 else:
                     lb_const = "%c{}_{}".format(0,i)
-                    lb = "{} = arith.constant {} : index".format(lb_const, 0)
                     ub_const = "%c{}_{}".format(i, val)
-                    ub = "{} = arith.constant {} : index".format(ub_const, val)
                     step_const = "%cst{}_{}".format(1,i)
-                    step = "{}= arith.constant {} : index".format(step_const ,1)
-                    decl = '%{} = "ta.static_index_label"({}, {}, {}) : (index, index, index) -> !ta.range'.format(i,lb_const, ub_const,step_const)
+                    if isinstance(val, str) :
+                        lb = "{} = arith.constant {} : index".format(lb_const, 0)
+                        ub = ""
+                        step = "{}= arith.constant {} : index".format(step_const ,1)
+                        decl = '%{} = "ta.dynamic_index_label"({}, {}) : (index, index) -> !ta.range'.format(i,lb_const, step_const)
+                    else:
+                        lb = "{} = arith.constant {} : index".format(lb_const, 0)
+                        ub = "{} = arith.constant {} : index".format(ub_const, val)
+                        step = "{}= arith.constant {} : index".format(step_const ,1)
+                        decl = '%{} = "ta.static_index_label"({}, {}, {}) : (index, index, index) -> !ta.range'.format(i,lb_const, ub_const,step_const)
 
                 self.id_decl_vars_ta[key] = "%{}".format(i)
                 self.vals_ta_idx_vars_map[val] = "%{}".format(i)
@@ -616,7 +650,8 @@ class _Build_and_lower_mlir:
     def build_tensors_decls_ta(self):
         count = 0
         tensor_Decl_vars_ta = {}
-        list_tensor_decls = []
+        list_dense_tensor_decls = []
+        list_sp_tensor_decls = []
         last_var_assigned = int(self.final_id_decl_var.split("%")[1]) + 1
     
         #construct tensor declarations for all tensors
@@ -631,11 +666,14 @@ class _Build_and_lower_mlir:
                 if list_array_dims != 'No record found':
                     if(list_array_dims_lbls != 'No record found'):  
                         for dimension,dim_lbl in zip(list_array_dims,list_array_dims_lbls):
+                            val = label_id_map[dim_lbl]
                             if format == "Dense":
-                                tensor_type += "{}x".format(dimension)
+                                if isinstance(val, str):
+                                    tensor_type += "{}x".format('?')
+                                else:
+                                    tensor_type += "{}x".format(dimension)
                             else:
                                 tensor_type += "{}x".format('?')
-                                
                             list_index_vars.append(self.id_decl_vars_ta[dim_lbl])
                     else:
                         for dimension in list_array_dims:
@@ -653,7 +691,11 @@ class _Build_and_lower_mlir:
 
                     #Build the declaration
                     tensor_decl = decl_var +  tensor_decl_build_init.build_tensor()
-                    list_tensor_decls.append(tensor_decl)
+                    if format == "Dense":
+                        list_dense_tensor_decls.append(tensor_decl)
+                    else:
+                        list_sp_tensor_decls.append(tensor_decl)
+                    # list_tensor_decls.append(tensor_decl)
                 else:
                     tensor_type = "f64"
                     decl_var = "%{}".format(last_var_assigned+count)
@@ -662,7 +704,7 @@ class _Build_and_lower_mlir:
                 tensor_Decl_vars_ta[array] = [decl_var,tensor_type]
                 self.declared_arrays.append(array)
 
-        return list_tensor_decls,tensor_Decl_vars_ta
+        return  list_sp_tensor_decls + list_dense_tensor_decls  ,tensor_Decl_vars_ta
 
 
      #Build the tensor fill operations
@@ -1074,12 +1116,13 @@ def compile(flags, with_jit=True):
                             format = numpy_array_info.get_format(target)
                             if format == "Dense":
                                 outputtype = (tensor_vars_ta[target])[1]
+                                lbls = numpy_array_info.get_dims_labels(target)
                                 if 'x' in outputtype:
-                                    shape = [int(x) for x in outputtype.split('<')[1].split('f64>')[0].split('x')[:-1]]
+                                    shape = [int(label_id_map[x][1:]) if isinstance(label_id_map[x], str) else label_id_map[x] for x in lbls]
                                 else:
                                     shape = [1,]
                                 list_in_dims.append((arg, outputtype))
-                                outputs.append(np.empty(shape))
+                                outputs.append(np.zeros(shape))
                             else:
                                 if format == "CSR":
                                     outputs.append(scp.sparse.csr_matrix([]))

@@ -63,8 +63,8 @@ files_to_cleanup = []
 def cleanup():
     for f in files_to_cleanup:
         if os.path.exists(f):
-            # os.remove(f) 
-            pass
+            os.remove(f) 
+            # pass
 
 atexit.register(cleanup)
 if("macOS" in platform.platform()):
@@ -160,11 +160,13 @@ def comment_unneeded_dense(input_, arg_vals):
     return output            
 
 def comment_unneeded_sparse(input_, arg_vals):
+    # print(input_)
     output = ""
     input = input_.splitlines()
     indexes = []
     indexes = []
     allocs = []
+    alloc_lines = []
     returns = []
     return_found = False
     out_len = len(input)
@@ -175,7 +177,7 @@ def comment_unneeded_sparse(input_, arg_vals):
             cast = line[line.find("(") : line.find(")")].split(",")[3].lstrip().strip()
             # With tiles
             # cast = line[line.find("(") : line.find(")")].split(",")[5].lstrip().strip()
-            # input[i] = "//" +input[i]
+            # input[i] = "//from sparse" +input[i]
             input[i] = ""
             alloc = ""
             for j in range(len(input[:i])):
@@ -206,17 +208,24 @@ def comment_unneeded_sparse(input_, arg_vals):
             if idx in indexes[:-1]:
                 indexes.remove(idx)
                 allocs.append(line.split('=')[0].rstrip().strip())
-                # input[i] = "// from sparse" + input[i]
-                input[i] = ""
+                cur_lines = []
+                cur_lines.append(i)
                 while "scf.for" not in input[i]:
                     i+=1
-                # input[i] = "// from sparse" + input[i]
-                # input[i+1] = "// from sparse" + input[i+1]
-                # input[i+2] = "// from sparse" + input[i+2]
-                input[i] = ""
-                input[i+1] = ""
-                input[i+2] = ""
+                cur_lines.append(i)
+                cur_lines.append(i+1)
+                cur_lines.append(i+2)
+                cur_lines.append(i+3)
+                alloc_lines.append(cur_lines)
         elif "call @read_input_2D" in input[i]:
+            casts = input[i].split(",")[3:8]
+            for lines in alloc_lines:
+                if "memref.cast" in input[lines[-1]]:
+                    for c in casts:
+                        if c in input[lines[-1]]:
+                            for l in lines[:-1]:
+                                # input[l] = "// from sparse new " + input[l]
+                                input[l] = ""
             # input[i] = '// from sparse' + input[i]
             input[i] = ""
         elif "call @comet_print_memref_i64" in input[i] or "call @comet_print_memref_f64" in input[i]:
@@ -367,13 +376,15 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
             for s in ndarray.shape:
                 llvm_args.append(s)
                 llvm_args_types.append(ctypes.c_longlong)
+
             for s in ndarray.strides:
-                llvm_args.append(s)
+                llvm_args.append(s//8)
                 llvm_args_types.append(ctypes.c_longlong)
             if i >= num_in:
                 all_outputs.append(ndarray)
         # Ndarray is sparse
         else:
+            # Working on the output matrix
             if i >= num_in:
                 A1pos = memref_i64()
                 A1crd = memref_i64()
@@ -425,7 +436,6 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                     # llvm_args += [*np_array_to_memref(np.array([ndarray.get_shape()[1] + 1, ndarray.nnz, 0, 0, 1, 1, 0, 0, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
                 
                 Aval = ndarray.data.astype('float64')
-
                 # Based on the  desc_A1pos/crd, desc_A2pos/crd, desc_Aval arrays in SparseUtils.cpp: read_input_2D
                 # Expand to memrefs llvmir implementation
                 llvm_args += [*np_array_to_memref(A1pos),  *np_array_to_memref(A1crd), *np_array_to_memref(A2pos), *np_array_to_memref(A2crd), *np_array_to_memref(Aval)]
