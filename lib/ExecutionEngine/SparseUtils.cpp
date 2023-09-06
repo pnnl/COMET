@@ -90,13 +90,13 @@ struct CooMatrix
   //---------------------------------------------------------------------
 
   // Fields
-  int num_rows;
-  int num_cols;
-  int num_nonzeros;
-  int num_nonzeros_lowerTri;   // triangular matrix read stats
-  int num_nonzeros_upperTri;
-  int num_nonzeros_lowerTri_strict;
-  int num_nonzeros_upperTri_strict;
+  uint64_t num_rows;
+  uint64_t num_cols;
+  uint64_t num_nonzeros;
+  uint64_t num_nonzeros_lowerTri;   // triangular matrix read stats
+  uint64_t num_nonzeros_upperTri;
+  uint64_t num_nonzeros_lowerTri_strict;
+  uint64_t num_nonzeros_upperTri_strict;
   CooTuple<T> *coo_tuples;
 
   //---------------------------------------------------------------------
@@ -131,7 +131,7 @@ struct CooMatrix
   {
     cout << "COO Matrix (" << num_rows << " rows, " << num_cols << " columns, " << num_nonzeros << " non-zeros):\n";
     cout << "Ordinal, Row, Column, Value\n";
-    for (int i = 0; i < num_nonzeros; i++)
+    for (uint64_t i = 0; i < num_nonzeros; i++)
     {
       cout << '\t' << i << ',' << coo_tuples[i].row << ',' << coo_tuples[i].col << ',' << coo_tuples[i].val << "\n";
     }
@@ -169,7 +169,8 @@ struct CooMatrix
     bool array = false;
     bool symmetric = false;
     bool skew = false;
-    int current_nz = -1;
+    uint64_t current_nz = 0;
+    int nparsed = -1;
     char line[1024];
 
     if (verbose)
@@ -204,10 +205,10 @@ struct CooMatrix
           }
         }
       }
-      else if (current_nz == -1)
+      else if (nparsed == -1)
       {
         // Problem description
-        int nparsed = sscanf(line, "%d %d %d", &num_rows, &num_cols, &num_nonzeros);
+        nparsed = sscanf(line, "%lld %lld %lld", &num_rows, &num_cols, &num_nonzeros);
         if ((!array) && (nparsed == 3))
         {
           if (symmetric)
@@ -235,11 +236,11 @@ struct CooMatrix
         // Edge
         if (current_nz >= num_nonzeros)
         {
-          fprintf(stderr, "Error parsing MARKET matrix: encountered more than %d num_nonzeros\n", num_nonzeros);
+          fprintf(stderr, "Error parsing MARKET matrix: encountered more than %lld num_nonzeros\n", num_nonzeros);
           exit(1);
         }
 
-        int row, col;
+        uint64_t row, col;
         T val;
         double tempVal = 0.0;
 
@@ -247,7 +248,7 @@ struct CooMatrix
         {
           if (sscanf(line, "%lf", &tempVal) != 1)  // using tempVal instead of templated T val to avoid warning
           {
-            fprintf(stderr, "Error parsing MARKET matrix: badly formed current_nz: '%s' at edge %d\n", line, current_nz);
+            fprintf(stderr, "Error parsing MARKET matrix: badly formed current_nz: '%s' at edge %lld\n", line, current_nz);
             exit(1);
           }
           val = (T) tempVal;
@@ -283,7 +284,7 @@ struct CooMatrix
           row = strtol(l, &t, 0);
           if (t == l)
           {
-            fprintf(stderr, "Error parsing MARKET matrix: badly formed row at edge %d\n", current_nz);
+            fprintf(stderr, "Error parsing MARKET matrix: badly formed row at edge %lld\n", current_nz);
             exit(1);
           }
           l = t;
@@ -292,7 +293,7 @@ struct CooMatrix
           col = strtol(l, &t, 0);
           if (t == l)
           {
-            fprintf(stderr, "Error parsing MARKET matrix: badly formed col at edge %d\n", current_nz);
+            fprintf(stderr, "Error parsing MARKET matrix: badly formed col at edge %lld\n", current_nz);
             exit(1);
           }
           l = t;
@@ -387,15 +388,15 @@ template <typename T>
 struct CsrMatrix
 {
 
-  int num_rows;
-  int num_cols;
-  int num_nonzeros;
-  int num_nonzeros_lowerTri; // triangular matrix read stats from COO
-  int num_nonzeros_upperTri;
-  int num_nonzeros_lowerTri_strict;
-  int num_nonzeros_upperTri_strict;
-  int *row_offsets;
-  int *column_indices;
+  uint64_t num_rows;
+  uint64_t num_cols;
+  uint64_t num_nonzeros;
+  uint64_t num_nonzeros_lowerTri; // triangular matrix read stats from COO
+  uint64_t num_nonzeros_upperTri;
+  uint64_t num_nonzeros_lowerTri_strict;
+  uint64_t num_nonzeros_upperTri_strict;
+  uint64_t *row_offsets;
+  uint64_t *column_indices;
   T *values;
 
   /**
@@ -423,48 +424,48 @@ struct CsrMatrix
       printf("done.");
     fflush(stdout);
 
-    row_offsets = new int[num_rows + 1];
+    row_offsets = new uint64_t[num_rows + 1];
     
     if (readMode == LOWER_TRI_STRICT)
     {
-      column_indices = new int[num_nonzeros_lowerTri_strict];
+      column_indices = new uint64_t[num_nonzeros_lowerTri_strict];
       values = new T[num_nonzeros_lowerTri_strict];
     }
     else if (readMode == LOWER_TRI)
     {
-      column_indices = new int[num_nonzeros_lowerTri];
+      column_indices = new uint64_t[num_nonzeros_lowerTri];
       values = new T[num_nonzeros_lowerTri];
     }
     else if (readMode == UPPER_TRI_STRICT)
     {
-      column_indices = new int[num_nonzeros_upperTri_strict];
+      column_indices = new uint64_t[num_nonzeros_upperTri_strict];
       values = new T[num_nonzeros_upperTri_strict];
     }
     else if (readMode == UPPER_TRI)
     {
-      column_indices = new int[num_nonzeros_upperTri];
+      column_indices = new uint64_t[num_nonzeros_upperTri];
       values = new T[num_nonzeros_upperTri];
     }
     else // DEFAULT
     {
-      column_indices = new int[num_nonzeros];
+      column_indices = new uint64_t[num_nonzeros];
       values = new T[num_nonzeros];
     }
 
 
-    int prev_row = -1;
-    int curr_idx = 0;
-    for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
+    uint64_t prev_row = -1;
+    uint64_t curr_idx = 0;
+    for (uint64_t current_nz = 0; current_nz < num_nonzeros; current_nz++)
     { 
-      int current_row = coo_matrix->coo_tuples[current_nz].row;
-      int current_col = coo_matrix->coo_tuples[current_nz].col;
+      uint64_t current_row = coo_matrix->coo_tuples[current_nz].row;
+      uint64_t current_col = coo_matrix->coo_tuples[current_nz].col;
 
       if ( ( (readMode == LOWER_TRI_STRICT) || (readMode == LOWER_TRI) ) && 
            (current_row > current_col) )
       {
         // Fill in rows up to and including the current row
-        //printf("\t\tLower> current_nz: %d, curr_idx: %d\n", current_nz, curr_idx);
-        for (int row = prev_row + 1; row <= current_row; row++)
+        //printf("\t\tLower> current_nz: %lld, curr_idx: %lld\n", current_nz, curr_idx);
+        for (uint64_t row = prev_row + 1; row <= current_row; row++)
         {
           row_offsets[row] = curr_idx;
         }
@@ -477,7 +478,7 @@ struct CsrMatrix
       else if ( ( (readMode == UPPER_TRI_STRICT) || (readMode == UPPER_TRI) ) && 
                 (current_row < current_col) )
       {
-        for (int row = prev_row + 1; row <= current_row; row++)
+        for (uint64_t row = prev_row + 1; row <= current_row; row++)
         {
           row_offsets[row] = curr_idx;
         }
@@ -490,7 +491,7 @@ struct CsrMatrix
       else if ( ( (readMode == UPPER_TRI) || (readMode == LOWER_TRI) ) &&
                 (current_row == current_col) )  // diagonals
       {
-        for (int row = prev_row + 1; row <= current_row; row++)
+        for (uint64_t row = prev_row + 1; row <= current_row; row++)
         {
           row_offsets[row] = curr_idx;
         }
@@ -503,8 +504,8 @@ struct CsrMatrix
       else if ( readMode == DEFAULT ) // standard matrix read
       {
         // Fill in rows up to and including the current row
-        //printf("\t\tLower> current_nz: %d, curr_idx: %d\n", current_nz, curr_idx);
-        for (int row = prev_row + 1; row <= current_row; row++)
+        //printf("\t\tLower> current_nz: %lld, curr_idx: %lld\n", current_nz, curr_idx);
+        for (uint64_t row = prev_row + 1; row <= current_row; row++)
         {
           row_offsets[row] = curr_idx;
         }
@@ -518,7 +519,7 @@ struct CsrMatrix
     } // end-loop
 
     // Fill out any trailing edgeless vertices (and the end-of-list element)
-    for (int row = prev_row + 1; row <= num_rows; row++)
+    for (uint64_t row = prev_row + 1; row <= num_rows; row++)
     {
       if (readMode == LOWER_TRI_STRICT)
         row_offsets[row] = num_nonzeros_lowerTri_strict;
@@ -577,11 +578,11 @@ template <typename T>
 struct CscMatrix
 {
 
-  int num_rows;
-  int num_cols;
-  int num_nonzeros;
-  int *col_offsets;
-  int *row_indices;
+  uint64_t num_rows;
+  uint64_t num_cols;
+  uint64_t num_nonzeros;
+  uint64_t *col_offsets;
+  uint64_t *row_indices;
   T *values;
 
   /**
@@ -604,17 +605,17 @@ struct CscMatrix
       printf("done.");
     fflush(stdout);
 
-    col_offsets = new int[num_cols + 1];
-    row_indices = new int[num_nonzeros];
+    col_offsets = new uint64_t[num_cols + 1];
+    row_indices = new uint64_t[num_nonzeros];
     values = new T[num_nonzeros];
 
-    int prev_col = -1;
-    for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
+    uint64_t prev_col = -1;
+    for (uint64_t current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_col = coo_matrix->coo_tuples[current_nz].col;
+      uint64_t current_col = coo_matrix->coo_tuples[current_nz].col;
 
       // Fill in cols up to and including the current col
-      for (int col = prev_col + 1; col <= current_col; col++)
+      for (uint64_t col = prev_col + 1; col <= current_col; col++)
       {
         col_offsets[col] = current_nz;
       }
@@ -625,7 +626,7 @@ struct CscMatrix
     }
 
     // Fill out any trailing edgeless vertices (and the end-of-list element)
-    for (int col = prev_col + 1; col <= num_cols; col++)
+    for (uint64_t col = prev_col + 1; col <= num_cols; col++)
     {
       col_offsets[col] = num_nonzeros;
     }
@@ -677,18 +678,18 @@ struct CscMatrix
 template <typename T>
 struct DcsrMatrix
 {
-  int num_rows;
-  int num_cols;
-  int num_nonzeros;
-  int A1pos_size = 0;
-  int A1crd_size = 0;
-  int A2pos_size = 0;
-  int A2crd_size = 0;
-  int Aval_size = 0;
-  int *A1pos;
-  int *A1crd;
-  int *A2pos;
-  int *A2crd;
+  uint64_t num_rows;
+  uint64_t num_cols;
+  uint64_t num_nonzeros;
+  uint64_t A1pos_size = 0;
+  uint64_t A1crd_size = 0;
+  uint64_t A2pos_size = 0;
+  uint64_t A2crd_size = 0;
+  uint64_t Aval_size = 0;
+  uint64_t *A1pos;
+  uint64_t *A1crd;
+  uint64_t *A2pos;
+  uint64_t *A2crd;
   T *Aval;
 
   /**
@@ -711,16 +712,16 @@ struct DcsrMatrix
       printf("done.");
     fflush(stdout);
 
-    A1pos = new int[2];
-    A1crd = new int[num_rows];
-    A2pos = new int[num_rows + 1];
-    A2crd = new int[num_nonzeros];
+    A1pos = new uint64_t[2];
+    A1crd = new uint64_t[num_rows];
+    A2pos = new uint64_t[num_rows + 1];
+    A2crd = new uint64_t[num_nonzeros];
     Aval = new T[num_nonzeros];
 
-    int prev_row = -1;
-    for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
+    uint64_t prev_row = -1;
+    for (uint64_t current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_row = coo_matrix->coo_tuples[current_nz].row;
+      uint64_t current_row = coo_matrix->coo_tuples[current_nz].row;
 
       // Fill in rows up to and including the current row
       if (current_row == prev_row)
@@ -794,10 +795,10 @@ struct DcsrMatrix
 template <typename T>
 struct EllpackMatrix
 {
-    int num_rows;
-    int num_cols;
-    int num_nonzeros;
-    int *col_crd;
+    uint64_t num_rows;
+    uint64_t num_cols;
+    uint64_t num_nonzeros;
+    uint64_t *col_crd;
     T *Aval;
 
     /**
@@ -819,11 +820,11 @@ struct EllpackMatrix
         fflush(stdout);
 
         // Calculate the column count
-        int max = 0;
-        int buffer = 0;
+        uint64_t max = 0;
+        uint64_t buffer = 0;
         int current = -1;
 
-        for (int i = 0; i<num_nonzeros; i++) {
+        for (uint64_t i = 0; i<num_nonzeros; i++) {
           if (coo_matrix->coo_tuples[i].row == current) {
             ++buffer;
           } else {
@@ -837,16 +838,16 @@ struct EllpackMatrix
 
         // Create the column coordinate list
         // TODO: This terrible, but it works
-        col_crd = new int[num_rows*num_cols];
+        col_crd = new uint64_t[num_rows*num_cols];
         Aval = new T[num_rows*num_cols];
-        int index = 0;
+        uint64_t index = 0;
 
         // Build the column coordinates/value array
-        for (int i = 0; i<num_rows; i++) {
+        for (uint64_t i = 0; i<num_rows; i++) {
             // In this loop, get all non-zero column coordinates and track
             // how many we have found
-            int found_cols = 0;
-            for (int j = 0; j<num_nonzeros; j++) {
+            uint64_t found_cols = 0;
+            for (uint64_t j = 0; j<num_nonzeros; j++) {
               if (coo_matrix->coo_tuples[j].row == i) {
                 ++found_cols;
               }
@@ -855,7 +856,7 @@ struct EllpackMatrix
             // If the number of columns we have found in the row is less than
             // the block, we need to add some zeros to create the block
             if (found_cols == num_cols) {
-              for (int j = 0; j<num_nonzeros; j++) {
+              for (uint64_t j = 0; j<num_nonzeros; j++) {
                 if (coo_matrix->coo_tuples[j].row == i) {
                   col_crd[index] = coo_matrix->coo_tuples[j].col;
                   Aval[index] = coo_matrix->coo_tuples[j].val;
@@ -867,7 +868,7 @@ struct EllpackMatrix
             
             // If there were no found columns, we'll just add zeros
             if (found_cols == 0) {
-              for (int j = 0; j<num_cols; j++) {
+              for (uint64_t j = 0; j<num_cols; j++) {
                   col_crd[index] = j;
                   Aval[index] = 0;
                   ++index;
@@ -877,10 +878,10 @@ struct EllpackMatrix
 
             // If we have an odd number, we need to add preceeding elements before
             // the actual non-zero indicies
-            for (int j = 0; j<num_nonzeros; j++) {
+            for (uint64_t j = 0; j<num_nonzeros; j++) {
               if (coo_matrix->coo_tuples[j].row == i) {
                 // TODO: This IS NOT portable
-                for (int k = 0; k<coo_matrix->coo_tuples[j].col && found_cols < num_cols; k++) {
+                for (uint64_t k = 0; k<coo_matrix->coo_tuples[j].col && found_cols < num_cols; k++) {
                   col_crd[index] = k;
                   Aval[index] = 0;
                   ++index;
@@ -934,14 +935,14 @@ struct Coo3DTensor
   // COO edge tuple
   struct Coo3DTuple
   {
-    int index_i;
-    int index_j;
-    int index_k;
+    uint64_t index_i;
+    uint64_t index_j;
+    uint64_t index_k;
     T val;
 
     Coo3DTuple() {}
-    Coo3DTuple(int index_i, int index_j, int index_k) : index_i(index_i), index_j(index_j), index_k(index_k) {}
-    Coo3DTuple(int index_i, int index_j, int index_k, T val) : index_i(index_i), index_j(index_j), index_k(index_k), val(val) {}
+    Coo3DTuple(uint64_t index_i, uint64_t index_j, uint64_t index_k) : index_i(index_i), index_j(index_j), index_k(index_k) {}
+    Coo3DTuple(uint64_t index_i, uint64_t index_j, uint64_t index_k, T val) : index_i(index_i), index_j(index_j), index_k(index_k), val(val) {}
   };
 
   //---------------------------------------------------------------------
@@ -949,10 +950,10 @@ struct Coo3DTensor
   //---------------------------------------------------------------------
 
   // Fields
-  int num_index_i;
-  int num_index_j;
-  int num_index_k;
-  int num_nonzeros;
+  uint64_t num_index_i;
+  uint64_t num_index_j;
+  uint64_t num_index_k;
+  uint64_t num_nonzeros;
   Coo3DTuple *coo_3dtuples;
 
   //---------------------------------------------------------------------
@@ -984,7 +985,7 @@ struct Coo3DTensor
   {
     cout << "COO Tensor 3D (" << num_index_i << " index_i, " << num_index_j << " index_j, " << num_index_k << " index_k, " << num_nonzeros << " non-zeros):\n";
     cout << "Ordinal, index_i, index_j, index_k, Value\n";
-    for (int i = 0; i < num_nonzeros; i++)
+    for (uint64_t i = 0; i < num_nonzeros; i++)
     {
       cout << '\t' << i << ',' << coo_3dtuples[i].index_i << ',' << coo_3dtuples[i].index_j << ',' << coo_3dtuples[i].index_k << ',' << coo_3dtuples[i].val << "\n";
     }
@@ -1019,7 +1020,8 @@ struct Coo3DTensor
       exit(1);
     }
 
-    int current_nz = -1;
+    uint64_t current_nz = 0;
+    int nparsed = -1;
     char line[1024];
 
     if (verbose)
@@ -1037,10 +1039,10 @@ struct Coo3DTensor
         break;
       }
 
-      if (current_nz == -1)
+      if (nparsed == -1)
       {
         // Problem description
-        int nparsed = sscanf(line, "%d %d %d %d", &num_index_i, &num_index_j, &num_index_k, &num_nonzeros);
+        nparsed = sscanf(line, "%lld %lld %lld %lld", &num_index_i, &num_index_j, &num_index_k, &num_nonzeros);
 
         if (nparsed == 4)
         {
@@ -1059,11 +1061,11 @@ struct Coo3DTensor
         // Edge
         if (current_nz >= num_nonzeros)
         {
-          fprintf(stderr, "Error parsing FROSTT tensor: encountered more than %d num_nonzeros\n", num_nonzeros);
+          fprintf(stderr, "Error parsing FROSTT tensor: encountered more than %lld num_nonzeros\n", num_nonzeros);
           assert(false);
         }
 
-        int idx_i, idx_j, idx_k;
+        uint64_t idx_i, idx_j, idx_k;
         T val;
 
         // Parse nonzero (note: using strtol and strtod is 2x faster than sscanf or istream parsing)
@@ -1074,7 +1076,7 @@ struct Coo3DTensor
         idx_i = strtol(l, &t, 0);
         if (t == l)
         {
-          fprintf(stderr, "Error parsing FROSTT tensor: badly formed row at edge %d\n", current_nz);
+          fprintf(stderr, "Error parsing FROSTT tensor: badly formed row at edge %lld\n", current_nz);
           assert(false);
         }
         l = t;
@@ -1083,7 +1085,7 @@ struct Coo3DTensor
         idx_j = strtol(l, &t, 0);
         if (t == l)
         {
-          fprintf(stderr, "Error parsing FROSTT tensor: badly formed col at edge %d\n", current_nz);
+          fprintf(stderr, "Error parsing FROSTT tensor: badly formed col at edge %lld\n", current_nz);
           assert(false);
         }
         l = t;
@@ -1092,7 +1094,7 @@ struct Coo3DTensor
         idx_k = strtol(l, &t, 0);
         if (t == l)
         {
-          fprintf(stderr, "Error parsing FROSTT tensor: badly formed col at edge %d\n", current_nz);
+          fprintf(stderr, "Error parsing FROSTT tensor: badly formed col at edge %lld\n", current_nz);
           assert(false);
         }
         l = t;
@@ -1144,23 +1146,23 @@ struct Coo3DTensorComparator
 template <typename T>
 struct Csf3DTensor
 {
-  int num_index_i;
-  int num_index_j;
-  int num_index_k;
-  int num_nonzeros;
-  int A1pos_size = 0;
-  int A1crd_size = 0;
-  int A2pos_size = 0;
-  int A2crd_size = 0;
-  int A3pos_size = 0;
-  int A3crd_size = 0;
-  int Aval_size = 0;
-  int *A1pos;
-  int *A1crd;
-  int *A2pos;
-  int *A2crd;
-  int *A3pos;
-  int *A3crd;
+  uint64_t num_index_i;
+  uint64_t num_index_j;
+  uint64_t num_index_k;
+  uint64_t num_nonzeros;
+  uint64_t A1pos_size = 0;
+  uint64_t A1crd_size = 0;
+  uint64_t A2pos_size = 0;
+  uint64_t A2crd_size = 0;
+  uint64_t A3pos_size = 0;
+  uint64_t A3crd_size = 0;
+  uint64_t Aval_size = 0;
+  uint64_t *A1pos;
+  uint64_t *A1crd;
+  uint64_t *A2pos;
+  uint64_t *A2crd;
+  uint64_t *A3pos;
+  uint64_t *A3crd;
   T *Aval;
 
   /**
@@ -1184,20 +1186,20 @@ struct Csf3DTensor
       printf("done.");
     fflush(stdout);
 
-    A1pos = new int[2];
-    A1crd = new int[num_nonzeros];
-    A2pos = new int[num_nonzeros + 1];
-    A2crd = new int[num_nonzeros];
-    A3pos = new int[num_nonzeros + 1];
-    A3crd = new int[num_nonzeros];
+    A1pos = new uint64_t[2];
+    A1crd = new uint64_t[num_nonzeros];
+    A2pos = new uint64_t[num_nonzeros + 1];
+    A2crd = new uint64_t[num_nonzeros];
+    A3pos = new uint64_t[num_nonzeros + 1];
+    A3crd = new uint64_t[num_nonzeros];
     Aval = new T[num_nonzeros];
 
-    int prev_index_i = -1;
-    int prev_index_j = -1;
-    for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
+    uint64_t prev_index_i = -1;
+    uint64_t prev_index_j = -1;
+    for (uint64_t current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_index_i = coo_3dtensor->coo_3dtuples[current_nz].index_i;
-      int current_index_j = coo_3dtensor->coo_3dtuples[current_nz].index_j;
+      uint64_t current_index_i = coo_3dtensor->coo_3dtuples[current_nz].index_i;
+      uint64_t current_index_j = coo_3dtensor->coo_3dtuples[current_nz].index_j;
 
       if (current_index_j != prev_index_j)
       {
@@ -1302,23 +1304,23 @@ struct Csf3DTensor
 template <typename T>
 struct Mg3DTensor
 {
-  int num_index_i;
-  int num_index_j;
-  int num_index_k;
-  int num_nonzeros;
-  int A1pos_size = 0;
-  int A1crd_size = 0;
-  int A2pos_size = 0;
-  int A2crd_size = 0;
-  int A3pos_size = 0;
-  int A3crd_size = 0;
-  int Aval_size = 0;
-  int *A1pos;
-  int *A1crd;
-  int *A2pos;
-  int *A2crd;
-  int *A3pos;
-  int *A3crd;
+  uint64_t num_index_i;
+  uint64_t num_index_j;
+  uint64_t num_index_k;
+  uint64_t num_nonzeros;
+  uint64_t A1pos_size = 0;
+  uint64_t A1crd_size = 0;
+  uint64_t A2pos_size = 0;
+  uint64_t A2crd_size = 0;
+  uint64_t A3pos_size = 0;
+  uint64_t A3crd_size = 0;
+  uint64_t Aval_size = 0;
+  uint64_t *A1pos;
+  uint64_t *A1crd;
+  uint64_t *A2pos;
+  uint64_t *A2crd;
+  uint64_t *A3pos;
+  uint64_t *A3crd;
   T *Aval;
 
   /**
@@ -1343,13 +1345,13 @@ struct Mg3DTensor
     fflush(stdout);
 
     // Evaluate size of A1crd, A2crd
-    int alloc_size_A1crd = 0; // same with alloc_size_A2crd
-    int alloc_prev_index_i = -1;
-    int alloc_prev_index_j = -1;
-    for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
+    uint64_t alloc_size_A1crd = 0; // same with alloc_size_A2crd
+    uint64_t alloc_prev_index_i = -1;
+    uint64_t alloc_prev_index_j = -1;
+    for (uint64_t current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_index_i = coo_3dtensor->coo_3dtuples[current_nz].index_i;
-      int current_index_j = coo_3dtensor->coo_3dtuples[current_nz].index_j;
+      uint64_t current_index_i = coo_3dtensor->coo_3dtuples[current_nz].index_i;
+      uint64_t current_index_j = coo_3dtensor->coo_3dtuples[current_nz].index_j;
 
       if (current_index_i != alloc_prev_index_i || current_index_j != alloc_prev_index_j)
       {
@@ -1358,24 +1360,24 @@ struct Mg3DTensor
         alloc_prev_index_j = current_index_j;
       }
     }
-    A1pos = new int[2];
-    A1crd = new int[alloc_size_A1crd];
-    A2pos = new int[1];
-    A2crd = new int[alloc_size_A1crd];
-    A3pos = new int[1];
-    A3crd = new int[1];
+    A1pos = new uint64_t[2];
+    A1crd = new uint64_t[alloc_size_A1crd];
+    A2pos = new uint64_t[1];
+    A2crd = new uint64_t[alloc_size_A1crd];
+    A3pos = new uint64_t[1];
+    A3crd = new uint64_t[1];
     Aval = new T[alloc_size_A1crd * num_index_k];
 
     A3pos[A3pos_size++] = num_index_k;
 
-    int prev_index_i = -1;
-    int prev_index_j = -1;
-    for (int current_nz = 0; current_nz < num_nonzeros; current_nz++)
+    uint64_t prev_index_i = -1;
+    uint64_t prev_index_j = -1;
+    for (uint64_t current_nz = 0; current_nz < num_nonzeros; current_nz++)
     {
-      int current_index_i = coo_3dtensor->coo_3dtuples[current_nz].index_i;
-      int current_index_j = coo_3dtensor->coo_3dtuples[current_nz].index_j;
-      int current_index_k = coo_3dtensor->coo_3dtuples[current_nz].index_k;
-      int current_val = coo_3dtensor->coo_3dtuples[current_nz].val;
+      uint64_t current_index_i = coo_3dtensor->coo_3dtuples[current_nz].index_i;
+      uint64_t current_index_j = coo_3dtensor->coo_3dtuples[current_nz].index_j;
+      uint64_t current_index_k = coo_3dtensor->coo_3dtuples[current_nz].index_k;
+      uint64_t current_val = coo_3dtensor->coo_3dtuples[current_nz].val;
 
       // Fill in rows up to and including the current row
       if (current_index_i != prev_index_i || current_index_j != prev_index_j)
@@ -1386,11 +1388,11 @@ struct Mg3DTensor
         // Fill previous (i,j)
         if (Aval_size % num_index_k != 0)
         {
-          for (int i = Aval_size % num_index_k; i < num_index_k; i++)
+          for (uint64_t i = Aval_size % num_index_k; i < num_index_k; i++)
             Aval[Aval_size++] = 0;
         }
         // Fill current (i,j)
-        for (int i = Aval_size % num_index_k; i < current_index_k; i++)
+        for (uint64_t i = Aval_size % num_index_k; i < current_index_k; i++)
           Aval[Aval_size++] = 0;
         Aval[Aval_size++] = current_val;
 
@@ -1399,7 +1401,7 @@ struct Mg3DTensor
       }
       else
       {
-        for (int i = Aval_size % num_index_k; i < current_index_k; i++)
+        for (uint64_t i = Aval_size % num_index_k; i < current_index_k; i++)
           Aval[Aval_size++] = 0;
         Aval[Aval_size++] = current_val;
       }
@@ -1648,9 +1650,9 @@ struct FileReaderWrapper
 
 // helper func: get num of nonzeros based on selected matrix read
 template <typename T>
-int getNumNonZeros (CooMatrix<T> *coo_matrix, int32_t readMode)
+uint64_t getNumNonZeros (CooMatrix<T> *coo_matrix, int32_t readMode)
 {
-  int NumNonZeros = -1; 
+  uint64_t NumNonZeros = -1; 
 
   int selected_matrix_read = getMatrixReadOption(readMode);
 
@@ -1686,7 +1688,7 @@ void read_input_sizes_2D(int32_t fileID,
   if (A1format == Compressed_nonunique && A2format == singleton)
   {
     // get num-NNZs from coo_matrix struct.
-    int NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
+    uint64_t NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
 
     desc_sizes->data[0] = 2;              // A1_pos
     desc_sizes->data[1] = NumNonZeros;    // A1_crd
@@ -1715,7 +1717,7 @@ void read_input_sizes_2D(int32_t fileID,
   else if (A1format == Dense && A2format == Compressed_unique)
   {
     // get num-NNZs from coo_matrix struct.
-    int NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
+    uint64_t NumNonZeros = getNumNonZeros(FileReader.coo_matrix, readMode);
 
     desc_sizes->data[0] = 1;              // A1pos
     desc_sizes->data[1] = 1;              // A1crd
@@ -1743,7 +1745,7 @@ void read_input_sizes_2D(int32_t fileID,
   // CSC
   else if (A1format == Compressed_unique && A2format == Dense)
   {
-    int NumNonZeros = 0;
+    uint64_t NumNonZeros = 0;
     if (selected_matrix_read == DEFAULT)
       NumNonZeros = FileReader.coo_matrix->num_nonzeros;
     else
@@ -1898,9 +1900,9 @@ void read_input_2D(int32_t fileID,
     std::stable_sort(FileReader.coo_matrix->coo_tuples, FileReader.coo_matrix->coo_tuples + FileReader.coo_matrix->num_nonzeros, CooComparatorRow());
 
     desc_A1pos->data[0] = 0;
-    int actual_num_nonzeros = 0;
+    uint64_t actual_num_nonzeros = 0;
 
-    for (int i = 0; i < FileReader.coo_matrix->num_nonzeros; i++)
+    for (uint64_t i = 0; i < FileReader.coo_matrix->num_nonzeros; i++)
     {
       if ( ( (selected_matrix_read == LOWER_TRI_STRICT) || (selected_matrix_read == LOWER_TRI) ) &&   // filter lower triangular vals
                 (FileReader.coo_matrix->coo_tuples[i].row > FileReader.coo_matrix->coo_tuples[i].col) )
@@ -1944,7 +1946,7 @@ void read_input_2D(int32_t fileID,
   {
     CsrMatrix<T> csr_matrix(FileReader.coo_matrix, selected_matrix_read); 
 
-    int upperBound_NNZ = getNumNonZeros(FileReader.coo_matrix, readMode);
+    uint64_t upperBound_NNZ = getNumNonZeros(FileReader.coo_matrix, readMode);
     FileReader.FileReaderWrapperFinalize();  // clear coo_matrix
     
     // /*****************DEBUG******************/
@@ -1971,12 +1973,12 @@ void read_input_2D(int32_t fileID,
 
     desc_A1pos->data[0] = csr_matrix.num_rows;
 
-    for (int i = 0; i < csr_matrix.num_rows + 1; i++)
+    for (uint64_t i = 0; i < csr_matrix.num_rows + 1; i++)
     {
       desc_A2pos->data[i] = csr_matrix.row_offsets[i];
     }
 
-    for (int i = 0; i < upperBound_NNZ; i++)
+    for (uint64_t i = 0; i < upperBound_NNZ; i++)
     {
       desc_A2crd->data[i] = csr_matrix.column_indices[i];
       desc_Aval->data[i] = csr_matrix.values[i];
@@ -2014,12 +2016,12 @@ void read_input_2D(int32_t fileID,
 
     desc_A2pos->data[0] = csc_matrix.num_cols;
 
-    for (int i = 0; i < csc_matrix.num_cols + 1; i++)
+    for (uint64_t i = 0; i < csc_matrix.num_cols + 1; i++)
     {
       desc_A1pos->data[i] = csc_matrix.col_offsets[i];
     }
 
-    for (int i = 0; i < csc_matrix.num_nonzeros; i++)
+    for (uint64_t i = 0; i < csc_matrix.num_nonzeros; i++)
     {
       desc_A1crd->data[i] = csc_matrix.row_indices[i];
       desc_Aval->data[i] = csc_matrix.values[i];
@@ -2069,22 +2071,22 @@ void read_input_2D(int32_t fileID,
     // std::cout << "finished read_market\n";
     /*****************DEBUG******************/
 
-    for (int i = 0; i < dcsr_matrix.A1pos_size; i++)
+    for (uint64_t i = 0; i < dcsr_matrix.A1pos_size; i++)
     {
       desc_A1pos->data[i] = dcsr_matrix.A1pos[i];
     }
 
-    for (int i = 0; i < dcsr_matrix.A1crd_size; i++)
+    for (uint64_t i = 0; i < dcsr_matrix.A1crd_size; i++)
     {
       desc_A1crd->data[i] = dcsr_matrix.A1crd[i];
     }
 
-    for (int i = 0; i < dcsr_matrix.A2pos_size; i++)
+    for (uint64_t i = 0; i < dcsr_matrix.A2pos_size; i++)
     {
       desc_A2pos->data[i] = dcsr_matrix.A2pos[i];
     }
 
-    for (int i = 0; i < dcsr_matrix.A2crd_size; i++)
+    for (uint64_t i = 0; i < dcsr_matrix.A2crd_size; i++)
     {
       desc_A2crd->data[i] = dcsr_matrix.A2crd[i];
       desc_Aval->data[i] = dcsr_matrix.Aval[i];
@@ -2239,7 +2241,7 @@ void read_input_3D(int32_t fileID,
     desc_A1pos->data[0] = 0;
     desc_A1pos->data[1] = FileReader.coo_3dtensor->num_nonzeros;
 
-    for (int i = 0; i < FileReader.coo_3dtensor->num_nonzeros; i++)
+    for (uint64_t i = 0; i < FileReader.coo_3dtensor->num_nonzeros; i++)
     {
       desc_A1crd->data[i] = FileReader.coo_3dtensor->coo_3dtuples[i].index_i;
       desc_A2crd->data[i] = FileReader.coo_3dtensor->coo_3dtuples[i].index_j;
@@ -2300,31 +2302,31 @@ void read_input_3D(int32_t fileID,
     // std::cout << "\n";
 
     // Fill data
-    for (int i = 0; i < csf_3dtensor.A1pos_size; i++)
+    for (uint64_t i = 0; i < csf_3dtensor.A1pos_size; i++)
     {
       desc_A1pos->data[i] = csf_3dtensor.A1pos[i];
     }
-    for (int i = 0; i < csf_3dtensor.A1crd_size; i++)
+    for (uint64_t i = 0; i < csf_3dtensor.A1crd_size; i++)
     {
       desc_A1crd->data[i] = csf_3dtensor.A1crd[i];
     }
-    for (int i = 0; i < csf_3dtensor.A2pos_size; i++)
+    for (uint64_t i = 0; i < csf_3dtensor.A2pos_size; i++)
     {
       desc_A2pos->data[i] = csf_3dtensor.A2pos[i];
     }
-    for (int i = 0; i < csf_3dtensor.A2crd_size; i++)
+    for (uint64_t i = 0; i < csf_3dtensor.A2crd_size; i++)
     {
       desc_A2crd->data[i] = csf_3dtensor.A2crd[i];
     }
-    for (int i = 0; i < csf_3dtensor.A3pos_size; i++)
+    for (uint64_t i = 0; i < csf_3dtensor.A3pos_size; i++)
     {
       desc_A3pos->data[i] = csf_3dtensor.A3pos[i];
     }
-    for (int i = 0; i < csf_3dtensor.A3crd_size; i++)
+    for (uint64_t i = 0; i < csf_3dtensor.A3crd_size; i++)
     {
       desc_A3crd->data[i] = csf_3dtensor.A3crd[i];
     }
-    for (int i = 0; i < csf_3dtensor.Aval_size; i++)
+    for (uint64_t i = 0; i < csf_3dtensor.Aval_size; i++)
     {
       desc_Aval->data[i] = csf_3dtensor.Aval[i];
     }
@@ -2366,23 +2368,23 @@ void read_input_3D(int32_t fileID,
     // std::cout << "\n";
 
     // Fill data
-    for (int i = 0; i < mg_3dtensor.A1pos_size; i++)
+    for (uint64_t i = 0; i < mg_3dtensor.A1pos_size; i++)
     {
       desc_A1pos->data[i] = mg_3dtensor.A1pos[i];
     }
-    for (int i = 0; i < mg_3dtensor.A1crd_size; i++)
+    for (uint64_t i = 0; i < mg_3dtensor.A1crd_size; i++)
     {
       desc_A1crd->data[i] = mg_3dtensor.A1crd[i];
     }
-    for (int i = 0; i < mg_3dtensor.A2crd_size; i++)
+    for (uint64_t i = 0; i < mg_3dtensor.A2crd_size; i++)
     {
       desc_A2crd->data[i] = mg_3dtensor.A2crd[i];
     }
-    for (int i = 0; i < mg_3dtensor.A3pos_size; i++)
+    for (uint64_t i = 0; i < mg_3dtensor.A3pos_size; i++)
     {
       desc_A3pos->data[i] = mg_3dtensor.A3pos[i];
     }
-    for (int i = 0; i < mg_3dtensor.Aval_size; i++)
+    for (uint64_t i = 0; i < mg_3dtensor.Aval_size; i++)
     {
       desc_Aval->data[i] = mg_3dtensor.Aval[i];
     }
@@ -2542,6 +2544,7 @@ extern "C" void read_input_sizes_3D_f64(int32_t fileID,
 
 
 
+//TODO(gkestor): check the following utility function
 //===----------------------------------------------------------------------===//
 // Sort a vector within a range [first, last).
 //===----------------------------------------------------------------------===//
