@@ -1,6 +1,7 @@
 #
 # Supposed to run in Linux
 export EXT="so"
+ulimit -s unlimited  # Set stack size as unlimited
 
 
 ################################################################
