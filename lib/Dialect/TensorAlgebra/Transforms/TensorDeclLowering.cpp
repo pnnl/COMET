@@ -70,7 +70,12 @@ using namespace mlir::indexTree;
   llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
   n.dump()
 #else
-#define comet_debug() if(true){}else llvm::errs()
+#define comet_debug() \
+  if (true)           \
+  {                   \
+  }                   \
+  else                \
+    llvm::errs()
 // #define comet_debug() llvm::nulls()
 #define comet_pdump(n)
 #define comet_vdump(n)
@@ -342,22 +347,22 @@ namespace
     if (rank_size == 2)
     {
       comet_debug() << " Rank Size is 2\n";
-auto readInput2DF32Func = FunctionType::get(ctx, {i32Type,
-                                    indexType, indexType,     // A1_format, A1_tile_format
-                                    indexType, indexType,     // A2_format, A2_tile_format
-                                    unrankedMemref_index, unrankedMemref_index,   // A1_pos, A1_crd
-                                    unrankedMemref_index, unrankedMemref_index,   // A1_tile_pos, A1_tile_crd
-                                    unrankedMemref_index, unrankedMemref_index,   // A2_pos, A2_crd
-                                    unrankedMemref_index, unrankedMemref_index,   // A2_tile_pos, A2_tile_crd
-                                    unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
-      auto readInput2DF64Func = FunctionType::get(ctx, {i32Type,
-                                    indexType, indexType,     // A1_format, A1_tile_format
-                                    indexType, indexType,     // A2_format, A2_tile_format
-                                    unrankedMemref_index, unrankedMemref_index,   // A1_pos, A1_crd
-                                    unrankedMemref_index, unrankedMemref_index,   // A1_tile_pos, A1_tile_crd
-                                    unrankedMemref_index, unrankedMemref_index,   // A2_pos, A2_crd
-                                    unrankedMemref_index, unrankedMemref_index,   // A2_tile_pos, A2_tile_crd
-                                    unrankedMemref_f64, i32Type}, {});
+      auto readInput2DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType,              // A1_format, A1_tile_format
+                                                        indexType, indexType,                       // A2_format, A2_tile_format
+                                                        unrankedMemref_index, unrankedMemref_index, // A1_pos, A1_crd
+                                                        unrankedMemref_index, unrankedMemref_index, // A1_tile_pos, A1_tile_crd
+                                                        unrankedMemref_index, unrankedMemref_index, // A2_pos, A2_crd
+                                                        unrankedMemref_index, unrankedMemref_index, // A2_tile_pos, A2_tile_crd
+                                                        unrankedMemref_f32, i32Type},
+                                                  {});                                              // last arg (i32Type): readMode
+      auto readInput2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType,              // A1_format, A1_tile_format
+                                                        indexType, indexType,                       // A2_format, A2_tile_format
+                                                        unrankedMemref_index, unrankedMemref_index, // A1_pos, A1_crd
+                                                        unrankedMemref_index, unrankedMemref_index, // A1_tile_pos, A1_tile_crd
+                                                        unrankedMemref_index, unrankedMemref_index, // A2_pos, A2_crd
+                                                        unrankedMemref_index, unrankedMemref_index, // A2_tile_pos, A2_tile_crd
+                                                        unrankedMemref_f64, i32Type},
+                                                  {});
 
       if (VALUETYPE.compare("f32") == 0)
       {
@@ -414,24 +419,24 @@ auto readInput2DF32Func = FunctionType::get(ctx, {i32Type,
     // 3D tensor
     else if (rank_size == 3)
     {
-auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
-                                      indexType, indexType, indexType, indexType, indexType, indexType, // Dimensions
-                                      unrankedMemref_index, unrankedMemref_index,     // A1
-                                      unrankedMemref_index, unrankedMemref_index,     // A1_tile
-                                      unrankedMemref_index, unrankedMemref_index,     // A2
-                                      unrankedMemref_index, unrankedMemref_index,     // A2_tile
-                                      unrankedMemref_index, unrankedMemref_index,     // A3
-                                      unrankedMemref_index, unrankedMemref_index,     // A3_tile
-                                      unrankedMemref_f32, i32Type}, {}); // last arg (i32Type): readMode
-      auto readInput3DF64Func = FunctionType::get(ctx, {i32Type,
-                                      indexType, indexType, indexType, indexType, indexType, indexType, // Dimensions
-                                      unrankedMemref_index, unrankedMemref_index,     // A1
-                                      unrankedMemref_index, unrankedMemref_index,     // A1_tile
-                                      unrankedMemref_index, unrankedMemref_index,     // A2
-                                      unrankedMemref_index, unrankedMemref_index,     // A2_tile
-                                      unrankedMemref_index, unrankedMemref_index,     // A3
-                                      unrankedMemref_index, unrankedMemref_index,     // A3_tile
-                                      unrankedMemref_f64, i32Type}, {});
+      auto readInput3DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, indexType, indexType, // Dimensions
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A1
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A1_tile
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A2
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A2_tile
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A3
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A3_tile
+                                                        unrankedMemref_f32, i32Type},
+                                                  {});                                                                             // last arg (i32Type): readMode
+      auto readInput3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, indexType, indexType, // Dimensions
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A1
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A1_tile
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A2
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A2_tile
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A3
+                                                        unrankedMemref_index, unrankedMemref_index,                                // A3_tile
+                                                        unrankedMemref_f64, i32Type},
+                                                  {});
 
       if (VALUETYPE.compare("f32") == 0)
       {
@@ -457,11 +462,7 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
         }
       }
 
-     auto readInputSizes3DF64Func = FunctionType::get(ctx, {
-                                              i32Type,
-                                              indexType, indexType, indexType,
-                                              indexType, indexType, indexType,
-                                              unrankedMemref_index, i32Type}, {}); // last arg (i32Type): readMode
+      auto readInputSizes3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {}); // last arg (i32Type): readMode
 
       if (VALUETYPE.compare("f32") == 0)
       {
@@ -666,7 +667,6 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
               array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(crdLocInSrc));
               array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(posLocInSrc2));
               array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(crdLocInSrc2));
-
             }
             // val array size
             array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(8 * dst_rank + 1));
@@ -713,8 +713,9 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
               // Aval
               // TODO: Do not hardcode
               array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(17));
-            } else if (src_format.compare("ELL") == 0)
-            { 
+            }
+            else if (src_format.compare("ELL") == 0)
+            {
               comet_debug() << " 2D ELL transpose to 2D ELL\n";
               comet_pdump(src_input.getDefiningOp());
               // A1
@@ -968,61 +969,65 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
         if (rank_size == 2)
         {
           sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
-                                                                             ValueRange{tensorload_sizes_vec[0],  // A1pos (each dimension consists of pos and crd arrays)
-                                                                            tensorload_sizes_vec[1],   // A1crd
-                                                                            tensorload_sizes_vec[2],   // A1tile_pos
-                                                                            tensorload_sizes_vec[3],   // A1tile_crd
-                                                                            tensorload_sizes_vec[4],   // A2pos
-                                                                            tensorload_sizes_vec[5],   // A2crd
-                                                                            tensorload_sizes_vec[6],   // A2tile_pos
-                                                                            tensorload_sizes_vec[7],   // A2tile_crd
-                                                                            tensorload_sizes_vec[8],   // Aval
-                                                                            array_sizes_vec[0],        // A1pos_size (size of each pos and crd arrays)
-                                                                            array_sizes_vec[1],        // A1crd_size
-                                                                            array_sizes_vec[2],        // A1tile_pos_size
-                                                                            array_sizes_vec[3],        // A1tile_crd_size
-                                                                            array_sizes_vec[4],        // A2pos_size
-                                                                            array_sizes_vec[5],        // A2crd_size
-                                                                            array_sizes_vec[6],        // A2tile_pos_size
-                                                                            array_sizes_vec[7],        // A2tile_crd_size
-                                                                            array_sizes_vec[8],        // Aval_size (size of value array)
-                                                                            dimSizes[0],             // dim1_size(size of each dimension in sparse tensor)
-                                                                            dimSizes[1]              // dim2_size (size of each dimension in sparse tensor)
-                                                                            }, 2);        
-                                                                            }
+                                                                             ValueRange{
+                                                                                 tensorload_sizes_vec[0], // A1pos (each dimension consists of pos and crd arrays)
+                                                                                 tensorload_sizes_vec[1], // A1crd
+                                                                                 tensorload_sizes_vec[2], // A1tile_pos
+                                                                                 tensorload_sizes_vec[3], // A1tile_crd
+                                                                                 tensorload_sizes_vec[4], // A2pos
+                                                                                 tensorload_sizes_vec[5], // A2crd
+                                                                                 tensorload_sizes_vec[6], // A2tile_pos
+                                                                                 tensorload_sizes_vec[7], // A2tile_crd
+                                                                                 tensorload_sizes_vec[8], // Aval
+                                                                                 array_sizes_vec[0],      // A1pos_size (size of each pos and crd arrays)
+                                                                                 array_sizes_vec[1],      // A1crd_size
+                                                                                 array_sizes_vec[2],      // A1tile_pos_size
+                                                                                 array_sizes_vec[3],      // A1tile_crd_size
+                                                                                 array_sizes_vec[4],      // A2pos_size
+                                                                                 array_sizes_vec[5],      // A2crd_size
+                                                                                 array_sizes_vec[6],      // A2tile_pos_size
+                                                                                 array_sizes_vec[7],      // A2tile_crd_size
+                                                                                 array_sizes_vec[8],      // Aval_size (size of value array)
+                                                                                 dimSizes[0],             // dim1_size(size of each dimension in sparse tensor)
+                                                                                 dimSizes[1]              // dim2_size (size of each dimension in sparse tensor)
+                                                                             },
+                                                                             2);
+        }
         else if (rank_size == 3)
         {
           sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
-                                                                             ValueRange{tensorload_sizes_vec[0],  // A1pos (each dimension consists of pos and crd arrays)
-                                                                            tensorload_sizes_vec[1],   // A1crd
-                                                                            tensorload_sizes_vec[2],   // A1tile_pos
-                                                                            tensorload_sizes_vec[3],   // A1tile_crd
-                                                                            tensorload_sizes_vec[4],   // A2pos
-                                                                            tensorload_sizes_vec[5],   // A2crd
-                                                                            tensorload_sizes_vec[6],   // A2tile_pos
-                                                                            tensorload_sizes_vec[7],   // A2tile_crd
-                                                                            tensorload_sizes_vec[8],   // A3pos
-                                                                            tensorload_sizes_vec[9],   // A3crd
-                                                                            tensorload_sizes_vec[10],   // A3tile_pos
-                                                                            tensorload_sizes_vec[11],   // A3tile_crd
-                                                                            tensorload_sizes_vec[12],   // Aval
-                                                                            array_sizes_vec[0],        // A1pos_size (size of each pos and crd arrays)
-                                                                            array_sizes_vec[1],        // A1crd_size
-                                                                            array_sizes_vec[2],        // A1tile_pos_size
-                                                                            array_sizes_vec[3],        // A1tile_crd_size
-                                                                            array_sizes_vec[4],        // A2pos_size
-                                                                            array_sizes_vec[5],        // A2crd_size
-                                                                            array_sizes_vec[6],        // A2tile_pos_size
-                                                                            array_sizes_vec[7],        // A2tile_crd_size
-                                                                            array_sizes_vec[8],        // A3pos_size
-                                                                            array_sizes_vec[9],        // A3crd_size
-                                                                            array_sizes_vec[10],        // A3tile_pos_size
-                                                                            array_sizes_vec[11],        // A3tile_crd_size
-                                                                            array_sizes_vec[12],        // Aval_size (size of value array)
-                                                                            dimSizes[0],         // dim1_size (size of each dimension in sparse tensor)
-                                                                            dimSizes[1],         // dim2_size (size of each dimension in sparse tensor)
-                                                                            dimSizes[2]          // dim3_size
-                                                                            }, 3);
+                                                                             ValueRange{
+                                                                                 tensorload_sizes_vec[0],  // A1pos (each dimension consists of pos and crd arrays)
+                                                                                 tensorload_sizes_vec[1],  // A1crd
+                                                                                 tensorload_sizes_vec[2],  // A1tile_pos
+                                                                                 tensorload_sizes_vec[3],  // A1tile_crd
+                                                                                 tensorload_sizes_vec[4],  // A2pos
+                                                                                 tensorload_sizes_vec[5],  // A2crd
+                                                                                 tensorload_sizes_vec[6],  // A2tile_pos
+                                                                                 tensorload_sizes_vec[7],  // A2tile_crd
+                                                                                 tensorload_sizes_vec[8],  // A3pos
+                                                                                 tensorload_sizes_vec[9],  // A3crd
+                                                                                 tensorload_sizes_vec[10], // A3tile_pos
+                                                                                 tensorload_sizes_vec[11], // A3tile_crd
+                                                                                 tensorload_sizes_vec[12], // Aval
+                                                                                 array_sizes_vec[0],       // A1pos_size (size of each pos and crd arrays)
+                                                                                 array_sizes_vec[1],       // A1crd_size
+                                                                                 array_sizes_vec[2],       // A1tile_pos_size
+                                                                                 array_sizes_vec[3],       // A1tile_crd_size
+                                                                                 array_sizes_vec[4],       // A2pos_size
+                                                                                 array_sizes_vec[5],       // A2crd_size
+                                                                                 array_sizes_vec[6],       // A2tile_pos_size
+                                                                                 array_sizes_vec[7],       // A2tile_crd_size
+                                                                                 array_sizes_vec[8],       // A3pos_size
+                                                                                 array_sizes_vec[9],       // A3crd_size
+                                                                                 array_sizes_vec[10],      // A3tile_pos_size
+                                                                                 array_sizes_vec[11],      // A3tile_crd_size
+                                                                                 array_sizes_vec[12],      // Aval_size (size of value array)
+                                                                                 dimSizes[0],              // dim1_size (size of each dimension in sparse tensor)
+                                                                                 dimSizes[1],              // dim2_size (size of each dimension in sparse tensor)
+                                                                                 dimSizes[2]               // dim3_size
+                                                                             },
+                                                                             3);
         }
         else
         {
@@ -1490,10 +1495,10 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
           }
           auto read_input_sizes_3D_Call = rewriter.create<func::CallOp>(loc, read_input_sizes_str, SmallVector<Type, 2>{},
                                                                         ValueRange{sparseFileID,
-                                                                                  dim_format[0], dim_format[1],   // A1, A1_tile
-                                                                                  dim_format[2], dim_format[3],   // A2, A2_tile
-                                                                                  dim_format[4], dim_format[5],   // A3, A3_tile
-                                                                                  alloc_sizes_cast, readModeConst});
+                                                                                   dim_format[0], dim_format[1], // A1, A1_tile
+                                                                                   dim_format[2], dim_format[3], // A2, A2_tile
+                                                                                   dim_format[4], dim_format[5], // A3, A3_tile
+                                                                                   alloc_sizes_cast, readModeConst});
           read_input_sizes_3D_Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
           comet_debug() << "\n";
         }
@@ -1553,17 +1558,17 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
             read_input_str = "read_input_2D_f64";
           }
           auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
-                                                                   ValueRange{sparseFileID,
+                                                                  ValueRange{sparseFileID,
                                                                              dim_format[0], dim_format[1], // A1_format, A1_tile_format
                                                                              dim_format[2], dim_format[3], // A2_format, A2_tile_format
-                                                                             alloc_sizes_cast_vec[0],   // A1_pos
-                                                                             alloc_sizes_cast_vec[1],   // A1_crd
-                                                                             alloc_sizes_cast_vec[2],   // A1_tile_pos
-                                                                             alloc_sizes_cast_vec[3],   // A1_tile_crd
-                                                                             alloc_sizes_cast_vec[4],   // A2_pos
-                                                                             alloc_sizes_cast_vec[5],   // A2_crd
-                                                                             alloc_sizes_cast_vec[6],   // A2_tile_pos
-                                                                             alloc_sizes_cast_vec[7],   // A2_tile_crd
+                                                                             alloc_sizes_cast_vec[0],      // A1_pos
+                                                                             alloc_sizes_cast_vec[1],      // A1_crd
+                                                                             alloc_sizes_cast_vec[2],      // A1_tile_pos
+                                                                             alloc_sizes_cast_vec[3],      // A1_tile_crd
+                                                                             alloc_sizes_cast_vec[4],      // A2_pos
+                                                                             alloc_sizes_cast_vec[5],      // A2_crd
+                                                                             alloc_sizes_cast_vec[6],      // A2_tile_pos
+                                                                             alloc_sizes_cast_vec[7],      // A2_tile_crd
                                                                              alloc_sizes_cast_vec[8], readModeConst});
           read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
         }
@@ -1580,15 +1585,15 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
           }
           auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
                                                                   ValueRange{sparseFileID,
-                                                                             dim_format[0], dim_format[1],    // A1, A1_tile
-                                                                             dim_format[2], dim_format[3],    // A2, A2_tile
-                                                                             dim_format[4], dim_format[5],    // A3, A3_tile
-                                                                             alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1],    // A1
-                                                                             alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3],    // A1_tile
-                                                                             alloc_sizes_cast_vec[4], alloc_sizes_cast_vec[5],    // A2
-                                                                             alloc_sizes_cast_vec[6], alloc_sizes_cast_vec[7],    // A2_tile
-                                                                             alloc_sizes_cast_vec[8], alloc_sizes_cast_vec[9],    // A3
-                                                                             alloc_sizes_cast_vec[10], alloc_sizes_cast_vec[11],  // A3_tile
+                                                                             dim_format[0], dim_format[1],                       // A1, A1_tile
+                                                                             dim_format[2], dim_format[3],                       // A2, A2_tile
+                                                                             dim_format[4], dim_format[5],                       // A3, A3_tile
+                                                                             alloc_sizes_cast_vec[0], alloc_sizes_cast_vec[1],   // A1
+                                                                             alloc_sizes_cast_vec[2], alloc_sizes_cast_vec[3],   // A1_tile
+                                                                             alloc_sizes_cast_vec[4], alloc_sizes_cast_vec[5],   // A2
+                                                                             alloc_sizes_cast_vec[6], alloc_sizes_cast_vec[7],   // A2_tile
+                                                                             alloc_sizes_cast_vec[8], alloc_sizes_cast_vec[9],   // A3
+                                                                             alloc_sizes_cast_vec[10], alloc_sizes_cast_vec[11], // A3_tile
                                                                              alloc_sizes_cast_vec[12], readModeConst});
           read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
         }
@@ -1625,42 +1630,24 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
         Value sptensor;
         if (rank_size == 2)
         {
-          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{
-                                                                                alloc_tensor_vec[0], alloc_tensor_vec[1], // A1
-                                                                                alloc_tensor_vec[2], alloc_tensor_vec[3], // A1_tile
-                                                                                alloc_tensor_vec[4], alloc_tensor_vec[5], // A2
-                                                                                alloc_tensor_vec[6], alloc_tensor_vec[7], // A2_tile
-                                                                                alloc_tensor_vec[8],
-                                                                                array_sizes[0], array_sizes[1],
-                                                                                array_sizes[2], array_sizes[3],
-                                                                                array_sizes[4], array_sizes[5],
-                                                                                array_sizes[6], array_sizes[7],
-                                                                                array_sizes[8], array_sizes[9],
-                                                                                array_sizes[10]
-                                                                                }, 2);
-          }
+          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{alloc_tensor_vec[0], alloc_tensor_vec[1], // A1
+                                                                                                 alloc_tensor_vec[2], alloc_tensor_vec[3], // A1_tile
+                                                                                                 alloc_tensor_vec[4], alloc_tensor_vec[5], // A2
+                                                                                                 alloc_tensor_vec[6], alloc_tensor_vec[7], // A2_tile
+                                                                                                 alloc_tensor_vec[8], array_sizes[0], array_sizes[1], array_sizes[2], array_sizes[3], array_sizes[4], array_sizes[5], array_sizes[6], array_sizes[7], array_sizes[8], array_sizes[9], array_sizes[10]},
+                                                                             2);
+        }
         else if (rank_size == 3)
         {
-          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{
-                                                                          alloc_tensor_vec[0], alloc_tensor_vec[1],     // A1
-                                                                          alloc_tensor_vec[2], alloc_tensor_vec[3],     // A1_tile
-                                                                          alloc_tensor_vec[4], alloc_tensor_vec[5],     // A2
-                                                                          alloc_tensor_vec[6], alloc_tensor_vec[7],     // A2_tile
-                                                                          alloc_tensor_vec[8], alloc_tensor_vec[9],     // A3
-                                                                          alloc_tensor_vec[10], alloc_tensor_vec[11],   // A3_tile
-                                                                          alloc_tensor_vec[12],
-                                                                          array_sizes[0], array_sizes[1],
-                                                                          array_sizes[2], array_sizes[3],
-                                                                          array_sizes[4], array_sizes[5],
-                                                                          array_sizes[6], array_sizes[7],
-                                                                          array_sizes[8], array_sizes[9],
-                                                                          array_sizes[10], array_sizes[11],
-                                                                          array_sizes[12], array_sizes[13],
-                                                                          array_sizes[14], array_sizes[15],
-                                                                          array_sizes[16], array_sizes[17],
-                                                                          array_sizes[18]
-                                                                          }, 3);
-          }
+          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{alloc_tensor_vec[0], alloc_tensor_vec[1],   // A1
+                                                                                                 alloc_tensor_vec[2], alloc_tensor_vec[3],   // A1_tile
+                                                                                                 alloc_tensor_vec[4], alloc_tensor_vec[5],   // A2
+                                                                                                 alloc_tensor_vec[6], alloc_tensor_vec[7],   // A2_tile
+                                                                                                 alloc_tensor_vec[8], alloc_tensor_vec[9],   // A3
+                                                                                                 alloc_tensor_vec[10], alloc_tensor_vec[11], // A3_tile
+                                                                                                 alloc_tensor_vec[12], array_sizes[0], array_sizes[1], array_sizes[2], array_sizes[3], array_sizes[4], array_sizes[5], array_sizes[6], array_sizes[7], array_sizes[8], array_sizes[9], array_sizes[10], array_sizes[11], array_sizes[12], array_sizes[13], array_sizes[14], array_sizes[15], array_sizes[16], array_sizes[17], array_sizes[18]},
+                                                                             3);
+        }
         else
         {
           llvm::errs() << __LINE__ << " more than 3D, not supported\n";
@@ -1793,7 +1780,7 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
       MLIRContext *context = &getContext();
       RewritePatternSet patterns(context);
 
-      mlir::comet::populateDenseTensorDeclLoweringPatterns(patterns);
+      patterns.insert<DenseTensorDeclOpLowering>(patterns.getContext());
 
       func::FuncOp function = getOperation();
       ConversionTarget target(getContext());
@@ -1816,7 +1803,7 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::SparseTensorConstructOp>();
 
-      //function.dump();
+      // function.dump();
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
       {
         llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
@@ -1860,8 +1847,7 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
                         tensorAlgebra::DenseTensorDeclOp,
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::IndexLabelDynamicOp,
-                        func::CallOp
-                        >();
+                        func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
       {
@@ -1869,6 +1855,53 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
         signalPassFailure();
       }
       comet_debug() << "---------------SparseTensorDeclLoweringPass end\n";
+    }
+  };
+
+  class SparseTempOutputTensorDeclLoweringPass
+      : public PassWrapper<SparseTempOutputTensorDeclLoweringPass, OperationPass<func::FuncOp>>
+  {
+  public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(SparseTensorDeclLoweringPass)
+    void runOnOperation() override
+    {
+      MLIRContext *context = &getContext();
+      RewritePatternSet patterns(context);
+      patterns.add<TempSparseOutputTensorDeclOpLowering>(patterns.getContext());
+
+      func::FuncOp function = getOperation();
+      ConversionTarget target(getContext());
+      target.markUnknownOpDynamicallyLegal([](Operation *)
+                                           { return true; });
+
+      target.addLegalDialect<LinalgDialect,
+                             ArithDialect,
+                             scf::SCFDialect,
+                             mlir::memref::MemRefDialect,
+                             IndexTreeDialect,
+                             bufferization::BufferizationDialect>();
+
+      target.addIllegalDialect<TADialect>();
+      target.addLegalOp<tensorAlgebra::PrintOp,
+                        tensorAlgebra::GetTimeOp,
+                        tensorAlgebra::PrintElapsedTimeOp,
+                        tensorAlgebra::ReduceOp,
+                        tensorAlgebra::TransposeOp,
+                        tensorAlgebra::TensorFillOp,
+                        tensorAlgebra::SparseTensorConstructOp,
+                        tensorAlgebra::TensorSetOp,
+                        tensorAlgebra::DenseTensorDeclOp,
+                        tensorAlgebra::SparseOutputTensorDeclOp,
+                        tensorAlgebra::IndexLabelStaticOp,
+                        tensorAlgebra::IndexLabelDynamicOp,
+                        func::CallOp>();
+
+      if (failed(applyPartialConversion(function, target, std::move(patterns))))
+      {
+        llvm::errs() << "Failed to Lower SparseOutputTensorDeclLoweringPass\n";
+        signalPassFailure();
+      }
+      comet_debug() << "---------------SparseOutputTensorDeclLoweringPass end\n";
     }
   };
 
@@ -1882,10 +1915,13 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
       MLIRContext *context = &getContext();
       RewritePatternSet patterns(context);
 
-      mlir::comet::populateSparseOutputTensorDeclLoweringPatterns(patterns);
+      patterns.add<SparseOutputTensorDeclOpLowering>(patterns.getContext());
 
       func::FuncOp function = getOperation();
       ConversionTarget target(getContext());
+
+      target.markUnknownOpDynamicallyLegal([](Operation *)
+                                           { return true; });
 
       target.addLegalDialect<LinalgDialect,
                              ArithDialect,
@@ -1894,6 +1930,7 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
                              IndexTreeDialect,
                              bufferization::BufferizationDialect>();
 
+      target.addIllegalDialect<TADialect>();
       target.addLegalOp<tensorAlgebra::PrintOp,
                         tensorAlgebra::GetTimeOp,
                         tensorAlgebra::PrintElapsedTimeOp,
@@ -1920,22 +1957,7 @@ auto readInput3DF32Func = FunctionType::get(ctx, {i32Type,
 //===----------------------------------------------------------------------===//
 /// Early Lowering Passes end
 //===----------------------------------------------------------------------===//
-
-void mlir::comet::populateDenseTensorDeclLoweringPatterns(RewritePatternSet &patterns)
-{
-  patterns.insert<DenseTensorDeclOpLowering>(patterns.getContext());
-}
-
-void mlir::comet::populateSparseOutputTensorDeclLoweringPatterns(RewritePatternSet &patterns)
-{
-  patterns.add<TempSparseOutputTensorDeclOpLowering>(patterns.getContext(),
-                                                  /*benefit=*/200);
-  patterns.add<SparseOutputTensorDeclOpLowering>(patterns.getContext(),
-                                                  /*benefit=*/100);
-  // patterns.insert<SparseOutputTensorDeclOpLowering,
-  //                 TempSparseOutputTensorDeclOpLowering>(patterns.getContext());
-}
-
+//TODO(gkestor): could it be possible to merge some of the tensor declaration lowerings?
 std::unique_ptr<Pass> mlir::comet::createDenseTensorDeclLoweringPass()
 {
   return std::make_unique<DenseTensorDeclLoweringPass>();
@@ -1944,6 +1966,11 @@ std::unique_ptr<Pass> mlir::comet::createDenseTensorDeclLoweringPass()
 std::unique_ptr<Pass> mlir::comet::createSparseTensorDeclLoweringPass()
 {
   return std::make_unique<SparseTensorDeclLoweringPass>();
+}
+
+std::unique_ptr<Pass> mlir::comet::createSparseTempOutputTensorDeclLoweringPass()
+{
+  return std::make_unique<SparseTempOutputTensorDeclLoweringPass>();
 }
 
 std::unique_ptr<Pass> mlir::comet::createSparseOutputTensorDeclLoweringPass()

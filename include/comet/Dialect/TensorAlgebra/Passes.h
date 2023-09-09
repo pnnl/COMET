@@ -49,6 +49,9 @@ namespace mlir
         /// Create a pass to lower sparse output tensor declarations
         std::unique_ptr<Pass> createSparseOutputTensorDeclLoweringPass();
 
+        /// Create a pass to lower temporary sparse output tensor declarations - temporary sparse output is introduced in compound expressions
+        std::unique_ptr<Pass> createSparseTempOutputTensorDeclLoweringPass();
+
         ////////////////////////////////////
         ////////////////////////////////////
         ////////////////////////////////////

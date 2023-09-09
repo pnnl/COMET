@@ -66,6 +66,17 @@ def TensorAlgebraSparseTensorDeclLowering : Pass<"lower-sparse-tensor-decl"> {
   ];
 }
 
+def TensorAlgebraSparseTempOutputTensorDeclLowering : Pass<"lower-sparse-temp-output-tensor-decl"> {
+  let summary = "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createSparseTempOutputTensorDeclLoweringPass()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect"
+  ];
+}
+
 def TensorAlgebraSparseOutputTensorDeclLowering : Pass<"lower-sparse-output-tensor-decl"> {
   let summary = "";
   let description = [{
