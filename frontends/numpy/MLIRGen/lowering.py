@@ -63,8 +63,8 @@ files_to_cleanup = []
 def cleanup():
     for f in files_to_cleanup:
         if os.path.exists(f):
-            # os.remove(f) 
-            pass
+            os.remove(f) 
+            # pass
 
 atexit.register(cleanup)
 if("macOS" in platform.platform()):
@@ -660,16 +660,18 @@ def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_nam
     
     # elif(isinstance(compile_with_flags,str)):
     #     mlir_lower_flags += compile_with_flags + " "
-
-    if "--convert-tc-to-ttgt" not in compile_with_flags:
-        mlir_lower_flags += "  --convert-ta-to-it "
-    if "--opt-fusion"  in compile_with_flags:
-        mlir_lower_flags += "--opt-fusion"
-        compile_with_flags = compile_with_flags.replace("--opt-fusion","")
-        compile_with_flags = compile_with_flags.replace("--opt-comp-workspace","")
-    if "-opt-matmul-tiling" not in compile_with_flags:
-        mlir_lower_flags += "   --convert-to-loops "
-    mlir_lower_flags =" "+compile_with_flags + mlir_lower_flags
+    if compile_with_flags != None:
+        if "--convert-tc-to-ttgt" not in compile_with_flags:
+            mlir_lower_flags += "  --convert-ta-to-it "
+        if "--opt-fusion"  in compile_with_flags:
+            mlir_lower_flags += "--opt-fusion"
+            compile_with_flags = compile_with_flags.replace("--opt-fusion","")
+            compile_with_flags = compile_with_flags.replace("--opt-comp-workspace","")
+        if "-opt-matmul-tiling" not in compile_with_flags:
+            mlir_lower_flags += "   --convert-to-loops "
+        mlir_lower_flags =" "+compile_with_flags + mlir_lower_flags
+    else:
+        mlir_lower_flags = "  --convert-ta-to-it --convert-to-loops "
     # scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
     scf_lower_flags =  " --convert-to-llvm "
 
