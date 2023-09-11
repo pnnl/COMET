@@ -518,7 +518,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
     start = time.time()
     func(*(args))
     end = time.time()
-    print("Kernel execution time JIT: {}".format(end-start))
+    # print("Kernel execution time JIT: {}".format(end-start))
 
     out = None
     ret_outputs = []

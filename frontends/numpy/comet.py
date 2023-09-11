@@ -1,3 +1,34 @@
+#
+# Copyright 2022 Battelle Memorial Institute
+# 
+# Redistribution and use in source and binary forms, with or without modification, 
+# are permitted provided that the following conditions are met:
+# 
+# 1. Redistributions of source code must retain the above copyright notice, this list of conditions 
+# and the following disclaimer.
+# 
+# 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions 
+# and the following disclaimer in the documentation and/or other materials provided with the distribution.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED 
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR 
+# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, 
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE 
+# GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+# 
+# 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions 
+# and the following disclaimer in the documentation and/or other materials provided with the distribution.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED 
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR 
+# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, 
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE 
+# GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# 
+
 from _ast import Assign, Attribute, BinOp, Call, Constant, Expr
 import ast
 import inspect
@@ -127,27 +158,11 @@ class NewVisitor(ast.NodeVisitor):
             self.tsymbols[arg.arg] = self.tcurr
             labels = []
             format = get_format(self.inputs[i])
-            # for d in self.inputs[i].shape:
-            #     if format == DENSE:
-            #         if d not in self.valsToILabels:
-            #             self.valsToILabels[d] = self.icurr
-            #             self.iLabelsToVals[self.icurr] = (d, format)
-            #             self.uniqueLabels.append((d,format))
-            #             labels.append(self.icurr)
-            #             self.icurr += 1
-            #         else:
-            #             labels.append(self.valsToILabels[d])
-            #     else:
-            #         labels.append(self.icurr)
-            #         self.iLabelsToVals[self.icurr] = (d, format)
-            #         self.icurr += 1
             self.declarations.append(('d', 'T', 'i', i, self.tcurr))
             self.tsemantics[self.tcurr] = {
                 'shape': list(self.inputs[i].shape),
-                # 'labels': labels,
                 'format': format
                 }
-            # if format == DENSE:
             self.in_args.append(self.tcurr)
             self.tcurr += 1
         
@@ -161,7 +176,6 @@ class NewVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: Call) -> Any:
         obj = None
-        # if isinstance(node.func, ast.Attribute): # If it's a method call, we need to parse first the object the owning object
         obj = NewVisitor.visit(self,node.func)
         if obj != None:
             return self.visit_Method_Call(node, obj) 
@@ -221,7 +235,6 @@ class NewVisitor(ast.NodeVisitor):
             self.declarations.append(('d', 'T', 'l', self.tcurr))
         elif isinstance(node.op, ast.Sub):
             self.ops.append(("-", operands, indices+','+indices+'->'+indices, self.tcurr))
-            # format = self.sp_elw_add_sub_conversions[operands[0]][operands[1]]
             self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'labels': op_semantics['labels'], 'format': format}
             self.declarations.append(('d', 'T', 'l', self.tcurr))
         elif isinstance(node.op, ast.Mult):
@@ -379,7 +392,6 @@ class NewVisitor(ast.NodeVisitor):
                     for j in range(len(opl1)):
                         if opl0[i] == opl1[j]:
                             found = True
-                            # self.tsemantics[operands[0]]['labels'][i] = self.tsemantics[operands[1]]['labels'][j]
                             if self.tsemantics[operands[0]]['format'] != DENSE:
                                 self.iLabelsToVals[self.tsemantics[operands[1]]['labels'][j]] = (self.tsemantics[operands[0]]['shape'][j], self.tsemantics[operands[0]]['format'])
                             labels.append(self.tsemantics[operands[1]]['labels'][j])
@@ -397,7 +409,6 @@ class NewVisitor(ast.NodeVisitor):
                         for i in range(len(opl0)):
                             if opl0[i] == opl1[j]:
                                 found = True
-                                # self.tsemantics[operands[0]]['labels'][i] = self.tsemantics[operands[1]]['labels'][j]
                                 if self.tsemantics[operands[1]]['format'] != DENSE:
                                     self.iLabelsToVals[self.tsemantics[operands[0]]['labels'][i]] = (self.tsemantics[operands[1]]['shape'][j], self.tsemantics[operands[1]]['format'])
                                 labels.append(self.tsemantics[operands[0]]['labels'][i])
@@ -432,34 +443,6 @@ class NewVisitor(ast.NodeVisitor):
         out_id = self.tcurr
         self.declarations.append(('d', 'T', 'l', self.tcurr))
         labels = []
-        # label_id_map = {}
-        # for i, j in zip(range(len(operands)), range(len(ops))):
-        #     dims = self.tsemantics[operands[i]]
-        #     lbls = ops[j]
-        #     labels = []
-        #     if 'labels' in self.tsemantics[operands[i]]:
-        #         labels = self.tsemantics[operands[i]]['labels']
-            
-        #         for k,key in enumerate(lbls):
-
-        #             if key in label_id_map:
-        #                 if self.iLabelsToVals[label_id_map[key]][1] == DENSE:
-        #                     label_id_map[key] = labels[k]
-        #             else:
-        #                 label_id_map[key] = labels[k]
-        #     else:
-        #         for k,key in enumerate(lbls):
-
-        # for key in label_id_map:
-        #     self.iLabelsToVals[self.icurr] = label_id_map[key]
-        #     self.icurr += 1
-
-        # for i, op in enumerate(operands):
-        #     if 'labels' not in  self.tsemantics[op]:
-        #         labels = []
-        #         for l in ops[i]:
-        #             labels.append(label_id_map[l])
-        #         op['labels'] = labels
 
         if len(operands) == 1:
             if 'labels'  not in self.tsemantics[operands[0]] :
@@ -469,9 +452,6 @@ class NewVisitor(ast.NodeVisitor):
                     self.iLabelsToVals[self.icurr] = (d, self.tsemantics[operands[0]]['format'])
                     self.icurr +=1
                 self.tsemantics[operands[0]]['labels'] = labels
-
-        # if 'labels'  not in self.tsemantics[operands[0]] :
-        #     if 'labels'  not in self.tsemantics[operands[1]] :
 
 
         temp = []
@@ -534,7 +514,6 @@ def compile(flags, with_jit=True):
             irb = builders.MLIRFunctionBuilder(
                 func_def.name,
                 input_types=in_types,
-                # input_types= [("%t"+str(arg), "tensor<{}xf64>".format("x".join(str(v.iLabelsToVals[s][0]) if v.iLabelsToVals[s][1] == DENSE else '?' for s in v.tsemantics[arg]['labels']))) for arg in v.in_args],
                 return_types=[],
             ) 
 
@@ -547,9 +526,7 @@ def compile(flags, with_jit=True):
             v.uniqueLabels = set(v.uniqueLabels)
             c0 = "%c0 = arith.constant 0 : index"
             c1 = "%c1 = arith.constant 1 : index"
-            # print(c0, file=f)
             irb.add_statement(c0)
-            # print(c1, file=f)
             irb.add_statement(c1)
             valMap = {}
             for i in v.iLabelsToVals:
@@ -557,64 +534,41 @@ def compile(flags, with_jit=True):
                 if t == DENSE:
                     if val not in valMap:
                         irb.add_statement('%c{} = arith.constant {} : index'.format(val, val))
-                        # print('%c{} = arith.constant {} : index'.format(val, val), file=f)
                         valMap[val] = "in"
-
-                    # print('%i{} = "ta.static_index_label"(%c0, %c{}, %c1) : (index,index,index) -> !ta.range'.format(i, val), file = f)
                     irb.add_statement('%i{} = "ta.static_index_label"(%c0, %c{}, %c1) : (index,index,index) -> !ta.range'.format(i, val))
                 else:
-                    # print('%i{} = "ta.dynamic_index_label"(%c0, %c1) : (index,index) -> !ta.range'.format(i), file=f)
                     irb.add_statement('%i{} = "ta.dynamic_index_label"(%c0, %c1) : (index,index) -> !ta.range'.format(i))
 
 
             label_map = v.iLabelsToVals
             dense_tensors = []
             sp_tensors = []
-            # print(len(v.declarations))
             for dec in v.declarations:
                 
-                # print(dec, v.tsemantics[dec[-1]])
                 if dec[1] == 'T':
                     t = builders.Tensor_Decl_Builder(dec[-1], v.tsemantics[dec[-1]]['labels'], v.tsemantics[dec[-1]]['labels'], v.tsemantics[dec[-1]]['format'], 'f64', label_map, dec[2] == 'i')
-                    # print(dec, v.tsemantics[dec[-1]], t.build_tensor())
                     if v.tsemantics[dec[-1]]['format'] == DENSE:
                         dense_tensors.append(t)
                     else:
-                        # print(t.build_tensor(), file=f)
                         irb.add_statement(t.build_tensor())
 
             for t in dense_tensors:
-                # print(t.build_tensor(), file= f)
                 irb.add_statement(t.build_tensor())
 
             for op in v.ops:
                 
                 if op[0] == 'c':
-                    # print(op)
-                    # print(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0], label_map ).build_op(), file = f)
                     if op[4] != None:
                         irb.add_statement(builders.ArithOp_Builder(op[3], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[3]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[3]]['labels']], op[0], label_map, op[4], op[5], v.tsemantics[op[4]]['labels']  ).build_op())
                     else:
                         irb.add_statement(builders.ArithOp_Builder(op[3], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[3]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[3]]['labels']], op[0], label_map, op[4], op[5], None  ).build_op())
-                elif op[0] == '+':
-                    # print(op[-1])
-                    irb.add_statement(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0], label_map ).build_op())
-                elif op[0] == '-':
-                    # print(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0] , label_map).build_op(), file = f)
-                    irb.add_statement(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0] , label_map).build_op())
-                elif op[0] == '*':
-                    # print(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0] , label_map).build_op(), file = f)
-                    irb.add_statement(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0] , label_map).build_op())
-                elif op[0] == 't':
-                    # print(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0], label_map ).build_op(), file = f)
-                    irb.add_statement(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0], label_map ).build_op())
                 elif op[0] == 's':
-                    # print(TensorSumBuilder(op[-1], op[1], [v.tsemantics[t]['labels'] for t in op[1]], label_map).build_op(), file=f)
                     irb.add_statement(builders.TensorSumBuilder(op[-1], op[1], [v.tsemantics[t]['labels'] for t in op[1]], label_map).build_op())
                 elif op[0] == 'p':
                     irb.add_statement(builders.PrintBuilder(op[1], [v.tsemantics[t]['labels'] for t in op[1]], "f64", label_map).build_op())
+                else:
+                    irb.add_statement(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0], label_map ).build_op())
             irb.add_statement("return")
-        # print(v.iLabelsToVals)
 
             outputs = []
             ret = v.tsemantics[v.returns[0]]
