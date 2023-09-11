@@ -292,7 +292,7 @@ class NewVisitor(ast.NodeVisitor):
                 # elif len(op1['shape']) == 1 and len(op2['shape']) == 1:
                 #     shape = [1,0]
             self.need_opt_comp_workspace = op1['format'] or op2['format']
-            self.ops.append(("c", operands, indices, self.tcurr))
+            self.ops.append(("c", operands, indices, self.tcurr, None, None))
             format = self.sp_matmult_conversions[op1['format']][op2['format']]
             self.tsemantics[self.tcurr] = {'shape': shape, 'labels': labels, 'format': format}
             self.declarations.append(('d', 'T', 'l', self.tcurr))
@@ -335,10 +335,27 @@ class NewVisitor(ast.NodeVisitor):
 
 
     def visit_Einsum_Call(self, node: Call):
+        mask = None
+        mask_type = "none"
         iLabels = node.args[0].value
         ops, res = iLabels.split('->')
         ops = ops.split(',')
         res = list(res)
+        if len(node.keywords) > 0:
+            for key in node.keywords:
+                if key.arg == 'mask':
+                    mask = NewVisitor.visit(self, key.value)
+                    mask_sems = self.tsemantics[mask]
+                    if 'labels' not in mask_sems:
+                        labels = []
+                        for d in mask_sems['shape']:
+                            self.iLabelsToVals[self.icurr] = (d, mask_sems['format'])
+                            labels.append(self.icurr)
+                            self.icurr += 1
+                        mask_sems['labels'] = labels
+                    mask_type = "pull"
+                elif key.arg == 'mask_type':
+                    mask_type =  key.value.value
         operands = []
         if len(node.args) > 1:
             for arg in node.args[1:]:
@@ -491,7 +508,7 @@ class NewVisitor(ast.NodeVisitor):
                 format = self.sp_matmult_conversions[format][self.tsemantics[op]['format']]
                 if format != DENSE:
                     self.need_opt_comp_workspace = True
-            self.ops.append(("c", operands, iLabels, self.tcurr))
+            self.ops.append(("c", operands, iLabels, self.tcurr, mask, mask_type))
         self.tsemantics[self.tcurr] = {'shape': shape, 'labels': labels, 'format': format}
         self.tcurr += 1
 
@@ -573,9 +590,12 @@ def compile(flags, with_jit=True):
             for op in v.ops:
                 
                 if op[0] == 'c':
-                    # print(op[-1])
+                    # print(op)
                     # print(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0], label_map ).build_op(), file = f)
-                    irb.add_statement(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0], label_map ).build_op())
+                    if op[4] != None:
+                        irb.add_statement(builders.ArithOp_Builder(op[3], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[3]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[3]]['labels']], op[0], label_map, op[4], op[5], v.tsemantics[op[4]]['labels']  ).build_op())
+                    else:
+                        irb.add_statement(builders.ArithOp_Builder(op[3], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[3]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[3]]['labels']], op[0], label_map, op[4], op[5], None  ).build_op())
                 elif op[0] == '+':
                     # print(op[-1])
                     irb.add_statement(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0], label_map ).build_op())

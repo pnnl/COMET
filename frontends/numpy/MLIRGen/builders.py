@@ -220,13 +220,13 @@ class ArithOp_Builder:
 
     tc_decl_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        + '%temp_{{dest}} = "ta.mul"{{operators}}'
-        + '{MaskType = "none", ' #[TODO] MaskType should not be static
+        + '%temp_{{dest}} = "ta.mul"({{operators}})'
+        + '{MaskType = "{{mask_type}}", ' 
         + '__alpha__ = 1.000000e+00 : f64, '  
         +"__beta__ = 0.000000e+00 : f64,"
         + 'formats = [{{formats}}],'
         +'indexing_maps = {{indexing_maps}}, '
-        +'operand_segment_sizes = array<i32:1, 1, {{lhs_dims}}, 0>, ' #[TODO] operand_segment_sizes should not be static
+        +'operand_segment_sizes = array<i32:1, 1, {{lhs_dims}}, {{num_masks}}>, ' #[TODO] operand_segment_sizes should not be static
         +'semiring = "plusxy_times"} : ' 
         +"({{inputtype}})"
         +"-> {{outputtype}}"
@@ -238,7 +238,7 @@ class ArithOp_Builder:
 
     tensor_add_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        +'%temp_{{dest}} = "ta.add"{{operators}}'
+        +'%temp_{{dest}} = "ta.add"({{operators}})'
         +' {'
         +' Masktype = "none",'
         +' formats = [{{formats}}],'
@@ -254,7 +254,7 @@ class ArithOp_Builder:
 
     tensor_sub_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        +'%temp_{{dest}} = "ta.subtract"{{operators}}'
+        +'%temp_{{dest}} = "ta.subtract"({{operators}})'
         +' {'
         +' Masktype = "none",'
         +' formats = [{{formats}}],'
@@ -270,7 +270,7 @@ class ArithOp_Builder:
 
     elewisemult_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        +'%temp_{{dest}} = "ta.elews_mul"{{operators}}'
+        +'%temp_{{dest}} = "ta.elews_mul"({{operators}})'
         +' {__alpha__ = 1.000000e+00 : f64, '
         +"__beta__ = 0.000000e+00: f64,"
         + 'formats = [{{formats}}],'
@@ -284,7 +284,7 @@ class ArithOp_Builder:
 
     tranpose_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        + '%temp_{{dest}} = "ta.transpose"{{operators}}'
+        + '%temp_{{dest}} = "ta.transpose"({{operators}})'
         + '{__alpha__ = 1.000000e+00 : f64, '
         +"__beta__ = 0.000000e+00 : f64,"
         + 'formats = [{{formats}}],'
@@ -296,12 +296,12 @@ class ArithOp_Builder:
         undefined=jinja2.StrictUndefined,
     )
 
-    def __init__(self, dest, input_tensors:list, tc_indices, formats: list, tensors_shapes, opr_type, label_map):
+    def __init__(self, dest, input_tensors:list, tc_indices, formats: list, tensors_shapes, opr_type, label_map, mask=None, mask_type="none", mask_lbls = None):
                 #   dimslbls_to_map:list, input_array_dims_lbls:list, 
                 #             target_dims_lbls:list,tensor_types:list,tc_indices:list,opr_type:str,op:str, formats:list) -> None:
         
         self.dest = dest
-        self.operators = "({})".format(",".join("%t"+str(v) for v in input_tensors)+","+",".join("%i"+str(v) for v in tensors_shapes[-1]))
+        self.operators = "{}".format(",".join("%t"+str(v) for v in input_tensors)+","+",".join("%i"+str(v) for v in tensors_shapes[-1]))
         self.tc_indices = tc_indices
         # self.dimslbls_to_map = dimslbls_to_map
         # self.input_array_dims_lbls = input_array_dims_lbls
@@ -313,6 +313,13 @@ class ArithOp_Builder:
         self.opr_type = opr_type
         # self.op = op
         self.formats = formats
+        self.mask = mask
+        self.mask_type = mask_type
+        if mask_lbls != None:
+            self.mask_shape = [ label_map[lbl][0] if label_map[lbl][1] == DENSE else '?' for lbl in mask_lbls ]
+            self.operators+=",%t"+str(self.mask)
+        else:
+            self.mask_shape = None
 
 
     def build_op(self):
@@ -323,6 +330,8 @@ class ArithOp_Builder:
         for v in self.tensors_shapes[-1]:
             input_type.append("!ta.range")
         input_type = ",".join(input_type) 
+        if self.mask_shape != None:
+            input_type += ",tensor<{}xf64>".format("x".join(str(v) for v in self.mask_shape))
         # beta_val = ArithOp_Builder.get_beta_val(self.op)
         
         ops = self.tc_indices.split(',')
@@ -366,7 +375,8 @@ class ArithOp_Builder:
         indexing_maps = str(indexing_maps).replace("'","")
 
         
-        if self.opr_type == 'c':
+        # Tensor contraction
+        if self.opr_type == 'c': 
 
             return self.tc_decl_wrapper_text.render(
                     dest = self.dest,
@@ -376,7 +386,10 @@ class ArithOp_Builder:
                     outputtype = output_type,
                     # beta =  self.beta_val,
                     formats = '"{}", "{}", "{}"'.format(*[self.formats_str[x] for x in self.formats]),
-                    lhs_dims = len(self.tensors_shapes[-1])
+                    lhs_dims = len(self.tensors_shapes[-1]),
+                    mask=self.mask,
+                    mask_type = self.mask_type,
+                    num_masks = 0 if self.mask == None else 1,
                 )
         # Add
         elif(self.opr_type == '+'):
