@@ -63,8 +63,8 @@ files_to_cleanup = []
 def cleanup():
     for f in files_to_cleanup:
         if os.path.exists(f):
-            os.remove(f) 
-            # pass
+            # os.remove(f) 
+            pass
 
 atexit.register(cleanup)
 if("macOS" in platform.platform()):
@@ -299,7 +299,6 @@ def comment_unneeded_sparse(input_, arg_vals):
 def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
 
     path_to_comet = "../build/bin/comet-opt"
-
     command = path_to_comet + mlir_lower_flags + mlir_in
     p = subprocess.run(shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,close_fds=False)
     if p.returncode != 0:
@@ -332,6 +331,7 @@ def lower_scf_to_llvm(scf_in, scf_lower_flags, uuid_s):
     path_to_cometopt = "../build/bin/comet-opt"
 
     command = path_to_cometopt + scf_lower_flags + scf_in
+    # command = path_to_cometopt + scf_lower_flags + ' 38ee2ea1-6e20-439f-b7c0-73d7fa6b7da5loops.mlir'
 
     p = subprocess.run(shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=False,close_fds=False)
     if(p.returncode != 0):
@@ -413,11 +413,11 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                 all_outputs.append((A1pos, A1crd, A1tile_pos, A1tile_crd, A2pos, A2crd, A2tile_pos, A2tile_crd, Aval))
             else:
                 # [TODO] The arrays used as inputs for the comet generated code need to be updated to take into account the extra tile component
-                # CSR
                 A1tile_pos = np.array([-1], dtype=np.int64)
                 A1tile_crd = np.array([-1], dtype=np.int64)
                 A2tile_pos = np.array([-1], dtype=np.int64)
                 A2tile_crd = np.array([-1], dtype=np.int64)
+                # CSR
                 if scp.sparse.isspmatrix_csr(ndarray):
                     A1pos = np.array([ndarray.get_shape()[0]], dtype=np.int64)
                     A1crd = np.array([-1], dtype=np.int64)
@@ -515,10 +515,10 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
 
     # Uncomment to measure execution time without the compilation process
     
-    # start = time.time()
+    start = time.time()
     func(*(args))
-    # end = time.time()
-    # print("Kernel execution time JIT: {}".format(end-start))
+    end = time.time()
+    print("Kernel execution time JIT: {}".format(end-start))
 
     out = None
     ret_outputs = []
@@ -603,14 +603,16 @@ def translate_and_exec_llvm(llvm_in,func_name, out_dims, uuid_s):
 def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
 
     #lower TA dialect to the SCF dialect
-    mlir_lower_flags = " --convert-ta-to-it --convert-to-loops "
+    mlir_lower_flags = ""
 
     if isinstance(compile_with_flags,tuple):
         for i in range(len(compile_with_flags)):
             mlir_lower_flags += compile_with_flags[i] + " "
     
     elif(isinstance(compile_with_flags,str)):
-        mlir_lower_flags += compile_with_flags + " "
+        mlir_lower_flags += compile_with_flags 
+    
+    mlir_lower_flags += " --convert-ta-to-it --convert-to-loops "
 
     # scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
     scf_lower_flags =  " --convert-to-llvm "
@@ -650,15 +652,24 @@ def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
 
 def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_name, args_vals, outputs):
     #lower TA dialect to the SCF dialect
-    mlir_lower_flags = " --convert-ta-to-it --convert-to-loops "
+    mlir_lower_flags = " "
 
-    if isinstance(compile_with_flags,tuple):
-        for i in range(len(compile_with_flags)):
-            mlir_lower_flags += compile_with_flags[i] + " "
+    # if isinstance(compile_with_flags,tuple):
+    #     for i in range(len(compile_with_flags)):
+    #         mlir_lower_flags += compile_with_flags[i] + " "
     
-    elif(isinstance(compile_with_flags,str)):
-        mlir_lower_flags += compile_with_flags + " "
+    # elif(isinstance(compile_with_flags,str)):
+    #     mlir_lower_flags += compile_with_flags + " "
 
+    if "--convert-tc-to-ttgt" not in compile_with_flags:
+        mlir_lower_flags += "  --convert-ta-to-it "
+    if "--opt-fusion"  in compile_with_flags:
+        mlir_lower_flags += "--opt-fusion"
+        compile_with_flags = compile_with_flags.replace("--opt-fusion","")
+        compile_with_flags = compile_with_flags.replace("--opt-comp-workspace","")
+    if "-opt-matmul-tiling" not in compile_with_flags:
+        mlir_lower_flags += "   --convert-to-loops "
+    mlir_lower_flags =" "+compile_with_flags + mlir_lower_flags
     # scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
     scf_lower_flags =  " --convert-to-llvm "
 
