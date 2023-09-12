@@ -4,12 +4,13 @@ import glob
 import subprocess
 import os
 
-categories = ['ops', 'opts', 'kernels', 'compound_exps']
+categories = ['ops', 'opts', 'kernels', 'compound_exps', 'semiring']
 files = []
 for c in categories:
-
-    os.symlink("../../comet.py","./"+c+"/comet.py")
-    os.symlink("../../MLIRGen","./"+c+"/MLIRGen")
+    if not os.path.exists("./"+c+"/comet.py"):
+        os.symlink("../../comet.py","./"+c+"/comet.py")
+    if not os.path.exists("./"+c+"/MLIRGen"):
+        os.symlink("../../MLIRGen","./"+c+"/MLIRGen")
     files = files + glob.glob("./"+c+"/test_*.py")
 
 
