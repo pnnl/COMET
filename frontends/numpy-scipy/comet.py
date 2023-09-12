@@ -39,7 +39,7 @@ import scipy as sp
 from MLIRGen import lowering
 from MLIRGen import builders
 from MLIRGen.types import *
-
+#import time
 
 
 def get_format(A):
@@ -633,9 +633,11 @@ def compile(flags, with_jit=True):
                     new_flags = new_flags + ' --opt-comp-workspace'
                 else:
                     new_flags = ' --opt-comp-workspace'
-
-            lowering_result = lowering.lower_dialect_with_jit(irb.compile(),None, new_flags,func_def.name, arg_vals, outputs)
-
+            code = irb.compile()
+            # start = time.time()
+            lowering_result = lowering.lower_dialect_with_jit(code,None, new_flags,func_def.name, arg_vals, outputs)
+            # end = time.time()
+            # print("Time for JIT", end-start)
             return lowering_result
             
         return wrapper
