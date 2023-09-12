@@ -6,6 +6,11 @@ import os
 
 categories = ['ops', 'opts', 'kernels', 'compound_exps', 'semiring']
 files = []
+if not os.path.exists("./llvm/"):
+    os.symlink("../../llvm", "../llvm")
+if not os.path.exists("./build/"):
+    os.symlink("../../build", "../build")
+
 for c in categories:
     if not os.path.exists("./"+c+"/comet.py"):
         os.symlink("../../comet.py","./"+c+"/comet.py")
@@ -49,3 +54,6 @@ if(list_failed_tests):
 for c in categories:
     os.unlink("./"+c+"/comet.py")
     os.unlink("./"+c+"/MLIRGen")
+
+os.unlink("../llvm")
+os.unlink("../build")

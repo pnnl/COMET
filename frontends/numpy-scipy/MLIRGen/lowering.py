@@ -305,9 +305,6 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
         cleanup()
         raise AssertionError("comet-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
 
-    scf_out  = p.stderr.decode()
-    scf_out = comment_unneeded_sparse(scf_out, arg_vals)
-    scf_out = comment_unneeded_dense(scf_out, arg_vals)
 
     scf_out_file = uuid_s+'loops.mlir'
 
@@ -317,6 +314,9 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
     else:
         f = open(scf_out_file, 'w')
 
+    scf_out  = p.stderr.decode()
+    scf_out = comment_unneeded_sparse(scf_out, arg_vals)
+    scf_out = comment_unneeded_dense(scf_out, arg_vals)
     f.write(scf_out)
     f.close()
 
@@ -478,7 +478,6 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
 
     p = subprocess.run(shlex.split(translate_mlir_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=False,close_fds=False)
 
-    llvmir_out = p.stdout
     # llvmir_file = 'einsum.ll'
     llvmir_file = uuid_s+'.ll'
     libname = "lib"+llvmir_file+func_name+".so"
@@ -488,10 +487,10 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
     else:
         f = open(llvmir_file, 'wb')
 
+    llvmir_out = p.stdout
     # with open(os.path.join( os.getcwd(),llvmir_file), 'wb') as f:
     f.write(llvmir_out)
     f.close()
-    
     llc_command = "../llvm/build/bin/llc -O3 "+llvmir_file+" -filetype=obj -o " +llvmir_file+".o"
     p = subprocess.run(shlex.split(llc_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=False)
     if(p.returncode != 0):
@@ -508,7 +507,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
     # Load code generated from COMET
     lib = ctypes.cdll.LoadLibrary(libname)
     func = lib.__getattr__(func_name)
-    
+
     # Get the inputs, input types and the output containers
     args, arg_types, all_output = generate_llvm_args_from_ndarrays(len(inputs),*(inputs), *(outputs))
     func.argtypes = arg_types
