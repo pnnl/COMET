@@ -149,8 +149,11 @@ class NewVisitor(ast.NodeVisitor):
         self.sp_elw_add_sub_conversions = self.sp_elw_mult_conversions
 
 
-        self.sp_elw_add_sub_conversions[CSR]["Dense"] = "Dense"
-        self.sp_elw_add_sub_conversions[COO]["Dense"] = "Dense"
+        # self.sp_elw_add_sub_conversions[CSR][DENSE] = DENSE
+        # self.sp_elw_add_sub_conversions[COO][DENSE] = DENSE
+
+        self.sp_elw_add_sub_conversions[CSR][DENSE] = CSR
+        self.sp_elw_add_sub_conversions[COO][DENSE] = COO
 
 
     def visit_FunctionDef(self, node):

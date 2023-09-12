@@ -4,13 +4,13 @@ import scipy as sp
 import comet
 
 def run_numpy(A,B):
-	C = A.multiply( B.transpose())
+	C = A @  B.transpose()
 
 	return C
 
 @comet.compile(flags=None)
 def run_comet_with_jit(A, B):
-	C = A * B.transpose()
+	C = A @ B.transpose()
 
 	return C
 
