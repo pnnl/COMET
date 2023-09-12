@@ -227,7 +227,7 @@ class ArithOp_Builder:
         + 'formats = [{{formats}}],'
         +'indexing_maps = {{indexing_maps}}, '
         +'operand_segment_sizes = array<i32:1, 1, {{lhs_dims}}, {{num_masks}}>, ' #[TODO] operand_segment_sizes should not be static
-        +'semiring = "plusxy_times"} : ' 
+        +'semiring = "{{semiring}}"} : ' 
         +"({{inputtype}})"
         +"-> {{outputtype}}"
         + "\n" 
@@ -274,7 +274,7 @@ class ArithOp_Builder:
         +' {__alpha__ = 1.000000e+00 : f64, '
         +"__beta__ = 0.000000e+00: f64,"
         + 'formats = [{{formats}}],'
-        +'indexing_maps = {{indexing_maps}}, semiring = "noop_times"} : '
+        +'indexing_maps = {{indexing_maps}}, semiring = "{{semiring}}"} : '
         +"({{inputtype}})"
         +"-> {{outputtype}}"
         + "\n" 
@@ -296,7 +296,7 @@ class ArithOp_Builder:
         undefined=jinja2.StrictUndefined,
     )
 
-    def __init__(self, dest, input_tensors:list, tc_indices, formats: list, tensors_shapes, opr_type, label_map, mask=None, mask_type="none", mask_lbls = None):
+    def __init__(self, dest, input_tensors:list, tc_indices, formats: list, tensors_shapes, opr_type, label_map, mask=None, mask_type="none", mask_lbls = None, semiring=None):
                 #   dimslbls_to_map:list, input_array_dims_lbls:list, 
                 #             target_dims_lbls:list,tensor_types:list,tc_indices:list,opr_type:str,op:str, formats:list) -> None:
         
@@ -320,6 +320,7 @@ class ArithOp_Builder:
             self.operators+=",%t"+str(self.mask)
         else:
             self.mask_shape = None
+        self.semiring = semiring
 
 
     def build_op(self):
@@ -377,6 +378,26 @@ class ArithOp_Builder:
         
         # Tensor contraction
         if self.opr_type == 'c': 
+            semiring = "plusxy_times"
+            if self.semiring != None:
+                s1, s2 = self.semiring.split(",")
+                if s1 == "+":
+                    semiring = "plusxy_"
+                elif s1 == "any":
+                    semiring = "any_"
+                elif s1 == "min":
+                    semiring = "minxy_"
+                if s2 == "*":
+                    semiring += "times"
+                elif s2 == "pair":
+                    semiring += "pairxy"
+                elif s2 == "first":
+                    semiring += "first"
+                elif s2 == "+":
+                    semiring += "plusxy"
+                elif s2 == "second":
+                    semiring += "second"
+
 
             return self.tc_decl_wrapper_text.render(
                     dest = self.dest,
@@ -387,6 +408,7 @@ class ArithOp_Builder:
                     # beta =  self.beta_val,
                     formats = '"{}", "{}", "{}"'.format(*[self.formats_str[x] for x in self.formats]),
                     lhs_dims = len(self.tensors_shapes[-1]),
+                    semiring = semiring,
                     mask=self.mask,
                     mask_type = self.mask_type,
                     num_masks = 0 if self.mask == None else 1,
@@ -413,6 +435,16 @@ class ArithOp_Builder:
             )
         # Elementwise mult
         elif(self.opr_type == '*'):
+            semiring = "noop_times"
+            if self.semiring != None:
+                if self.semiring == "min":
+                    semiring = "noop_minxy"
+                elif self.semiring == "-":
+                    semiring = "noop_minus"
+                elif self.semiring == "+":
+                    semiring = "noop_plusxy"
+                elif self.semiring == "*":
+                    semiring = "noop_times"
             return self.elewisemult_wrapper_text.render(
                 dest = self.dest,
                 operators = self.operators,
@@ -420,6 +452,7 @@ class ArithOp_Builder:
                 inputtype = input_type,
                 outputtype = output_type,
                 formats = '"{}", "{}", "{}"'.format(*[self.formats_str[x] for x in self.formats]),
+                semiring = semiring,
                 beta =  self.beta_val
             )
         # Transpose
