@@ -14,7 +14,7 @@ def run_comet_with_jit(A):
 
 	return B
 
-A = sp.sparse.coo_matrix(sp.io.mmread("../../../integration_test/data/test_rank3.tns"))
+A = sp.sparse.coo_array(sp.io.mmread("../../../integration_test/data/test_rank3.tns"))
 expected_result = run_numpy(A)
 result_with_jit = run_comet_with_jit(A)
 if sp.sparse.issparse(expected_result):

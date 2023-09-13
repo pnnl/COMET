@@ -4,7 +4,7 @@ import scipy as sp
 import comet
 
 def run_numpy(L0,L1,L2):
-	C = L0.multiply(L1 @ L2).sum() 
+	C = (L0*(L1 @ L2)).sum() 
 	return C
 
 @comet.compile(flags=None)
@@ -12,7 +12,7 @@ def run_comet_with_jit(L0,L1,L2):
     C = (L0 * (L1 @ L2)).sum()
     return C
 
-A = sp.sparse.csr_matrix(sp.io.mmread("../../../integration_test/data/tc.mtx"))
+A = sp.sparse.csr_array(sp.io.mmread("../../../integration_test/data/tc.mtx"))
 L0 = sp.sparse.tril(A, format='csr')
 L1 = sp.sparse.tril(A, format='csr')
 L2 = sp.sparse.tril(A, format='csr')

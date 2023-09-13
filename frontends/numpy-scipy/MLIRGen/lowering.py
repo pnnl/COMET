@@ -418,7 +418,7 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                 A2tile_pos = np.array([-1], dtype=np.int64)
                 A2tile_crd = np.array([-1], dtype=np.int64)
                 # CSR
-                if scp.sparse.isspmatrix_csr(ndarray):
+                if ndarray.format == 'csr':
                     A1pos = np.array([ndarray.get_shape()[0]], dtype=np.int64)
                     A1crd = np.array([-1], dtype=np.int64)
                     A2pos = ndarray.indptr.astype('int64')
@@ -430,7 +430,7 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                     # With tiles
                     llvm_args += [*np_array_to_memref(np.array([1, 1, 0, 0, ndarray.get_shape()[0] + 1, ndarray.getnnz(), 0, 0, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
                 # COO
-                elif scp.sparse.isspmatrix_coo(ndarray):
+                elif ndarray.format == 'coo':
                     A1pos = np.array([0, ndarray.nnz], dtype=np.int64)
                     A1crd = ndarray.row.astype('int64')
                     A2pos = np.array([-1], dtype=np.int64)
@@ -443,7 +443,7 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                     llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 0, 0, 1, ndarray.getnnz(), 0, 0, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
                 
                 # CSC
-                elif scp.sparse.isspmatrix_csc(ndarray):
+                elif ndarray.format == 'csc':
                     A1pos = ndarray.indptr.astype('int64')
                     A1crd = ndarray.indices.astype('int64')
                     A2pos = np.array([ndarray.get_shape()[1]], dtype=np.int64)
@@ -514,9 +514,9 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
 
     # Uncomment to measure execution time without the compilation process
     
-    start = time.time()
+    # start = time.time()
     func(*(args))
-    end = time.time()
+    # end = time.time()
     # print("Kernel execution time JIT: {}".format(end-start))
 
     out = None
@@ -526,16 +526,16 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
             # A1pos, A1crd, A2pos, A2crd, Aval = v0
             # With tiles
             A1pos, A1crd, A1tile_pos, A1tile_crd, A2pos, A2crd, A2tile_pos, A2tile_crd, Aval = v0
-            if scp.sparse.isspmatrix_csr(v1):
+            if v1.format == 'csr':
                 np_r_indices = np.ctypeslib.as_array(A2pos.mem, [A2pos.dim])
                 np_c_indices = np.ctypeslib.as_array(A2crd.mem, [A2crd.dim])
                 np_values = np.ctypeslib.as_array(Aval.mem, [Aval.dim])
-                ret_outputs.append(scp.sparse.csr_matrix((np_values, np_c_indices, np_r_indices), copy=False))
-            elif scp.sparse.isspmatrix_coo(v1):
+                ret_outputs.append(scp.sparse.csr_array((np_values, np_c_indices, np_r_indices), copy=False))
+            elif v1.format == 'coo':
                 rows = np.ctypeslib.as_array(A1crd.mem, [A1crd.dim])
                 cols = np.ctypeslib.as_array(A2crd.mem, [A2crd.dim])
                 np_values = np.ctypeslib.as_array(Aval.mem, [Aval.dim])
-                ret_outputs.append(scp.sparse.coo_matrix((np_values, (rows, cols)), copy=False))
+                ret_outputs.append(scp.sparse.coo_array((np_values, (rows, cols)), copy=False))
         else:
             if v1.shape == (1,):
                 ret_outputs.append(np.squeeze(v1))
@@ -549,7 +549,8 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
     files_to_cleanup.append(os.path.join( os.getcwd(), libname))
 
     return out, llvmir_file
-
+def func_execute(func, args):
+    func(*(args))
 
 def translate_and_exec_llvm(llvm_in,func_name, out_dims, uuid_s):
 

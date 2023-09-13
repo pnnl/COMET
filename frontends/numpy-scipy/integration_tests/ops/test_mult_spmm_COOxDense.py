@@ -14,9 +14,9 @@ def run_comet_with_jit(A,B):
 
 	return C
 
-A = sp.sparse.coo_matrix(sp.io.mmread("../../../integration_test/data/test_rank2.mtx"))
-B = np.full([A.get_shape()[1], 4], 1.7,  dtype=float)
-C = np.full([A.get_shape()[0], 4], 0.0,  dtype=float)
+A = sp.sparse.coo_array(sp.io.mmread("../../../integration_test/data/test_rank2.mtx"))
+B = np.full([A.shape[1], 4], 1.7,  dtype=float)
+C = np.full([A.shape[0], 4], 0.0,  dtype=float)
 expected_result = run_numpy(A,B)
 result_with_jit = run_comet_with_jit(A,B)
 if sp.sparse.issparse(expected_result):
