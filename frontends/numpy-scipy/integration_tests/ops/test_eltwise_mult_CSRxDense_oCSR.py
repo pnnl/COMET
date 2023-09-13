@@ -4,7 +4,7 @@ import scipy as sp
 import comet
 
 def run_numpy(A,B):
-	C = A .multiply(B) 
+	C = A * B 
 
 	return C
 
@@ -14,8 +14,8 @@ def run_comet_with_jit(A,B):
 
 	return C
 
-A = sp.sparse.csr_matrix(sp.io.mmread("../../../integration_test/data/test_rank2.mtx"))
-B = np.full([A.get_shape()[0], A.get_shape()[1]], 2.7,  dtype=float)
+A = sp.sparse.csr_array(sp.io.mmread("../../../integration_test/data/test_rank2.mtx"))
+B = np.full([A.shape[0], A.shape[1]], 2.7,  dtype=float)
 expected_result = run_numpy(A,B)
 result_with_jit = run_comet_with_jit(A,B)
 if sp.sparse.issparse(expected_result):

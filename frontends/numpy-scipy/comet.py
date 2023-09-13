@@ -41,18 +41,17 @@ from MLIRGen import builders
 from MLIRGen.types import *
 #import time
 
-
 def get_format(A):
     if not sp.sparse.issparse(A):
         return DENSE
-    elif sp.sparse.isspmatrix_csr(A):
+    elif A.format == 'csr':
         return CSR
-    elif sp.sparse.isspmatrix_coo(A):
+    elif A.format == 'coo':
         return COO
-    elif sp.sparse.isspmatrix_csc(A):
+    elif A.format == 'csc':
         return CSC
     else:
-        return UNSUPPORTED_FORMAT
+        raise RuntimeError('Unsupported sparse format')
 
 
 
@@ -620,11 +619,11 @@ def compile(flags, with_jit=True):
             if format == DENSE:
                 outputs.append(np.empty(ret['shape']))
             elif format == CSR:
-                outputs.append(sp.sparse.csr_matrix([]))
+                outputs.append(sp.sparse.csr_array([]))
             elif format == COO:
-                outputs.append(sp.sparse.coo_matrix([]))
+                outputs.append(sp.sparse.coo_array([]))
             elif format == CSC:
-                outputs.append(sp.sparse.csc_matrix([]))
+                outputs.append(sp.sparse.csc_array([]))
 
             arg_vals = v.inputs
             new_flags = flags
@@ -639,6 +638,6 @@ def compile(flags, with_jit=True):
             # end = time.time()
             # print("Time for JIT", end-start)
             return lowering_result
-            
+
         return wrapper
     return innerfunc
