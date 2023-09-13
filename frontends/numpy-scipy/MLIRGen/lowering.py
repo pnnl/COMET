@@ -479,8 +479,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
     p = subprocess.run(shlex.split(translate_mlir_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=False,close_fds=False)
 
     # llvmir_file = 'einsum.ll'
-    llvmir_file = uuid_s+'.ll'
-    libname = "lib"+llvmir_file+func_name+".so"
+    llvmir_file = uuid_s+'.bc'
     if(os.path.exists(llvmir_file) == False):
         f = open(os.path.join( os.getcwd(), llvmir_file), 'wb')
         files_to_cleanup.append(os.path.join( os.getcwd(), llvmir_file))
@@ -491,13 +490,25 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
     # with open(os.path.join( os.getcwd(),llvmir_file), 'wb') as f:
     f.write(llvmir_out)
     f.close()
-    llc_command = "../llvm/build/bin/llc -O3 "+llvmir_file+" -filetype=obj -o " +llvmir_file+".o"
+    llvmir_opt_file = llvmir_file+'.opt'
+
+    llvm_opt_command = "../llvm/build/bin/opt --O3 "+llvmir_file+" -S -o "+llvmir_opt_file
+    p = subprocess.run(shlex.split(llvm_opt_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=False)
+    if(p.returncode != 0):
+        cleanup()
+        raise AssertionError("opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr))
+    files_to_cleanup.append(llvmir_opt_file)
+
+    llc_obj_file = llvmir_opt_file+".o"
+    llc_command = "../llvm/build/bin/llc -O3 "+llvmir_opt_file+" -filetype=obj -o " +llc_obj_file
     p = subprocess.run(shlex.split(llc_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=False)
     if(p.returncode != 0):
         cleanup()
-        raise AssertionError("lcc failed with error code: {}. Error: {}".format(p.returncode, p.stderr))
-    files_to_cleanup.append(llvmir_file+ ".o")
-    gcc_command = "gcc --shared  " +llvmir_file+ ".o -O3 -o "+libname+" -fpic -L ../build/lib/ -Wl,-rpath,../build/lib/ -lcomet_runner_utils"
+        raise AssertionError("llc failed with error code: {}. Error: {}".format(p.returncode, p.stderr))
+    files_to_cleanup.append(llc_obj_file)
+    libname = "./lib"+llc_obj_file+func_name+".so"
+    
+    gcc_command = "gcc --shared  " +llc_obj_file+ " -O3 -o "+libname+" -fpic -L ../build/lib/ -Wl,-rpath,../build/lib/ -lcomet_runner_utils"
 
     p = subprocess.run(shlex.split(gcc_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=False)
     if(p.returncode != 0):
@@ -518,6 +529,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
     func(*(args))
     # end = time.time()
     # print("Kernel execution time JIT: {}".format(end-start))
+
 
     out = None
     ret_outputs = []
