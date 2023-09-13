@@ -8,7 +8,7 @@ def run_numpy(A):
 
 	return B
 
-@comet.compile(flags=None)
+@comet.compile(flags="-opt-dense-transpose")
 def run_comet_with_jit(A):
 	B = comet.einsum('ijkl->ikjl', A)
 

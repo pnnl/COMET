@@ -10,7 +10,7 @@ def run_numpy(A,B):
 
 @comet.compile(flags=None)
 def run_comet_with_jit(A,B):
-	C = B *A.transpose()
+	C = B * A.transpose()
 
 	return C
 
