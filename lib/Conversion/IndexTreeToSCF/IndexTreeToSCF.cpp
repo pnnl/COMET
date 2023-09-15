@@ -259,7 +259,19 @@ struct SymbolicInfo {
         dim2_size,
     )
   */
+
+//  Value ws_bitmap;   /// workspace's bitmap to tell if a column ID is visited.
+//  Value mask_array;  /// the intermediate dense vector for a row of the mask.
 };
+
+/// ----------------- ///
+/// Auxiliary structures for the numeric phase
+/// ----------------- ///
+struct NumericInfo {
+  Value ws_bitmap;   /// workspace's bitmap to tell if a column ID is visited.
+  Value mask_array;  /// the intermediate dense vector for a row of the mask.
+};
+
 
 /// ----------------- ///
 /// Remove an operantion's user who is a memref.store
@@ -460,7 +472,7 @@ void genSymbolicInitMarkArrayByMask(std::vector<OpsTree *> &three_index_ancestor
 ///        %70 = arith.cmpf une, %val, %cst : f64
 ///        scf.if %70 {
 ///          %j_idx = memref.load %mask_col[%arg1] : memref<?xindex>
-///          memref.store %mark, %mark_array[%j_idx] : memref<?xi1>
+///          memref.store %mark, %mark_array[%j_idx] : memref<?xindex>
 ///        }
 ///      }
 void genNumericInitMarkArrayByMask(std::vector<scf::ForOp> &forLoops /* numeric for-loops, from innermost to outermost*/,
@@ -1852,6 +1864,9 @@ void genSymbolicPhase(indexTree::IndexTreeComputeOp &cur_op,
                       new_mark_reg /* output */,
                       num_cols /* output */);
 
+  symbolicInfo.mtxC_num_rows = num_rows;
+  symbolicInfo.mtxC_num_cols = num_cols;
+
   /// Generate the for-loop that initializes mark_array by using the mask.
   if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
     genSymbolicInitMarkArrayByMask(three_index_ancestors,
@@ -2503,6 +2518,209 @@ Value getSemiringFirstVal(OpBuilder &builder, Location &loc,
   return reduceResult;
 }
 
+/// ----------------- ///
+/// Allocate the ws_bitmap and mask_array before the outermost for-loop for the numeric phase.
+/// ----------------- ///
+///    %ws_bitmap = memref.alloc(%18) {alignment = 8 : i64} : memref<?xi1>
+///    scf.for %arg0 = %c0 to %18 step %c1 {
+///      memref.store %false, %ws_bitmap[%arg0] : memref<?xi1>
+///    }
+///    %array_mask = memref.alloc(%18) {alignment = 8 : i64} : memref<?xi1>
+///    scf.for %arg0 = %c0 to %18 step %c1 {
+///      memref.store %false, %array_mask[%arg0] : memref<?xi1>
+///    }
+void genAllocBitmapAndMaskArray(OpBuilder &builder,
+                                Location &loc,
+                                std::vector<scf::ForOp> &for_loops /*for-loop statements, from innermost to outermost*/,
+                                SymbolicInfo &symbolicInfo,
+                                MaskingInfo &maskingInfo,
+                                NumericInfo &numericInfo /* contents updated after call */) {
+//                                NumericAuxiliary &numericAuxiliary /* output */) {
+  /// Save the old Insertion Point
+  auto previous_loc = builder.saveInsertionPoint();
+
+  /// Jump Insertion Point to the front of the outermost for-loop
+  builder.setInsertionPoint(for_loops.back());
+
+  /// Allocate the ws_bitmap
+  Value &num_cols = symbolicInfo.mtxC_num_cols;
+  Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+  MemRefType memTy_alloc_bitarray = MemRefType::get({ShapedType::kDynamic}, builder.getI1Type());
+  numericInfo.ws_bitmap = builder.create<memref::AllocOp>(loc,
+                                                     memTy_alloc_bitarray,
+                                                     ValueRange{num_cols},
+                                                     builder.getI64IntegerAttr(8) /* alignment bytes */);
+  /// Initialize ws_bitmap to zeros.
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  auto bitmap_init_loop = builder.create<scf::ForOp>(loc,
+                                                         const_index_0 /* lowerBound */,
+                                                         num_cols /* upperBound */,
+                                                         const_index_1 /* step */);
+  auto before_for_loop_body_loc = builder.saveInsertionPoint();
+  builder.setInsertionPointToStart(bitmap_init_loop.getBody());
+  Value i_idx = bitmap_init_loop.getInductionVar();
+  auto const_i1_false = builder.create<ConstantOp>(loc,
+                                                        builder.getI1Type(),
+                                                              builder.getBoolAttr(false));
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+  auto store_0_to_bitmap = builder.create<memref::StoreOp>(loc,
+                                                           const_i1_false,
+                                                           numericInfo.ws_bitmap,
+                                                               ValueRange{i_idx});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  const_i1_false,
+                                  numericInfo.ws_bitmap,
+                                  ValueRange{i_idx});
+#endif
+  {
+    comet_vdump(numericInfo.ws_bitmap);
+    comet_vdump(store_0_to_bitmap);
+    comet_vdump(bitmap_init_loop);
+  }
+
+  /// Allocate the mask_array
+  if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+    builder.restoreInsertionPoint(before_for_loop_body_loc);
+    numericInfo.mask_array = builder.create<memref::AllocOp>(loc,
+                                                             memTy_alloc_bitarray,
+                                                             ValueRange{num_cols},
+                                                             builder.getI64IntegerAttr(8) /* alignment bytes */);
+    /// Initialize mask_array to zeros
+    auto mask_array_init_loop = builder.create<scf::ForOp>(loc,
+                                                           const_index_0 /* lowerBound */,
+                                                           num_cols /* upperBound */,
+                                                           const_index_1 /* step */);
+    builder.setInsertionPointToStart(mask_array_init_loop.getBody());
+    i_idx = mask_array_init_loop.getInductionVar();
+    const_i1_false = builder.create<ConstantOp>(loc,
+                                                builder.getI1Type(),
+                                                builder.getBoolAttr(false));
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+    auto store_0_to_mask_array = builder.create<memref::StoreOp>(loc,
+                                                                 const_i1_false,
+                                                                 numericInfo.mask_array,
+                                                                 ValueRange{i_idx});
+#else
+    builder.create<memref::StoreOp>(loc,
+                                    const_i1_false,
+                                    numericInfo.mask_array,
+                                    ValueRange{i_idx});
+#endif
+
+    {
+      comet_vdump(numericInfo.mask_array);
+      comet_vdump(store_0_to_mask_array);
+      comet_vdump(mask_array_init_loop);
+    }
+  }
+
+  /// Restore the previous Insertion Point
+  builder.restoreInsertionPoint(previous_loc);
+}
+
+/// ----------------- ///
+/// Generate the numeric for-loop that initialize the mask_array using the mask
+/// ----------------- ///
+///      %j_loc_start = memref.load %mask_rowptr[%i_idx] : memref<?xindex>  /// alloc_16 = mask.rowptr
+///      %j_loc_bound = memref.load %mask_rowptr[%i_idx_plus_one] : memref<?xindex>
+///      scf.for %arg1 = %j_loc_start to %j_loc_bound step %c1 {
+///        %val = memref.load %mask_val[%arg1] : memref<?xf64>
+///        %54 = arith.cmpf une, %val, %cst : f64
+///        scf.if %54 {
+///          %j_idx = memref.load %mask_col[%arg1] : memref<?xindex>
+///          memref.store %true, %mask_array[%j_idx] : memref<?xi1>
+///        }
+///      }
+/// ----------------- ///
+/// Reset mask_array after the 2nd numeric for-loop
+/// ----------------- ///
+///      scf.for %arg1 = %j_loc_start to %j_loc_bound step %c1 {
+///        %j_idx = memref.load %mask_col[%arg1] : memref<?xindex>
+///        memref.store %false, %array_mask[%j_idx] : memref<?xi1>
+///      }
+void genNumericInitAndResetMaskArrayByMask(std::vector<scf::ForOp> &forLoops /* numeric for-loops, from innermost to outermost*/,
+                                   NumericInfo &numericInfo,
+                                   MaskingInfo &maskingInfo,
+                                   OpBuilder &builder,
+                                   Location &loc) {
+  /// ----------------- ///
+  /// Generate the initialization for-loop
+  /// ----------------- ///
+  /// Store the insertion point
+  auto last_insertion_point = builder.saveInsertionPoint();
+
+  /// Set the Insertion Point to the place before the 2nd-level numeric for-loop
+  builder.setInsertionPoint(forLoops[1]);
+
+  /// Generate the for-loop entry
+  Value &mask_array = numericInfo.mask_array;
+  Value &mask_rowptr = maskingInfo.mask_rowptr;
+  Value &mask_col = maskingInfo.mask_col;
+  Value &mask_val = maskingInfo.mask_val;
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  Value i_idx = forLoops[2].getInductionVar();  /// i_idx is the induction variable of the outermost for-loop.
+  Value i_idx_plus_one = builder.create<AddIOp>(loc, i_idx, const_index_1);
+  Value j_loc_start = builder.create<memref::LoadOp>(loc, mask_rowptr, ValueRange{i_idx});
+  Value j_loc_bound = builder.create<memref::LoadOp>(loc, mask_rowptr, ValueRange{i_idx_plus_one});
+  auto init_for_loop = builder.create<scf::ForOp>(loc,
+                                             j_loc_start /* lower_bound */,
+                                             j_loc_bound /* upper_bound*/,
+                                             const_index_1 /* step */);
+  builder.setInsertionPointToStart(init_for_loop.getBody());
+
+  /// Generate the for-loop body
+  Value const_f64_0 = builder.create<ConstantOp>(loc, builder.getF64Type(), builder.getF64FloatAttr(0));
+  Value j_loc = init_for_loop.getInductionVar();
+  Value val = builder.create<memref::LoadOp>(loc, mask_val, ValueRange{j_loc});
+  Value not_zero = builder.create<arith::CmpFOp>(loc, CmpFPredicate::UNE, val, const_f64_0);
+  auto if_not_zero = builder.create<scf::IfOp>(loc, not_zero, false /*NoElseRegion*/);
+  builder.setInsertionPointToStart(&if_not_zero.getThenRegion().front());
+  Value j_idx = builder.create<memref::LoadOp>(loc, mask_col, ValueRange{j_loc});
+  Value const_i1_1 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(true));
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+  auto store_true = builder.create<memref::StoreOp>(loc,
+                                                    const_i1_1,
+                                                    mask_array,
+                                                    ValueRange{j_idx});
+#else
+  builder.create<memref::StoreOp>(loc,
+                                  const_i1_1,
+                                  mask_array,
+                                  ValueRange{j_idx});
+#endif
+  {
+    comet_vdump(store_true);
+    comet_vdump(init_for_loop);
+  }
+
+  /// ----------------- ///
+  /// Generate the resetting for-loop after the 2nd-level numeric for-loop
+  /// ----------------- ///
+  builder.setInsertionPointAfter(forLoops[1]);
+  auto reset_for_loop = builder.create<scf::ForOp>(loc,
+                                                   j_loc_start /* lower_bound */,
+                                                   j_loc_bound /* upper_bound*/,
+                                                   const_index_1 /* step */);
+  builder.setInsertionPointToStart(reset_for_loop.getBody());
+
+  /// Generate the for-loop body
+  j_loc = reset_for_loop.getInductionVar();
+  j_idx = builder.create<memref::LoadOp>(loc, mask_col, ValueRange{j_loc});
+  Value const_i1_0 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(false));
+  builder.create<memref::StoreOp>(loc,
+                                  const_i1_0,
+                                  mask_array,
+                                  ValueRange{j_idx});
+  {
+    comet_vdump(reset_for_loop);
+  }
+
+  /// Restore the insertion point
+  builder.restoreInsertionPoint(last_insertion_point);
+}
+
+
 
 /// ----------------- ///
 /// Declare the variable Mark = 0.
@@ -2623,50 +2841,99 @@ Value updateVariableMarkNumeric(
 
 /// ----------------- ///
 /// Generate if statement for the Compute node
-///   %76 = memref.load %mark_array[%73] : memref<?xindex>
-///   %77 = arith.cmpi ne, %76, %new_mark : index
-///   scf.if %77 {
+///     %58 = memref.load %array_mask[%57] : memref<?xi1>
+///     %59 = arith.cmpi eq, %58, %true : i1
+///     scf.if %59 {
+///       %b_t = memref.load %ws_bitmap[%57] : memref<?xi1>
+///       %not_visited = arith.cmpi eq, %b_t, %false : i1
+///       scf.if %not_visited {
 /// ----------------- ///
-scf::IfOp genIfStatementConditionNumeric(
-//    PatternRewriter &rewriter,
+void genIfStatementConditionNumeric(
         OpBuilder &builder,
         Location &loc,
-        int lhs_loc,
-        const std::vector<std::vector<Value>> &tensors_lhs_Allocs,
-        const std::vector<std::vector<Value>> &allValueAccessIdx,
-//    Value &const_i1_0,
-        Value &new_mark,
-        MaskingInfo &maskingInfo) {
-  // Workspace tensors are on the lhs
-  comet_debug() << " lhs_loc: " << lhs_loc << "\n";
-  Value checkAlreadySet = builder.create<memref::LoadOp>(loc, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
-//  comet_debug() << " ";
-  comet_vdump(checkAlreadySet);
-//  comet_debug() << " ";
-  comet_vdump(checkAlreadySet.getType());
-//  comet_debug() << " ";
-//  comet_vdump(const_i1_0.getType());
+//        int lhs_loc,
+//        const std::vector<std::vector<Value>> &tensors_lhs_Allocs,
+//        const std::vector<std::vector<Value>> &allValueAccessIdx,
+//        Value &new_mark,
+        Value &accessIdx,
+        NumericInfo &numericInfo,
+        MaskingInfo &maskingInfo,
+        scf::IfOp &if_notAlreadySet /* output */) {
 
-  scf::IfOp if_notAlreadySet;
+  Value const_i1_0 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(false));
+  Value const_i1_1 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(true));
+
   if (NO_MASKING == maskingInfo.mask_type) {
-    Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::ne, checkAlreadySet, new_mark);
-//  Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, const_i1_0);
-    comet_vdump(notAlreadySet);
-    if_notAlreadySet = builder.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
+    ///     %b_t = memref.load %ws_bitmap[%57] : memref<?xi1>
+    ///     %not_visited = arith.cmpi eq, %b_t, %false : i1
+    ///     scf.if %not_visited {
+
+    Value ele_bitmap = builder.create<memref::LoadOp>(loc, numericInfo.ws_bitmap, ValueRange{accessIdx});
+    Value not_visited = builder.create<CmpIOp>(loc, CmpIPredicate::eq, ele_bitmap, const_i1_0);
+    if_notAlreadySet = builder.create<scf::IfOp>(loc, not_visited, /*WithElseRigion*/ true);
+    {
+      comet_vdump(ele_bitmap);
+      comet_vdump(not_visited);
+      comet_vdump(if_notAlreadySet);
+    }
+
   } else if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
-    Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, new_mark);
-    comet_vdump(notAlreadySet);
-    if_notAlreadySet = builder.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
+    ///     %58 = memref.load %array_mask[%57] : memref<?xi1>
+    ///     %59 = arith.cmpi eq, %58, %true : i1
+    ///     scf.if %59 {
+    ///       %b_t = memref.load %ws_bitmap[%57] : memref<?xi1>
+    ///       %not_visited = arith.cmpi eq, %b_t, %false : i1
+    ///       scf.if %not_visited {
+
+    Value ele_mask_array = builder.create<memref::LoadOp>(loc, numericInfo.mask_array, ValueRange{accessIdx});
+    Value is_set = builder.create<CmpIOp>(loc, CmpIPredicate::eq, ele_mask_array, const_i1_1);
+    auto if_mask_set = builder.create<scf::IfOp>(loc, is_set, /*NoElseRegion*/ false);
+    builder.setInsertionPointToStart(&if_mask_set.getThenRegion().front());
+    Value ele_bitmap = builder.create<memref::LoadOp>(loc, numericInfo.ws_bitmap, ValueRange{accessIdx});
+    Value not_visited = builder.create<CmpIOp>(loc, CmpIPredicate::eq, ele_bitmap, const_i1_0);
+    if_notAlreadySet = builder.create<scf::IfOp>(loc, not_visited, /*WithElseRigion*/ true);
+    {
+      comet_vdump(ele_mask_array);
+      comet_vdump(is_set);
+      comet_vdump(if_mask_set);
+    }
+
   } else {
     llvm::errs() << "Error: genIfStatementConditionNumeric(): mask_type " << maskingInfo.mask_type << " is not supported.\n";
   }
 
-  {
-    comet_debug() << " If branch:\n";
-    comet_vdump(if_notAlreadySet);
-  }
 
-  return if_notAlreadySet;
+//  //////////////////////////////////////////
+//  // Workspace tensors are on the lhs
+//  comet_debug() << " lhs_loc: " << lhs_loc << "\n";
+//  Value checkAlreadySet = builder.create<memref::LoadOp>(loc, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
+////  comet_debug() << " ";
+//  comet_vdump(checkAlreadySet);
+////  comet_debug() << " ";
+//  comet_vdump(checkAlreadySet.getType());
+////  comet_debug() << " ";
+////  comet_vdump(const_i1_0.getType());
+//
+//  scf::IfOp if_notAlreadySet;
+//  if (NO_MASKING == maskingInfo.mask_type) {
+//    Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::ne, checkAlreadySet, new_mark);
+////  Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, const_i1_0);
+//    comet_vdump(notAlreadySet);
+//    if_notAlreadySet = builder.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
+//  } else if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+//    Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, new_mark);
+//    comet_vdump(notAlreadySet);
+//    if_notAlreadySet = builder.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
+//  } else {
+//    llvm::errs() << "Error: genIfStatementConditionNumeric(): mask_type " << maskingInfo.mask_type << " is not supported.\n";
+//  }
+//
+//  {
+//    comet_debug() << " If branch:\n";
+//    comet_vdump(if_notAlreadySet);
+//  }
+//
+//  return if_notAlreadySet;
 }
 
 /// ----------------- ///
@@ -2686,6 +2953,18 @@ scf::IfOp genIfStatementConditionNumeric(
 ///     rowptr += 1;
 ///     WS_data[j_idx] = a * b;
 /// }
+///
+///
+///     scf.if %not_visited {
+///       memref.store %true, %ws_bitmap[%57] : memref<?xi1>
+///       %61 = memref.load %alloc_20[%arg2] : memref<?xf64> // alloc_20 = B.val
+///       %62 = arith.mulf %60, %61 : f64
+///       memref.store %62, %alloc_22[%57] : memref<?xf64>  // workspace = A * B
+///       %64 = memref.load %alloc_42[%c0] : memref<1xindex>  // rowptr
+///       memref.store %57, %alloc_40[%64] : memref<?xindex>  // C.col[rowptr] = col
+///       %65 = arith.addi %64, %c1 : index   // rowptr += 1
+///       memref.store %65, %alloc_42[%c0] : memref<1xindex>
+///     }
 void genIfStatementThenRegionNumeric(
         scf::IfOp &if_notAlreadySet,
 //    PatternRewriter &rewriter,
@@ -2696,16 +2975,20 @@ void genIfStatementThenRegionNumeric(
         llvm::StringRef &semiringSecond,
         bool compressedWorkspace,
 //    Value &const_i1_1,
-        Value &new_mark,
-        Value &const_index_0,
+//        Value &new_mark,
+//        Value &const_index_0,
         const std::vector<std::vector<Value>> &main_tensors_all_Allocs,
         const std::vector<std::vector<Value>> &allValueAccessIdx,
-        const std::vector<std::vector<Value>> &tensors_lhs_Allocs,
+//        const std::vector<std::vector<Value>> &tensors_lhs_Allocs,
         SymbolicInfo &symbolicInfo,
-        MaskingInfo &maskingInfo) {
+        NumericInfo &numericInfo) {
+//        MaskingInfo &maskingInfo) {
+
   builder.setInsertionPointToStart(&if_notAlreadySet.getThenRegion().front());
 
-
+  /// ----------------- ///
+  /// Do computation Wj = Aik * Bkj
+  /// ----------------- ///
 
   std::vector<Value> allLoadsIf(main_tensor_nums);
   for (int m = 0; m < main_tensor_nums; m++) {
@@ -2719,7 +3002,12 @@ void genIfStatementThenRegionNumeric(
   comet_debug() << "calculate elementWise operation only\n";
   Value elementWiseResult = getSemiringSecondVal(builder, loc, semiringSecond, allLoadsIf[0], allLoadsIf[1],
                                                  compressedWorkspace);
-  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  builder.create<memref::StoreOp>(loc,
+                                  elementWiseResult,
+                                  main_tensors_all_Allocs[lhs_loc].back(),
+                                  allValueAccessIdx[lhs_loc]);
+
+
   /// ----------------- ///
   /// Backup of W = A * B
   /// ----------------- ///
@@ -2744,7 +3032,7 @@ void genIfStatementThenRegionNumeric(
   /// ----------------- ////
   /// Look-up Table
   /// ----------------- ////
-  /// tensors_lhs_Allocs[1][0]                : mark_array
+  /// tensors_lhs_Allocs[1][0]                : mark_array (DEPRECATED)
   /// allValueAccessIdx[lhs_loc][0]           : j_idx (no-masking's lhs_loc is 2, push-masking's lhs_loc is 3)
   /// main_tensors_all_Allocs[lhs_loc].back() : W_data
   /// main_tensors_all_Allocs[2].back()       : W_data (NO_MASKING)
@@ -2752,84 +3040,100 @@ void genIfStatementThenRegionNumeric(
   /// tensors_lhs_Allocs[2][0]                : W_index_list (DEPRECATED)
   /// tensors_lhs_Allocs[3][0]                : W_index_list_size (DEPRECATED)
   /// ----------------- ///
-  if (NO_MASKING == maskingInfo.mask_type) {
-#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-    auto assign_new_mark = builder.create<memref::StoreOp>(loc, new_mark, tensors_lhs_Allocs[1][0],
-                                                           allValueAccessIdx[lhs_loc]);
-    comet_vdump(assign_new_mark);
-#else
-    builder.create<memref::StoreOp>(loc, new_mark, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
-#endif
 
-  } else if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
-    ///     %m_v_plus_one = arith.addi %m_v, %c1 : index
-    ///     memref.store %m_v_plus_one, %mark_array[%j_idx] : memref<?xindex>  // mark_array[B_col_id] = new_mark
-    Value mark_value_plus_one = builder.create<AddIOp>(loc, new_mark, const_index_1);
+  /// ----------------- ///
+  /// Update bitmap ws_bitmap[j_idx] = true;
+  /// ----------------- ///
+  Value const_i1_1 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(true));
+  builder.create<memref::StoreOp>(loc,
+                                  const_i1_1,
+                                  numericInfo.ws_bitmap,
+                                  allValueAccessIdx[lhs_loc]);
 
-#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-    auto store_mark_value_plus_one = builder.create<memref::StoreOp>(loc,
-                                                                     mark_value_plus_one,
-                                                                     tensors_lhs_Allocs[1][0],
-                                                                     allValueAccessIdx[lhs_loc]);
-    {
-      comet_vdump(mark_value_plus_one);
-      comet_vdump(store_mark_value_plus_one);
-    }
-#else
-    builder.create<memref::StoreOp>(loc,
-                                    mark_value_plus_one,
-                                    tensors_lhs_Allocs[1][0],
-                                    allValueAccessIdx[lhs_loc]);
-#endif
-  } else {
-    llvm::errs() << "Error: genIfStatementThenRegionNumeric(): masking type " << maskingInfo.mask_type << " is not supported, yet.\n";
-  }
+//  if (NO_MASKING == maskingInfo.mask_type) {
+//#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+//    auto assign_new_mark = builder.create<memref::StoreOp>(loc, new_mark, tensors_lhs_Allocs[1][0],
+//                                                           allValueAccessIdx[lhs_loc]);
+//    comet_vdump(assign_new_mark);
+//#else
+//    builder.create<memref::StoreOp>(loc, new_mark, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
+//#endif
+//
+//  } else if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+//    ///     %m_v_plus_one = arith.addi %m_v, %c1 : index
+//    ///     memref.store %m_v_plus_one, %mark_array[%j_idx] : memref<?xindex>  // mark_array[B_col_id] = new_mark
+//    Value mark_value_plus_one = builder.create<AddIOp>(loc, new_mark, const_index_1);
+//
+//#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+//    auto store_mark_value_plus_one = builder.create<memref::StoreOp>(loc,
+//                                                                     mark_value_plus_one,
+//                                                                     tensors_lhs_Allocs[1][0],
+//                                                                     allValueAccessIdx[lhs_loc]);
+//    {
+//      comet_vdump(mark_value_plus_one);
+//      comet_vdump(store_mark_value_plus_one);
+//    }
+//#else
+//    builder.create<memref::StoreOp>(loc,
+//                                    mark_value_plus_one,
+//                                    tensors_lhs_Allocs[1][0],
+//                                    allValueAccessIdx[lhs_loc]);
+//#endif
+//  } else {
+//    llvm::errs() << "Error: genIfStatementThenRegionNumeric(): masking type " << maskingInfo.mask_type << " is not supported, yet.\n";
+//  }
 
+  /// ----------------- ///
+  /// Store column ID: C_col[rowpt] = j_idx
+  /// Update rowptr: rowptr += 1
+  /// ----------------- ///
   /// ----------------- ///
   ///     %row = memref.load %rowptr[%c0] : memref<1xindex>  // row = rowptr
   ///     memref.store %j_idx, %C_col[%row] : memref<?xindex>  // C_col[row] = B_col_id
   ///     %new_rowptr = arith.addi %row, %c1 : index // new_rowptr = ++row
   ///     memref.store %new_rowptr, %rowptr[%c0] : memref<1xindex> //  rowptr = new_rowptr
-  ///     memref.store %mul_val, %ws_data[%j_idx] : memref<?xf64>  // ws_data[B_col_id] = A_val * B_val
+//  ///     memref.store %mul_val, %ws_data[%j_idx] : memref<?xf64>  // ws_data[B_col_id] = A_val * B_val
   /// ----------------- ///
   /// allValueAccessIdx[lhs_loc][0] : %j_idx
+  Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
   Value &row_offset = symbolicInfo.row_offset;
   Value &mtxC_col = symbolicInfo.mtxC_col;
   Value old_row_offset = builder.create<memref::LoadOp>(loc, row_offset, const_index_0);
-#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-  auto store_col_id = builder.create<memref::StoreOp>(loc,
-                                                      allValueAccessIdx[lhs_loc][0],
-                                                      mtxC_col,
-                                                      ValueRange{old_row_offset});
-#else
+//#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+//  auto store_col_id = builder.create<memref::StoreOp>(loc,
+//                                                      allValueAccessIdx[lhs_loc][0],
+//                                                      mtxC_col,
+//                                                      ValueRange{old_row_offset});
+//#else
   builder.create<memref::StoreOp>(loc,
                                   allValueAccessIdx[lhs_loc][0],
                                   mtxC_col,
                                   ValueRange{old_row_offset});
-#endif
+//#endif
 
   Value new_row_offset = builder.create<AddIOp>(loc, old_row_offset, const_index_1);
 
 
-#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
-  auto store_new_row_offset = builder.create<memref::StoreOp>(loc,
-                                                               new_row_offset,
-                                                               row_offset,
-                                                               ValueRange{const_index_0});
-  auto store_sum = builder.create<memref::StoreOp>(loc,
-                                                     elementWiseResult,
-                                                     main_tensors_all_Allocs[lhs_loc].back(),
-                                                     allValueAccessIdx[lhs_loc]);
-#else
+//#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+//  auto store_new_row_offset = builder.create<memref::StoreOp>(loc,
+//                                                               new_row_offset,
+//                                                               row_offset,
+//                                                               ValueRange{const_index_0});
+////  auto store_sum = builder.create<memref::StoreOp>(loc,
+////                                                     elementWiseResult,
+////                                                     main_tensors_all_Allocs[lhs_loc].back(),
+////                                                     allValueAccessIdx[lhs_loc]);
+//#else
   builder.create<memref::StoreOp>(loc,
                                   new_row_offset,
                                   row_offset,
                                   ValueRange{const_index_0});
-  builder.create<memref::StoreOp>(loc,
-                                  elementWiseResult,
-                                  main_tensors_all_Allocs[lhs_loc].back(),
-                                  allValueAccessIdx[lhs_loc]);
-#endif
+//  builder.create<memref::StoreOp>(loc,
+//                                  elementWiseResult,
+//                                  main_tensors_all_Allocs[lhs_loc].back(),
+//                                  allValueAccessIdx[lhs_loc]);
+//#endif
 
 
 //  if (NO_MASKING == maskingInfo.mask_type) {
@@ -2868,11 +3172,12 @@ void genIfStatementThenRegionNumeric(
 //    llvm::errs() << "Error: genIfStatementThenRegionNumeric(): masking type " << maskingInfo.mask_type << " is not supported, yet.\n";
 //  }
   {
-    comet_vdump(old_row_offset);
-    comet_vdump(store_col_id);
-    comet_vdump(new_row_offset);
-    comet_vdump(store_new_row_offset);
-    comet_vdump(store_sum);
+//    comet_vdump(old_row_offset);
+//    comet_vdump(store_col_id);
+//    comet_vdump(new_row_offset);
+//    comet_vdump(store_new_row_offset);
+//    comet_vdump(store_sum);
+    comet_vdump(if_notAlreadySet);
   }
 
 
@@ -2961,6 +3266,9 @@ void genIfStatementElseRegionNumeric(
                                   main_tensors_all_Allocs[lhs_loc].back(),
                                   allValueAccessIdx[lhs_loc]);
 #endif
+  {
+    comet_vdump(if_notAlreadySet);
+  }
 
 //  if (NO_MASKING == maskingInfo.mask_type) {
 //    /// main_tensors_all_Allocs[2].back() is W_data
@@ -3019,6 +3327,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                           std::vector<std::vector<std::string>> &rhsFormats,
                           std::vector<std::vector<std::string>> &lhsFormats,
                           SymbolicInfo &symbolicInfo,
+                          NumericInfo &numericInfo,
                           MaskingInfo &maskingInfo) {
   bool isMixedMode = checkIsMixedMode(rhsFormats);
   bool isElementwise = checkIsElementwise(rhsPerms);
@@ -3049,100 +3358,170 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
     compressedWorkspace = true;
 
     /// ----------------- ///
-    /// Initialize the variable Mark in front of the outermost for-loop
-    ///     %mark = memref.alloc() : memref<1xindex>
-    ///     memref.store %c0, %mark[%c0] : memref<1xindex>
+    /// Allocate the ws_bitmap and mask_array before the outermost for-loop for the numeric phase.
     /// ----------------- ///
-    Value alloc_mark = initVariableMarkNumeric(builder,
-                                        loc,
-                                        forLoops /*for-loop statements, from innermost to outermost*/);
+    genAllocBitmapAndMaskArray(builder,
+                               loc,
+                               forLoops /*for-loop statements, from innermost to outermost*/,
+                               symbolicInfo,
+                               maskingInfo,
+                               numericInfo /* contents updated after call */);
+//                               numericAuxiliary /* output */);
 
-    /// ----------------- ///
-    /// Update the variable Mark for every row A[i,:] in A.
-    ///      %old_mark = memref.load %mark[%c0] : memref<1xindex>
-    ///      %new_mark = arith.addi %old_mark, %c2 : index
-    ///      memref.store %new_mark, %mark[%c0] : memref<1xindex>
-    /// ----------------- ///
-    Value new_mark = updateVariableMarkNumeric(alloc_mark,
-                                        builder,
-                                        loc,
-                                        forLoops);
+//    /// ----------------- ///
+//    /// Initialize the variable Mark in front of the outermost for-loop
+//    ///     %mark = memref.alloc() : memref<1xindex>
+//    ///     memref.store %c0, %mark[%c0] : memref<1xindex>
+//    /// ----------------- ///
+//    Value alloc_mark = initVariableMarkNumeric(builder,
+//                                        loc,
+//                                        forLoops /*for-loop statements, from innermost to outermost*/);
+//
+//    /// ----------------- ///
+//    /// Update the variable Mark for every row A[i,:] in A.
+//    ///      %old_mark = memref.load %mark[%c0] : memref<1xindex>
+//    ///      %new_mark = arith.addi %old_mark, %c2 : index
+//    ///      memref.store %new_mark, %mark[%c0] : memref<1xindex>
+//    /// ----------------- ///
+//    Value new_mark = updateVariableMarkNumeric(alloc_mark,
+//                                        builder,
+//                                        loc,
+//                                        forLoops);
 
 
     if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+//      /// ----------------- ///
+//      /// Generate the numeric for-loop that initialize the mark_array by using the mask
+//      /// new_mark: the update value of mark
+//      /// tensors_lhs_Allocs[1][0] : the mask tensor
+//      /// ----------------- ///
+//      {
+//        comet_vdump(new_mark);
+//        comet_vdump(tensors_lhs_Allocs[1][0]);
+//      }
+//      genNumericInitMarkArrayByMask(forLoops /* numeric for-loops, from innermost to outermost*/,
+//                                    new_mark,
+//                                    tensors_lhs_Allocs[1][0],
+//                                    maskingInfo,
+//                                    builder,
+//                                    loc);
       /// ----------------- ///
-      /// Generate the numeric for-loop that initialize the mark_array by using the mask
-      /// new_mark: the update value of mark
-      /// tensors_lhs_Allocs[1][0] : the mask tensor
+      /// Generate the numeric for-loop that initialize the mask_array using the mask,
+      /// and reset the mask_array after the 2nd numeric for-loop.
       /// ----------------- ///
-      {
-        comet_vdump(new_mark);
-        comet_vdump(tensors_lhs_Allocs[1][0]);
-      }
-      genNumericInitMarkArrayByMask(forLoops /* numeric for-loops, from innermost to outermost*/,
-                                    new_mark,
-                                    tensors_lhs_Allocs[1][0],
+      genNumericInitAndResetMaskArrayByMask(forLoops /* numeric for-loops, from innermost to outermost*/,
+                                    numericInfo,
                                     maskingInfo,
                                     builder,
                                     loc);
     }
-
     /// ----------------- ///
     /// Generate if statement's condition
-    ///   %76 = memref.load %mark_array[%73] : memref<?xindex>
-    ///   %77 = arith.cmpi ne, %76, %new_mark : index
-    ///   scf.if %77 {
+    ///     %58 = memref.load %array_mask[%57] : memref<?xi1>
+    ///     %59 = arith.cmpi eq, %58, %true : i1
+    ///     scf.if %59 {
+    ///       %b_t = memref.load %ws_bitmap[%57] : memref<?xi1>
+    ///       %not_visited = arith.cmpi eq, %b_t, %false : i1
+    ///       scf.if %not_visited {
     /// ----------------- ///
-    auto if_notAlreadySet = genIfStatementConditionNumeric(builder,
-                                                         loc,
-                                                         lhs_loc,
-                                                         tensors_lhs_Allocs,
-                                                         allValueAccessIdx,
-//                                                         const_i1_0,
-                                                         new_mark,
-                                                         maskingInfo);
+    scf::IfOp if_notAlreadySet;
+    genIfStatementConditionNumeric(builder,
+                                   loc,
+                                   allValueAccessIdx[lhs_loc][0],
+                                   numericInfo,
+                                   maskingInfo,
+                                   if_notAlreadySet);
 
-    // if-then region corresponding to if_notAlreadySet instruction.
-    // if (&if_notAlreadySet. getThenRegion())
     if (!if_notAlreadySet.getThenRegion().empty()) {
       /// ----------------- ///
       /// Generate if statement's then region
       /// ----------------- ///
       genIfStatementThenRegionNumeric(if_notAlreadySet,
-                                    builder,
-                                    loc,
-                                    main_tensor_nums,
-                                    lhs_loc,
-                                    semiringSecond,
-                                    compressedWorkspace,
-//                                    const_i1_1,
-                                    new_mark,
-                                    const_index_0,
-                                    main_tensors_all_Allocs,
-                                    allValueAccessIdx,
-                                    tensors_lhs_Allocs,
-                                    symbolicInfo,
-                                    maskingInfo);
+                                      builder,
+                                      loc,
+                                      main_tensor_nums,
+                                      lhs_loc,
+                                      semiringSecond,
+                                      compressedWorkspace,
+                                      main_tensors_all_Allocs,
+                                      allValueAccessIdx,
+                                      symbolicInfo,
+                                      numericInfo);
+//                                      maskingInfo);
     }
 
-    // if-else region corresponding to if_notAlreadySet instruction.
-    // if (&if_notAlreadySet.getElseRegion())
     if (!if_notAlreadySet.getElseRegion().empty()) {
       /// ----------------- ///
       /// Generate if statement's else region
       /// ----------------- ///
       genIfStatementElseRegionNumeric(if_notAlreadySet,
-                                    builder,
-                                    loc,
-                                    main_tensor_nums,
-                                    lhs_loc,
-                                    semiringFirst,
-                                    compressedWorkspace,
-                                    semiringSecond,
-                                    main_tensors_all_Allocs,
-                                    allValueAccessIdx,
-                                    maskingInfo);
+                                      builder,
+                                      loc,
+                                      main_tensor_nums,
+                                      lhs_loc,
+                                      semiringFirst,
+                                      compressedWorkspace,
+                                      semiringSecond,
+                                      main_tensors_all_Allocs,
+                                      allValueAccessIdx,
+                                      maskingInfo);
     }
+//    /// ----------------- ///
+//    /// Generate if statement's condition
+//    ///   %76 = memref.load %mark_array[%73] : memref<?xindex>
+//    ///   %77 = arith.cmpi ne, %76, %new_mark : index
+//    ///   scf.if %77 {
+//    /// ----------------- ///
+//    auto if_notAlreadySet = genIfStatementConditionNumeric(builder,
+//                                                         loc,
+//                                                         lhs_loc,
+//                                                         tensors_lhs_Allocs,
+//                                                         allValueAccessIdx,
+////                                                         const_i1_0,
+//                                                         new_mark,
+//                                                         maskingInfo);
+//
+//    // if-then region corresponding to if_notAlreadySet instruction.
+//    // if (&if_notAlreadySet. getThenRegion())
+//    if (!if_notAlreadySet.getThenRegion().empty()) {
+//      /// ----------------- ///
+//      /// Generate if statement's then region
+//      /// ----------------- ///
+//      genIfStatementThenRegionNumeric(if_notAlreadySet,
+//                                    builder,
+//                                    loc,
+//                                    main_tensor_nums,
+//                                    lhs_loc,
+//                                    semiringSecond,
+//                                    compressedWorkspace,
+////                                    const_i1_1,
+//                                    new_mark,
+//                                    const_index_0,
+//                                    main_tensors_all_Allocs,
+//                                    allValueAccessIdx,
+//                                    tensors_lhs_Allocs,
+//                                    symbolicInfo,
+//                                    maskingInfo);
+//    }
+//
+//    // if-else region corresponding to if_notAlreadySet instruction.
+//    // if (&if_notAlreadySet.getElseRegion())
+//    if (!if_notAlreadySet.getElseRegion().empty()) {
+//      /// ----------------- ///
+//      /// Generate if statement's else region
+//      /// ----------------- ///
+//      genIfStatementElseRegionNumeric(if_notAlreadySet,
+//                                    builder,
+//                                    loc,
+//                                    main_tensor_nums,
+//                                    lhs_loc,
+//                                    semiringFirst,
+//                                    compressedWorkspace,
+//                                    semiringSecond,
+//                                    main_tensors_all_Allocs,
+//                                    allValueAccessIdx,
+//                                    maskingInfo);
+//    }
 
   } else { // general dense or mixed mode computation, no need workspace transformations
     std::vector<Value> allLoads(main_tensor_nums);
@@ -3589,9 +3968,10 @@ void genNewSparseTensorToPrint(OpBuilder &builder,
 ///      /// Store results from workspace to C
 ///      // %rowptr_bound = memref.load %rowptr[%c0] : memref<1xindex>
 ///      scf.for %ptr = %rowptr_start to %rowptr_bound step %c1 {
-///        %c_col_id = memref.load %C_col[%ptr] : memref<?xindex>  // c_col_id = C_col[ptr]
-///        %data = memref.load %ws_data[%c_col_id] : memref<?xf64>  // data = ws_data[c_col_id]
-///        memref.store %data, %C_val[%ptr] : memref<?xf64>  // C_val[ptr] = data
+///        %c_col_id = memref.load %C_col[%ptr] : memref<?xindex>       // c_col_id = C_col[ptr]
+///        %data = memref.load %ws_data[%c_col_id] : memref<?xf64>      // data = ws_data[c_col_id]
+///        memref.store %data, %C_val[%ptr] : memref<?xf64>             // C_val[ptr] = data
+///        memref.store %false, %ws_bitmap[%c_col_id] : memref<?xi1>    // ws_bitmap[c_col_id] = false
 ///      }
 /// ----------------- ///
 /// tensors_rhs_Allocs[0][0] : workspace (ws_data)
@@ -3601,7 +3981,8 @@ void genNumericGatherLoop(indexTree::IndexTreeComputeOp &cur_op,
                           std::vector<std::vector<Value>> &tensors_rhs_Allocs,
                           OpBuilder &builder,
                           Location &loc,
-                          SymbolicInfo &symbolicInfo) {
+                          SymbolicInfo &symbolicInfo,
+                          NumericInfo &numericInfo) {
 
   /// tensors_rhs_Allocs[0][0] : workspace (ws_data)
   /// tensors_rhs_Allocs[1][0] : mark_array
@@ -3679,6 +4060,11 @@ void genNumericGatherLoop(indexTree::IndexTreeComputeOp &cur_op,
                                   mtxC_val,
                                   ValueRange{rowptr});
 #endif
+  Value const_i1_0 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(false));
+  builder.create<memref::StoreOp>(loc,
+                                  const_i1_0,
+                                  numericInfo.ws_bitmap,
+                                  ValueRange{c_col_id});
   {
     comet_vdump(c_col_id);
     comet_vdump(data);
@@ -3699,6 +4085,7 @@ void genNumericGatherLoop(indexTree::IndexTreeComputeOp &cur_op,
   builder.create<memref::DeallocOp>(loc, ws_data);
   builder.create<memref::DeallocOp>(loc, mark_array);
 #endif
+  builder.create<memref::DeallocOp>(loc, numericInfo.ws_bitmap);
 
   /// ----------------- ///
   /// Generate the new ta.sptensor_construct() using the newly allocated C_col and C_val
@@ -3727,7 +4114,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                 OpsTree *opstree,
                 std::vector<Value> &ancestorsWps,
                 std::vector<Value> &wp_ops,
-                SymbolicInfo &symbolicInfo) {
+                SymbolicInfo &symbolicInfo,
+                NumericInfo &numericInfo) {
   comet_debug() << " calling genCmptOps\n";
   Location loc = rootOp.getLoc();
   comet_debug() << " \n";
@@ -4137,7 +4525,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                                tensors_rhs_Allocs,
                                builder,
                                loc,
-                               symbolicInfo);
+                               symbolicInfo,
+                               numericInfo);
 
           /// ----------------- ///
           /// Backup: previous Cij = Wj
@@ -4465,6 +4854,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                          rhsFormats,
                          lhsFormats,
                          symbolicInfo,
+                         numericInfo,
                          masking_info);
   } else if (main_tensors_rhs.size() == 3) { // Generate " a<m> = b * c" binary op with masking
 
@@ -4553,6 +4943,7 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                              rhsFormats,
                              lhsFormats,
                              symbolicInfo,
+                             numericInfo,
                              masking_info);
         break;
       }
@@ -4752,6 +5143,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
   /// ----------------- ///
 //  bool is_SpGEMM = false;
   SymbolicInfo symbolicInfo;
+  NumericInfo numericInfo;
   {//test
     comet_debug() << "Before generating nodes\n";
     comet_pdump(rootOp.getOperation()->getParentOp());
@@ -4854,7 +5246,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       // ancestors_wp can give all the indices of the nested loops
 //      genCmptOps(cur_op, rootOp, rewriter, opstree_vec[i], ancestors_wp);
       genCmptOps(cur_op, rootOp, builder, opstree_vec[i], ancestors_wp,
-                 wp_ops, symbolicInfo);
+                 wp_ops, symbolicInfo, numericInfo);
       comet_debug() << " finished call genCmptOps, i = " << i << "\n";
     }
   }
