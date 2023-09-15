@@ -10,7 +10,9 @@ def run_numpy(L0,L1,L2):
 
 @comet.compile(flags=None)
 def run_comet_with_jit(L0,L1,L2):
-	C = comet.einsum('ij,jk->ik', L1,L2, mask=L0,mask_type="push")
+	C[L0,"push"] = L1 @ L2 # Performs masking. Currently, only works on a single matmul operation
+	#or C = comet.einsum('ij,jk->ik', L1,L2, mask=L0, mask_type="push")
+	#or C[L0,"push"] = comet.einsum('ij,jk->ik', L1,L2) 
 	D = C.sum()
 	
 	return D
