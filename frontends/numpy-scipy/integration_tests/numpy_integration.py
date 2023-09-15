@@ -6,9 +6,9 @@ import os
 
 categories = ['ops', 'opts', 'kernels', 'compound_exps', 'semiring']
 files = []
-if not os.path.exists("./llvm/"):
+if not os.path.exists("../llvm/"):
     os.symlink("../../llvm", "../llvm")
-if not os.path.exists("./build/"):
+if not os.path.exists("../build/"):
     os.symlink("../../build", "../build")
 
 for c in categories:
