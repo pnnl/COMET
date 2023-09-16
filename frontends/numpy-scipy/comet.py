@@ -358,7 +358,24 @@ class NewVisitor(ast.NodeVisitor):
             self.tsemantics[out_id] = {'shape': [1,], 'format': DENSE, 'labels': []}
             self.ops.append(("s", [obj], out_id))
             self.declarations.append(('d', 'v', 'l', out_id))
-
+        elif node.func.attr == "multiply":
+            op1 = NewVisitor.visit(self, node.args[0])
+            op1_sems = self.tsemantics[op1]
+            if 'labels' not in op1_sems:
+                op1_sems['labels'] = op_semantics['labels']
+            if self.tsemantics[obj]['format'] != DENSE:
+                op_semantics = self.tsemantics[obj]
+                self.tsemantics[op1]['labels'] = op_semantics['labels']
+            else:
+                op_semantics = self.tsemantics[op1]
+                if self.tsemantics[op1]['format'] != DENSE:
+                    self.tsemantics[obj]['labels'] = op_semantics['labels']
+            s = 'a'
+            indices = "".join(chr(ord(s)+i) for i in range(len(op_semantics['labels'])))
+            self.ops.append(("*", [obj, op1], indices+','+indices+'->'+indices, self.tcurr, None))
+            format = self.sp_elw_mult_conversions[op_semantics['format']][op1_sems['format']]
+            self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'labels': op_semantics['labels'], 'format': format}
+            self.declarations.append(('d', 'T', 'l', self.tcurr))
         self.tcurr +=1
 
         return out_id
