@@ -1734,10 +1734,9 @@ void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
   Value &mtxC = symbolicInfo.mtxC;
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
 
-  /// Find the alloc of C_col_size (Arcrd_size)
-  ///     %66 = memref.load %alloc_153[%c0_128] : memref<1xindex>
-  Value C_col_size_alloc = mtxC.getDefiningOp()->getOperand(14).getDefiningOp()->getOperand(0);    //8
-  /// Store the new mtxC_val_size to C_col_size
+    /// Find the alloc of C_col_size (Arcrd_size)
+    Value C_col_size_alloc = mtxC.getDefiningOp()->getOperand(14).getDefiningOp()->getOperand(0); // 8
+                                                                                                  /// Store the new mtxC_val_size to C_col_size
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
     auto store_C_col_size_alloc = builder.create<memref::StoreOp>(loc,
                                                                   mtxC_val_size,
@@ -1752,10 +1751,9 @@ void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
                                     ValueRange{const_index_0});
 #endif
 
-  /// Find the alloc of C_val_size (Aval_size)
-  ///     %67 = memref.load %alloc_154[%c0_128] : memref<1xindex>
-  Value C_val_size_alloc = mtxC.getDefiningOp()->getOperand(17).getDefiningOp()->getOperand(0);  //9
-  /// Store the new mtxC_val_size to C_val_size
+    /// Find the alloc of C_val_size (Aval_size)
+    Value C_val_size_alloc = mtxC.getDefiningOp()->getOperand(17).getDefiningOp()->getOperand(0); // 9
+    /// Store the new mtxC_val_size to C_val_size                                                                                                                                                                                        
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
     auto store_C_val_size_alloc = builder.create<memref::StoreOp>(loc,
                                                                   mtxC_val_size,
@@ -1795,12 +1793,11 @@ void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
   void replaceOld_CCol_And_CVal(SymbolicInfo &symbolicInfo)
   {
     Value &mtxC = symbolicInfo.mtxC;
-
-  /// Find the alloc of old_C_col (A2crd)
-  ///     %61 = bufferization.to_tensor %alloc_142 : memref<?xindex>
-  Value old_C_col = mtxC.getDefiningOp()->getOperand(5).getDefiningOp()->getOperand(0);   // 3
-  /// Replace old_C_col with the new mtxC_col
-  replaceOldValueToNewValue(old_C_col, symbolicInfo.mtxC_col);
+    /// Find the alloc of old_C_col (A2crd)
+    ///     %61 = bufferization.to_tensor %alloc_142 : memref<?xindex>
+    Value old_C_col = mtxC.getDefiningOp()->getOperand(5).getDefiningOp()->getOperand(0); // 3
+    /// Replace old_C_col with the new mtxC_col
+    replaceOldValueToNewValue(old_C_col, symbolicInfo.mtxC_col);
 
   /// Find the allod of old_C_val (Aval)
   ///     %62 = bufferization.to_tensor %alloc_146 : memref<?xf64>
