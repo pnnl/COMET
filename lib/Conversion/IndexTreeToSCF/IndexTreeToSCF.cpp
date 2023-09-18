@@ -382,18 +382,12 @@ void getMaskSparseTensorInfo(MaskingInfo &maskingInfo /* contents updated after 
 
   // A2pos
   Value mask_rowtpr_buff = mask_tensor.getDefiningOp()->getOperand(4);    // 2
-  // A2pos
-  Value mask_rowtpr_buff = mask_tensor.getDefiningOp()->getOperand(4);    // 2
   maskingInfo.mask_rowptr = mask_rowtpr_buff.getDefiningOp()->getOperand(0);
 
   // A2crd
   Value mask_col_buff = mask_tensor.getDefiningOp()->getOperand(5);   // 3
-  // A2crd
-  Value mask_col_buff = mask_tensor.getDefiningOp()->getOperand(5);   // 3
   maskingInfo.mask_col = mask_col_buff.getDefiningOp()->getOperand(0);
 
-  // Aval
-  Value mask_val_buff = mask_tensor.getDefiningOp()->getOperand(8);   // 4
   // Aval
   Value mask_val_buff = mask_tensor.getDefiningOp()->getOperand(8);   // 4
   maskingInfo.mask_val = mask_val_buff.getDefiningOp()->getOperand(0);
@@ -626,7 +620,6 @@ void genSymbolicForLoopsLevel2(Value &mtxA,
   }
   Value k_loc = for_loop_1.getInductionVar();
   Value A_col_buffer = mtxA.getDefiningOp()->getOperand(5); //3
-  Value A_col_buffer = mtxA.getDefiningOp()->getOperand(5); //3
   Value A_col_alloc = A_col_buffer.getDefiningOp()->getOperand(0);
   Value k_idx = builder.create<memref::LoadOp>(loc, A_col_alloc, ValueRange{k_loc});
   {
@@ -659,7 +652,6 @@ void genSymbolicForLoopsLevel3(Value &mtxB,
   ///     %j_idx = memref.load %B_col[%j_loc] : memref<?xindex>
   /// mtxB.A2pos is B_rowptr, the 2nd operand of mtxB. mtxB.A2crd is B_col, the 3nd operand of mtxB.
   Value B_rowptr_buffer = mtxB.getDefiningOp()->getOperand(4);    // 2
-  Value B_rowptr_buffer = mtxB.getDefiningOp()->getOperand(4);    // 2
   Value B_rowptr_alloc = B_rowptr_buffer.getDefiningOp()->getOperand(0);
   Value k_idx = three_index_ancestors[1]->symbolicAccessIdx[0];
   Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
@@ -682,7 +674,6 @@ void genSymbolicForLoopsLevel3(Value &mtxB,
     comet_vdump(for_loop_2);
   }
   Value j_loc = for_loop_2.getInductionVar();
-  Value B_col_buffer = mtxB.getDefiningOp()->getOperand(5);   //3
   Value B_col_buffer = mtxB.getDefiningOp()->getOperand(5);   //3
   Value B_col_alloc = B_col_buffer.getDefiningOp()->getOperand(0);
   Value j_idx = builder.create<memref::LoadOp>(loc, B_col_alloc, ValueRange{j_loc});
@@ -1186,12 +1177,9 @@ void findOutputMatrixRowptrAndColAndVal(indexTree::IndexTreeComputeOp &cur_op,
   Value cmp_LHS = cmp_op.getLhs();
   Value mtxC = cmp_LHS.getDefiningOp()->getOperand(0);
   Value rowptr_buffer = mtxC.getDefiningOp()->getOperand(4);  //2
-  Value rowptr_buffer = mtxC.getDefiningOp()->getOperand(4);  //2
   symbolicInfo.mtxC_rowptr = rowptr_buffer.getDefiningOp()->getOperand(0);
   Value col_buffer = mtxC.getDefiningOp()->getOperand(5);   //3
-  Value col_buffer = mtxC.getDefiningOp()->getOperand(5);   //3
   symbolicInfo.mtxC_col = col_buffer.getDefiningOp()->getOperand(0);
-  Value val_buffer = mtxC.getDefiningOp()->getOperand(8);   //4
   Value val_buffer = mtxC.getDefiningOp()->getOperand(8);   //4
   symbolicInfo.mtxC_val = val_buffer.getDefiningOp()->getOperand(0);
   symbolicInfo.mtxC = mtxC;
@@ -1733,8 +1721,6 @@ void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
 
   /// Find the alloc of C_col_size (Arcrd_size)
-  ///     %66 = memref.load %alloc_153[%c0_128] : memref<1xindex>
-  Value C_col_size_alloc = mtxC.getDefiningOp()->getOperand(14).getDefiningOp()->getOperand(0);    //8
   Value C_col_size_alloc = mtxC.getDefiningOp()->getOperand(14).getDefiningOp()->getOperand(0);    //8
   /// Store the new mtxC_val_size to C_col_size
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
@@ -1753,8 +1739,6 @@ void genChangeOld_CColSize_And_CValSize(Value &mtxC_val_size,
 
 
   /// Find the alloc of C_val_size (Aval_size)
-  ///     %67 = memref.load %alloc_154[%c0_128] : memref<1xindex>
-  Value C_val_size_alloc = mtxC.getDefiningOp()->getOperand(17).getDefiningOp()->getOperand(0);  //9
   Value C_val_size_alloc = mtxC.getDefiningOp()->getOperand(17).getDefiningOp()->getOperand(0);  //9
   /// Store the new mtxC_val_size to C_val_size
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
@@ -1802,13 +1786,11 @@ void replaceOld_CCol_And_CVal(SymbolicInfo &symbolicInfo) {
   /// Find the alloc of old_C_col (A2crd)
   ///     %61 = bufferization.to_tensor %alloc_142 : memref<?xindex>
   Value old_C_col = mtxC.getDefiningOp()->getOperand(5).getDefiningOp()->getOperand(0);   // 3
-  Value old_C_col = mtxC.getDefiningOp()->getOperand(5).getDefiningOp()->getOperand(0);   // 3
   /// Replace old_C_col with the new mtxC_col
   replaceOldValueToNewValue(old_C_col, symbolicInfo.mtxC_col);
 
   /// Find the allod of old_C_val (Aval)
   ///     %62 = bufferization.to_tensor %alloc_146 : memref<?xf64>
-  Value old_C_val = mtxC.getDefiningOp()->getOperand(8).getDefiningOp()->getOperand(0);   // 4
   Value old_C_val = mtxC.getDefiningOp()->getOperand(8).getDefiningOp()->getOperand(0);   // 4
   /// Replace old_C_val with the new mtxC_val
   replaceOldValueToNewValue(old_C_val, symbolicInfo.mtxC_val);
@@ -2416,7 +2398,6 @@ void genForOps(std::vector<Value> &tensors,
 
         std::vector<Value> crd_indices = {loop.getInductionVar()};
         auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
-        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
         opstree->forOps.push_back(loop);
         opstree->accessIdx.push_back(get_index);
@@ -2439,7 +2420,6 @@ void genForOps(std::vector<Value> &tensors,
         }
 
         std::vector<Value> crd_indices = {last_forop.getInductionVar()};
-        auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
         auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
         /// Adding one iteration loop to provide consistency with the corresponding index tree.
@@ -4599,15 +4579,8 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
         // Get tensor ranks
         auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(lhs.getDefiningOp());
         int lhs_ranks = sp_op.getTensorRank();
-        
-        // Get tensor ranks
-        auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(lhs.getDefiningOp());
-        int lhs_ranks = sp_op.getTensorRank();
 
         //[0...2d,2d+1...4d+1,4d+2...5d+1]
-        unsigned int lhs_val_size_loc = 8 * lhs_ranks + 1;    // 17 (2d)  // 15
-        unsigned int lhs_2crd_size_loc = 7 * lhs_ranks;       // 14 (2d)  // 12
-        unsigned int lhs_2pos_size_loc = 7 * lhs_ranks - 1;   // 13 (2d)  // 11
         unsigned int lhs_val_size_loc = 8 * lhs_ranks + 1;    // 17 (2d)  // 15
         unsigned int lhs_2crd_size_loc = 7 * lhs_ranks;       // 14 (2d)  // 12
         unsigned int lhs_2pos_size_loc = 7 * lhs_ranks - 1;   // 13 (2d)  // 11
@@ -4813,7 +4786,6 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                                                                       1];
               comet_debug() << " ";
               comet_vdump(crd_index);
-              Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];   //-2
               Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];   //-2
               comet_debug() << " ";
               comet_vdump(lhs_2crd);
