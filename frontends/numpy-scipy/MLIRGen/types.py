@@ -1,0 +1,5 @@
+DENSE = 0 
+CSR = 1
+COO = 2
+CSC = 3
+UNSUPPORTED_FORMAT = -1
