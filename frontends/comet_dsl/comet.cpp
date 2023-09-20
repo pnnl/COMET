@@ -340,10 +340,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // optPM.addPass(mlir::tensorAlgebra::createOptDenseTransposePass());
   }
 
-  // if (OptMatmulTiling)
-  // {
-  //   optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulTilingPass());
-  // }
+  if (OptMatmulTiling)
+  {
+    optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
+  }
 
   // if (OptCallToMatMulMicroKernel)
   // {

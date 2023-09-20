@@ -33,7 +33,6 @@
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-// #include "mlir/Conversion/LinalgToStandard/LinalgToStandard.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
@@ -45,9 +44,9 @@ using namespace mlir::arith;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LINALGTRANSFORMS
-// #define DEBUG_MODE_LINALGTRANSFORMS
-// #endif
+#ifndef DEBUG_MODE_LINALGTRANSFORMS
+#define DEBUG_MODE_LINALGTRANSFORMS
+#endif
 
 #ifdef DEBUG_MODE_LINALGTRANSFORMS
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -58,7 +57,12 @@ using namespace mlir::tensorAlgebra;
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
   n.dump()
 #else
-#define comet_debug() if(true){}else llvm::errs()
+#define comet_debug() \
+  if (true)           \
+  {                   \
+  }                   \
+  else                \
+    llvm::errs()
 #define comet_pdump(n)
 #define comet_vdump(n)
 #endif
@@ -72,10 +76,43 @@ namespace
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LinAlgMatmulTilingPass)
     void runOnOperation() override
     {
-      func::FuncOp func = getOperation();
-      MLIRContext *ctx = func.getContext();
 
-      RewritePatternSet patterns(&getContext());
+      //===----------------------------------------------------------------------===//
+      // BLIS HASWELL
+      //===----------------------------------------------------------------------===//
+      // #define BLIS_DGEMM_UKERNEL         bli_dgemm_asm_8x6
+      // #define BLIS_DEFAULT_MC_D          72
+      // #define BLIS_DEFAULT_KC_D          256
+      // #define BLIS_DEFAULT_NC_D          4080
+      // #define BLIS_DEFAULT_MR_D          8
+      // #define BLIS_DEFAULT_NR_D          6
+
+      ArrayRef<int64_t> tileInterchange_L2;
+      
+
+      // Tile the root operation.
+      LinalgTilingOptions tilingOptions;
+      tilingOptions = tilingOptions
+                          // .setInterchange(SmallVector<unsigned>(
+                          //     tileInterchange.begin(), tileInterchange.end()))
+                          .setInterchange({1, 2, 0})
+                          //.setTileSizes(tileSizes)
+                          .setTileSizes({72, 4080, 256})
+                          .setLoopType(LinalgTilingLoopType::Loops);
+
+      // TODO: Propagate RewriterBase everywhere.
+      IRRewriter rewriter(b);
+      FailureOr<TiledLinalgOp> tiledRootOp =
+          tileLinalgOp(rewriter, rootOp, tilingOptions);
+
+      // Exit if tiling the root operation fails.
+      // if (failed(tiledRootOp))
+      //   return failure();
+
+      // func::FuncOp func = getOperation();
+      // MLIRContext *ctx = func.getContext();
+
+      // RewritePatternSet patterns(&getContext());
 
       // Add the matmul tiling patterns to the list.
       //===----------------------------------------------------------------------===//
@@ -107,7 +144,7 @@ namespace
       //     LinalgTransformationFilter(Identifier::get("L2__with_tiling__", ctx),
       //                                Identifier::get("__micro_kernel__", ctx)));
 
-      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+      //(void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   };
 } // end anonymous namespace
@@ -467,7 +504,6 @@ namespace
 //   };
 // } // end anonymous namespace
 
-
 /// Create a pass to optimize LinAlg Matmul Op with tiling
 std::unique_ptr<mlir::Pass> mlir::comet::createLinAlgMatmulTilingPass()
 {
@@ -489,4 +525,3 @@ std::unique_ptr<mlir::Pass> mlir::comet::createLinAlgMatmulMicroKernelPass()
 //   comet_debug() << "LinAlgTransforms createOptDenseTransposePass\n";
 //   return std::make_unique<OptDenseTransposePass>(tile_size, seperate_tiles);
 // }
-
