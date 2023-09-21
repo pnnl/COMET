@@ -285,15 +285,25 @@ namespace
     }
 
     /// Initialize the sizes of pos/crd/val arrays
-    array_sizes.push_back(cst_index_1);
-    array_sizes.push_back(cst_index_1);
-    array_sizes.push_back(cst_index_1);
-    array_sizes.push_back(cst_index_0);
-    array_sizes.push_back(cst_index_0);
-    array_sizes.push_back(cst_index_0);
-    array_sizes.push_back(cst_index_0);
-    array_sizes.push_back(cst_index_1);
-    array_sizes.push_back(cst_index_1);
+    array_sizes.push_back(cst_index_1);  /// A1pos_size
+    array_sizes.push_back(cst_index_1);  /// A1crd_size
+    array_sizes.push_back(cst_index_1);  /// A1tile_pos_size
+    array_sizes.push_back(cst_index_0);  /// A1tile_crd_size
+    /// ----------------- ///
+    /// Changed by Zhen Peng on 09/20/2023 12:47:35 AM
+    /// A2pos_size should be initialized to 1 rather than 0.
+    /// Aval_size should be initialized to 0 rather than 1.
+    /// ----------------- ///
+//    array_sizes.push_back(cst_index_0);  /// A2pos_size
+    array_sizes.push_back(cst_index_1);  /// A2pos_size
+    array_sizes.push_back(cst_index_0);  /// A2crd_size
+    array_sizes.push_back(cst_index_0);  /// A2tile_pos_size
+    array_sizes.push_back(cst_index_1);  /// A2tile_crd_size
+    /// ----------------- ///
+    /// Aval_size should be initialized to 0 rather than 1.
+    /// ----------------- ///
+//    array_sizes.push_back(cst_index_1);  /// Aval_size
+    array_sizes.push_back(cst_index_0);  /// Aval_size
     // put the array sizes into alloc/store/loadOp
     for (auto size : array_sizes)
     {
