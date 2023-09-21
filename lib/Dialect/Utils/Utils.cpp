@@ -44,9 +44,9 @@
 
 #define DEBUG_TYPE "ta-utils"
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_UTILS
-// #define DEBUG_MODE_UTILS
-// #endif
+//#ifndef DEBUG_MODE_UTILS
+//#define DEBUG_MODE_UTILS
+//#endif
 
 #ifdef DEBUG_MODE_UTILS
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -216,7 +216,13 @@ namespace mlir
       if (cur_memref[0] == 1)
       { // Only 1 element in the array, no need to generate for loop
         auto const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+#ifdef DEBUG_MODE_UTILS
+        auto store_op = builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
+        comet_vdump(store_op);
+#else
         builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
+#endif
+//        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
       }
       else
       {

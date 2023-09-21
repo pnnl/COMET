@@ -75,9 +75,9 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
-// #define DEBUG_MODE_LowerIndexTreeToSCFPass
-// #endif
+//#ifndef DEBUG_MODE_LowerIndexTreeToSCFPass
+//#define DEBUG_MODE_LowerIndexTreeToSCFPass
+//#endif
 
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
 #define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
@@ -3334,6 +3334,115 @@ void genIfStatementElseRegionNumeric(
 }
 
 
+/// ----------------- ///
+/// The old codegen for Elementwise Multiplication. Called inside formSemiringLoopBody().
+/// ----------------- ///
+void genEltwiseCmptLoopBody(OpBuilder &builder,
+                            Location &loc,
+                            int lhs_loc,
+                            int main_tensor_nums,
+                            bool compressedWorkspace,
+                            llvm::StringRef &semiringFirst,
+                            llvm::StringRef &semiringSecond,
+                            std::vector<std::vector<Value>> &main_tensors_all_Allocs,
+                            std::vector<std::vector<Value>> &tensors_lhs_Allocs,
+                            std::vector<std::vector<Value>> &allValueAccessIdx) {
+//  Value const_i1_0 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(0));
+//  Value const_i1_1 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(1));
+  Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  // Workspace tensors are on the lhs
+  comet_debug() << " lhs_loc: " << lhs_loc << "\n";
+  Value checkAlreadySet = builder.create<memref::LoadOp>(loc, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
+  comet_debug() << " ";
+  comet_vdump(checkAlreadySet);
+  comet_debug() << " ";
+  comet_vdump(checkAlreadySet.getType());
+//  comet_debug() << " ";
+//  comet_vdump(const_i1_0.getType());
+
+  Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, const_index_0);
+//  Value notAlreadySet = builder.create<CmpIOp>(loc, CmpIPredicate::eq, checkAlreadySet, const_i1_0);
+  comet_debug() << " ";
+  comet_vdump(notAlreadySet);
+  auto if_notAlreadySet = builder.create<scf::IfOp>(loc, notAlreadySet, /*WithElseRegion*/ true);
+  comet_debug() << " If branch:\n";
+  comet_vdump(if_notAlreadySet);
+
+  // if-then region corresponding to if_notAlreadySet instruction.
+  // if (&if_notAlreadySet. getThenRegion())
+  if (!if_notAlreadySet.getThenRegion().empty())
+  {
+    builder.setInsertionPointToStart(&if_notAlreadySet.getThenRegion().front());
+
+    // Wj = Aik * Bkj          // computation wj, outer has k, so +=/= need if/else
+    // W_already_set[j] = 1
+    // W_index_list[W_index_list_size] = j
+    // W_index_list_size++
+
+    std::vector<Value> allLoadsIf(main_tensor_nums);
+    for (int m = 0; m < main_tensor_nums; m++)
+    {
+      Value s = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
+      allLoadsIf[m] = s;
+      comet_debug() << " ";
+      comet_vdump(s);
+    }
+    comet_debug() << " allLoadsIf.size(): " << allLoadsIf.size() << "\n";
+
+    comet_debug() << "calculate elementWise operation only\n";
+    Value elementWiseResult = getSemiringSecondVal(builder, loc, semiringSecond, allLoadsIf[0], allLoadsIf[1], compressedWorkspace);
+#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+    auto store_sum = builder.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1], allValueAccessIdx[lhs_loc]);
+//    auto store_sum = builder.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
+    comet_debug() << " ";
+    comet_vdump(elementWiseResult);
+    comet_vdump(store_sum);
+#else
+    builder.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1], allValueAccessIdx[lhs_loc]);
+//    builder.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
+#endif
+
+    builder.create<memref::StoreOp>(loc, const_index_1, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
+//    builder.create<memref::StoreOp>(loc, const_i1_1, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
+
+    Value W_index_list_size_old = builder.create<memref::LoadOp>(loc, tensors_lhs_Allocs[3][0], ValueRange{const_index_0});
+
+    assert(allValueAccessIdx[lhs_loc].size() == 1 && " more than one access id for auxiliary array\n");
+    builder.create<memref::StoreOp>(loc, allValueAccessIdx[lhs_loc][0], tensors_lhs_Allocs[2][0], ValueRange{W_index_list_size_old});
+
+    Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+    Value W_index_list_size_new = builder.create<AddIOp>(loc, W_index_list_size_old, const_index_1);
+    comet_debug() << " AddIOps (W_index_list_size_new)";
+    comet_vdump(W_index_list_size_new);
+
+    builder.create<memref::StoreOp>(loc, W_index_list_size_new, tensors_lhs_Allocs[3][0], ValueRange{const_index_0});
+  }
+
+  // if-else region corresponding to if_notAlreadySet instruction.
+  // if (&if_notAlreadySet.getElseRegion())
+  if (!if_notAlreadySet.getElseRegion().empty())
+  {
+    builder.setInsertionPointToStart(&if_notAlreadySet.getElseRegion().front());
+
+    std::vector<Value> allLoadsElse(main_tensor_nums);
+    for (auto m = 0; m < main_tensor_nums; m++)
+    {
+      Value s = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
+      allLoadsElse[m] = s;
+      comet_debug() << " ";
+      comet_vdump(s);
+    }
+    comet_debug() << " allLoadsElse.size(): " << allLoadsElse.size() << "\n";
+
+    comet_debug() << "calculate elementWise operation and reduction\n";
+    Value elementWiseResult = getSemiringSecondVal(builder, loc, semiringSecond, allLoadsElse[0], allLoadsElse[1], compressedWorkspace);
+    Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoadsElse[2], elementWiseResult, compressedWorkspace);
+    builder.create<memref::StoreOp>(loc, reduceResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
+  }
+}
+
+
 
 void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
                           llvm::StringRef &semiringSecond,
@@ -3376,18 +3485,19 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 
   if (comp_worksp_opt) // always lhs is dense after workspace transformations
   {
-    assert(symbolicInfo.is_SpGEMM && "comp_worksp_opt should work on SpGEMM.\n");
+//    assert(symbolicInfo.is_SpGEMM && "comp_worksp_opt should work on SpGEMM.\n");
     compressedWorkspace = true;
 
-    /// ----------------- ///
-    /// Allocate the ws_bitmap and mask_array before the outermost for-loop for the numeric phase.
-    /// ----------------- ///
-    genAllocBitmapAndMaskArray(builder,
-                               loc,
-                               forLoops /*for-loop statements, from innermost to outermost*/,
-                               symbolicInfo,
-                               maskingInfo,
-                               numericInfo /* contents updated after call */);
+    if (symbolicInfo.is_SpGEMM) {
+      /// ----------------- ///
+      /// Allocate the ws_bitmap and mask_array before the outermost for-loop for the numeric phase.
+      /// ----------------- ///
+      genAllocBitmapAndMaskArray(builder,
+                                 loc,
+                                 forLoops /*for-loop statements, from innermost to outermost*/,
+                                 symbolicInfo,
+                                 maskingInfo,
+                                 numericInfo /* contents updated after call */);
 //                               numericAuxiliary /* output */);
 
 //    /// ----------------- ///
@@ -3411,7 +3521,7 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 //                                        forLoops);
 
 
-    if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
+      if (PUSH_BASED_MASKING == maskingInfo.mask_type) {
 //      /// ----------------- ///
 //      /// Generate the numeric for-loop that initialize the mark_array by using the mask
 //      /// new_mark: the update value of mark
@@ -3427,67 +3537,67 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 //                                    maskingInfo,
 //                                    builder,
 //                                    loc);
+        /// ----------------- ///
+        /// Generate the numeric for-loop that initialize the mask_array using the mask,
+        /// and reset the mask_array after the 2nd numeric for-loop.
+        /// ----------------- ///
+        genNumericInitAndResetMaskArrayByMask(forLoops /* numeric for-loops, from innermost to outermost*/,
+                                              numericInfo,
+                                              maskingInfo,
+                                              builder,
+                                              loc);
+      }
       /// ----------------- ///
-      /// Generate the numeric for-loop that initialize the mask_array using the mask,
-      /// and reset the mask_array after the 2nd numeric for-loop.
+      /// Generate if statement's condition
+      ///     %58 = memref.load %array_mask[%57] : memref<?xi1>
+      ///     %59 = arith.cmpi eq, %58, %true : i1
+      ///     scf.if %59 {
+      ///       %b_t = memref.load %ws_bitmap[%57] : memref<?xi1>
+      ///       %not_visited = arith.cmpi eq, %b_t, %false : i1
+      ///       scf.if %not_visited {
       /// ----------------- ///
-      genNumericInitAndResetMaskArrayByMask(forLoops /* numeric for-loops, from innermost to outermost*/,
-                                    numericInfo,
-                                    maskingInfo,
-                                    builder,
-                                    loc);
-    }
-    /// ----------------- ///
-    /// Generate if statement's condition
-    ///     %58 = memref.load %array_mask[%57] : memref<?xi1>
-    ///     %59 = arith.cmpi eq, %58, %true : i1
-    ///     scf.if %59 {
-    ///       %b_t = memref.load %ws_bitmap[%57] : memref<?xi1>
-    ///       %not_visited = arith.cmpi eq, %b_t, %false : i1
-    ///       scf.if %not_visited {
-    /// ----------------- ///
-    scf::IfOp if_notAlreadySet;
-    genIfStatementConditionNumeric(builder,
-                                   loc,
-                                   allValueAccessIdx[lhs_loc][0],
-                                   numericInfo,
-                                   maskingInfo,
-                                   if_notAlreadySet);
+      scf::IfOp if_notAlreadySet;
+      genIfStatementConditionNumeric(builder,
+                                     loc,
+                                     allValueAccessIdx[lhs_loc][0],
+                                     numericInfo,
+                                     maskingInfo,
+                                     if_notAlreadySet);
 
-    if (!if_notAlreadySet.getThenRegion().empty()) {
-      /// ----------------- ///
-      /// Generate if statement's then region
-      /// ----------------- ///
-      genIfStatementThenRegionNumeric(if_notAlreadySet,
-                                      builder,
-                                      loc,
-                                      main_tensor_nums,
-                                      lhs_loc,
-                                      semiringSecond,
-                                      compressedWorkspace,
-                                      main_tensors_all_Allocs,
-                                      allValueAccessIdx,
-                                      symbolicInfo,
-                                      numericInfo);
+      if (!if_notAlreadySet.getThenRegion().empty()) {
+        /// ----------------- ///
+        /// Generate if statement's then region
+        /// ----------------- ///
+        genIfStatementThenRegionNumeric(if_notAlreadySet,
+                                        builder,
+                                        loc,
+                                        main_tensor_nums,
+                                        lhs_loc,
+                                        semiringSecond,
+                                        compressedWorkspace,
+                                        main_tensors_all_Allocs,
+                                        allValueAccessIdx,
+                                        symbolicInfo,
+                                        numericInfo);
 //                                      maskingInfo);
-    }
+      }
 
-    if (!if_notAlreadySet.getElseRegion().empty()) {
-      /// ----------------- ///
-      /// Generate if statement's else region
-      /// ----------------- ///
-      genIfStatementElseRegionNumeric(if_notAlreadySet,
-                                      builder,
-                                      loc,
-                                      main_tensor_nums,
-                                      lhs_loc,
-                                      semiringFirst,
-                                      compressedWorkspace,
-                                      semiringSecond,
-                                      main_tensors_all_Allocs,
-                                      allValueAccessIdx,
-                                      maskingInfo);
-    }
+      if (!if_notAlreadySet.getElseRegion().empty()) {
+        /// ----------------- ///
+        /// Generate if statement's else region
+        /// ----------------- ///
+        genIfStatementElseRegionNumeric(if_notAlreadySet,
+                                        builder,
+                                        loc,
+                                        main_tensor_nums,
+                                        lhs_loc,
+                                        semiringFirst,
+                                        compressedWorkspace,
+                                        semiringSecond,
+                                        main_tensors_all_Allocs,
+                                        allValueAccessIdx,
+                                        maskingInfo);
+      }
 //    /// ----------------- ///
 //    /// Generate if statement's condition
 //    ///   %76 = memref.load %mark_array[%73] : memref<?xindex>
@@ -3544,7 +3654,18 @@ void formSemiringLoopBody(bool comp_worksp_opt, llvm::StringRef &semiringFirst,
 //                                    allValueAccessIdx,
 //                                    maskingInfo);
 //    }
-
+    } else {  /// Elementwise Multiplication, not SpGEMM.
+      genEltwiseCmptLoopBody(builder,
+                             loc,
+                             lhs_loc,
+                             main_tensor_nums,
+                             compressedWorkspace,
+                             semiringFirst,
+                             semiringSecond,
+                             main_tensors_all_Allocs,
+                             tensors_lhs_Allocs,
+                             allValueAccessIdx);
+    }
   } else { // general dense or mixed mode computation, no need workspace transformations
     std::vector<Value> allLoads(main_tensor_nums);
     for (auto m = 0; m < main_tensor_nums; m++) {
@@ -4136,6 +4257,144 @@ void genNumericGatherLoop(indexTree::IndexTreeComputeOp &cur_op,
 }
 
 
+/// ----------------- ///
+/// The old codegen for Elementwise Multiplication Cij = Wj node. Called by genCmptOps().
+/// ----------------- ///
+void genEltwiseGatherWorkspaceToSparseOutput(OpBuilder &builder,
+                                             Location &loc,
+                                             int lhs_loc,
+                                             unsigned int lhs_2crd_size_loc,
+                                             unsigned int lhs_2pos_size_loc,
+                                             Type &unrankedMemrefType_index,
+                                             Value &lhs,
+                                             Value &lhs_val,
+                                             Value &lhs_nnz,
+                                             Value &lhs_nnz_alloc,
+                                             std::vector<std::vector<Value>> &main_tensors_all_Allocs,
+                                             std::vector<std::vector<std::string>> &allFormats,
+                                             std::vector<std::vector<Value>> &tensors_rhs_Allocs,
+                                             std::vector<scf::ForOp> &nested_forops) {
+  // Get the parent for op, change the upperbound as w_index_list_size
+  auto last_insertionPoint = builder.saveInsertionPoint();
+//  Value const_i1_0 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(0));
+  Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+  Value cst_0_index = builder.create<ConstantIndexOp>(loc, 0);
+  scf::ForOp theForop = dyn_cast<scf::ForOp>(const_index_0.getDefiningOp()->getParentOp());
+  comet_debug() << " ";
+  comet_vdump(theForop);
+
+  builder.setInsertionPoint(theForop);
+
+  Value const_index_00 = builder.create<ConstantIndexOp>(loc, 0);
+  Value w_index_list_size = builder.create<memref::LoadOp>(loc, tensors_rhs_Allocs[3][0], const_index_00);
+
+  std::string quick_sort_Str = "quick_sort";
+//  auto indexType = IndexType::get(rootOp.getContext());
+//  Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
+  Value w_index_list_cast = builder.create<memref::CastOp>(loc, unrankedMemrefType_index, tensors_rhs_Allocs[2][0]);
+  builder.create<func::CallOp>(loc, quick_sort_Str, SmallVector<Type, 2>{}, ValueRange{w_index_list_cast, w_index_list_size});
+
+  theForop.setUpperBound(w_index_list_size);
+  comet_debug() << " ";
+  comet_vdump(theForop);
+
+  builder.restoreInsertionPoint(last_insertionPoint);
+  Value crd_index = builder.create<memref::LoadOp>(loc, tensors_rhs_Allocs[2][0], theForop.getInductionVar());
+  Value c_value = builder.create<memref::LoadOp>(loc, tensors_rhs_Allocs[0][0], crd_index);
+  // Fill CVal
+  builder.create<memref::StoreOp>(loc, c_value, lhs_val, ValueRange{lhs_nnz});
+
+  // w_already_set[crd_j] = 0
+  builder.create<memref::StoreOp>(loc, const_index_0, tensors_rhs_Allocs[1][0], ValueRange{crd_index});
+//  builder.create<memref::StoreOp>(loc, const_i1_0, tensors_rhs_Allocs[1][0], ValueRange{crd_index});
+
+  comet_debug() << " lhs_loc: " << lhs_loc << "\n";
+  comet_debug() << " format: " << allFormats[lhs_loc][allFormats[lhs_loc].size() - 1] << "\n";
+  if (allFormats[lhs_loc][allFormats[lhs_loc].size() - 1].compare(0, 2, "CU") == 0)
+  {
+    Value lhs_2crd = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 4];   //-2
+    comet_debug() << " ";
+    comet_vdump(lhs_2crd);
+
+    builder.create<memref::StoreOp>(loc, crd_index, lhs_2crd, ValueRange{lhs_nnz});
+  }
+
+  comet_debug() << "\n";
+  Value cst_1_index = builder.create<ConstantIndexOp>(loc, 1);
+  comet_debug() << " ";
+  comet_vdump(lhs_nnz);
+  Value lhs_nnz_new = builder.create<AddIOp>(loc, lhs_nnz, cst_1_index);
+  comet_debug() << " AddIOps (lhs_nnz_new): ";
+  comet_vdump(lhs_nnz_new);
+  comet_debug() << " ";
+  comet_vdump(lhs_nnz_alloc);
+
+  builder.create<memref::StoreOp>(loc, lhs_nnz_new, lhs_nnz_alloc, ValueRange{cst_0_index});
+
+  Value lhs_2crd = lhs.getDefiningOp()->getOperand(lhs_2crd_size_loc);
+  Value lhs_2crd_op;
+  comet_vdump(lhs_2crd);
+  if (isa<IndexCastOp>(lhs_2crd.getDefiningOp()))
+  {
+    lhs_2crd_op = lhs_2crd.getDefiningOp()->getOperand(0);
+  }
+  else
+  {
+    lhs_2crd_op = lhs_2crd;
+  }
+  comet_debug() << " ";
+  comet_vdump(lhs_2crd_op);
+  auto c2crd_size_load = cast<memref::LoadOp>(lhs_2crd_op.getDefiningOp());                    // index
+  Value c2crd_size_alloc = cast<memref::AllocOp>(c2crd_size_load.getMemRef().getDefiningOp()); // index
+  comet_debug() << " ";
+  comet_vdump(c2crd_size_alloc);
+
+  builder.create<memref::StoreOp>(loc, lhs_nnz_new, c2crd_size_alloc, ValueRange{cst_0_index});
+
+  // Fill C2pos
+  comet_debug() << " \n";
+  auto prev_forop = nested_forops[nested_forops.size() - 1 - 1];
+  builder.setInsertionPointAfter(prev_forop);
+
+  Value lhs_2pos_0 = lhs.getDefiningOp()->getOperand(lhs_2pos_size_loc);
+  Value lhs_2pos_op;
+  comet_debug() << " ";
+  comet_vdump(lhs_2pos_0);
+  if (isa<IndexCastOp>(lhs_2pos_0.getDefiningOp()))
+  {
+    lhs_2pos_op = lhs_2pos_0.getDefiningOp()->getOperand(0);
+  }
+  else
+  {
+    lhs_2pos_op = lhs_2pos_0;
+  }
+  comet_debug() << " ";
+  comet_vdump(lhs_2pos_op);
+  auto c2pos_size_load = cast<memref::LoadOp>(lhs_2pos_op.getDefiningOp());                    // index
+  Value c2pos_size_alloc = cast<memref::AllocOp>(c2pos_size_load.getMemRef().getDefiningOp()); // index
+  Value cst_index_000 = builder.create<ConstantIndexOp>(loc, 0);
+  Value c2pos_size_value = builder.create<memref::LoadOp>(loc, c2pos_size_alloc, ValueRange{cst_index_000});
+
+  Value c2crd_size_nnz = builder.create<memref::LoadOp>(loc, c2crd_size_alloc, ValueRange{cst_index_000});
+
+  // store crd_size into pos
+  Value lhs_2pos = main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 5]; // -3
+  comet_debug() << " ";
+  comet_vdump(lhs_2pos);
+  builder.create<memref::StoreOp>(loc, c2crd_size_nnz, lhs_2pos, ValueRange{c2pos_size_value});
+
+  Value cst_index_1 = builder.create<ConstantIndexOp>(loc, 1);
+  comet_debug() << " ";
+  comet_vdump(c2pos_size_value);
+  Value c2pos_size_value_new = builder.create<AddIOp>(loc, c2pos_size_value, cst_index_1);
+  comet_debug() << " AddIOps (c2pos_size_value_new): ";
+  comet_vdump(c2pos_size_value_new);
+
+  builder.create<memref::StoreOp>(loc, c2pos_size_value_new, c2pos_size_alloc, ValueRange{cst_index_000});
+}
+
+
+
 /// 1. Get the nested loops
 /// ---1.1 the nested loops corresponding indices can be infered from ancestors_wp
 /// 2. get lhs and rhs. if only 1 rhs, then it's a fill op; otherwise, binary op
@@ -4224,11 +4483,11 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
   builder.setInsertionPoint(nested_forops[0].getBody()->getTerminator());
 
   auto f64Type = builder.getF64Type();
-//  auto indexType = IndexType::get(rootOp.getContext());
+  auto indexType = IndexType::get(rootOp.getContext());
 
   Value const_f64_0 = builder.create<ConstantOp>(loc, f64Type, builder.getF64FloatAttr(0));
 //  Value const_i1_0 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(0));
-//  Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
+  Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
 
   /// Analyze the leafop, Get the tensors, rhs, lhs, and operator_type
   /// --- only one rhs, it will be a fill op; if two, check op_type (+, +=, *=)
@@ -4461,11 +4720,12 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
 
         // Generate Store 1.0, A[...]  this op
         // this case: allPerms[0] is empty, allFormats[0] is empty
+        comet_vdump(cstop);
         comet_debug() << " cstop.getValue(): " << cstop.getValue() << "\n";
-        comet_debug() << " ";
+//        comet_debug() << " ";
         comet_vdump(main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1]);
         comet_debug() << " tensors_lhs_Allocs.size(): " << tensors_lhs_Allocs.size() << "\n";
-        comet_debug() << " ";
+//        comet_debug() << " ";
 
         insertInitialize(loc, cstop, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1],
                          builder);
@@ -4555,14 +4815,32 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
 
         if (comp_worksp_opt) // true attr means compressed workspace
         {
-          /// Generate Cij = Wj to gather results from the workspace to the output matrix
-          genNumericGatherLoop(cur_op,
-                               opstree,
-                               tensors_rhs_Allocs,
-                               builder,
-                               loc,
-                               symbolicInfo,
-                               numericInfo);
+          if (symbolicInfo.is_SpGEMM) {
+            /// Generate Cij = Wj to gather results from the workspace to the output matrix
+            genNumericGatherLoop(cur_op,
+                                 opstree,
+                                 tensors_rhs_Allocs,
+                                 builder,
+                                 loc,
+                                 symbolicInfo,
+                                 numericInfo);
+          } else {
+            /// Elementwise Multiplication, not SpGEMM
+            genEltwiseGatherWorkspaceToSparseOutput(builder,
+                                                    loc,
+                                                    lhs_loc,
+                                                    lhs_2crd_size_loc,
+                                                    lhs_2pos_size_loc,
+                                                    unrankedMemrefType_index,
+                                                    lhs,
+                                                    lhs_val,
+                                                    lhs_nnz,
+                                                    lhs_nnz_alloc,
+                                                    main_tensors_all_Allocs,
+                                                    allFormats,
+                                                    tensors_rhs_Allocs,
+                                                    nested_forops);
+          }
 
           /// ----------------- ///
           /// Backup: previous Cij = Wj
@@ -5010,6 +5288,8 @@ void getIndexTreeOps(func::FuncOp &function,
 bool checkIfSpGEMM(indexTree::IndexTreeComputeOp &cur_op) {
   std::vector< std::vector<std::string> > opFormats;
   getRHSFormatsOfComputeOp(cur_op, opFormats);
+  std::vector< std::vector<int> > opPerms;
+  getRHSPermsOfComputeOp(cur_op, opPerms);
 
   /// Condition: SpGEMM has 2 or 3 operands in RHS (i.e., two input matrices, or plus one mask)
   if (!(opFormats.size() == 2 /* no mask */ || opFormats.size() == 3 /* mask */)) {
@@ -5024,6 +5304,15 @@ bool checkIfSpGEMM(indexTree::IndexTreeComputeOp &cur_op) {
   /// Condition: SpGEMM's two input matrices are both in CSR format.
   if(!(opFormats[0][0] == "D" && opFormats[0][1] == "CU" && \
        opFormats[1][0] == "D" && opFormats[1][1] == "CU")) {
+    return false;
+  }
+
+  /// Condition: for a elementwise multiplication, the allPerms[0] and allPerms[1] are the same.
+  /// For example, %12 below is elementwise multiplication.
+  /// %12 = "it.ComputeRHS"(%2, %3) {allFormats = [["D", "CU"], ["D", "CU"]], allPerms = [[0, 1], [0, 1]]} : (tensor<?x?xf64>, tensor<?x?xf64>) -> tensor<*xf64>
+  /// In contrast, %14 below is SpGEMM, whose allPerms[0] and allPerms[1] are not the same.
+  /// %14 = "it.ComputeRHS"(%3, %4) {allFormats = [["D", "CU"], ["D", "CU"]], allPerms = [[0, 1], [1, 2]]} : (tensor<?x?xf64>, tensor<?x?xf64>) -> tensor<*xf64>
+  if ( opPerms[0][0] == opPerms[1][0] && opPerms[0][1] == opPerms[1][1] ) {
     return false;
   }
 
@@ -5252,6 +5541,10 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
 //      genForOps(tensors, ids, formats, rootOp, rewriter, opstree_vec[i], ancestors_wp);
       genForOps(tensors, ids, formats, rootOp, builder, opstree_vec[i]);
       comet_debug() << " finished call genForOps, i = " << i << "\n";
+      {
+//    comet_pdump(rootOp.getOperation()->getParentOfType<ModuleOp>());
+        comet_pdump(rootOp->getParentOfType<ModuleOp>());
+      }
     }
     else if (indexTree::IndexTreeComputeOp cur_op = dyn_cast<mlir::indexTree::IndexTreeComputeOp>(wp_ops[i].getDefiningOp()))
     {
@@ -5284,6 +5577,10 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       genCmptOps(cur_op, rootOp, builder, opstree_vec[i], ancestors_wp,
                  wp_ops, symbolicInfo, numericInfo);
       comet_debug() << " finished call genCmptOps, i = " << i << "\n";
+//      {
+////    comet_pdump(rootOp.getOperation()->getParentOfType<ModuleOp>());
+//        comet_pdump(rootOp->getParentOfType<ModuleOp>());
+//      }
     }
   }
 
@@ -5376,16 +5673,17 @@ void LowerIndexTreeToSCFPass::runOnOperation()
   /// ----------------- ////
   /// Backup: add function declaration "quick_sort".
   /// ----------------- ////
-//  IndexType indexType = IndexType::get(ctx);
-//  auto quickSortFunc = FunctionType::get(ctx, {mlir::UnrankedMemRefType::get(indexType, 0), indexType}, {});
-//
-//  if (!hasFuncDeclaration(module, "quick_sort"))
-//  {
-//    mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "quick_sort",
-//                                                          quickSortFunc, ArrayRef<NamedAttribute>{});
-//    func1.setPrivate();
-//    module.push_back(func1);
-//  }
+  {
+    IndexType indexType = IndexType::get(ctx);
+    auto quickSortFunc = FunctionType::get(ctx, {mlir::UnrankedMemRefType::get(indexType, 0), indexType}, {});
+
+    if (!hasFuncDeclaration(module, "quick_sort")) {
+      mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "quick_sort",
+                                                            quickSortFunc, ArrayRef<NamedAttribute>{});
+      func1.setPrivate();
+      module.push_back(func1);
+    }
+  }
 
   /// Declare comet_sort_index()
   /// func.func private @comet_sort_index(memref<*xindex>, index, index)
