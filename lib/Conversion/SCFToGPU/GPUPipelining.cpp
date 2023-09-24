@@ -460,11 +460,13 @@ static Operation* replaceOpWithPredicatedOp(RewriterBase& rewriter,
     // Return/execute the op if it is a shared memory load.
     if (auto loadOp = dyn_cast<vector::LoadOp>(op)) {
       auto loadBaseType = loadOp.getBase().getType().cast<MemRefType>();
-      if (hasSharedMemoryAddressSpace(loadBaseType)) return op;
+      //if (hasSharedMemoryAddressSpace(loadBaseType)) return op;
+      if (loadBaseType.getMemorySpaceAsInt() == 3) return op;
     }
     if (auto loadOp = dyn_cast<memref::LoadOp>(op)) {
       auto loadBaseType = loadOp.getMemRefType();
-      if (hasSharedMemoryAddressSpace(loadBaseType)) return op;
+      //if (hasSharedMemoryAddressSpace(loadBaseType)) return op;
+      if (loadBaseType.getMemorySpaceAsInt() == 3) return op;
     }
     // If we are here that means the operation does not have predication support
     // and cannot be speculatively executed. Thus, unpeeled epilogue is not
@@ -570,7 +572,8 @@ static bool setPipeliningMarkers(scf::ForOp forOp, bool pipelineStoreStage) {
     auto st = dyn_cast<vector::TransferWriteOp>(ld->use_begin()->getOwner());
     if (!st) continue;
     auto stSrcType = st.getSource().getType().cast<MemRefType>();
-    if (!hasSharedMemoryAddressSpace(stSrcType)) continue;
+    //if (!hasSharedMemoryAddressSpace(stSrcType)) continue;
+    if (stSrcType.getMemorySpaceAsInt() != 3) continue;
     copyToWorkgroupMemory = true;
     ld->setAttr(kPipeliningFirstStage, builder.getUnitAttr());
     if (pipelineStoreStage == 0)

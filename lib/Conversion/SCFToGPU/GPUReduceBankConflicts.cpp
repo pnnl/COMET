@@ -76,6 +76,9 @@ using namespace mlir::tensorAlgebra;
 /// have bank conflicts when reading 2D shapes within shared memory.
 static void padAlloc(MLIRContext *context, memref::AllocOp allocOp,
                      int64_t paddingSizeBits) {
+  
+  comet_debug() << "padAlloc start\n";
+
   int64_t innerDim = allocOp.getType().getShape().back();
   if (ShapedType::isDynamic(innerDim)) return;
   Type elType = allocOp.getType().getElementType();
@@ -98,6 +101,8 @@ static void padAlloc(MLIRContext *context, memref::AllocOp allocOp,
       loc, paddedAlloc, offsets, allocOp.getType().getShape(), strides);
   replaceMemrefUsesAndPropagateType(rewriter, loc, allocOp, subview);
   rewriter.eraseOp(allocOp);
+
+  comet_debug() << "padAlloc end\n";
 }
 
 namespace {
@@ -125,7 +130,8 @@ private:
     SmallVector<memref::AllocOp> sharedMemAllocs;
     // Collect all the alloc operations.
     funcOp.walk([&](memref::AllocOp allocOp) {
-      if (hasSharedMemoryAddressSpace(allocOp.getType()) &&
+      // TODO: need to update all shared memory checks as below
+      if ((allocOp.getType().getMemorySpaceAsInt() == 3) && 
           allocOp.getType().hasStaticShape()) {
         sharedMemAllocs.push_back(allocOp);
       }

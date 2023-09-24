@@ -53,6 +53,7 @@
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/GPUToNVVM/GPUToNVVMPass.h"
+#include "mlir/Conversion/NVGPUToNVVM/NVGPUToNVVM.h"
 #include "mlir/Conversion/GPUCommon/GPUCommonPass.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
 #include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
@@ -424,7 +425,18 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       optPM.addPass(mlir::comet::createRaiseLoadStorePass());
 
       // ** Affine -> GPU
-      
+
+      // do tiling
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::createLoopTilingPass());
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
+
+      // insert shared memory copies
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUSharedMemPlacementPass());
+      pm.addPass(mlir::comet::createGPUAllocateGlobalMemPass());
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
+
       // Parallel loops
       auto pass = mlir::createAffineParallelizePass();
       pass->initializeOptions("max-nested=1");
@@ -433,7 +445,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       pm.addPass(mlir::createCSEPass());
 
       // Create memref copy ops for vectorization.
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUMemrefCopyPass());
+      //pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUMemrefCopyPass());
 
       // Creates vector ops (vectorized data transfers from Global memory)
       pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createGPUVectorizationPass());
@@ -451,9 +463,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       pm.addPass(mlir::createCSEPass());
 
       // scf-parallel-loop-tiling
-      auto pass2 = mlir::createParallelLoopTilingPass();
-      pass2->initializeOptions("parallel-loop-tile-sizes=4");
-      pm.addNestedPass<mlir::func::FuncOp>(std::move(pass2));
+      //auto pass2 = mlir::createParallelLoopTilingPass();
+      //pass2->initializeOptions("parallel-loop-tile-sizes=256");
+      //pm.addNestedPass<mlir::func::FuncOp>(std::move(pass2));
 
       // Map the parallel loops to workgroups
       pm.addNestedPass<mlir::func::FuncOp>(mlir::createGpuMapParallelLoopsPass());
@@ -525,6 +537,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createConvertSCFToCFPass());
     pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createArithToLLVMConversionPass());
     pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createLowerGpuOpsToNVVMOpsPass());
+    pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createConvertNVGPUToNVVMPass());
     pm.addNestedPass<mlir::gpu::GPUModuleOp>(mlir::createReconcileUnrealizedCastsPass());
     
     // Finalize GPU code generation.

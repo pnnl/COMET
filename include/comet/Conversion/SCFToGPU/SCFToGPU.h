@@ -90,7 +90,14 @@ namespace mlir
         std::unique_ptr<Pass> createGPUHostRegisterOpPass();  
 
         //*** create memref.copy ops
-        std::unique_ptr<Pass> createGPUMemrefCopyPass();      
+        std::unique_ptr<Pass> createGPUMemrefCopyPass();
+
+        //*** create shared memory.
+        std::unique_ptr<Pass> createGPUSharedMemPlacementPass();
+
+        //*** allocate global memory and get_global ops for uses.
+        std::unique_ptr<Pass> createGPUAllocateGlobalMemPass();
+        
     }
 } // namespace mlir
 

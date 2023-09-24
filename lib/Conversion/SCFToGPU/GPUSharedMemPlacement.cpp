@@ -1,4 +1,4 @@
-//===- GPUHostRegister.cpp------===//
+//===- GPUSharedMemPlacement.cpp------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,7 +21,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file adds gpu host_register op for mapping host memory to device space.
+// create shared memory copies for gpu kernel operands
 //===----------------------------------------------------------------------===//
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -29,7 +29,7 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
 #include "comet/Conversion/SCFToGPU/SCFToGPU.h"
-#include "comet/Conversion/Utils/GPUUtils.h"
+#include "comet/Conversion/Utils/MarkerUtils.h"
 #include "comet/Conversion/TensorAlgebraToIndexTree/TensorAlgebraToIndexTree.h"
 #include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
@@ -73,11 +73,11 @@ using namespace mlir;
 using namespace mlir::gpu;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_GPUHostRegister
-// #define DEBUG_MODE_GPUHostRegister
+// #ifndef DEBUG_MODE_GPUSharedMemPlacement
+// #define DEBUG_MODE_GPUSharedMemPlacement
 // #endif
 
-#ifdef DEBUG_MODE_GPUHostRegister
+#ifdef DEBUG_MODE_GPUSharedMemPlacement
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
 #define comet_pdump(n)                                \
   llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
@@ -93,89 +93,98 @@ using namespace mlir::gpu;
 // *********** For debug purpose *********//
 
 namespace {
-struct GPUHostRegisterPass
-    : public PassWrapper<GPUHostRegisterPass, OperationPass<func::FuncOp>> {
+struct GPUSharedMemPlacementPass
+    : public PassWrapper<GPUSharedMemPlacementPass, OperationPass<func::FuncOp>> {
 
 
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(GPUHostRegisterPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(GPUSharedMemPlacementPass)
 
 private:
   
  public:
-  GPUHostRegisterPass() {}
+  GPUSharedMemPlacementPass() {}
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<mlir::gpu::GPUDialect>();
+    registry.insert<mlir::memref::MemRefDialect>();
+  }
+
+  // Creates fast buffers (shared memory)
+  static void createAndPlaceFastBuffers(AffineForOp rootForOp,
+                                        OpBuilder opBuilder) {
+    
+    SmallVector<AffineForOp, 6> loopNest;
+    getPerfectlyNestedLoops(loopNest, rootForOp);
+
+    // Checks if the loop nest is perfectly nested or not. The pass doesn't work
+    // in case of imperfect loop nest.
+    assert(loopNest.size() > 2 && "Expected perfectly nested loop nest.");
+
+    SmallVector<Value, 4> inputMemrefs;
+    Value outputMemRef;
+    // Identify the input and output memrefs.
+    rootForOp.walk(
+      [&](AffineStoreOp storeOp) { outputMemRef = storeOp.getMemRef(); });
+    
+    rootForOp.walk([&](AffineLoadOp loadOp) {
+        // Checks if the loadOp's memref is equal to output memref, if yes then
+        // it's the output matrix's memref and skip it.
+        if (outputMemRef == loadOp.getMemRef())
+            return;
+        inputMemrefs.push_back(loadOp.getMemRef());
+    });
+    comet_debug() << "[DEBUG][GPU] done collecting input and output memrefs\n";
+
+    // Intialize the copy options for placing matrices into fast buffers.
+    AffineCopyOptions copyOptions = {/*generateDma=*/false,
+                                   /*slowMemorySpace=*/0,
+                                   /*fastMemorySpace=*/3,  // GPU shared memory
+                                   /*tagMemorySpace=*/0,
+                                   /*fastMemCapacityBytes=*/32 * 1024 * 1024UL};
+    
+    comet_debug() << "[DEBUG][GPU] making a call to affineDataCopyGenerate()\n";
+    DenseSet<Operation *> copyNests;
+    // TODO: make this more general for a variety of kernels.
+    for (int i = 0; i < inputMemrefs.size(); i++) {
+      if (failed(affineDataCopyGenerate(loopNest[2], copyOptions, inputMemrefs[i], copyNests)))
+        return;
+    }
+
+    for (Operation *copyNest : copyNests)
+      copyNest->setAttr("isCopyLoopNest", opBuilder.getBoolAttr(true));
+    
+    // Checks if the loop nest to be marked is present or not.
+    if (loopNest[3])
+       loopNest[3]->setAttr("isComputeLoopNest", opBuilder.getBoolAttr(true));
+    
+    comet_debug() << "[DEBUG][GPU] DONE call to affineDataCopyGenerate()\n";
+
   }
 
   void runOnOperation() override {
-    comet_debug() << "[DEBUG][GPU][Start] GPUHostRegister\n";
+    comet_debug() << "[DEBUG][GPU][Start] GPUSharedMemPlacement\n";
 
     MLIRContext *context = &getContext();
 
     auto funcOp = getOperation();
-
-    DenseSet<Operation *> allocOps;
-    funcOp.walk([&allocOps](memref::AllocOp allocOp) { allocOps.insert(allocOp); });
-
-    IRRewriter rewriter(context);
-    FloatType f64Type = FloatType::getF64(context);
-    Type unrankedMemrefType_f64 = UnrankedMemRefType::get(f64Type, 0);
-
-    // look for memref::allocs use in gpu.launch_func.
-    // if found being used in the launch_func, then a host_register op needs to be created.
-    bool found_use = false;
-    bool found_insert = false;
-    for (auto alloc : allocOps) {
-      for (auto n : alloc->getUsers()) {
-        if (isa<gpu::LaunchFuncOp>(n)) {
-          //comet_debug() << "Found use of alloc in launch func\n";
-          found_use = true;
+    for (Block &block : funcOp) {
+        for (Operation &op : block) {
+            // the outer for loop.
+            if (AffineForOp forOp = dyn_cast<AffineForOp>(op)) {
+                if (!forOp->getParentOfType<AffineForOp>()) {
+                    OpBuilder opBuilder(forOp);
+                    createAndPlaceFastBuffers(forOp, opBuilder);
+                }         
+            }
         }
-
-        // skip over shared memory address space memrefs
-        if (auto allocX = dyn_cast<memref::AllocOp>(alloc)) {
-          auto AllocType = allocX.getType().cast<MemRefType>();
-          if (AllocType.getMemorySpaceAsInt() == 3) {
-              found_use = false;
-              comet_debug() << "I found shared-memory address space\n";
-          }
-        }
-
-        if (isa<linalg::FillOp>(n)) {
-          // insert the new ops after linalg.fill 
-          found_insert = true;
-          rewriter.setInsertionPointAfter(n);
-        }
-      }
-
-      // this should skip over shared memory allocs.
-      if (found_use && found_insert) {
-
-        Location loc = alloc->getLoc();
-        if (!found_insert) 
-          rewriter.setInsertionPointAfter(alloc);
-
-        auto alloc_op = cast<memref::AllocOp>(alloc);
-        comet_vdump(alloc_op);
-        auto newCastOp = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
-        comet_vdump(newCastOp);
-
-        rewriter.create<gpu::HostRegisterOp>(loc, newCastOp);
-      }
-
-      found_use = false; // reset for next alloc
-      found_insert = false; 
     }
-
-    comet_debug() << "[DEBUG][GPU][End] GPUHostRegister\n";
+    comet_debug() << "[DEBUG][GPU][End] GPUSharedMemPlacement\n";
   }
 };
 
 }  // namespace
 
 
-/// Create a pass to add host register op to map host memory to device address space.
-std::unique_ptr<Pass> mlir::comet::createGPUHostRegisterOpPass() {
-  return std::make_unique<GPUHostRegisterPass>();
+/// Create a pass to place shared memory buffers using affineDataCopyGenerate().
+std::unique_ptr<Pass> mlir::comet::createGPUSharedMemPlacementPass() {
+  return std::make_unique<GPUSharedMemPlacementPass>();
 }

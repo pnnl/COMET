@@ -7,6 +7,8 @@ add_mlir_conversion_library(COMETSCFToGPU
   GPUAffineVectorize.cpp
   GPUHostRegister.cpp
   GPUMemrefCopy.cpp
+  GPUSharedMemPlacement.cpp
+  GPUAllocateGlobalMem.cpp
 
 
   ADDITIONAL_HEADER_DIRS
