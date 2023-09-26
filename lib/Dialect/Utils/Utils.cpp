@@ -197,7 +197,7 @@ namespace mlir
 
     // TODO(gkestor): review this code
 //    void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter)
-    void insertInitialize(Location loc, Value cst_init, Value alloc_op, OpBuilder &builder)
+    void insertInitialize(Location loc, Value cst_init, Value alloc_op, Value accessIdx, OpBuilder &builder)
     {
       auto lowerBound = builder.create<ConstantIndexOp>(loc, 0);
       MemRefType resultMemTy = alloc_op.getDefiningOp()->getResult(0).getType().cast<MemRefType>();
@@ -226,21 +226,30 @@ namespace mlir
       }
       else
       {
-        auto upperBound = builder.create<ConstantIndexOp>(loc, cur_memref[0]);
-        auto step = builder.create<ConstantIndexOp>(loc, 1);
-        auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-        auto insertPt = builder.saveInsertionPoint();
-        builder.setInsertionPointToStart(loop.getBody());
-
-        // Build loop body
-        std::vector<Value> indices = {loop.getInductionVar()};
-        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{indices});
-
-        // need to restore the insertion point to the previous point
-        builder.restoreInsertionPoint(insertPt);
-        comet_debug() << " insertAllocAndInitialize loop "
-                      << "\n";
-        comet_vdump(loop);
+#ifdef DEBUG_MODE_UTILS
+        auto store_op = builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{accessIdx});
+        comet_vdump(store_op);
+#else
+        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{accessIdx});
+#endif
+        /// ----------------- ///
+        /// Backup
+        /// ----------------- ///
+//        auto upperBound = builder.create<ConstantIndexOp>(loc, cur_memref[0]);
+//        auto step = builder.create<ConstantIndexOp>(loc, 1);
+//        auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
+//        auto insertPt = builder.saveInsertionPoint();
+//        builder.setInsertionPointToStart(loop.getBody());
+//
+//        // Build loop body
+//        std::vector<Value> indices = {loop.getInductionVar()};
+//        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{indices});
+//
+//        // need to restore the insertion point to the previous point
+//        builder.restoreInsertionPoint(insertPt);
+//        comet_debug() << " insertAllocAndInitialize loop "
+//                      << "\n";
+//        comet_vdump(loop);
       }
     }
 
