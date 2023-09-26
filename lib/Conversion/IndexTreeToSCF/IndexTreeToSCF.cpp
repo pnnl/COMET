@@ -4481,6 +4481,9 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
   comet_debug() << " ";
   comet_pdump(nested_forops[0].getBody()->getTerminator());
   builder.setInsertionPoint(nested_forops[0].getBody()->getTerminator());
+  {
+    comet_vdump(nested_forops[0]);
+  }
 
   auto f64Type = builder.getF64Type();
   auto indexType = IndexType::get(rootOp.getContext());
@@ -4726,8 +4729,14 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
         comet_vdump(main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1]);
         comet_debug() << " tensors_lhs_Allocs.size(): " << tensors_lhs_Allocs.size() << "\n";
 //        comet_debug() << " ";
-
-        insertInitialize(loc, cstop, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1],
+        {
+          comet_vdump(nested_forops[0]);
+        }
+        Value local_accessIdx = nested_forops[0].getInductionVar();
+        insertInitialize(loc,
+                         cstop,
+                         main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1],
+                         local_accessIdx,
                          builder);
         comet_debug() << " ";
       } else { // initial workspace
@@ -4742,7 +4751,11 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                                           main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() -
                                                                            1], allValueAccessIdx[lhs_loc]);
         } else {
-          insertInitialize(loc, cstop, main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1],
+          Value local_accessIdx = nested_forops[0].getInductionVar();
+          insertInitialize(loc,
+                           cstop,
+                           main_tensors_all_Allocs[lhs_loc][main_tensors_all_Allocs[lhs_loc].size() - 1],
+                           local_accessIdx,
                            builder);
         }
       }
@@ -5540,11 +5553,11 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       comet_debug() << " call genForOps, i = " << i << "\n";
 //      genForOps(tensors, ids, formats, rootOp, rewriter, opstree_vec[i], ancestors_wp);
       genForOps(tensors, ids, formats, rootOp, builder, opstree_vec[i]);
-      comet_debug() << " finished call genForOps, i = " << i << "\n";
       {
 //    comet_pdump(rootOp.getOperation()->getParentOfType<ModuleOp>());
         comet_pdump(rootOp->getParentOfType<ModuleOp>());
       }
+      comet_debug() << " finished call genForOps, i = " << i << "\n";
     }
     else if (indexTree::IndexTreeComputeOp cur_op = dyn_cast<mlir::indexTree::IndexTreeComputeOp>(wp_ops[i].getDefiningOp()))
     {
@@ -5576,11 +5589,11 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
 //      genCmptOps(cur_op, rootOp, rewriter, opstree_vec[i], ancestors_wp);
       genCmptOps(cur_op, rootOp, builder, opstree_vec[i], ancestors_wp,
                  wp_ops, symbolicInfo, numericInfo);
+      {
+//    comet_pdump(rootOp.getOperation()->getParentOfType<ModuleOp>());
+        comet_pdump(rootOp->getParentOfType<ModuleOp>());
+      }
       comet_debug() << " finished call genCmptOps, i = " << i << "\n";
-//      {
-////    comet_pdump(rootOp.getOperation()->getParentOfType<ModuleOp>());
-//        comet_pdump(rootOp->getParentOfType<ModuleOp>());
-//      }
     }
   }
 
