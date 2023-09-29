@@ -58,25 +58,25 @@ def get_format(A):
 
 
 class NewVisitor(ast.NodeVisitor):
-    tsemantics = {}
-    isemantics = {}
-    inputs = []
-    tsymbols = {"comet": None}
-    isymbols = {}
-    tcurr = 0
-    icurr = 0
-    ops = []
-    iLabelsToVals = {}
-    valsToILabels = {}
-    declarations = []
-    uniqueLabels = []
-    in_args = []
-    returns = []
-    mask = None
-    need_opt_comp_workspace = False
-    def __init__(self,inputs):
-        self.inputs = inputs
 
+    def __init__(self,inputs):
+        self.tsemantics = {}
+        self.isemantics = {}
+        self.tsymbols = {"comet": None}
+        self.isymbols = {}
+        self.tcurr = 0
+        self.icurr = 0
+        self.ops = []
+        self.iLabelsToVals = {}
+        self.valsToILabels = {}
+        self.declarations = []
+        self.uniqueLabels = []
+        self.in_args = []
+        self.returns = []
+        self.mask = None
+        self.need_opt_comp_workspace = False
+        
+        self.inputs = inputs
         # Output formats when multiply matrices of different formats
         self.sp_matmult_conversions = {
             CSR: {
