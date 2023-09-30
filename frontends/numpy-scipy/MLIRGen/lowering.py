@@ -32,6 +32,8 @@ import atexit
 import uuid
 import scipy as scp
 debug = False
+temp_dir = '.cometpy/'
+
 class memref_i64(Structure):
     _fields_ = [ ('mem_aligned', POINTER(c_longlong)), ('mem', POINTER(c_longlong)), ('offset', c_longlong), ('dim', c_longlong), ('stride', c_longlong)]
 
@@ -308,7 +310,7 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
         raise AssertionError("comet-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
 
 
-    scf_out_file = uuid_s+'loops.mlir'
+    scf_out_file = temp_dir + uuid_s+'loops.mlir'
 
     if(os.path.exists(scf_out_file) == False):
         f = open(os.path.join( os.getcwd(), scf_out_file), 'w')
@@ -340,7 +342,7 @@ def lower_scf_to_llvm(scf_in, scf_lower_flags, uuid_s):
         cleanup()
         raise AssertionError("comet-opt failed with error code: {}. Error message: {}".format(p.returncode, p.stderr.decode()))
 
-    llvm_out_file = uuid_s+'.llvm'
+    llvm_out_file = temp_dir + uuid_s+'.llvm'
 
     if(os.path.exists(llvm_out_file) == False):
         f = open(os.path.join( os.getcwd(), llvm_out_file), 'wb')
@@ -487,35 +489,35 @@ def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s)
     llvm_cfg_out = p.stdout.decode().strip()  # This only needs to run once and should be possible to generate at compile time
     # llvmir_out = llvmir_out.decode()
 
-    if(os.path.exists(llvmir_file) == False):
-        f = open(os.path.join( os.getcwd(), llvmir_file), 'wb')
-        files_to_cleanup.append(os.path.join( os.getcwd(), llvmir_file))
+    if(os.path.exists(temp_dir+temp_dir+llvmir_file) == False):
+        f = open(os.path.join( os.getcwd(), temp_dir+llvmir_file), 'wb')
+        files_to_cleanup.append(os.path.join( os.getcwd(), temp_dir+llvmir_file))
     else:
-        f = open(llvmir_file, 'wb')
-    # with open(os.path.join( os.getcwd(),llvmir_file), 'wb') as f:
+        f = open(temp_dir+llvmir_file, 'wb')
+    # with open(os.path.join( os.getcwd(),temp_dir+llvmir_file), 'wb') as f:
     f.write(llvmir_out)
     f.close()
     llvmir_opt_file = llvmir_file+'.opt.ll'
 
-    llvm_opt_command = '../llvm/build/bin/opt --O3 --mtriple="' + llvm_cfg_out+'" ' +llvmir_file+' -S -o '+llvmir_opt_file
+    llvm_opt_command = '../llvm/build/bin/opt --O3 --mtriple="' + llvm_cfg_out+'" ' +temp_dir+llvmir_file+' -S -o '+temp_dir+llvmir_opt_file
     p = subprocess.run(shlex.split(llvm_opt_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if(p.returncode != 0):
         cleanup()
         raise AssertionError("opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr))
-    files_to_cleanup.append(llvmir_opt_file)
+    files_to_cleanup.append(temp_dir+llvmir_opt_file)
 
-    libname = "./lib"+llvmir_file+func_name+".so"
+    libname =   "./lib"+llvmir_file+func_name+".so"
     
-    gcc_command = "../llvm/build/bin/clang -Wno-everything --shared -O3 "+platform_args+ llvmir_opt_file+ " -o "+libname+" -fpic -L ../build/lib/ -Wl,-rpath,../build/lib/ -lcomet_runner_utils"
+    gcc_command = "../llvm/build/bin/clang -Wno-everything --shared -O3 "+platform_args+ temp_dir+llvmir_opt_file+ " -o "+ temp_dir + libname+" -fpic -L ../build/lib/ -Wl,-rpath,../build/lib/ -lcomet_runner_utils"
 
     p = subprocess.run(shlex.split(gcc_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if(p.returncode != 0):
         cleanup()
         raise AssertionError("gcc failed with error code: {}. Error: {}".format(p.returncode, p.stderr))
-    files_to_cleanup.append(os.path.join( os.getcwd(), libname))
+    files_to_cleanup.append(os.path.join( os.getcwd(), temp_dir +libname))
 
     # Load code generated from COMET
-    lib = ctypes.cdll.LoadLibrary(libname)
+    lib = ctypes.cdll.LoadLibrary(temp_dir +libname)
     func = lib.__getattr__(func_name)
 
     # Get the inputs, input types and the output containers
@@ -692,8 +694,11 @@ def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_nam
 
      #write the TA dialect rep to file
     # ta_dialect_file = 'einsum.mlir'
+    if not os.path.exists(temp_dir):
+        os.mkdir(temp_dir)
+        
     uuid_s = str(uuid.uuid4())
-    ta_dialect_file = uuid_s+'.mlir'
+    ta_dialect_file = temp_dir+uuid_s+'.mlir'
     if(os.path.exists(ta_dialect_file) == False):
         f = open(os.path.join( os.getcwd(), ta_dialect_file), 'w')
         files_to_cleanup.append(os.path.join( os.getcwd(), ta_dialect_file))
