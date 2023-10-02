@@ -70,6 +70,85 @@ using namespace mlir::tensorAlgebra;
 
 namespace
 {
+  class LinalgTilingPattern : public OpRewritePattern<MatmulOp>
+  {
+  public:
+    using OpRewritePattern<MatmulOp>::OpRewritePattern;
+
+    LinalgTilingPattern(
+        MLIRContext *context, LinalgTilingOptions options,
+        PatternBenefit benefit = 1) : OpRewritePattern<MatmulOp>(context, benefit),
+                                      tilingOptions(options) {}
+
+    LogicalResult matchAndRewrite(
+        MatmulOp op, PatternRewriter &rewriter) const;
+
+  private:
+    /// Options to control tiling;
+    LinalgTilingOptions tilingOptions;
+  };
+}
+
+namespace
+{
+
+  LogicalResult LinalgTilingPattern::matchAndRewrite(MatmulOp rootOp, PatternRewriter &rewriter) const
+  {
+    // // TiledLinalgOp tiledLinalgOp;
+    // // if (failed(LinalgTilingPattern::matchAndRewrite(op, rewriter,
+    // //                                                 tiledLinalgOp)))
+    // //   return failure();
+    // // if (tiledLinalgOp.tensorResults.empty())
+    // //   rewriter.eraseOp(op);
+    // // else
+    // //   rewriter.replaceOp(op, tiledLinalgOp.tensorResults);
+    // // return success();
+
+    // IRRewriter rewriter(b);
+    // FailureOr<TiledLinalgOp> result =
+    //     tileLinalgOp(rewriter, op, tilingOptions);
+
+    // // Exit if tiling the root operation fails.
+    // if (failed(tiledRootOp))
+    //   return failure();
+
+    FailureOr<TiledLinalgOp> tiledRootOp =
+        tileLinalgOp(rewriter, rootOp, tilingOptions);
+
+    // Exit if tiling the root operation fails.
+    if (failed(tiledRootOp))
+      return failure();
+
+    // Replace all uses of the root operation if it has been tiled before. All
+    // uses of the original untiled root operation are updated by the calling pass
+    // or pattern.
+    //if (!isEmpty())
+      rootOp->replaceAllUsesWith(tiledRootOp->tensorResults);
+
+    // // Transfer the stored `rootOp` loop dimensions if it has been tiled before.
+    // if (tiledRootAndFusedOpsLoops.count(rootOp) != 0)
+    // {
+    //   tiledRootAndFusedOpsLoops[tiledRootOp->op] =
+    //       tiledRootAndFusedOpsLoops[rootOp];
+    // }
+
+    // // Update the root operation and append the loops and tile loop dimensions.
+    // rootOp = tiledRootOp->op;
+    // tileLoopOps.append(tiledRootOp->loops.begin(), tiledRootOp->loops.end());
+    // for (const auto &en : enumerate(tileSizes))
+    // {
+    //   // Copy only the tiled loop dimensions with non-zero tile size.
+    //   if (en.value() == 0)
+    //     continue;
+    //   tiledRootAndFusedOpsLoops[rootOp].push_back(tileInterchange[en.index()]);
+    // }
+    // assert(isValid() && "expect tile loop nest to be valid after tiling");
+    return success();
+  }
+}
+
+namespace
+{
   class LinAlgMatmulTilingPass : public PassWrapper<LinAlgMatmulTilingPass, OperationPass<func::FuncOp>>
   {
   public:
@@ -87,32 +166,31 @@ namespace
       // #define BLIS_DEFAULT_MR_D          8
       // #define BLIS_DEFAULT_NR_D          6
 
-      ArrayRef<int64_t> tileInterchange_L2;
-      
+      // ArrayRef<int64_t> tileInterchange_L2;
 
-      // Tile the root operation.
-      LinalgTilingOptions tilingOptions;
-      tilingOptions = tilingOptions
-                          // .setInterchange(SmallVector<unsigned>(
-                          //     tileInterchange.begin(), tileInterchange.end()))
-                          .setInterchange({1, 2, 0})
-                          //.setTileSizes(tileSizes)
-                          .setTileSizes({72, 4080, 256})
-                          .setLoopType(LinalgTilingLoopType::Loops);
+      // // Tile the root operation.
+      // LinalgTilingOptions tilingOptions;
+      // tilingOptions = tilingOptions
+      //                     // .setInterchange(SmallVector<unsigned>(
+      //                     //     tileInterchange.begin(), tileInterchange.end()))
+      //                     .setInterchange({1, 2, 0})
+      //                     //.setTileSizes(tileSizes)
+      //                     .setTileSizes({72, 4080, 256})
+      //                     .setLoopType(LinalgTilingLoopType::Loops);
 
-      // TODO: Propagate RewriterBase everywhere.
-      IRRewriter rewriter(b);
-      FailureOr<TiledLinalgOp> tiledRootOp =
-          tileLinalgOp(rewriter, rootOp, tilingOptions);
+      // // TODO: Propagate RewriterBase everywhere.
+      // IRRewriter rewriter(b);
+      // FailureOr<TiledLinalgOp> tiledRootOp =
+      //     tileLinalgOp(rewriter, rootOp, tilingOptions);
 
       // Exit if tiling the root operation fails.
       // if (failed(tiledRootOp))
       //   return failure();
 
-      // func::FuncOp func = getOperation();
-      // MLIRContext *ctx = func.getContext();
+      func::FuncOp func = getOperation();
+      MLIRContext *ctx = func.getContext();
 
-      // RewritePatternSet patterns(&getContext());
+      RewritePatternSet patterns(&getContext());
 
       // Add the matmul tiling patterns to the list.
       //===----------------------------------------------------------------------===//
@@ -126,14 +204,16 @@ namespace
       // #define BLIS_DEFAULT_NR_D          6
 
       // TODO(gkestor): leverage exisiting tiling pass in linalg
-      //  patterns.insert<LinalgTilingPattern<MatmulOp>>(
-      //      ctx,
-      //      LinalgTilingOptions()
-      //          .setTileSizes({72, 4080, 256})
-      //          .setInterchange({1, 2, 0})
-      //          .setLoopType(LinalgTilingLoopType::Loops),
-      //      LinalgTransformationFilter(Identifier::get("__with_tiling__", ctx),
-      //                                 Identifier::get("L2__with_tiling__", ctx)));
+      patterns.insert<LinalgTilingPattern>(
+          ctx,
+          LinalgTilingOptions()
+              .setTileSizes({72, 4080, 256})
+              .setInterchange({1, 2, 0})
+              .setLoopType(LinalgTilingLoopType::Loops)
+          //      ,
+          //  LinalgTransformationFilter(Identifier::get("__with_tiling__", ctx),
+          //                             Identifier::get("L2__with_tiling__", ctx))
+      );
 
       // patterns.insert<LinalgTilingPattern<MatmulOp>>(
       //     ctx,
@@ -144,14 +224,14 @@ namespace
       //     LinalgTransformationFilter(Identifier::get("L2__with_tiling__", ctx),
       //                                Identifier::get("__micro_kernel__", ctx)));
 
-      //(void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   };
 } // end anonymous namespace
 
 namespace
 {
-  class LinalgMatMulOpToLibraryCallRewrite : public OpRewritePattern<MatmulOp>
+  class LinalgMatMulOpToLibraryCallPattern : public OpRewritePattern<MatmulOp>
   {
   public:
     using OpRewritePattern<MatmulOp>::OpRewritePattern;
@@ -251,7 +331,7 @@ getLibraryCallSymbolRef(Operation *op, PatternRewriter &rewriter)
   return fnNameAttr;
 }
 
-LogicalResult LinalgMatMulOpToLibraryCallRewrite::matchAndRewrite(
+LogicalResult LinalgMatMulOpToLibraryCallPattern::matchAndRewrite(
     MatmulOp op, PatternRewriter &rewriter) const
 {
   if (!isa<MatmulOp>(op))
@@ -284,7 +364,7 @@ namespace
       RewritePatternSet patterns(&getContext());
 
       // Replace the inner linalg.matmul with the blis microkernel
-      patterns.insert<LinalgMatMulOpToLibraryCallRewrite>(ctx);
+      patterns.insert<LinalgMatMulOpToLibraryCallPattern>(ctx);
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   };

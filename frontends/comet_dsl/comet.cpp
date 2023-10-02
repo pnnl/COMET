@@ -343,6 +343,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (OptMatmulTiling)
   {
     optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+    return 0;
   }
 
   // if (OptCallToMatMulMicroKernel)
@@ -357,9 +360,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
 
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
-    optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());        // lowers dense input/output tensor declaration
-     optPM.addPass(mlir::comet::createSparseTempOutputTensorDeclLoweringPass()); //Temporary sparse output tensor declarations introduced by compound expressions 
-                                                                                 //should be lowered before sparse output tensor declarations
+    optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());            // lowers dense input/output tensor declaration
+    optPM.addPass(mlir::comet::createSparseTempOutputTensorDeclLoweringPass()); // Temporary sparse output tensor declarations introduced by compound expressions
+                                                                                // should be lowered before sparse output tensor declarations
     optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass()); // lowering for sparse output tensor declarations
                                                                             //(sparse_output_tensor_decl and temp_sparse_output_tensor_decl)
     // The partial Fusion pass might add new tensor.fill operations
