@@ -213,27 +213,63 @@ class TensorSumBuilder:
             output_types = output_type
         )
 
+class SetOp_Builder:
+    indentation_size = 4
+    beta_val = 0.0
+
+    set_op_wrapper_text = jinja2.Template(
+        ("" * indentation_size)
+        + '"ta.set_op"(%temp_{{input}},%t{{dest}}) {__beta__ = {{beta}} : f64} : ({{outputtype}}, {{outputtype}}) -> ()\n',
+        undefined=jinja2.StrictUndefined,
+    )
+
+    def __init__(self, in_tensor, target, tensors_shapes, label_map, beta) :
+        self.target = target
+        self.in_tensor = in_tensor
+        self.tensors_shapes =[]
+        for l in tensors_shapes:
+            self.tensors_shapes.append([ label_map[lbl][0] if label_map[lbl][1] == DENSE else '?' for lbl in l ]  )
+        self.beta = "{:e}".format(beta)
+
+
+    def build_op(self):
+        output_type = "tensor<{}xf64>".format("x".join(str(v) for v in self.tensors_shapes[-1]))
+        # input_type = []
+        # for t in self.tensors_shapes[:-1]:
+        #     input_type.append("tensor<{}xf64>".format("x".join(str(v) for v in t)))
+
+        return self.set_op_wrapper_text.render(
+            dest = self.target,
+            input = self.in_tensor,
+            beta = self.beta,
+            outputtype= output_type,
+
+        )
+
 class ArithOp_Builder:
     formats_str = ['Dense', 'CSR', 'COO', 'CSC']
     indentation_size = 4
     beta_val = 0.0
+
+
 
     tc_decl_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
         + '%temp_{{dest}} = "ta.mul"({{operators}})'
         + '{MaskType = "{{mask_type}}", ' 
         + '__alpha__ = 1.000000e+00 : f64, '  
-        +"__beta__ = 0.000000e+00 : f64,"
+        +"__beta__ = {{beta}} : f64,"
         + 'formats = [{{formats}}],'
         +'indexing_maps = {{indexing_maps}}, '
         +'operand_segment_sizes = array<i32:1, 1, {{lhs_dims}}, {{num_masks}}>, ' #[TODO] operand_segment_sizes should not be static
         +'semiring = "{{semiring}}"} : ' 
         +"({{inputtype}})"
         +"-> {{outputtype}}"
-        + "\n" 
-        + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
+        + "\n" ,
+        # + '"ta.set_op"(%temp_{{dest}},%t{{dest}}) {__beta__ = {{beta}} : f64} : ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
+
 
 
     tensor_add_wrapper_text = jinja2.Template(   
@@ -247,8 +283,8 @@ class ArithOp_Builder:
         +' }'
         +' : ({{inputtype}})'
         +"-> {{outputtype}}"
-        + "\n" 
-        + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
+        + "\n", 
+        # + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
@@ -263,8 +299,8 @@ class ArithOp_Builder:
         +' }'
         +' : ({{inputtype}})'
         +"-> {{outputtype}}"
-        + "\n" 
-        + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
+        + "\n",
+        # + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
@@ -272,13 +308,13 @@ class ArithOp_Builder:
         ("" * indentation_size)
         +'%temp_{{dest}} = "ta.elews_mul"({{operators}})'
         +' {__alpha__ = 1.000000e+00 : f64, '
-        +"__beta__ = 0.000000e+00: f64,"
+        +"__beta__ = {{beta}}: f64,"
         + 'formats = [{{formats}}],'
         +'indexing_maps = {{indexing_maps}}, semiring = "{{semiring}}"} : '
         +"({{inputtype}})"
         +"-> {{outputtype}}"
-        + "\n" 
-        + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
+        + "\n" ,
+        # + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
@@ -291,12 +327,12 @@ class ArithOp_Builder:
         +'indexing_maps = {{indexing_maps}},semiring = "plusxy_times"} : '
         +"({{inputtype}})"
         +"-> {{outputtype}}"
-        + "\n" 
-        + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
+        + "\n" ,
+        # + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
-    def __init__(self, dest, input_tensors:list, tc_indices, formats: list, tensors_shapes, opr_type, label_map, mask=None, mask_type="none", mask_lbls = None, semiring=None):
+    def __init__(self, dest, input_tensors:list, tc_indices, formats: list, tensors_shapes, opr_type, label_map, mask=None, mask_type="none", mask_lbls = None, semiring=None, beta=0):
                 #   dimslbls_to_map:list, input_array_dims_lbls:list, 
                 #             target_dims_lbls:list,tensor_types:list,tc_indices:list,opr_type:str,op:str, formats:list) -> None:
         
@@ -321,6 +357,7 @@ class ArithOp_Builder:
         else:
             self.mask_shape = None
         self.semiring = semiring
+        self.beta = "{:e}".format(beta)
 
 
     def build_op(self):
@@ -412,6 +449,7 @@ class ArithOp_Builder:
                     mask=self.mask,
                     mask_type = self.mask_type,
                     num_masks = 0 if self.mask == None else 1,
+                    beta = self.beta,
                 )
         # Add
         elif(self.opr_type == '+'):
