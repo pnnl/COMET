@@ -860,7 +860,7 @@ def GenericCallOp : TA_Op<"generic_call",
 
   // The generic call operation returns a single value of TensorType or
   // StructType.
-  let results = (outs TA_AnyTensor);
+  let results = (outs Optional<TA_AnyTensor>);
 
   // Specialize assembly printing and parsing using a declarative format.
   let assemblyFormat = [{
