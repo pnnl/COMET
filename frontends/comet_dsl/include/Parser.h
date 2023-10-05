@@ -493,6 +493,13 @@ namespace tensorAlgebra
         }
         // CallExprAST is generated for random()
       }
+      else
+      {
+        if (args.size() == 0)
+        {
+          args.push_back(nullptr);
+        }
+      }
       comet_debug() << "generate CallExprAST node\n ";
       return std::make_unique<CallExprAST>(std::move(loc), name, std::move(args[0]));
     }

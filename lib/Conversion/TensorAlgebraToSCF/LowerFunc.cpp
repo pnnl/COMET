@@ -6,11 +6,30 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
 
-using namespace mlir;
+// *********** For debug purpose *********//
+// #ifndef DEBUG_MODE_LOWER_FUNC
+// #define DEBUG_MODE_LOWER_FUNC
+// #endif
+
+#ifdef DEBUG_MODE_LOWER_FUNC
+#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
+#define comet_pdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n->dump()
+#define comet_vdump(n)                                \
+  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
+  n.dump()
+#else
+#define comet_debug() llvm::nulls()
+#define comet_pdump(n)
+#define comet_vdump(n)
+#endif
+// *********** For debug purpose *********//
 
 //===----------------------------------------------------------------------===//
 // tensorAlgebra::FuncOp to  func::FuncOp RewritePatterns
@@ -25,20 +44,20 @@ namespace {
 
 struct FuncOpLowering : public OpConversionPattern<tensorAlgebra::FuncOp> {
   using OpConversionPattern<tensorAlgebra::FuncOp>::OpConversionPattern;
-
   LogicalResult
   matchAndRewrite(tensorAlgebra::FuncOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     // We only lower the main function as we expect that all other functions
     // have been inlined.
-    if (op.getName() != "main")
-      return failure();
-
-    // Verify that the given main has no inputs and results.
-    if (op.getNumArguments() || op.getFunctionType().getNumResults()) {
-      return rewriter.notifyMatchFailure(op, [](Diagnostic &diag) {
-        diag << "expected 'main' to have 0 inputs and 0 results";
-      });
+    if (op.getName() == "main")
+    {
+      // return failure();
+          // Verify that the given main has no inputs and results.
+      if (op.getNumArguments() || op.getFunctionType().getNumResults()) {
+        return rewriter.notifyMatchFailure(op, [](Diagnostic &diag) {
+          diag << "expected 'main' to have 0 inputs and 0 results";
+        });
+      }
     }
 
     // Create a new non-tensorAlgebra function, with the same region.
@@ -78,14 +97,47 @@ struct ReturnOpLowering : public OpRewritePattern<tensorAlgebra::TAReturnOp> {
                                 PatternRewriter &rewriter) const final {
     // During this lowering, we expect that all function calls have been
     // inlined.
-    if (op.hasOperand())
-      return failure();
+    // if (op.hasOperand())
+    //   return failure();
 
-    // We lower "toy.return" directly to "func.return".
-    rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
+    if(op.hasOperand())
+    {
+      rewriter.replaceOpWithNewOp<func::ReturnOp>(op, op.getOperands());
+    }
+    else
+    {
+      rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
+    }
+
     return success();
   }
 };
+
+struct GenericCallOpLowering : public OpRewritePattern<mlir::tensorAlgebra::GenericCallOp> {
+  using OpRewritePattern<mlir::tensorAlgebra::GenericCallOp>::OpRewritePattern;
+
+    LogicalResult matchAndRewrite(mlir::tensorAlgebra::GenericCallOp op,
+                                PatternRewriter &rewriter) const final {
+
+    // During this lowering, we expect that all function calls have been
+    // inlined.
+    // if (op.hasOperand())
+    //   return failure();
+
+    // We lower "toy.return" directly to "func.return".
+    if(op.getResults().size() > 0)
+    {
+      auto res = rewriter.replaceOpWithNewOp<func::CallOp>(op, op->getAttrOfType<SymbolRefAttr>("callee"), op.getType(0), op.getOperands());
+    }
+    else
+    {
+      auto res = rewriter.replaceOpWithNewOp<func::CallOp>(op, op->getAttrOfType<SymbolRefAttr>("callee"), mlir::TypeRange(), op.getOperands());
+    }
+
+    return success();
+  }
+};
+
 
 void FuncOpLoweringPass::runOnOperation() {
   // The first thing to define is the conversion target. This will define the
@@ -110,7 +162,7 @@ void FuncOpLoweringPass::runOnOperation() {
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the Toy operations.
   RewritePatternSet patterns(&getContext());
-  patterns.add<FuncOpLowering, ReturnOpLowering>(
+  patterns.add<FuncOpLowering, ReturnOpLowering, GenericCallOpLowering>(
       &getContext());
 
   // With the target and rewrite patterns defined, we can now attempt the

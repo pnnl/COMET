@@ -34,6 +34,7 @@
 
 #include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
@@ -1336,6 +1337,32 @@ namespace
           sumVal = builder.create<mlir::tensorAlgebra::ReduceOp>(location, builder.getF64Type(), tensorValue);
         }
       }
+      else
+      {
+        auto *expr = call.getArgs();
+        if(expr)
+        {
+          assert(false && "functions with argument are currently not supported!");
+        }
+        mlir::Value tensorValue;
+        tensorValue = mlir::Value();
+        ArrayRef<mlir::Value> args{};
+        if(tensorValue)
+          args = ArrayRef<mlir::Value> (tensorValue);
+
+        auto c  = functionMap.lookup(callee);
+        if(c.getFunctionType().getResults().size() > 0) // Function that returns a value
+        {
+          auto res = builder.create<GenericCallOp>(location, c.getFunctionType().getResults()[0], callee, args);
+          sumVal = res.getResults()[0];
+        }
+        else // Void function
+        {
+          builder.create<GenericCallOp>(location, callee, args);
+          sumVal = mlir::Value();
+        }
+      }
+      // comet_debug() << "Called: " << callee << "\n";
 
       // Otherwise this is a call to a user-defined function. Calls to ser-defined
       // functions are mapped to a custom call that takes the callee name as an
@@ -2298,8 +2325,13 @@ namespace
 
         // Generic expression dispatch codegen.
         comet_debug() << " expr->getKind(): " << expr->getKind() << "\n";
-        if (!mlirGen(*expr))
-          return mlir::failure();
+        
+        // If calling a void function this will return null, thus we cannot count on this for
+        // error checking
+        mlirGen(*expr);
+          // return mlir::failure();
+        // if (!mlirGen(*expr))
+        //   return mlir::failure();
       }
       return mlir::success();
     }

@@ -260,6 +260,40 @@ namespace
     }
   };
 
+  class ReturnOpLowering : public ConversionPattern
+  {
+  public:
+    explicit ReturnOpLowering(MLIRContext *ctx)
+        : ConversionPattern(tensorAlgebra::PrintElapsedTimeOp::getOperationName(), 1, ctx) {}
+
+    LogicalResult
+    matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                    ConversionPatternRewriter &rewriter) const override
+    {
+      auto ctx = rewriter.getContext();
+      auto module = op->getParentOfType<ModuleOp>();
+
+      auto start = operands[0];
+      auto end = operands[1];
+      std::string printElapsedTimeStr = "printElapsedTime";
+      auto f64Type = rewriter.getF64Type();
+
+      if (!hasFuncDeclaration(module, printElapsedTimeStr))
+      {
+        auto printElapsedTimeFunc = FunctionType::get(ctx, {f64Type, f64Type}, {});
+        // func @printElapsedTime(f64, f64) -> ()
+        func::FuncOp func1 = func::FuncOp::create(op->getLoc(), printElapsedTimeStr,
+                                                  printElapsedTimeFunc, ArrayRef<NamedAttribute>{});
+        func1.setPrivate();
+        module.push_back(func1);
+      }
+
+      rewriter.replaceOpWithNewOp<func::CallOp>(op, printElapsedTimeStr, SmallVector<Type, 2>{}, ValueRange{start, end});
+
+      return success();
+    }
+  };
+
 } // end anonymous namespace.
 
 /// This is a partial lowering to linear algebra of the tensor algebra operations that are
