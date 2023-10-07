@@ -20,5 +20,5 @@ add_dependencies(
   COMETTensorAlgebraPassIncGen
   )
 
-target_link_libraries(COMETTensorAlgebraDialect MLIRIR)
+target_link_libraries(COMETTensorAlgebraDialect MLIRIR ${BLAS_LIBRARIES})
 
