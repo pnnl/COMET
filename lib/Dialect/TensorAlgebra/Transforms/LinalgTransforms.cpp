@@ -28,15 +28,31 @@
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
+// #include "comet/Dialect/TensorAlgebra/Transforms/LinalgTransforms.h"
 
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Linalg/Utils/Utils.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
+#include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/Linalg/Utils/Utils.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+
+// suppress all warnings coming from inclusion of blis.h in source tree
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#include "blis.h"
+#endif
+
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wtype-limits"
+#include "blis.h"
+#endif
 
 using namespace mlir;
 using namespace mlir::linalg;
@@ -44,9 +60,9 @@ using namespace mlir::arith;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-#ifndef DEBUG_MODE_LINALGTRANSFORMS
-#define DEBUG_MODE_LINALGTRANSFORMS
-#endif
+// #ifndef DEBUG_MODE_LINALGTRANSFORMS
+// #define DEBUG_MODE_LINALGTRANSFORMS
+// #endif
 
 #ifdef DEBUG_MODE_LINALGTRANSFORMS
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -68,83 +84,206 @@ using namespace mlir::tensorAlgebra;
 #endif
 // *********** For debug purpose *********//
 
+/////////////////////////////////////////////
+/////////LinAlg Matmul Tiling////////////////
+/////////////////////////////////////////////
 namespace
 {
-  class LinalgTilingPattern : public OpRewritePattern<MatmulOp>
+  /// Marker used as attribute name in generated Linalg rewriting transformations.
+  const StringLiteral kLinalgTransformMarker = "__with_tiling__";
+
+  /// Helper class to control application of linalg transformation patterns.
+  /// Control comes in 2 forms:
+  ///   1. attribute matching and setting behavior using the attribute named
+  ///      `kLinalgTransformMarker`. This can be used to build a state machine
+  ///      using attributes and incrementally applying patterns to advance states.
+  ///   2. filter function, which is a simple lambda on the Operation* that
+  ///      returns a LogicalResult.
+  struct LinalgTransformationFilter
   {
-  public:
-    using OpRewritePattern<MatmulOp>::OpRewritePattern;
+    using FilterFunction = std::function<LogicalResult(Operation *)>;
 
-    LinalgTilingPattern(
-        MLIRContext *context, LinalgTilingOptions options,
-        PatternBenefit benefit = 1) : OpRewritePattern<MatmulOp>(context, benefit),
-                                      tilingOptions(options) {}
+    explicit LinalgTransformationFilter(
+        ArrayRef<StringAttr> matchDisjunction = {},
+        std::optional<StringAttr> replacement = std::nullopt);
 
-    LogicalResult matchAndRewrite(
-        MatmulOp op, PatternRewriter &rewriter) const;
+    explicit LinalgTransformationFilter(
+        const FilterFunction &f, ArrayRef<StringAttr> matchDisjunction = {},
+        std::optional<StringAttr> replacement = std::nullopt);
+
+    LinalgTransformationFilter(LinalgTransformationFilter &&) = default;
+    LinalgTransformationFilter(const LinalgTransformationFilter &) = default;
+    LogicalResult checkAndNotify(PatternRewriter &rewriter, Operation *op) const;
+    void replaceLinalgTransformationFilter(PatternRewriter &rewriter,
+                                           Operation *op) const;
+
+    LinalgTransformationFilter &addFilter(const FilterFunction &f)
+    {
+      if (f)
+        filters.push_back(f);
+      return *this;
+    }
+
+    template <typename... OpTypes>
+    LinalgTransformationFilter &addOpFilter()
+    {
+      return addFilter(
+          [](Operation *op)
+          { return success(isa<OpTypes...>(op)); });
+    }
+
+    LinalgTransformationFilter &addOpNameFilter(StringRef opName)
+    {
+      return addFilter([opName](Operation *op)
+                       { return success(op->getName().getStringRef() == opName); });
+    }
+
+    LinalgTransformationFilter &setMatchByDefault()
+    {
+      matchByDefault = true;
+      return *this;
+    }
 
   private:
-    /// Options to control tiling;
-    LinalgTilingOptions tilingOptions;
+    SmallVector<FilterFunction> filters;
+    SmallVector<StringAttr> matchDisjunction;
+    std::optional<StringAttr> replacement;
+    /// When set to true, if the attribute is not set, it will be treated as
+    /// a match. Default is false.
+    bool matchByDefault;
   };
-}
 
-namespace
-{
+  LinalgTransformationFilter::LinalgTransformationFilter(
+      ArrayRef<StringAttr> matchDisjunction,
+      std::optional<StringAttr> replacement)
+      : matchDisjunction(matchDisjunction.begin(), matchDisjunction.end()),
+        replacement(replacement), matchByDefault(false) {}
 
-  LogicalResult LinalgTilingPattern::matchAndRewrite(MatmulOp rootOp, PatternRewriter &rewriter) const
+  LogicalResult
+  LinalgTransformationFilter::checkAndNotify(PatternRewriter &rewriter,
+                                             Operation *op) const
   {
-    // // TiledLinalgOp tiledLinalgOp;
-    // // if (failed(LinalgTilingPattern::matchAndRewrite(op, rewriter,
-    // //                                                 tiledLinalgOp)))
-    // //   return failure();
-    // // if (tiledLinalgOp.tensorResults.empty())
-    // //   rewriter.eraseOp(op);
-    // // else
-    // //   rewriter.replaceOp(op, tiledLinalgOp.tensorResults);
-    // // return success();
-
-    // IRRewriter rewriter(b);
-    // FailureOr<TiledLinalgOp> result =
-    //     tileLinalgOp(rewriter, op, tilingOptions);
-
-    // // Exit if tiling the root operation fails.
-    // if (failed(tiledRootOp))
-    //   return failure();
-
-    FailureOr<TiledLinalgOp> tiledRootOp =
-        tileLinalgOp(rewriter, rootOp, tilingOptions);
-
-    // Exit if tiling the root operation fails.
-    if (failed(tiledRootOp))
+    if (llvm::any_of(filters,
+                     [&](const FilterFunction &f)
+                     { return failed(f(op)); }))
       return failure();
 
-    // Replace all uses of the root operation if it has been tiled before. All
-    // uses of the original untiled root operation are updated by the calling pass
-    // or pattern.
-    //if (!isEmpty())
-      rootOp->replaceAllUsesWith(tiledRootOp->tensorResults);
+    auto attr = op->template getAttrOfType<StringAttr>(kLinalgTransformMarker);
 
-    // // Transfer the stored `rootOp` loop dimensions if it has been tiled before.
-    // if (tiledRootAndFusedOpsLoops.count(rootOp) != 0)
-    // {
-    //   tiledRootAndFusedOpsLoops[tiledRootOp->op] =
-    //       tiledRootAndFusedOpsLoops[rootOp];
-    // }
+    if (!attr)
+    {
+      // 1. Has no filter case and matchDisjunction is empty.
+      if (matchDisjunction.empty() || matchByDefault)
+        return success();
 
-    // // Update the root operation and append the loops and tile loop dimensions.
-    // rootOp = tiledRootOp->op;
-    // tileLoopOps.append(tiledRootOp->loops.begin(), tiledRootOp->loops.end());
-    // for (const auto &en : enumerate(tileSizes))
-    // {
-    //   // Copy only the tiled loop dimensions with non-zero tile size.
-    //   if (en.value() == 0)
-    //     continue;
-    //   tiledRootAndFusedOpsLoops[rootOp].push_back(tileInterchange[en.index()]);
-    // }
-    // assert(isValid() && "expect tile loop nest to be valid after tiling");
-    return success();
+      // 2. Has no filter but was expecting a filter.
+      return rewriter.notifyMatchFailure(op, [&](Diagnostic &diag)
+                                         {
+      diag << " does not have any filter from list: ";
+      interleaveComma(matchDisjunction, diag); });
+    }
+
+    // 4. Match explicit filter.
+    for (auto filter : matchDisjunction)
+      if (attr.getValue() == filter)
+        return success();
+
+    // 5. Fail to match.
+    return rewriter.notifyMatchFailure(op, [&](Diagnostic &diag)
+                                       {
+    diag << " does not have any filter from list: ";
+    interleaveComma(matchDisjunction, diag); });
   }
+
+  void LinalgTransformationFilter::replaceLinalgTransformationFilter(
+      PatternRewriter &rewriter, Operation *op) const
+  {
+    if (replacement.has_value())
+      op->setAttr(kLinalgTransformMarker, *replacement);
+    else
+      op->removeAttr(rewriter.getStringAttr(kLinalgTransformMarker));
+  }
+
+  /// Pattern that tiles linalg operations using the `TilingInterface`
+  /// with `scf.for` ops for iterating over the tiles) while
+  /// using a `filter` to avoid recursive application.
+  struct LinalgTilingLoops
+      : public OpInterfaceRewritePattern<TilingInterface>
+  {
+    LinalgTilingLoops(
+        MLIRContext *context, scf::SCFTilingOptions options,
+        LinalgTransformationFilter filter = LinalgTransformationFilter(),
+        PatternBenefit benefit = 1)
+        : OpInterfaceRewritePattern<TilingInterface>(context, benefit),
+          options(std::move(options)), filter(std::move(filter)) {}
+
+    /// Construct a generic pattern applied to `opName`.
+    LinalgTilingLoops(
+        StringRef opName, MLIRContext *context, scf::SCFTilingOptions options,
+        LinalgTransformationFilter filter = LinalgTransformationFilter(),
+        PatternBenefit benefit = 1)
+        : OpInterfaceRewritePattern<TilingInterface>(context, benefit),
+          options(std::move(options)), filter(std::move(filter)) {}
+
+    LogicalResult matchAndRewrite(TilingInterface op,
+                                  PatternRewriter &rewriter) const override
+    {
+      if (failed(filter.checkAndNotify(rewriter, op)))
+        return failure();
+
+      FailureOr<scf::SCFTilingResult> tilingResult =
+          scf::tileUsingSCFForOp(rewriter, op, options);
+      if (failed(tilingResult))
+        return rewriter.notifyMatchFailure(op, "failed to tile operation");
+
+      if (op->getNumResults())
+      {
+        rewriter.replaceOp(op, tilingResult->replacements);
+      }
+      else
+      {
+        rewriter.eraseOp(op);
+      }
+
+      for (auto *tiledOp : tilingResult->tiledOps)
+        filter.replaceLinalgTransformationFilter(rewriter, tiledOp);
+      return success();
+    }
+
+  private:
+    scf::SCFTilingOptions options;
+    LinalgTransformationFilter filter;
+  };
+
+} // namespace
+
+void get_level3_blocksizes(int *mc, int *kc, int *nc, int *mr, int *nr, int size_dt)
+{
+  // Query a native context.
+  cntx_t *cntx = (cntx_t *)bli_gks_query_nat_cntx();
+
+  *mc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MC, cntx);
+  *kc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_KC, cntx);
+  *nc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NC, cntx);
+  *mr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MR, cntx);
+  *nr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NR, cntx);
+
+  // printf("mc= %d, kc= %d, nc=%d, mr=%d, nr=%d\n", *mc, *kc, *nc, *mr, *nr);
+  return;
+}
+
+static void addPatternForTiling(MLIRContext *context,
+                                RewritePatternSet &patterns,
+                                StringRef filterName,
+                                StringRef updatedFilterName,
+                                ArrayRef<int64_t> tileSizes,
+                                ArrayRef<int64_t> interchange = {})
+{
+  scf::SCFTilingOptions tilingOptions;
+  tilingOptions.setTileSizes(tileSizes).setInterchange(interchange);
+  LinalgTransformationFilter filter(StringAttr::get(context, filterName),
+                                    StringAttr::get(context, updatedFilterName));
+  patterns.add<LinalgTilingLoops>(context, tilingOptions, filter);
 }
 
 namespace
@@ -155,80 +294,27 @@ namespace
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LinAlgMatmulTilingPass)
     void runOnOperation() override
     {
-
-      //===----------------------------------------------------------------------===//
-      // BLIS HASWELL
-      //===----------------------------------------------------------------------===//
-      // #define BLIS_DGEMM_UKERNEL         bli_dgemm_asm_8x6
-      // #define BLIS_DEFAULT_MC_D          72
-      // #define BLIS_DEFAULT_KC_D          256
-      // #define BLIS_DEFAULT_NC_D          4080
-      // #define BLIS_DEFAULT_MR_D          8
-      // #define BLIS_DEFAULT_NR_D          6
-
-      // ArrayRef<int64_t> tileInterchange_L2;
-
-      // // Tile the root operation.
-      // LinalgTilingOptions tilingOptions;
-      // tilingOptions = tilingOptions
-      //                     // .setInterchange(SmallVector<unsigned>(
-      //                     //     tileInterchange.begin(), tileInterchange.end()))
-      //                     .setInterchange({1, 2, 0})
-      //                     //.setTileSizes(tileSizes)
-      //                     .setTileSizes({72, 4080, 256})
-      //                     .setLoopType(LinalgTilingLoopType::Loops);
-
-      // // TODO: Propagate RewriterBase everywhere.
-      // IRRewriter rewriter(b);
-      // FailureOr<TiledLinalgOp> tiledRootOp =
-      //     tileLinalgOp(rewriter, rootOp, tilingOptions);
-
-      // Exit if tiling the root operation fails.
-      // if (failed(tiledRootOp))
-      //   return failure();
-
       func::FuncOp func = getOperation();
       MLIRContext *ctx = func.getContext();
+      RewritePatternSet tilingPatterns(ctx);
 
-      RewritePatternSet patterns(&getContext());
+      int mc, kc, nc, mr, nr = 0;
+      get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
+      printf("");
 
-      // Add the matmul tiling patterns to the list.
-      //===----------------------------------------------------------------------===//
-      // BLIS HASWELL
-      //===----------------------------------------------------------------------===//
-      // #define BLIS_DGEMM_UKERNEL         bli_dgemm_asm_8x6
-      // #define BLIS_DEFAULT_MC_D          72
-      // #define BLIS_DEFAULT_KC_D          256
-      // #define BLIS_DEFAULT_NC_D          4080
-      // #define BLIS_DEFAULT_MR_D          8
-      // #define BLIS_DEFAULT_NR_D          6
+      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, {1, 2, 0});
+      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {nr, mr, kc}, {1, 0, 2});
 
-      // TODO(gkestor): leverage exisiting tiling pass in linalg
-      patterns.insert<LinalgTilingPattern>(
-          ctx,
-          LinalgTilingOptions()
-              .setTileSizes({72, 4080, 256})
-              .setInterchange({1, 2, 0})
-              .setLoopType(LinalgTilingLoopType::Loops)
-          //      ,
-          //  LinalgTransformationFilter(Identifier::get("__with_tiling__", ctx),
-          //                             Identifier::get("L2__with_tiling__", ctx))
-      );
-
-      // patterns.insert<LinalgTilingPattern<MatmulOp>>(
-      //     ctx,
-      //     LinalgTilingOptions()
-      //         .setTileSizes({6, 8, 256})
-      //         .setInterchange({1, 0, 2})
-      //         .setLoopType(LinalgTilingLoopType::Loops),
-      //     LinalgTransformationFilter(Identifier::get("L2__with_tiling__", ctx),
-      //                                Identifier::get("__micro_kernel__", ctx)));
-
-      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+      if (failed(applyPatternsAndFoldGreedily(getOperation(),
+                                              std::move(tilingPatterns))))
+        return signalPassFailure();
     }
   };
 } // end anonymous namespace
 
+/////////////////////////////////////////////
+//////////LinAlg Matmul microkernel//////////
+/////////////////////////////////////////////
 namespace
 {
   class LinalgMatMulOpToLibraryCallPattern : public OpRewritePattern<MatmulOp>
@@ -369,6 +455,10 @@ namespace
     }
   };
 } // end anonymous namespace
+
+/////////////////////////////////////////////////////
+////////LinAlg CopyOp (Transpose) Optimization///////
+/////////////////////////////////////////////////////
 
 // struct OptDenseTranspose : public ConversionPattern
 // {

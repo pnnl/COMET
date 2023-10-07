@@ -36,6 +36,7 @@
 #include "mlir/Support/TypeID.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
+#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
@@ -343,28 +344,24 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (OptMatmulTiling)
   {
     optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
-    if (mlir::failed(pm.run(*module)))
-      return 4;
-    return 0;
   }
 
-  // if (OptCallToMatMulMicroKernel)
-  // {
-  //   optPM.addPass(mlir::tensorAlgebra::createLinAlgMatmulMicroKernelPass());
-  // }
+  if (OptCallToMatMulMicroKernel)
+  {
+    optPM.addPass(mlir::comet::createLinAlgMatmulMicroKernelPass());
+  }
 
   // =============================================================================
   // Lowering all the operations to loops
   // =============================================================================
   if (IsLoweringtoSCF || emitLoops || emitLLVM)
   {
-
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
     optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());            // lowers dense input/output tensor declaration
     optPM.addPass(mlir::comet::createSparseTempOutputTensorDeclLoweringPass()); // Temporary sparse output tensor declarations introduced by compound expressions
                                                                                 // should be lowered before sparse output tensor declarations
-    optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass()); // lowering for sparse output tensor declarations
-                                                                            //(sparse_output_tensor_decl and temp_sparse_output_tensor_decl)
+    optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass());     // lowering for sparse output tensor declarations
+                                                                                //(sparse_output_tensor_decl and temp_sparse_output_tensor_decl)
     // The partial Fusion pass might add new tensor.fill operations
     optPM.addPass(mlir::comet::createTensorFillLoweringPass());
     optPM.addPass(mlir::comet::createPCToLoopsLoweringPass());
@@ -405,6 +402,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertSCFToCFPass());
     pm.addPass(mlir::memref::createExpandStridedMetadataPass()); // Needed for memref.expand_shape
+    pm.addPass(mlir::createLowerAffinePass());
     pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createArithToLLVMConversionPass());
     pm.addPass(mlir::createConvertFuncToLLVMPass());

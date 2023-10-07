@@ -3,6 +3,7 @@
 /install*
 /cmake-build*
 /docker_build
+/blis
 
 # OS and libaries
 #*
