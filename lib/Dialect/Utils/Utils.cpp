@@ -1308,7 +1308,7 @@ namespace mlir
       }
     }
 
-    void getAncestorsWp(Value op, std::vector<Value> &ret, std::vector<Value> dfsOps)
+    void getAncestorsWp(Value op, std::vector<Value> &ret /* output ancestors*/, std::vector<Value> &dfsOps)
     {
       comet_debug() << " ";
       comet_vdump(op);
@@ -1568,10 +1568,11 @@ namespace mlir
 
     /// Get indices in current WorkspaceOp cur_op
     void getFormatsInfo(Value cur_op,
-                        std::vector<int> indices,
-                        std::vector<Value> leafs, std::vector<Value> &tensors,
-                        std::vector<unsigned int> &ids,
-                        std::vector<std::string> &formats)
+                        std::vector<int> &indices,
+                        std::vector<Value> &leafs,
+                        std::vector<Value> &tensors /* output */,
+                        std::vector<unsigned int> &ids /* output */,
+                        std::vector<std::string> &formats /* output */)
     {
       // For each indices, find in each leaf, which tensor, the corresponding format
       // If in all tensors, the formats of the index are D, then D
@@ -1769,18 +1770,23 @@ namespace mlir
       } // for(auto i = 0; i < indices.size(); i++){
     }
 
+    /// Find leaves of tcRootOp in the Index Tree (dfsOp).
+    /// A leaf is a computeOp node and tcRootOp is one of its ancestors.
     /// Method 0:
     /// Search for the tensor which contains index i from workspace tree ops: ta.tc_root
     /// Return the tensor name and the index in the tensor
     /// step: find the ancestor of each leaf, check the workspaceOp is in whose ancestorWP
-    void findLeafs(Value tcRootOp, std::vector<int> indices, std::vector<Value> dfsOps, std::vector<Value> &ret)
+    void findLeafs(Value tcRootOp,
+                   std::vector<int> &indices,
+                   std::vector<Value> &dfsOps,
+                   std::vector<Value> &ret /* output leaves */)
     {
       std::vector<std::vector<Value>> allAncestors(dfsOps.size());
       for (unsigned int i = 0; i < dfsOps.size(); i++)
       {
         if (IndexTreeComputeOp cur_op = dyn_cast<IndexTreeComputeOp>(dfsOps[i].getDefiningOp()))
         {
-          getAncestorsWp(dfsOps[i], allAncestors[i], dfsOps);
+          getAncestorsWp(dfsOps[i], allAncestors[i] /* output ancestors */, dfsOps);
           comet_debug() << " print allAncestors[" << i << "]: ";
           print_vector_value(allAncestors[i]);
         }

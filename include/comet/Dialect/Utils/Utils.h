@@ -187,13 +187,13 @@ namespace mlir
     /// dfs traverse the tcRootOp,
     /// parent node can get from getUser() function, only one user since tree structure
     void dfsRootOpTree(Value tcRootOp, std::vector<Value> &ret);
-    void getAncestorsWp(Value op, std::vector<Value> &ret, std::vector<Value> dfsOps);
+    void getAncestorsWp(Value op, std::vector<Value> &ret /* output ancestors*/, std::vector<Value> &dfsOps);
 
     /// Method 0:
     /// Search for the tensor which contains index i from workspace tree ops: ta.tc_root
     /// Return the tensor name and the index in the tensor
     /// step: find the ancestor of each leaf, check the workspaceOp is in whose ancestorWP
-    void findLeafs(Value tcRootOp, std::vector<int> indices, std::vector<Value> dfsOps, std::vector<Value> &ret);
+    void findLeafs(Value tcRootOp, std::vector<int> &indices, std::vector<Value> &dfsOps, std::vector<Value> &ret /* output leaves */);
     bool isRealRoot(Operation *op);
     std::vector<std::vector<int>> convertArrayAttrIntTo2DVector(ArrayAttr perms);
     ArrayAttr convert2DVectorToArrayAttrInt(std::vector<std::vector<int>> t1_perms_int, OpBuilder &builder);
@@ -219,8 +219,8 @@ namespace mlir
                                     std::vector<std::vector<bool>> &inputOutputMapping);
 
     void getFormatsInfo(Value cur_op,
-                        std::vector<int> indices,
-                        std::vector<Value> leafs,
+                        std::vector<int> &indices,
+                        std::vector<Value> &leafs,
                         std::vector<Value> &tensors,
                         std::vector<unsigned int> &ids,
                         std::vector<std::string> &formats);
