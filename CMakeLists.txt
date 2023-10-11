@@ -81,7 +81,7 @@ set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
   set(BLA_VENDOR FLAME)
   set(BLA_PREFER_PKGCONFIG TRUE)
   set(BLA_PKGCONFIG_BLAS blis)
-  set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/blis")
+  set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/install")
   find_package(BLAS REQUIRED)
 
 #-------------------------------------------------------------------------------
@@ -110,8 +110,8 @@ add_custom_target(comet-doc)
 # Add MLIR, LLVM and BLIS headers to the include path
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/install/include/blis/")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/mcl/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/blis/include/blis")
 
 # Add COMET files to the include path
 include_directories(${COMET_MAIN_INCLUDE_DIR})
@@ -125,7 +125,6 @@ add_subdirectory(include/comet)
 add_subdirectory(lib)
 add_subdirectory(frontends/comet_dsl)
 add_subdirectory(integration_test)
-add_subdirectory(tools)
 
 
 option(COMET_INCLUDE_DOCS "Generate build targets for the COMET docs.")
@@ -164,7 +163,8 @@ if (NOT LLVM_ENABLE_IDE)
                            COMPONENT comet-headers)
 endif()
 
-#add_subdirectory(cmake/modules)
+set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/install/lib/")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Set RPATH to $ORIGIN on all targets.
 function(set_rpath_all_targets dir)

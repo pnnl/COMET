@@ -237,26 +237,26 @@ namespace mlir
       }
     }
 
-    template <typename T>
-    void print_vector(std::vector<T> vec)
-    {
-      for (auto n : vec)
-      {
-        comet_debug() << n << " ";
-      }
-      comet_debug() << "\n";
-    }
+    // template <typename T>
+    // void print_vector(std::vector<T> vec)
+    // {
+    //   for (auto n : vec)
+    //   {
+    //     comet_debug() << n << " ";
+    //   }
+    //   comet_debug() << "\n";
+    // }
 
-    template <>
-    void print_vector<bool>(std::vector<bool> vec)
-    {
-      // Special code for Array<bool>
-      for (auto n : vec)
-      {
-        comet_debug() << n << " ";
-      }
-      comet_debug() << "\n";
-    }
+    // template <>
+    // void print_vector<bool>(std::vector<bool> vec)
+    // {
+    //   // Special code for Array<bool>
+    //   for (auto n : vec)
+    //   {
+    //     comet_debug() << n << " ";
+    //   }
+    //   comet_debug() << "\n";
+    // }
 
     void print_vector_value(std::vector<Value> vec)
     {
@@ -280,28 +280,28 @@ namespace mlir
       return rso.str();
     }
 
-    template <class T>
-    unsigned int findIndexInVector(std::vector<T> const &vec, T e)
-    {
-      // Check if element e exists in vector
-      auto it = std::find(vec.begin(), vec.end(), e);
+    // template <class T>
+    // unsigned int findIndexInVector(std::vector<T> const &vec, T e)
+    // {
+    //   // Check if element e exists in vector
+    //   auto it = std::find(vec.begin(), vec.end(), e);
 
-      // It accepts a range and an element to search in the given range. If element is found then
-      // it returns an iterator to the first element in the given range that’s equal to given element,
-      // else it returns an end of the list.
-      unsigned int ret = 0;
-      if (it != vec.end())
-      {
-        ret = std::distance(vec.begin(), it);
-        comet_debug() << " Element Found and its index location: " << ret << " \n";
-      }
-      else
-      {
-        comet_debug() << " Element Not Found\n";
-        ret = vec.size();
-      }
-      return ret;
-    }
+    //   // It accepts a range and an element to search in the given range. If element is found then
+    //   // it returns an iterator to the first element in the given range that’s equal to given element,
+    //   // else it returns an end of the list.
+    //   unsigned int ret = 0;
+    //   if (it != vec.end())
+    //   {
+    //     ret = std::distance(vec.begin(), it);
+    //     comet_debug() << " Element Found and its index location: " << ret << " \n";
+    //   }
+    //   else
+    //   {
+    //     comet_debug() << " Element Not Found\n";
+    //     ret = vec.size();
+    //   }
+    //   return ret;
+    // }
 
     bool isDense(std::string s, std::string delim)
     {

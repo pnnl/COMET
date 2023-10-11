@@ -57,7 +57,7 @@ def generate_xclbin(ifile, ofile):
         exec_cmd(cmd)
         cmd = hls_as + ' ' + ofile + '.ll -o ' + ofile + '.xpirbc'
         exec_cmd(cmd)
-        cmd = hls_link + ' ' + ofile + '.xpirbc ' + vitis_lib + '/libspir-39-hls.bc -o ' + ofile + '.linked.xpirbc --only-needed'
+        cmd = hls_link + ' ' + ofile + '.xpirbc ' + vitis_lib + ' -o ' + ofile + '.linked.xpirbc --only-needed'
         exec_cmd(cmd)
 
         os.system('mkdir ' + vpp_temp)
@@ -79,13 +79,13 @@ llvm_spirv   = os.getenv('LLVM_SPIRV')
 llvm_dis     = os.getenv('LLVM_DIS')
 hls_as       = hls_dir + '/bin/llvm-as'
 hls_link     = hls_dir + '/bin/llvm-link'
-vitis_lib    = vitis_dir + '/lnx64/lib'
+vitis_lib    = os.getenv('VITIS_LIB')
 vpp          = os.getenv('VPP')
 vpp_flags    = os.getenv('VPP_FLAGS')
 vpp_temp     = os.getenv('VPP_TEMP_DIR')
 
 comet_flags = "--convert-ta-to-it --convert-to-loops"
-mlir_flags  = "--convert-scf-to-std --convert-std-to-llvm"
+mlir_flags  = "--convert-scf-to-cf --convert-cf-to-llvm"
 stream = os.popen(comet_opt + ' --version')
 comet_info = stream.read()
 
@@ -112,4 +112,4 @@ cmd = generate_cmd(mlir_opt, mlir_flags, args.ofile + '.llvm', args.ofile + '.ml
 exec_cmd(cmd)
 
 if(args.targets == 'fpga'):
-        generate_xclbin('spirv_comet_main_kernel.spv', args.ofile)
+        generate_xclbin('spirv_comet__main_kernel.bin', args.ofile)
