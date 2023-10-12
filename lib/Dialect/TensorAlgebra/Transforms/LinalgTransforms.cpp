@@ -32,6 +32,7 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
+#include "mlir/Dialect/Linalg/TransformOps/LinalgTransformOps.h"
 #include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -59,9 +60,9 @@ using namespace mlir::arith;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LINALGTRANSFORMS
-// #define DEBUG_MODE_LINALGTRANSFORMS
-// #endif
+#ifndef DEBUG_MODE_LINALGTRANSFORMS
+#define DEBUG_MODE_LINALGTRANSFORMS
+#endif
 
 #ifdef DEBUG_MODE_LINALGTRANSFORMS
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -84,7 +85,7 @@ using namespace mlir::tensorAlgebra;
 // *********** For debug purpose *********//
 
 /////////////////////////////////////////////
-/////////LinAlg Matmul Tiling////////////////
+// LinAlg Matmul Tiling////////////////
 /////////////////////////////////////////////
 namespace
 {
@@ -265,10 +266,10 @@ void get_level3_blocksizes(int *mc, int *kc, int *nc, int *mr, int *nr, int size
   *mc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MC, cntx);
   *kc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_KC, cntx);
   *nc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NC, cntx);
-  *mr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MR, cntx);
-  *nr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NR, cntx);
+  *mr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NR, cntx);
+  *nr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MR, cntx);
 
-  //printf("mc= %d, kc= %d, nc=%d, mr=%d, nr=%d\n", *mc, *kc, *nc, *mr, *nr);
+  // printf("mc= %d, kc= %d, nc=%d, mr=%d, nr=%d\n", *mc, *kc, *nc, *mr, *nr);
   return;
 }
 
@@ -300,7 +301,6 @@ namespace
 
       int mc, kc, nc, mr, nr = 0;
       get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
-      printf("");
 
       addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, {1, 2, 0});
       addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {nr, mr, kc}, {1, 0, 2});
@@ -356,12 +356,15 @@ static SmallVector<Type, 4> extractOperandTypes(Operation *op)
 
 static SmallVector<Value, 4>
 createTypeCanonicalizedMemRefOperands(OpBuilder &b, Location loc,
-                                      ValueRange operands) {
+                                      ValueRange operands)
+{
   SmallVector<Value, 4> res;
   res.reserve(operands.size());
-  for (auto op : operands) {
+  for (auto op : operands)
+  {
     auto memrefType = op.getType().dyn_cast<MemRefType>();
-    if (!memrefType) {
+    if (!memrefType)
+    {
       res.push_back(op);
       continue;
     }
@@ -374,10 +377,11 @@ createTypeCanonicalizedMemRefOperands(OpBuilder &b, Location loc,
 
 // Get a SymbolRefAttr containing the library function name for the LinalgOp.
 // If the library function does not exist, insert a declaration.
-static FailureOr<FlatSymbolRefAttr> getLibraryCallSymbolRef(Operation *op, PatternRewriter &rewriter) {
+static FailureOr<FlatSymbolRefAttr> getLibraryCallSymbolRef(Operation *op, PatternRewriter &rewriter)
+{
   auto linalgOp = cast<LinalgOp>(op);
   auto fnName = linalgMatmulUkrFname;
-  //printf("fname: %s\n", fnName.c_str());
+  // printf("fname: %s\n", fnName.c_str());
   if (fnName.empty())
     return rewriter.notifyMatchFailure(op, "No library call defined for: ");
 
@@ -389,7 +393,8 @@ static FailureOr<FlatSymbolRefAttr> getLibraryCallSymbolRef(Operation *op, Patte
     return fnNameAttr;
 
   SmallVector<Type, 4> inputTypes(extractOperandTypes(op));
-  if (op->getNumResults() != 0) {
+  if (op->getNumResults() != 0)
+  {
     return rewriter.notifyMatchFailure(
         op,
         "Library call for linalg operation can be generated only for ops that "
@@ -446,6 +451,81 @@ namespace
 
       // Replace the inner linalg.matmul with the blis microkernel
       patterns.insert<LinalgMatMulOpToLibraryCallPattern>(ctx);
+      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
+    }
+  };
+} // end anonymous namespace
+
+// ******************************************** //
+//*******Subview Promote************************//
+// ******************************************** //
+namespace
+{
+  class PromoteSubviewPattern : public OpRewritePattern<MatmulOp>
+  {
+  public:
+    using OpRewritePattern<MatmulOp>::OpRewritePattern;
+    LogicalResult matchAndRewrite(MatmulOp op,
+                                  PatternRewriter &rewriter) const override;
+  };
+}
+
+LogicalResult PromoteSubviewPattern::matchAndRewrite(
+    MatmulOp op, PatternRewriter &rewriter) const
+{
+  if (!isa<MatmulOp>(op))
+    return failure();
+
+  comet_vdump(op);
+  LinalgPromotionOptions promotionOptions;
+
+  // ArrayRef<int64_t> operands;
+
+  // promotionOptions = promotionOptions.setOperandsToPromote();
+
+  //       extractFromI64ArrayAttr(getOperandsToPromote()));
+  // if (getUseFullTilesByDefault())
+  //   promotionOptions = promotionOptions.setUseFullTileBuffersByDefault(
+  //       getUseFullTilesByDefault());
+  // if (getUseAlloca())
+  //   promotionOptions = promotionOptions.setUseAlloca(getUseAlloca());
+  // if (!getUseFullTileBuffers().empty())
+  //   promotionOptions = promotionOptions.setUseFullTileBuffers(
+  //       llvm::to_vector(getUseFullTileBuffers().getAsValueRange<BoolAttr>()));
+  // if (getAlignment().has_value())
+  //   promotionOptions = promotionOptions.setAlignment(*getAlignment());
+
+  // if (failed(promoteSubviewsPrecondition(matmulOp, promotionOptions)))
+  //   return emitDefaultDefiniteFailure(matmulOp);
+
+  rewriter.setInsertionPoint(op);
+  FailureOr<LinalgOp> res = promoteSubViews(rewriter, op, promotionOptions);
+  // printf("Gokcen\n");
+  // res->dump();
+
+  // LinalgOpInstancePromotionOptions linalgOptions(op);
+  // auto layout = DataLayout::closest(op);
+  // ImplicitLocOpBuilder b(op.getLoc(), rewriter);
+  // auto res = promoteSubViews(rewriter, op, linalgOptions, layout);
+
+  return success();
+}
+
+namespace
+{
+  class PromoteSubviewPass : public PassWrapper<PromoteSubviewPass, OperationPass<func::FuncOp>>
+  {
+  public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PromoteSubviewPass)
+    void runOnOperation() override
+    {
+      func::FuncOp func = getOperation();
+      MLIRContext *ctx = func.getContext();
+
+      RewritePatternSet patterns(&getContext());
+
+      // Replace the inner linalg.matmul with the blis microkernel
+      patterns.insert<PromoteSubviewPattern>(ctx);
       (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
     }
   };
@@ -679,6 +759,12 @@ std::unique_ptr<mlir::Pass> mlir::comet::createLinAlgMatmulTilingPass()
 std::unique_ptr<mlir::Pass> mlir::comet::createLinAlgMatmulMicroKernelPass()
 {
   return std::make_unique<LinAlgMatmulMicroKernelPass>();
+}
+
+/// Create a pass to call a blis micro kernel for the inner linalg.matmul after tiling
+std::unique_ptr<mlir::Pass> mlir::comet::createPromoteSubviewPass()
+{
+  return std::make_unique<PromoteSubviewPass>();
 }
 
 /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
