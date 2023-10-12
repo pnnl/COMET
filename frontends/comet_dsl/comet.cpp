@@ -344,11 +344,19 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (OptMatmulTiling)
   {
     optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
+
+    optPM.addPass(mlir::comet::createPromoteSubviewPass());
+                 if (mlir::failed(pm.run(*module)))
+        return 4;
+      return 0;
   }
 
   if (OptCallToMatMulMicroKernel)
   {
     optPM.addPass(mlir::comet::createLinAlgMatmulMicroKernelPass());
+         if (mlir::failed(pm.run(*module)))
+        return 4;
+      return 0;
   }
 
   // =============================================================================

@@ -55,8 +55,9 @@ void bli_dgemm_x86_ukr(
       (strcmp("skx", arch) == 0) ||
       (strcmp("knl", arch) == 0))
   {
-    // printf("Calling bli_dgemm_haswell_asm_6x8\n");
-    bli_dgemm_haswell_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
+    printf("Calling bli_dgemm_haswell_asm_6x8\n");
+    // bli_dgemm_haswell_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
+    bli_dgemm_haswell_asm_8x6(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
   }
   else
   {
