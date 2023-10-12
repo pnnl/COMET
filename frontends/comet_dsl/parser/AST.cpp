@@ -249,7 +249,7 @@ void ASTDumper::dump(CallExprAST *Node)
 {
   INDENT();
   llvm::errs() << "Call '" << Node->getCallee() << "' [ " << loc(Node) << "\n";
-  dump(Node->getArgs());
+  // dump(Node->getArgs());
   indent();
   llvm::errs() << "]\n";
 }

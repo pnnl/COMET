@@ -495,13 +495,13 @@ namespace tensorAlgebra
       }
       else
       {
-        if (args.size() == 0)
-        {
-          args.push_back(nullptr);
-        }
+        // if (args.size() == 0)
+        // {
+        //   args.push_back(nullptr);
+        // }
       }
       comet_debug() << "generate CallExprAST node\n ";
-      return std::make_unique<CallExprAST>(std::move(loc), name, std::move(args[0]));
+      return std::make_unique<CallExprAST>(std::move(loc), name, std::move(args));
     }
 
     /// primary
@@ -603,6 +603,7 @@ namespace tensorAlgebra
       while (true)
       {
         int tokPrec = getTokPrecedence();
+        comet_debug() << lexer.getCurToken() << "\n";
         comet_debug() << " tokPrec: " << tokPrec << ", exprPrec: " << exprPrec << "\n";
         // If this is a binop that binds at least as tightly as the current binop,
         // consume it, otherwise we are done.
@@ -666,6 +667,11 @@ namespace tensorAlgebra
       auto lhs = parsePrimary();
       if (!lhs)
         return nullptr;
+      // if(lexer.getCurToken() == ';')
+      // {
+      //   comet_debug() << "return single operand\n";
+      //   return lhs;
+      // }
 
       comet_debug() << "finished lhs parse\n";
       comet_debug() << " call parseBinOpRHS\n";
@@ -724,6 +730,7 @@ namespace tensorAlgebra
       if (!type)
         type = std::make_unique<VarType>();
       lexer.consume(Token('='));
+      comet_debug() << "Parse declaration for " << id << "\n";  
       auto expr = parseExpression();
       return std::make_unique<VarDeclExprAST>(std::move(loc), std::move(id),
                                               std::move(*type), std::move(expr));
@@ -1341,9 +1348,9 @@ namespace tensorAlgebra
       {
         comet_debug() << __FILE__ << __LINE__ << " TensorOpExprAST rhs is Expr_Call\n";
 
-        //CallExprAST *call = llvm::cast<CallExprAST>(RHS.get());
-        //llvm::StringRef callee = call->getCallee();
-        //comet_debug() << __FILE__ << __LINE__ << " callee: " << callee << "\n";
+        CallExprAST *call = llvm::cast<CallExprAST>(RHS.get());
+        llvm::StringRef callee = call->getCallee();
+        comet_debug() << __FILE__ << __LINE__ << " callee: " << callee << "\n";
       }
       else if (RHS.get()->getKind() == tensorAlgebra::ExprAST::Expr_Transpose)
       {
@@ -1468,6 +1475,7 @@ namespace tensorAlgebra
         else if (lexer.getCurToken() == tok_identifier &&
                  lexer.lookAhead() == ' ')
         {
+          comet_debug() << "ParseVarExpression lhs parse\n";
           auto varOp = ParseVarExpression();
           if (!varOp)
             return nullptr;
@@ -1517,6 +1525,76 @@ namespace tensorAlgebra
       return exprList;
     }
 
+    std::unique_ptr<FuncArgAST> parseFuncArg()
+    {
+      auto tok = lexer.getCurToken();
+      if(tok == tok_tensor)
+      {
+        auto loc = lexer.getLastLocation();
+        lexer.getNextToken(); // eat Tensor
+
+        std::unique_ptr<VarType> type; // Type is optional, it can be inferred
+        if (lexer.getCurToken() == '<')
+        {
+          lexer.consume(Token('<')); // eat <
+          type = std::make_unique<VarType>();
+          if (lexer.getCurToken() == tok_double)
+          {
+            type->elt_ty = VarType::TY_DOUBLE;
+          }
+          else if (lexer.getCurToken() == tok_float)
+          {
+            type->elt_ty = VarType::TY_FLOAT;
+          }
+          else if (lexer.getCurToken() == tok_int)
+          {
+            type->elt_ty = VarType::TY_INT;
+          }
+          lexer.getNextToken(); // eat el_type
+          if (lexer.getCurToken() != '>')
+            return parseError<FuncArgAST>(">", "to end type");
+          lexer.getNextToken(); // eat >
+        }
+
+        if (lexer.getCurToken() != tok_identifier)
+          return parseError<FuncArgAST>("identifier",
+                                              "after 'Tensor' declaration");
+        std::string id(lexer.getId());
+        lexer.getNextToken(); // eat id
+
+        return std::make_unique<FuncArgAST>(std::move(loc), id, std::move(*type));
+      }
+      else if(tok == tok_int || tok == tok_float || tok == tok_double )
+      {
+        auto loc = lexer.getLastLocation();
+        std::unique_ptr<VarType> type;
+        type = std::make_unique<VarType>();
+        if (lexer.getCurToken() == tok_double)
+        {
+          type->elt_ty = VarType::TY_DOUBLE;
+        }
+        else if (lexer.getCurToken() == tok_float)
+        {
+          type->elt_ty = VarType::TY_FLOAT;
+        }
+        else if (lexer.getCurToken() == tok_int)
+        {
+          type->elt_ty = VarType::TY_INT;
+        }
+        lexer.getNextToken(); // eat type
+
+        std::string id(lexer.getId());
+        lexer.getNextToken(); // eat id
+
+        return std::make_unique<FuncArgAST>(std::move(loc), id, std::move(*type));
+      }
+      else
+      {
+        return parseError<FuncArgAST>("Unexpected token in function arguments");
+      }
+    }
+
+
     /// prototype ::= def id '(' decl_list ')'
     /// decl_list ::= identifier | identifier, decl_list
     std::unique_ptr<PrototypeAST> parsePrototype()
@@ -1533,22 +1611,23 @@ namespace tensorAlgebra
         return parseError<PrototypeAST>("(", "in prototype");
       lexer.consume(Token('('));
 
-      std::vector<std::unique_ptr<VariableExprAST>> args;
+      std::vector<std::unique_ptr<FuncArgAST>> args;
       if (lexer.getCurToken() != ')')
       {
         do
         {
-          std::string name(lexer.getId());
-          auto loc = lexer.getLastLocation();
-          lexer.consume(tok_identifier);
-          auto decl = std::make_unique<VariableExprAST>(std::move(loc), name);
-          args.push_back(std::move(decl));
+          auto arg = parseFuncArg();
+          // std::string name(lexer.getId());
+          // auto loc = lexer.getLastLocation();
+          // lexer.consume(tok_identifier);
+          // auto decl = std::make_unique<VariableExprAST>(std::move(loc), name);
+          args.push_back(std::move(arg));
           if (lexer.getCurToken() != ',')
             break;
           lexer.consume(Token(','));
-          if (lexer.getCurToken() != tok_identifier)
-            return parseError<PrototypeAST>(
-                "identifier", "after ',' in function parameter list");
+          // if (lexer.getCurToken() != tok_identifier)
+          //   return parseError<PrototypeAST>(
+          //       "identifier", "after ',' in function parameter list");
         } while (true);
       }
       if (lexer.getCurToken() != ')')
