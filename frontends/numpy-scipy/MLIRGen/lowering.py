@@ -34,6 +34,30 @@ import scipy as scp
 debug = False
 temp_dir = '.cometpy/'
 
+if not os.path.exists(temp_dir):
+    os.mkdir(temp_dir)
+
+platform_args = ""
+
+
+if("macOS" in platform.platform()):
+    comet_runner_util = "../build/lib/libcomet_runner_utils.dylib"
+    platform_args = "-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/ "
+elif("Linux" in platform.platform()):
+    comet_runner_util = "../build/lib/libcomet_runner_utils.so"
+else:
+    print("error: Support available only for Linux and macOS")
+    sys.exit()
+files_to_cleanup = []
+def cleanup():
+    for f in files_to_cleanup:
+        if os.path.exists(f):
+            os.remove(f)
+            # pass
+atexit.register(cleanup)
+p = subprocess.run(['../llvm/build/bin/llvm-config', '--host-target'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+llvm_cfg_out = p.stdout.decode().strip()  # This only needs to run once and should be possible to generate at compile time
+
 class memref_i64(Structure):
     _fields_ = [ ('mem_aligned', POINTER(c_longlong)), ('mem', POINTER(c_longlong)), ('offset', c_longlong), ('dim', c_longlong), ('stride', c_longlong)]
 
@@ -61,23 +85,8 @@ def len_dense(vals):
             num+=1
     return num
 
-files_to_cleanup = []
-def cleanup():
-    for f in files_to_cleanup:
-        if os.path.exists(f):
-            os.remove(f) 
-            # pass
 
-platform_args = ""
-atexit.register(cleanup)
-if("macOS" in platform.platform()):
-    comet_runner_util = "../build/lib/libcomet_runner_utils.dylib"
-    platform_args = "-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/ "
-elif("Linux" in platform.platform()):
-    comet_runner_util = "../build/lib/libcomet_runner_utils.so"
-else:
-    print("error: Support available only for Linux and macOS")
-    sys.exit()
+
 
 def lower_ta_to_mlir(mlir_in, mlir_lower_flags, uuid_s):
 
@@ -317,6 +326,7 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
         files_to_cleanup.append(os.path.join( os.getcwd(), scf_out_file))
     else:
         f = open(scf_out_file, 'w')
+        files_to_cleanup.append(os.path.join( os.getcwd(), scf_out_file))
 
     scf_out  = p.stderr.decode()
     scf_out = comment_unneeded_sparse(scf_out, arg_vals)
@@ -476,41 +486,26 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
     return llvm_args, llvm_args_types, all_outputs
 
 #Translating llvm dialect to llvm IR using mlir-translate and then executing the IR using lli
-def translate_and_exec_llvm_with_jit(llvm_in,func_name, inputs, outputs, uuid_s):
+def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs, outputs, uuid_s):
 
-    translate_mlir_command = "../llvm/build/bin/mlir-translate --mlir-to-llvmir " + llvm_in
 
-    p = subprocess.run(shlex.split(translate_mlir_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    # llvmir_file = 'einsum.ll'
     llvmir_file = uuid_s+'.ll'
-    llvmir_out = p.stdout
-    p = subprocess.run(['../llvm/build/bin/llvm-config', '--host-target'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    llvm_cfg_out = p.stdout.decode().strip()  # This only needs to run once and should be possible to generate at compile time
-    # llvmir_out = llvmir_out.decode()
 
-    if(os.path.exists(temp_dir+temp_dir+llvmir_file) == False):
-        f = open(os.path.join( os.getcwd(), temp_dir+llvmir_file), 'wb')
-        files_to_cleanup.append(os.path.join( os.getcwd(), temp_dir+llvmir_file))
-    else:
-        f = open(temp_dir+llvmir_file, 'wb')
-    # with open(os.path.join( os.getcwd(),temp_dir+llvmir_file), 'wb') as f:
-    f.write(llvmir_out)
-    f.close()
-    llvmir_opt_file = llvmir_file+'.opt.ll'
+    path_to_cometopt = "../build/bin/comet-opt"
+    to_llvm_command = path_to_cometopt + scf_lower_flags + llvm_in
+    translate_mlir_command = "../llvm/build/bin/mlir-translate --mlir-to-llvmir -- " 
 
-    llvm_opt_command = '../llvm/build/bin/opt --O3 --mtriple="' + llvm_cfg_out+'" ' +temp_dir+llvmir_file+' -S -o '+temp_dir+llvmir_opt_file
-    p = subprocess.run(shlex.split(llvm_opt_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if(p.returncode != 0):
-        cleanup()
-        raise AssertionError("opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr))
-    files_to_cleanup.append(temp_dir+llvmir_opt_file)
-
+    llvm_opt_command = '../llvm/build/bin/opt --O3 --mtriple="' + llvm_cfg_out+'" -S  --'
     libname =   "./lib"+llvmir_file+func_name+".so"
-    
-    gcc_command = "../llvm/build/bin/clang -Wno-everything --shared -O3 "+platform_args+ temp_dir+llvmir_opt_file+ " -o "+ temp_dir + libname+" -fpic -L ../build/lib/ -Wl,-rpath,../build/lib/ -lcomet_runner_utils"
+    gcc_command = "../llvm/build/bin/clang -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L ../build/lib/ -Wl,-rpath,../build/lib/ -lcomet_runner_utils -"
 
-    p = subprocess.run(shlex.split(gcc_command) , stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # We merge all several calls in a single call to the shell in order to only pay the overhead of process creation once.
+    # 1. Call comet to lower scf code to llvm
+    # 2. Call mlir-translate to convert llvm to llvmir 
+    # 3. Call opt to optimize generated code
+    # 4. Call clang to generate library
+    p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | '+llvm_opt_command + ' | ' + gcc_command , stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+
     if(p.returncode != 0):
         cleanup()
         raise AssertionError("gcc failed with error code: {}. Error: {}".format(p.returncode, p.stderr))
@@ -664,15 +659,9 @@ def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
 
 
 def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_name, args_vals, outputs):
-    #lower TA dialect to the SCF dialect
+
     mlir_lower_flags = " "
 
-    # if isinstance(compile_with_flags,tuple):
-    #     for i in range(len(compile_with_flags)):
-    #         mlir_lower_flags += compile_with_flags[i] + " "
-    
-    # elif(isinstance(compile_with_flags,str)):
-    #     mlir_lower_flags += compile_with_flags + " "
     if compile_with_flags != None:
         if "--convert-tc-to-ttgt" not in compile_with_flags:
             mlir_lower_flags += "  --convert-ta-to-it "
@@ -692,11 +681,6 @@ def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_nam
         print(ta_dialect_rep)
         return
 
-     #write the TA dialect rep to file
-    # ta_dialect_file = 'einsum.mlir'
-    if not os.path.exists(temp_dir):
-        os.mkdir(temp_dir)
-        
     uuid_s = str(uuid.uuid4())
     ta_dialect_file = temp_dir+uuid_s+'.mlir'
     if(os.path.exists(ta_dialect_file) == False):
@@ -708,18 +692,10 @@ def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_nam
     f.write(ta_dialect_rep)
     f.close()
 
-    # Uncomment for debugging pusposes
+    # Convert TA to SCF
     scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals, uuid_s)
-    # Running --convert-ta-to-it --convert-to-loops and  --convert-to-llvm in separate steps 
-    # does not produce correct output. This is an issue with the backend.
 
-    #lower the SCF dialect to first STD dialect and then to the llvm dialect
-    
-    llvm_out_file = lower_scf_to_llvm(scf_out_file, scf_lower_flags, uuid_s)
-    # llvm_out_file = lower_scf_to_llvm(ta_dialect_file, mlir_lower_flags + scf_lower_flags)
-   
-    #lower the SCF dialect to the LLVM dialect
-    #result = execute_llvm(llvm_out_file)
-    result,llvmir_file = translate_and_exec_llvm_with_jit(llvm_out_file,func_name, args_vals, outputs, uuid_s)
+    #lower the SCF dialect to LLVMIR and execute
+    result,llvmir_file = translate_and_exec_llvm_with_jit(scf_out_file, scf_lower_flags, func_name, args_vals, outputs, uuid_s)
 
     return result
