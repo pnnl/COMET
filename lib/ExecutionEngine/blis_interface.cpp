@@ -55,6 +55,7 @@ void bli_dgemm_x86_ukr(
       (strcmp("skx", arch) == 0) ||
       (strcmp("knl", arch) == 0))
   {
+    // printf("Calling bli_dgemm_haswell_asm_6x8\n");
     bli_dgemm_haswell_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
   }
   else
@@ -176,7 +177,7 @@ void dgemm_generic_noopt_mxn(
 };
 #endif
 
-extern "C" void _mlir_ciface_linalg_matmul_viewsxsxf64_viewsxsxf64_viewsxsxf64(
+extern "C" void _mlir_ciface_linalg_matmul_viewsxs_viewsxs_viewsxs(
     StridedMemRefType<double, 2> *A, StridedMemRefType<double, 2> *B,
     StridedMemRefType<double, 2> *C)
 {
@@ -202,16 +203,20 @@ extern "C" void _mlir_ciface_linalg_matmul_viewsxsxf64_viewsxsxf64_viewsxsxf64(
   }
 
   auxinfo_t data;
-  bli_auxinfo_set_next_a(A->data +  A->offset, &data);
-  bli_auxinfo_set_next_b(B->data +  B->offset, &data);
+  bli_auxinfo_set_next_a(A->data + A->offset, &data);
+  bli_auxinfo_set_next_b(B->data + B->offset, &data);
 
   // get the micro-arch
   arch_t id = bli_cpuid_query_id();
   const char *s = bli_arch_string(id);
 
+  printMemRefMetaData(std::cerr, *A);
+  printMemRefMetaData(std::cerr, *B);
+  printMemRefMetaData(std::cerr, *C);
+
   bli_dgemm_asm_6x8(A->sizes[0], // m
                     B->sizes[1], // n
-                    A->sizes[1], // k  
+                    A->sizes[1], // k
                     &alpha,
                     A->data + A->offset,
                     B->data + B->offset,
