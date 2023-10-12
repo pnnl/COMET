@@ -28,7 +28,6 @@
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
-// #include "comet/Dialect/TensorAlgebra/Transforms/LinalgTransforms.h"
 
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
@@ -91,6 +90,7 @@ namespace
 {
   /// Marker used as attribute name in generated Linalg rewriting transformations.
   const StringLiteral kLinalgTransformMarker = "__with_tiling__";
+  std::string linalgMatmulUkrFname = "linalg_matmul_viewsxs_viewsxs_viewsxs";
 
   /// Helper class to control application of linalg transformation patterns.
   /// Control comes in 2 forms:
@@ -268,7 +268,7 @@ void get_level3_blocksizes(int *mc, int *kc, int *nc, int *mr, int *nr, int size
   *mr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MR, cntx);
   *nr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NR, cntx);
 
-  // printf("mc= %d, kc= %d, nc=%d, mr=%d, nr=%d\n", *mc, *kc, *nc, *mr, *nr);
+  //printf("mc= %d, kc= %d, nc=%d, mr=%d, nr=%d\n", *mc, *kc, *nc, *mr, *nr);
   return;
 }
 
@@ -356,15 +356,12 @@ static SmallVector<Type, 4> extractOperandTypes(Operation *op)
 
 static SmallVector<Value, 4>
 createTypeCanonicalizedMemRefOperands(OpBuilder &b, Location loc,
-                                      ValueRange operands)
-{
+                                      ValueRange operands) {
   SmallVector<Value, 4> res;
   res.reserve(operands.size());
-  for (auto op : operands)
-  {
+  for (auto op : operands) {
     auto memrefType = op.getType().dyn_cast<MemRefType>();
-    if (!memrefType)
-    {
+    if (!memrefType) {
       res.push_back(op);
       continue;
     }
@@ -377,11 +374,10 @@ createTypeCanonicalizedMemRefOperands(OpBuilder &b, Location loc,
 
 // Get a SymbolRefAttr containing the library function name for the LinalgOp.
 // If the library function does not exist, insert a declaration.
-static FailureOr<FlatSymbolRefAttr>
-getLibraryCallSymbolRef(Operation *op, PatternRewriter &rewriter)
-{
+static FailureOr<FlatSymbolRefAttr> getLibraryCallSymbolRef(Operation *op, PatternRewriter &rewriter) {
   auto linalgOp = cast<LinalgOp>(op);
-  auto fnName = linalgOp.getLibraryCallName();
+  auto fnName = linalgMatmulUkrFname;
+  //printf("fname: %s\n", fnName.c_str());
   if (fnName.empty())
     return rewriter.notifyMatchFailure(op, "No library call defined for: ");
 
@@ -393,8 +389,7 @@ getLibraryCallSymbolRef(Operation *op, PatternRewriter &rewriter)
     return fnNameAttr;
 
   SmallVector<Type, 4> inputTypes(extractOperandTypes(op));
-  if (op->getNumResults() != 0)
-  {
+  if (op->getNumResults() != 0) {
     return rewriter.notifyMatchFailure(
         op,
         "Library call for linalg operation can be generated only for ops that "
