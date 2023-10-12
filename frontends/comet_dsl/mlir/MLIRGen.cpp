@@ -34,6 +34,7 @@
 
 #include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Attributes.h"
@@ -370,10 +371,12 @@ namespace
       //     return nullptr;
       // }
 
+    // function.
       //   // Declare all the function arguments in the symbol table.
       for (const auto nameValue :
            llvm::zip(protoArgs, entryBlock.getArguments()))
       {
+        comet_debug() << "Proto Args "<< std::get<1>(nameValue) << "\n";
         if (failed(declare(std::get<0>(nameValue)->getName(),
                            std::get<1>(nameValue))))
           return nullptr;
@@ -1245,6 +1248,8 @@ namespace
       {
         if (!(expr = mlirGen(**ret.getExpr())))
           return mlir::failure();
+        
+        expr = builder.create<mlir::tensor::CastOp>(location, mlir::UnrankedTensorType::get(builder.getF64Type()), expr);
       }
 
       // Otherwise, this return operation has zero operands.
@@ -1306,13 +1311,15 @@ namespace
     /// builtin. Other identifiers are assumed to be user-defined functions.
     mlir::Value mlirGen(CallExprAST &call)
     {
+        comet_debug()<< "CallExprAST\n";
+
       llvm::StringRef callee = call.getCallee();
       auto location = loc(call.loc());
 
       mlir::Value sumVal;
       if (callee == "SUM")
       {
-        auto *expr = call.getArgs();
+        auto *expr = call.getArg(0);
         // Check if it SUM(A[i,j]) or SUM(A[i,j] * B[j,k])
         // Case 1: SUM(A[i,j])
         if (llvm::isa<LabeledTensorExprAST>(expr))
@@ -1339,16 +1346,25 @@ namespace
       }
       else
       {
-        auto *expr = call.getArgs();
-        if(expr)
+        std::vector<mlir::Value> expr_args;
+        comet_debug()<< "Generic Call\n";
+        comet_debug() <<"Num args: " << call.getNumArgs() << "\n";
+        // auto exprs = call.getArgs();
+        if(call.getNumArgs() > 0 )
         {
-          assert(false && "functions with argument are currently not supported!");
+          for(size_t i = 0; i < call.getNumArgs(); i++)
+          {
+            auto res = builder.create<mlir::tensor::CastOp>(location, mlir::UnrankedTensorType::get(builder.getF64Type()), mlirGen(*call.getArg(i)));
+            expr_args.push_back(res);
+          }
+          comet_debug() <<"Num args: " << call.getNumArgs() << "\n";
+          // assert(false && "functions with argument are currently not supported!");
         }
         mlir::Value tensorValue;
         tensorValue = mlir::Value();
-        ArrayRef<mlir::Value> args{};
-        if(tensorValue)
-          args = ArrayRef<mlir::Value> (tensorValue);
+        ArrayRef<mlir::Value> args(expr_args);
+        // if(tensorValue)
+        //   args = ArrayRef<mlir::Value> (tensorValue);
 
         auto c  = functionMap.lookup(callee);
         if(c.getFunctionType().getResults().size() > 0) // Function that returns a value
@@ -2291,6 +2307,13 @@ namespace
                 if (mlir::failed(mlirGenTensorFillRandom(loc(tensor_op->loc()), tensor_name)))
                   return mlir::success();
               }
+              else
+              {
+                LabeledTensorExprAST *lhsLabeledTensorExprAST = llvm::cast<LabeledTensorExprAST>(tensor_op->getLHS());
+                auto call_res = mlirGen(*call);
+                auto lhs_tensor = symbolTable.lookup(lhsLabeledTensorExprAST->getTensorName());
+                builder.create<TensorSetOp>(loc(tensor_op->loc()), call_res, lhs_tensor);
+              }
               // TODO: put check here, if the user mis-spells something...
 
               continue;
@@ -2305,6 +2328,17 @@ namespace
 
               TransposeExprAST *transpose = llvm::cast<TransposeExprAST>(tensor_op->getRHS());
               mlirGen(*transpose, *lhsLabeledTensorExprAST);
+              continue;
+            }
+            else if(tensor_op->getRHS()->getKind() == ExprAST::ExprASTKind::Expr_Call)
+            {
+              comet_debug() << __LINE__ << "  in TensorOpExprAST, rhs is Expr_Call\n";
+
+              LabeledTensorExprAST *lhsLabeledTensorExprAST = llvm::cast<LabeledTensorExprAST>(tensor_op->getLHS());
+              CallExprAST * call = llvm::cast<CallExprAST>(tensor_op->getRHS());
+              auto call_res = mlirGen(*call);
+              auto lhs_tensor = symbolTable.lookup(lhsLabeledTensorExprAST->getTensorName());
+              builder.create<TensorSetOp>(loc(tensor_op->loc()), call_res, lhs_tensor);
               continue;
             }
             else if ((tensor_op->getRHS()->getKind() == ExprAST::ExprASTKind::Expr_LabeledTensor &&

@@ -40,6 +40,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
+#include "mlir/Dialect/Tensor/Transforms/Passes.h"
 
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
@@ -384,6 +385,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     // Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
+    optPM.addPass(mlir::createTensorBufferizePass());
     pm.addPass(mlir::func::createFuncBufferizePass()); // Needed for func
 
     // Dump index tree dialect.

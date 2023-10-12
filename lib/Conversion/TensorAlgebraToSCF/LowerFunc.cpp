@@ -10,6 +10,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
+using namespace mlir;
 
 // *********** For debug purpose *********//
 // #ifndef DEBUG_MODE_LOWER_FUNC
@@ -127,7 +128,7 @@ struct GenericCallOpLowering : public OpRewritePattern<mlir::tensorAlgebra::Gene
     // We lower "toy.return" directly to "func.return".
     if(op.getResults().size() > 0)
     {
-      auto res = rewriter.replaceOpWithNewOp<func::CallOp>(op, op->getAttrOfType<SymbolRefAttr>("callee"), op.getType(0), op.getOperands());
+      auto res = rewriter.replaceOpWithNewOp<func::CallOp>(op, op->getAttrOfType<SymbolRefAttr>("callee"), mlir::UnrankedTensorType::get(rewriter.getF64Type()), op.getOperands());
     }
     else
     {
