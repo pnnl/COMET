@@ -421,8 +421,17 @@ namespace
             MemRefType::get(lhsDims, lhsMemrefType.getElementType()), loc,
             rewriter);
         useLHSTranspose = true;
-        // TODO(gkestor): we might need this copy if we support update C[] += A[] * B[]
-        rewriter.create<linalg::TransposeOp>(loc, lhsMemref, lhsAlloc, llvm::ArrayRef<int64_t>(lhsOutPerm_int64));
+        double beta_val = betaAttr.cast<FloatAttr>().getValueAsDouble();
+
+        if(beta_val == 0)
+        {
+          Value constantOp = rewriter.create<ConstantOp>(loc, rewriter.getF64FloatAttr(0.0));
+          rewriter.create<linalg::FillOp>(loc, constantOp, lhsAlloc);
+        }
+        else
+        {
+          rewriter.create<linalg::TransposeOp>(loc, lhsMemref, lhsAlloc, llvm::ArrayRef<int64_t>(lhsOutPerm_int64));
+        }
       }
 
       RankedTensorType collapsedTensorType;
