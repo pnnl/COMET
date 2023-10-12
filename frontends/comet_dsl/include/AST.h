@@ -89,7 +89,8 @@ namespace tensorAlgebra
       Expr_GetTime,
       Expr_ForLoop,
       Expr_ForEnd,
-      Expr_Mask
+      Expr_Mask,
+      Expr_FuncArg,
     };
 
     ExprAST(ExprASTKind kind, Location location)
@@ -156,6 +157,22 @@ namespace tensorAlgebra
     static bool classof(const ExprAST *C) { return C->getKind() == Expr_Var; }
   };
 
+
+  class FuncArgAST : public ExprAST
+  {
+    Location loc;
+    std::string name;
+    VarType type;
+
+    public:
+      FuncArgAST(Location loc, llvm::StringRef name, VarType type)
+        : ExprAST(Expr_FuncArg, loc), loc(std::move(loc)), name(name), type(std::move(type)){}
+
+        llvm::StringRef getName() {return name;}
+        const VarType &getType() {return type;}
+
+      static bool classof(const ExprAST *C) { return C->getKind() == Expr_FuncArg; }
+  };
   // /// Expression class for defining a variable.
   // class VarDeclExprAST : public ExprAST
   // {
@@ -474,15 +491,16 @@ namespace tensorAlgebra
   class CallExprAST : public ExprAST
   {
     std::string Callee;
-    std::unique_ptr<ExprAST> Arg;
+    std::vector<std::unique_ptr<ExprAST>> Args;
 
   public:
     CallExprAST(Location loc, const std::string &Callee,
-                std::unique_ptr<ExprAST> Arg)
-        : ExprAST(Expr_Call, loc), Callee(Callee), Arg(std::move(Arg)) {}
+                std::vector<std::unique_ptr<ExprAST>>  Args)
+        : ExprAST(Expr_Call, loc), Callee(Callee), Args(std::move(Args)) {}
 
     llvm::StringRef getCallee() { return Callee; }
-    ExprAST *getArgs() { return Arg.get(); }
+    ExprAST*  getArg(int index) { return Args[index].get(); }
+    size_t getNumArgs() {return Args.size();}
     /// LLVM style RTTI
     static bool classof(const ExprAST *C) { return C->getKind() == Expr_Call; }
   };
@@ -594,17 +612,17 @@ namespace tensorAlgebra
   {
     Location location;
     std::string name;
-    std::vector<std::unique_ptr<VariableExprAST>> args;
+    std::vector<std::unique_ptr<FuncArgAST>> args;
 
   public:
     PrototypeAST(Location location, const std::string &name,
-                 std::vector<std::unique_ptr<VariableExprAST>> args)
+                 std::vector<std::unique_ptr<FuncArgAST>> args)
         : location(location), name(name), args(std::move(args)) {}
 
     const Location &loc() { return location; }
     const std::string &getName() const { return name; }
-    //TODO(gkestor): check VariableExprAST
-    const std::vector<std::unique_ptr<VariableExprAST>> &getArgs()
+    //TODO(gkestor): check FuncArgAST
+    const std::vector<std::unique_ptr<FuncArgAST>> &getArgs()
     {
       return args;
     }

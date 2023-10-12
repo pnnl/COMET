@@ -686,7 +686,7 @@ namespace
         lhs = rewriter.create<memref::LoadOp>(loc, lhs, alloc_zero_loc);
       }
 
-      assert((rhsType.isF64() || rhsType.isa<MemRefType>()) && (lhsType.isF64() || lhsType.isa<MemRefType>()) && "Scalar Operands data type must be either F64 or memref");
+      // assert((rhsType.isF64() || rhsType.isa<MemRefType>()) && (lhsType.isF64() || lhsType.isa<MemRefType>()) && "Scalar Operands data type must be either F64 or memref");
 
       Value res;
       bool res_comes_from_setop = false;
