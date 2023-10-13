@@ -247,10 +247,9 @@ optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
       // make getTotal optional to include only the operation count or
       // plus the cost  operation transpose
       totalCost += plan.getTotalTime();
-
       rhs1Labels = lhsLabels;
     }
-
+    
     // update global
     if (totalCost <= minCost)
     {
@@ -335,8 +334,10 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
     lblMaps[op] = labelVec;
   }
 
-  auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getLabels();
-  LTOpsToRemove.push_back(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
+  // auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getLabels();
+  // LTOpsToRemove.push_back(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
+  auto outLabels = cast<tensorAlgebra::DenseTensorDeclOp>(rhsOp).getLabels();
+  // LTOpsToRemove.push_back(cast<tensorAlgebra::DenseTensorDeclOp>(rhsOp).getOperation());
   std::vector<Operation *> outLabelVec;
   for (auto lbl : outLabels)
   {
@@ -351,8 +352,9 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   std::vector<std::vector<int64_t>> lhsTensorShapes;
   std::tie(order, sumLabels, lhsTensorShapes) = optimalOrder(inLTOps, lhsOp, lblSizes, lblMaps);
 
-  bool same_order = hasSameOrder(getIdentityPermutation(order.size()), order);
+  bool same_order = hasSameOrder(getReverseIdentityPermutation(order.size()), order);
 
+  comet_debug() << "Same order " << same_order << "\n";
   // updated ta dialect generation.
   if (!same_order)
   {
@@ -517,11 +519,11 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
                                                                MaskingAttr, nullptr);  //TODO: masking is an optional operand
       tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
       tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
-
+      comet_debug() << "New operation " << tcop << "\n";
       newRhs1 = tcop;
     }
 
-    mlir::tensorAlgebra::TensorSetOp newSetOp = builder.create<tensorAlgebra::TensorSetOp>(loc, newRhs1, operands[1].getDefiningOp()->getOperand(0));
+    mlir::tensorAlgebra::TensorSetOp newSetOp = builder.create<tensorAlgebra::TensorSetOp>(loc, newRhs1, operands[1]);
     newSetOp->setAttr("__beta__", builder.getF64FloatAttr(0.0));
 
     comet_debug() << "are they previous multop\n";

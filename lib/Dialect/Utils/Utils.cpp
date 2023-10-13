@@ -82,6 +82,16 @@ namespace mlir
       return MemRefType::get(type.getShape(), type.getElementType());
     }
 
+    std::vector<unsigned int> getReverseIdentityPermutation(size_t size)
+    {
+      std::vector<unsigned int> perm(size);
+      for (size_t i = 0; i < size; i++)
+      {
+        perm[i] = (size - 1) - i;
+      }
+      return perm;
+    }
+
     std::vector<unsigned int> getIdentityPermutation(size_t size)
     {
       std::vector<unsigned int> perm(size);
