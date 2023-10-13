@@ -247,30 +247,9 @@ optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
       // make getTotal optional to include only the operation count or
       // plus the cost  operation transpose
       totalCost += plan.getTotalTime();
-      comet_debug() << plan.bestPermStr_ << "\n";
-      std::string order01, shapeA, shapeB, shapeC;
-      for(auto r: result){
-        order01.append(std::to_string(r)).append("_");
-      }
-      for(auto r: tensorShapeA){
-        shapeA.append(std::to_string(r)).append("_");
-      }
-      for(auto r: tensorShapeB){
-        shapeB.append(std::to_string(r)).append("_");
-      }
-      for(auto r: tensorShapeC){
-        shapeC.append(std::to_string(r)).append("_");
-      }
-      comet_debug() << order01 << "\n";
-      comet_debug() << shapeA << "\n";
-      comet_debug() << shapeB << "\n";
-      comet_debug() << shapeC << "\n";
       rhs1Labels = lhsLabels;
     }
     
-    comet_debug() << totalCost << "\n";
-    comet_debug() << "\n";
-
     // update global
     if (totalCost <= minCost)
     {
@@ -372,12 +351,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   std::vector<std::vector<Operation *>> sumLabels;
   std::vector<std::vector<int64_t>> lhsTensorShapes;
   std::tie(order, sumLabels, lhsTensorShapes) = optimalOrder(inLTOps, lhsOp, lblSizes, lblMaps);
-  comet_debug() << "Order :" << "\n";
-  for(auto o: order)
-  {
-    comet_debug() << o << "_" ;
-  }
-  comet_debug() << "\n";
+
   bool same_order = hasSameOrder(getReverseIdentityPermutation(order.size()), order);
 
   comet_debug() << "Same order " << same_order << "\n";
