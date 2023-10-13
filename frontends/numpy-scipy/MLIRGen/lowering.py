@@ -495,16 +495,14 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     to_llvm_command = path_to_cometopt + scf_lower_flags + llvm_in
     translate_mlir_command = "../llvm/build/bin/mlir-translate --mlir-to-llvmir -- " 
 
-    llvm_opt_command = '../llvm/build/bin/opt --O3 --mtriple="' + llvm_cfg_out+'" -S  --'
     libname =   "./lib"+llvmir_file+func_name+".so"
-    gcc_command = "../llvm/build/bin/clang -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L ../build/lib/ -Wl,-rpath,../build/lib/ -lcomet_runner_utils -"
+    gcc_command = "../llvm/build/bin/clang -march=native -mtune=native -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L ../build/lib/ -Wl,-rpath,../build/lib/ -lcomet_runner_utils -"
 
     # We merge all several calls in a single call to the shell in order to only pay the overhead of process creation once.
     # 1. Call comet to lower scf code to llvm
     # 2. Call mlir-translate to convert llvm to llvmir 
-    # 3. Call opt to optimize generated code
-    # 4. Call clang to generate library
-    p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | '+llvm_opt_command + ' | ' + gcc_command , stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    # 3. Call clang to generate library
+    p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | ' + gcc_command , stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 
     if(p.returncode != 0):
         cleanup()
