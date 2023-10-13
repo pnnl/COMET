@@ -108,6 +108,7 @@ namespace mlir
 
     std::string dump2str(Value t);
     std::vector<std::string> stringSplit(std::string s, std::string delimiter);
+    std::vector<unsigned> getReverseIdentityPermutation(size_t size);
     std::vector<unsigned> getIdentityPermutation(size_t size);
 
     std::vector<std::vector<int64_t>> getAllPerms(ArrayAttr indexMaps);

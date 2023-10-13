@@ -247,9 +247,29 @@ optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
       // make getTotal optional to include only the operation count or
       // plus the cost  operation transpose
       totalCost += plan.getTotalTime();
-
+      comet_debug() << plan.bestPermStr_ << "\n";
+      std::string order01, shapeA, shapeB, shapeC;
+      for(auto r: result){
+        order01.append(std::to_string(r)).append("_");
+      }
+      for(auto r: tensorShapeA){
+        shapeA.append(std::to_string(r)).append("_");
+      }
+      for(auto r: tensorShapeB){
+        shapeB.append(std::to_string(r)).append("_");
+      }
+      for(auto r: tensorShapeC){
+        shapeC.append(std::to_string(r)).append("_");
+      }
+      comet_debug() << order01 << "\n";
+      comet_debug() << shapeA << "\n";
+      comet_debug() << shapeB << "\n";
+      comet_debug() << shapeC << "\n";
       rhs1Labels = lhsLabels;
     }
+    
+    comet_debug() << totalCost << "\n";
+    comet_debug() << "\n";
 
     // update global
     if (totalCost <= minCost)
@@ -335,8 +355,10 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
     lblMaps[op] = labelVec;
   }
 
-  auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getLabels();
-  LTOpsToRemove.push_back(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
+  // auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getLabels();
+  // LTOpsToRemove.push_back(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
+  auto outLabels = cast<tensorAlgebra::DenseTensorDeclOp>(rhsOp).getLabels();
+  // LTOpsToRemove.push_back(cast<tensorAlgebra::DenseTensorDeclOp>(rhsOp).getOperation());
   std::vector<Operation *> outLabelVec;
   for (auto lbl : outLabels)
   {
@@ -350,9 +372,15 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   std::vector<std::vector<Operation *>> sumLabels;
   std::vector<std::vector<int64_t>> lhsTensorShapes;
   std::tie(order, sumLabels, lhsTensorShapes) = optimalOrder(inLTOps, lhsOp, lblSizes, lblMaps);
+  comet_debug() << "Order :" << "\n";
+  for(auto o: order)
+  {
+    comet_debug() << o << "_" ;
+  }
+  comet_debug() << "\n";
+  bool same_order = hasSameOrder(getReverseIdentityPermutation(order.size()), order);
 
-  bool same_order = hasSameOrder(getIdentityPermutation(order.size()), order);
-
+  comet_debug() << "Same order " << same_order << "\n";
   // updated ta dialect generation.
   if (!same_order)
   {
@@ -517,11 +545,11 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
                                                                MaskingAttr, nullptr);  //TODO: masking is an optional operand
       tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
       tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
-
+      comet_debug() << "New operation " << tcop << "\n";
       newRhs1 = tcop;
     }
 
-    mlir::tensorAlgebra::TensorSetOp newSetOp = builder.create<tensorAlgebra::TensorSetOp>(loc, newRhs1, operands[1].getDefiningOp()->getOperand(0));
+    mlir::tensorAlgebra::TensorSetOp newSetOp = builder.create<tensorAlgebra::TensorSetOp>(loc, newRhs1, operands[1]);
     newSetOp->setAttr("__beta__", builder.getF64FloatAttr(0.0));
 
     comet_debug() << "are they previous multop\n";
