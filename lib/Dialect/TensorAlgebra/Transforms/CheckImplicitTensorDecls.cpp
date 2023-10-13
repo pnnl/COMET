@@ -178,6 +178,7 @@ void addTensorDecl(t op)
   if (ret_format.compare("Dense") == 0)
   {
     itensor = builder.create<DenseTensorDeclOp>(location, ret_value.getType(), lbls_value, ret_format);
+    builder.create<TensorFillOp>(location, itensor, builder.getF64FloatAttr(0));
   }
   else
   {
