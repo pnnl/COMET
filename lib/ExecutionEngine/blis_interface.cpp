@@ -56,8 +56,7 @@ void bli_dgemm_x86_ukr(
       (strcmp("knl", arch) == 0))
   {
     printf("Calling bli_dgemm_haswell_asm_6x8\n");
-    // bli_dgemm_haswell_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
-    bli_dgemm_haswell_asm_8x6(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
+    bli_dgemm_haswell_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
   }
   else
   {
@@ -93,7 +92,7 @@ void bli_dgemm_arm_ukr(
                  << "\n";
   }
 }
-#else
+#endif
 
 // generic arch-independent gemm microkernel reference implementation:
 // https://github.com/flame/blis/blob/master/config/template/kernels/3/bli_gemm_template_noopt_mxn.c
@@ -176,11 +175,10 @@ void dgemm_generic_noopt_mxn(
     }
   }
 };
-#endif
 
 extern "C" void _mlir_ciface_linalg_matmul_viewsxs_viewsxs_viewsxs(
     StridedMemRefType<double, 2> *A, StridedMemRefType<double, 2> *B,
-    StridedMemRefType<double, 2> *C)
+    StridedMemRefType<double, 2> *C, int mr, int nr)
 {
   if (A->strides[1] != B->strides[1] || A->strides[1] != C->strides[1] ||
       A->strides[1] != 1 || A->sizes[0] < A->strides[1] ||
@@ -195,6 +193,25 @@ extern "C" void _mlir_ciface_linalg_matmul_viewsxs_viewsxs_viewsxs(
     return;
   }
 
+  // printMemRefMetaData(std::cerr, *A);
+  // printMemRefMetaData(std::cerr, *B);
+  // printMemRefMetaData(std::cerr, *C);
+
+  // printf("\n");
+  // printf("A->sizes[0]-m: %d\n", A->sizes[0]);
+  // printf("A->sizes[1]-k: %d\n", A->sizes[1]);
+  // printf("A->strides[0]: %d\n", A->strides[0]);
+  // printf("A->strides[1]: %d\n", A->strides[1]);
+
+  // printf("B->sizes[0]: %d\n", B->sizes[0]);
+  // printf("B->sizes[1]-n: %d\n", B->sizes[1]);
+  // printf("B->strides[0]: %d\n", B->strides[0]);
+  // printf("B->strides[1]: %d\n", B->strides[1]);
+  // printf("\n");
+
+  // printf("mr: %d", mr);
+  // printf("nr: %d", nr);
+
   double alpha = 1.0f;
   double beta = 1.0f;
   if (beta == -1.0)
@@ -207,23 +224,39 @@ extern "C" void _mlir_ciface_linalg_matmul_viewsxs_viewsxs_viewsxs(
   bli_auxinfo_set_next_a(A->data + A->offset, &data);
   bli_auxinfo_set_next_b(B->data + B->offset, &data);
 
-  // get the micro-arch
-  arch_t id = bli_cpuid_query_id();
-  const char *s = bli_arch_string(id);
 
-  printMemRefMetaData(std::cerr, *A);
-  printMemRefMetaData(std::cerr, *B);
-  printMemRefMetaData(std::cerr, *C);
-
-  bli_dgemm_asm_6x8(A->sizes[0], // m
-                    B->sizes[1], // n
-                    A->sizes[1], // k
-                    &alpha,
-                    A->data + A->offset,
-                    B->data + B->offset,
-                    &beta,
-                    C->data + C->offset,
-                    C->strides[0],
-                    C->strides[1],
-                    &data, NULL);
+  // Partial tile
+  if (A->sizes[0] < mr || B->sizes[1] < nr)
+  {
+    // printf("A->sizes[0]: %d\n", A->sizes[0]);
+    // printf("B->sizes[1]: %d\n", B->sizes[1]);
+    // printf("mr: %d\n", mr);
+    // printf("nr: %d\n", nr);
+    dgemm_generic_noopt_mxn(A->sizes[0], // m
+                            B->sizes[1], // n
+                            A->sizes[1], // k
+                            &alpha,
+                            A->data + A->offset,
+                            B->data + B->offset,
+                            &beta,
+                            C->data + C->offset,
+                            C->strides[0],
+                            C->strides[1],
+                            &data, NULL);
+  }
+  else
+  {
+    assert(A->sizes[0] == mr && B->sizes[1] == nr);
+    bli_dgemm_asm_6x8(A->sizes[0], // m
+                      B->sizes[1], // n
+                      A->sizes[1], // k
+                      &alpha,
+                      A->data + A->offset,
+                      B->data + B->offset,
+                      &beta,
+                      C->data + C->offset,
+                      C->strides[0],
+                      C->strides[1],
+                      &data, NULL);
+  }
 }
