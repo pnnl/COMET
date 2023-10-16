@@ -72,7 +72,6 @@ namespace mlir
 
         std::unique_ptr<Pass> createLinAlgMatmulTilingPass();
         std::unique_ptr<Pass> createLinAlgMatmulMicroKernelPass();
-        std::unique_ptr<Pass> createPromoteSubviewPass();
         std::unique_ptr<Pass> createLowerLinAlgFillPass();
 
         /// Create a pass for lowering tensor fill operation to linalg.fill
