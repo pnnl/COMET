@@ -60,9 +60,9 @@ using namespace mlir::arith;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-#ifndef DEBUG_MODE_LINALGTRANSFORMS
-#define DEBUG_MODE_LINALGTRANSFORMS
-#endif
+// #ifndef DEBUG_MODE_LINALGTRANSFORMS
+// #define DEBUG_MODE_LINALGTRANSFORMS
+// #endif
 
 #ifdef DEBUG_MODE_LINALGTRANSFORMS
 #define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
@@ -266,8 +266,8 @@ void get_level3_blocksizes(int *mc, int *kc, int *nc, int *mr, int *nr, int size
   *mc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MC, cntx);
   *kc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_KC, cntx);
   *nc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NC, cntx);
-  *mr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NR, cntx);
-  *nr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MR, cntx);
+  *mr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MR, cntx);
+  *nr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NR, cntx);
 
   // printf("mc= %d, kc= %d, nc=%d, mr=%d, nr=%d\n", *mc, *kc, *nc, *mr, *nr);
   return;
@@ -351,6 +351,7 @@ static SmallVector<Type, 4> extractOperandTypes(Operation *op)
     else
       result.push_back(type);
   }
+
   return result;
 }
 
@@ -385,6 +386,7 @@ static FailureOr<FlatSymbolRefAttr> getLibraryCallSymbolRef(Operation *op, Patte
   if (fnName.empty())
     return rewriter.notifyMatchFailure(op, "No library call defined for: ");
 
+
   // fnName is a dynamic std::string, unique it via a SymbolRefAttr.
   FlatSymbolRefAttr fnNameAttr =
       SymbolRefAttr::get(rewriter.getContext(), fnName);
@@ -393,6 +395,11 @@ static FailureOr<FlatSymbolRefAttr> getLibraryCallSymbolRef(Operation *op, Patte
     return fnNameAttr;
 
   SmallVector<Type, 4> inputTypes(extractOperandTypes(op));
+
+  //Add inputTypes for mr and nr
+  inputTypes.push_back(IntegerType::get(rewriter.getContext(), 32));
+  inputTypes.push_back(IntegerType::get(rewriter.getContext(), 32));
+
   if (op->getNumResults() != 0)
   {
     return rewriter.notifyMatchFailure(
@@ -427,12 +434,28 @@ LogicalResult LinalgMatMulOpToLibraryCallPattern::matchAndRewrite(
   if (failed(libraryCallName))
     return failure();
 
+  int mc, kc, nc, mr, nr = 0;
+  get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
+  // printf("mr: %d\n", mr);
+  // printf("nr: %d\n", nr);
+
+  IntegerType i32Type = IntegerType::get(rewriter.getContext(), 32);
+  Value mrValue = rewriter.create<ConstantOp>(op->getLoc(), i32Type, rewriter.getIntegerAttr(i32Type, mr));
+  Value nrValue = rewriter.create<ConstantOp>(op->getLoc(), i32Type, rewriter.getIntegerAttr(i32Type, nr));
+
+  comet_vdump(mrValue);
+  comet_vdump(nrValue);
+
+  std::vector<Value> operands;
+  operands.insert(operands.end(), op->getOperands().begin(), op->getOperands().end());
+  operands.push_back(mrValue);
+  operands.push_back(nrValue);
+
   // TODO: Add support for more complex library call signatures that include
   // indices or captured values.
   rewriter.replaceOpWithNewOp<func::CallOp>(
       op, libraryCallName->getValue(), TypeRange(),
-      createTypeCanonicalizedMemRefOperands(rewriter, op->getLoc(),
-                                            op->getOperands()));
+      createTypeCanonicalizedMemRefOperands(rewriter, op->getLoc(), operands));
   return success();
 }
 
@@ -456,80 +479,6 @@ namespace
   };
 } // end anonymous namespace
 
-// ******************************************** //
-//*******Subview Promote************************//
-// ******************************************** //
-namespace
-{
-  class PromoteSubviewPattern : public OpRewritePattern<MatmulOp>
-  {
-  public:
-    using OpRewritePattern<MatmulOp>::OpRewritePattern;
-    LogicalResult matchAndRewrite(MatmulOp op,
-                                  PatternRewriter &rewriter) const override;
-  };
-}
-
-LogicalResult PromoteSubviewPattern::matchAndRewrite(
-    MatmulOp op, PatternRewriter &rewriter) const
-{
-  if (!isa<MatmulOp>(op))
-    return failure();
-
-  comet_vdump(op);
-  LinalgPromotionOptions promotionOptions;
-
-  // ArrayRef<int64_t> operands;
-
-  // promotionOptions = promotionOptions.setOperandsToPromote();
-
-  //       extractFromI64ArrayAttr(getOperandsToPromote()));
-  // if (getUseFullTilesByDefault())
-  //   promotionOptions = promotionOptions.setUseFullTileBuffersByDefault(
-  //       getUseFullTilesByDefault());
-  // if (getUseAlloca())
-  //   promotionOptions = promotionOptions.setUseAlloca(getUseAlloca());
-  // if (!getUseFullTileBuffers().empty())
-  //   promotionOptions = promotionOptions.setUseFullTileBuffers(
-  //       llvm::to_vector(getUseFullTileBuffers().getAsValueRange<BoolAttr>()));
-  // if (getAlignment().has_value())
-  //   promotionOptions = promotionOptions.setAlignment(*getAlignment());
-
-  // if (failed(promoteSubviewsPrecondition(matmulOp, promotionOptions)))
-  //   return emitDefaultDefiniteFailure(matmulOp);
-
-  rewriter.setInsertionPoint(op);
-  FailureOr<LinalgOp> res = promoteSubViews(rewriter, op, promotionOptions);
-  // printf("Gokcen\n");
-  // res->dump();
-
-  // LinalgOpInstancePromotionOptions linalgOptions(op);
-  // auto layout = DataLayout::closest(op);
-  // ImplicitLocOpBuilder b(op.getLoc(), rewriter);
-  // auto res = promoteSubViews(rewriter, op, linalgOptions, layout);
-
-  return success();
-}
-
-namespace
-{
-  class PromoteSubviewPass : public PassWrapper<PromoteSubviewPass, OperationPass<func::FuncOp>>
-  {
-  public:
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PromoteSubviewPass)
-    void runOnOperation() override
-    {
-      func::FuncOp func = getOperation();
-      MLIRContext *ctx = func.getContext();
-
-      RewritePatternSet patterns(&getContext());
-
-      // Replace the inner linalg.matmul with the blis microkernel
-      patterns.insert<PromoteSubviewPattern>(ctx);
-      (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
-    }
-  };
-} // end anonymous namespace
 
 /////////////////////////////////////////////////////
 ////////LinAlg CopyOp (Transpose) Optimization///////
@@ -759,12 +708,6 @@ std::unique_ptr<mlir::Pass> mlir::comet::createLinAlgMatmulTilingPass()
 std::unique_ptr<mlir::Pass> mlir::comet::createLinAlgMatmulMicroKernelPass()
 {
   return std::make_unique<LinAlgMatmulMicroKernelPass>();
-}
-
-/// Create a pass to call a blis micro kernel for the inner linalg.matmul after tiling
-std::unique_ptr<mlir::Pass> mlir::comet::createPromoteSubviewPass()
-{
-  return std::make_unique<PromoteSubviewPass>();
 }
 
 /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
