@@ -697,8 +697,6 @@ void genForOpFormat_CU(OpBuilder &builder,
   // Otherwise, the m comes from load operation of the input sparse tensor such as
   // j = crd[i];
   // for (int m = pos[j]; m < pos[j+1]; m++)
-//  Value upperBound;
-//  Value lowerBound;
 
   comet_debug() << " format is CU id: " << id << "\n";
   comet_debug() << " Tensor: \n";
@@ -707,17 +705,12 @@ void genForOpFormat_CU(OpBuilder &builder,
   Value index_upper;
   if (tensor.getType().cast<tensorAlgebra::SparseTensorType>()) {
     comet_debug() << " Tensor type is sparse\n";
-    // cur_idx is in ith input tensor, which is sparse
     if (id == 0) { // The first index in the tensor
       index_lower = builder.create<ConstantIndexOp>(loc, 0);
-//      comet_debug() << " index_lower is set here, id == 0 " << opstree->forOps.size() << "\n";
       comet_vdump(index_lower);
     } else {
       if (opstree->parent != nullptr) {
         comet_debug() << " opstree->parent is not NULL\n";
-        // Parent loop is
-        /// TODO: symbolic phase?
-//        scf::ForOp parent_forop = opstree->parent->forOps[opstree->parent->forOps.size() - 1];
         comet_debug() << " parent forop\n";
         comet_vdump(parent_forop);
         auto parent_UpperBound = parent_forop.getUpperBound();
@@ -743,7 +736,6 @@ void genForOpFormat_CU(OpBuilder &builder,
           comet_debug() << " DIFFERENT:Parent and Child has the different alloc\n";
           comet_vdump(alloc_parent_bounds);
           comet_vdump(alloc_child_bounds);
-//          index_lower = opstree->parent->accessIdx[opstree->parent->forOps.size() - 1];
           index_lower = parent_accessIdx;
         }
       } else
@@ -779,8 +771,6 @@ void genForOpFormat_CU(OpBuilder &builder,
 
     comet_debug() << "CU loop generated\n";
     comet_vdump(loop);
-//    opstree->forOps.push_back(loop);
-//    opstree->accessIdx.push_back(get_index);
     forLoop = loop;
     accessIndex = get_index;
   }
@@ -817,8 +807,6 @@ void genForOpFormat_CN(OpBuilder &builder,
     std::vector<Value> crd_indices = {loop.getInductionVar()};
     auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
-//    opstree->forOps.push_back(loop);
-//    opstree->accessIdx.push_back(get_index);
     forLoop = loop;
     accessIndex = get_index;
   }
@@ -847,19 +835,12 @@ void genForOpFormat_S(OpBuilder &builder,
     comet_debug() << "cur_idx is in tensor " << i << "\n";
     // Accesing the last level loop info
     scf::ForOp last_forop;
-    /// TODO: symbolic phase?
     if (opstree_forops.size() > 0) { // current node contain at least 1 level loop
       last_forop = opstree_forops.back();
     } else {
       if (opstree->parent != nullptr)
         last_forop = parent_forop;
     }
-//    if (opstree->forOps.size() > 0) { // current node contain at least 1 level loop
-//      last_forop = opstree->forOps[opstree->forOps.size() - 1];
-//    } else {
-//      if (opstree->parent != nullptr)
-//        last_forop = opstree->parent->forOps[opstree->parent->forOps.size() - 1];
-//    }
 
     std::vector<Value> crd_indices = {last_forop.getInductionVar()};
     auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
@@ -873,9 +854,6 @@ void genForOpFormat_S(OpBuilder &builder,
     auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
     comet_debug() << " S Loop\n";
     comet_vdump(loop);
-//    opstree->forOps.push_back(loop);
-//
-//    opstree->accessIdx.push_back(get_index);
     forLoop = loop;
     accessIndex = get_index;
   } else {
@@ -1342,8 +1320,6 @@ void genCmptOpKernelIfStatementCondition(OpBuilder &builder,
                                          NumericInfo &numericInfo,
                                          MaskingInfo &maskingInfo,
                                          scf::IfOp &if_notAlreadySet /* output */) {
-//  Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
-//  Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
   Value &is_visited_alloc = numericInfo.ws_bitmap;
   Value &valueAccessIdx = numericInfo.ws_bitmap_valueAccessIdx;
 
@@ -1430,7 +1406,6 @@ void genCmptOpKernelIfStatementThenRegion(OpBuilder &builder,
                                                    elementWiseResult,
                                                    W_data,
                                                    W_data_valueAccessIdx);
-//  auto store_sum = builder.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[lhs_loc].back(), allValueAccessIdx[lhs_loc]);
   comet_vdump(elementWiseResult);
   comet_vdump(store_sum);
 #else
@@ -1438,7 +1413,6 @@ void genCmptOpKernelIfStatementThenRegion(OpBuilder &builder,
                                   elementWiseResult,
                                   W_data,
                                   W_data_valueAccessIdx);
-//  builder.create<memref::StoreOp>(loc, elementWiseResult, main_tensors_all_Allocs[lhs_loc].back(), allValueAccessIdx[lhs_loc]);
 #endif
   Value const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
   Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
@@ -1446,13 +1420,10 @@ void genCmptOpKernelIfStatementThenRegion(OpBuilder &builder,
 
   /// ws_bitmap[j_idx] = true;
   builder.create<memref::StoreOp>(loc, const_i1_true, ws_bitmap, ws_bitmap_valueAccessIdx);
-//    builder.create<memref::StoreOp>(loc, const_i1_1, tensors_lhs_Allocs[1][0], allValueAccessIdx[lhs_loc]);
 
   Value W_id_list_size_old = builder.create<memref::LoadOp>(loc, W_id_list_size, ValueRange{const_index_0});
-//  Value W_index_list_size_old = builder.create<memref::LoadOp>(loc, tensors_lhs_Allocs[3][0], ValueRange{const_index_0});
 
   assert(allValueAccessIdx[lhs_loc].size() == 1 && " more than one access id for auxiliary array\n");
-//  builder.create<memref::StoreOp>(loc, allValueAccessIdx[lhs_loc][0], tensors_lhs_Allocs[2][0], ValueRange{W_index_list_size_old});
 
   /// C.col[W_id_list_size] = j_idx;
   builder.create<memref::StoreOp>(loc,
@@ -1466,7 +1437,6 @@ void genCmptOpKernelIfStatementThenRegion(OpBuilder &builder,
   comet_vdump(W_id_list_size_new);
 
   builder.create<memref::StoreOp>(loc, W_id_list_size_new, W_id_list_size, ValueRange{const_index_0});
-//  builder.create<memref::StoreOp>(loc, W_id_list_size_new, tensors_lhs_Allocs[3][0], ValueRange{const_index_0});
   {
     comet_vdump(if_notAlreadySet);
   }
@@ -1494,7 +1464,6 @@ void genCmptOpKernelIfStatementElseRegion(OpBuilder &builder,
   {
     Value s = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
     allLoadsElse[m] = s;
-    comet_debug() << " ";
     comet_vdump(s);
   }
   comet_debug() << " allLoadsElse.size(): " << allLoadsElse.size() << "\n";
@@ -1503,7 +1472,6 @@ void genCmptOpKernelIfStatementElseRegion(OpBuilder &builder,
   Value elementWiseResult = getSemiringSecondVal(builder, loc, semiringSecond, allLoadsElse[0], allLoadsElse[1], compressedWorkspace);
   Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoadsElse[lhs_loc], elementWiseResult, compressedWorkspace);
   builder.create<memref::StoreOp>(loc, reduceResult, W_data, W_data_valueAccessIdx);
-//  builder.create<memref::StoreOp>(loc, reduceResult, main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1], allValueAccessIdx[2]);
   {
     comet_vdump(if_notAlreadySet);
   }
@@ -1625,7 +1593,6 @@ void genNumericSetAndResetMaskArray(OpBuilder &builder,
                                     Location &loc,
                                     scf::ForOp &numeric_outermost_forLoop,
                                     Value &outermost_forLoop_valueAccessIdx,
-//                             SymbolicInfo &symbolicInfo,
                                     NumericInfo &numericInfo,
                                     MaskingInfo &maskingInfo) {
   /// Store the insertion point
@@ -1699,7 +1666,6 @@ void formSemiringLoopBody(indexTree::IndexTreeComputeOp &cur_op,
                           bool comp_worksp_opt,
                           llvm::StringRef &semiringFirst,
                           llvm::StringRef &semiringSecond,
-//                          PatternRewriter &rewriter, Location loc, int lhs_loc,
                           OpBuilder &builder, Location &loc, int lhs_loc,
                           std::vector<std::vector<Value>> &main_tensors_all_Allocs,
                           std::vector<std::vector<Value>> &tensors_lhs_Allocs,
@@ -1710,8 +1676,6 @@ void formSemiringLoopBody(indexTree::IndexTreeComputeOp &cur_op,
                           std::vector<Value> &numeric_nested_forLoop_AccessIdx,
                           std::vector<scf::ForOp> &symbolic_nested_forops /* symbolic for-loops from innermost to outermost */,
                           std::vector<std::vector<int>> &rhsPerms,
-//                          std::vector<std::vector<std::string>> &rhsFormats,
-//                          std::vector<std::vector<std::string>> &lhsFormats,
                           SymbolicInfo &symbolicInfo,
                           NumericInfo &numericInfo,
                           MaskingInfo &maskingInfo) {
@@ -3243,9 +3207,6 @@ void genReplaceOutputSparseTensorToNewSparseTensor(OpBuilder &builder,
   /// "ta.print"(%mtxC)  =>  "ta.print"(%sptensor)
   /// ----------------- ///
   replaceOldValueToNewValue(mtxC, sptensor);
-//  {
-//    comet_vdump(sptensor.getDefiningOp()->getParentOfType<ModuleOp>());
-//  }
 
   /// ----------------- ///
   /// Surprisingly, this code snippet below does not work.
@@ -3564,13 +3525,6 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
   {
     comet_vdump(nested_forops[0]);
   }
-
-//  auto f64Type = builder.getF64Type();
-//  auto indexType = IndexType::get(rootOp.getContext());
-
-//  Value const_f64_0 = builder.create<ConstantOp>(loc, f64Type, builder.getF64FloatAttr(0));
-//  Value const_i1_0 = builder.create<ConstantOp>(loc, builder.getI1Type(), builder.getBoolAttr(0));
-//  Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
 
   /// Analyze the leafop, Get the tensors, rhs, lhs, and operator_type
   /// --- only one rhs, it will be a fill op; if two, check op_type (+, +=, *=)
@@ -3920,8 +3874,6 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                          nested_AccessIdx,
                          symbolic_nested_forops,
                          allPerms_rhs,
-//                         rhsFormats,
-//                         lhsFormats,
                          symbolicInfo,
                          numericInfo,
                          maskingInfo);
@@ -3940,7 +3892,6 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
       // we should not proceed forward from this point to avoid faults.
       assert(false && "Not supported semiring operator");
     }
-
 
 
     auto maskingAttr = cur_op.getMaskType();
@@ -3963,7 +3914,6 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
         break;
       }
       case PUSH_BASED_MASKING: {  /// Use push-based masking
-//        mlir::Value states; /// The temporary dense vector for push-based masking
         /// mask_tensor should be the 3rd operand of ComputeRHS (tensors_rhs[2]).
         mlir::Value mask_tensor = tensors_rhs[2];
         {
@@ -4012,8 +3962,6 @@ void genCmptOps(indexTree::IndexTreeComputeOp &cur_op,
                              nested_AccessIdx,
                              symbolic_nested_forops,
                              allPerms_rhs,
-//                             rhsFormats,
-//                             lhsFormats,
                              symbolicInfo,
                              numericInfo,
                              maskingInfo);
@@ -4095,21 +4043,15 @@ void checkIfAllSparse(std::vector<mlir::Value> &wp_ops,
                       SymbolicInfo &symbolicInfo /* output */) {
   for (Value &op : wp_ops) {
     if (indexTree::IndexTreeComputeOp cur_op = dyn_cast<indexTree::IndexTreeComputeOp>(op.getDefiningOp())) {
-//      bool is_SpGEMM = checkIfSpGEMM(cur_op);
-//      if (is_SpGEMM) {
-//        symbolicInfo.is_SpGEMM = true;
-//      }
       bool comp_worksp_opt(cur_op.getCompWorkspOpt());
       if (!comp_worksp_opt) {
         symbolicInfo.are_inputs_sparse = false;
         return;
-//        return false;
       }
     }
   }
 
   symbolicInfo.are_inputs_sparse = true;
-//  return true;
 }
 
 
@@ -4161,12 +4103,12 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
   dfsRootOpTree(rootOp.getChildren(), wp_ops);
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   comet_debug() << " wp_ops.size(): " << wp_ops.size() << "\n";
-      for (auto n : wp_ops)
-      {
-        comet_debug() << " ";
-        comet_vdump(n);
-        // Declare opsTree
-      }
+  for (auto n : wp_ops)
+  {
+    comet_debug() << " ";
+    comet_vdump(n);
+    // Declare opsTree
+  }
 #endif
 
   // In ops vector, for each op, the parent of each op can get from getUsers()
@@ -4200,11 +4142,11 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
 
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   comet_debug() << " parent_idx: " << parent_idx.size() << "\n";
-      for (auto n : parent_idx)
-      {
-        comet_debug() << " " << n << " \n";
-        // Declare opsTree
-      }
+  for (auto n : parent_idx)
+  {
+    comet_debug() << " " << n << " \n";
+    // Declare opsTree
+  }
 #endif
 
   std::vector<OpsTree *> opstree_vec;
@@ -4212,7 +4154,6 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
   {
     std::vector<scf::ForOp> forOps;
     std::vector<Value> accessIdx;
-//    std::vector<Value> cmptOps;
 
     OpsTree *parent = nullptr;
     if (i >= 1)
@@ -4292,11 +4233,11 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       findLeafs(cur_op, indices, wp_ops, leafs /* output leaves*/);
 #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
       comet_debug() << " leafs.size(): " << leafs.size() << "\n";
-          for (auto n : leafs)
-          {
-            comet_debug() << " ";
-            comet_vdump(n);
-          }
+      for (auto n : leafs)
+      {
+        comet_debug() << " ";
+        comet_vdump(n);
+      }
 #endif
 
       /// tensors: the tensors that uses the cur_op (index node) as their iterative index.
@@ -4312,7 +4253,6 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       std::vector<unsigned int> ids;
       std::vector<std::string> formats;
 
-      comet_debug() << " ";
       comet_vdump(cur_op);
 
       getFormatsInfo(cur_op,
@@ -4384,17 +4324,12 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
   {
     if (indexTree::IndexTreeComputeOp cur_op = dyn_cast<mlir::indexTree::IndexTreeComputeOp>(itOp.getDefiningOp()))
     {
-      comet_pdump(itOp.getDefiningOp()->getOperand(0).getDefiningOp());
-      comet_pdump(itOp.getDefiningOp()->getOperand(1).getDefiningOp());
-//      rewriter.eraseOp(itOp.getDefiningOp()->getOperand(0).getDefiningOp()); //RHS
-//      rewriter.eraseOp(itOp.getDefiningOp()->getOperand(1).getDefiningOp()); //LHS
-//      cur_op.getOperand(0).getDefiningOp()->erase();
-//      cur_op->getOperand(1).getDefiningOp()->erase();
+      comet_pdump(itOp.getDefiningOp()->getOperand(0).getDefiningOp());  // RHS
+      comet_pdump(itOp.getDefiningOp()->getOperand(1).getDefiningOp());  // LHS
       operations_dumpster.push_back(cur_op.getOperand(0).getDefiningOp());
       operations_dumpster.push_back(cur_op.getOperand(1).getDefiningOp());
     }
     comet_pdump(itOp.getDefiningOp());
-//    rewriter.eraseOp(itOp.getDefiningOp());
     itOp.getDefiningOp()->erase();
   }
   for (auto op : operations_dumpster) {
@@ -4424,11 +4359,6 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
   /// ----------------- ///
   cleanOpstreeVec(opstree_vec);
 
-//  {
-//    comet_debug() << "End of doLoweringIndexTreeToSCF()\n";
-////    comet_pdump(rootOp.getOperation()->getParentOfType<ModuleOp>());
-//    comet_pdump(rootOp->getParentOfType<ModuleOp>());
-//  }
 }  /// End doLoweringIndexTreeToSCF()
 
 void LowerIndexTreeToSCFPass::runOnOperation()
