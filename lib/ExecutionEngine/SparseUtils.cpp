@@ -2540,26 +2540,6 @@ extern "C" void read_input_sizes_3D_f64(int32_t fileID,
                   A1pos_rank, A1pos_ptr, readMode);
 }
 
-int qsort_comp(const void *a, const void *b)
-{
-  return *((const int64_t *)a) - *((const int64_t *)b);
-}
-
-// Sort by rows, then columns
-struct qsortComparator
-{
-  template <typename int32_t>
-  bool operator()(const int32_t &a, const int32_t &b) const
-  {
-    return ((a < b) || ((a == b) && (a < b)) || ((a == b) && (a == b) && (a < b)));
-  }
-};
-
-extern "C" void quick_sort(int sizes_rank, void *sizes_ptr, int length)
-{
-  auto *desc_ptr = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
-  std::qsort(desc_ptr->data, length, sizeof(int64_t), qsort_comp);
-}
 
 
 //===----------------------------------------------------------------------===//

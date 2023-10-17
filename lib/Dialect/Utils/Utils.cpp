@@ -207,7 +207,13 @@ namespace mlir
 
     // TODO(gkestor): review this code
 //    void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter)
-    void insertInitialize(Location loc, Value cst_init, Value alloc_op, Value accessIdx, OpBuilder &builder)
+    void insertInitialize(Location loc,
+                          Value cst_init,
+                          Value alloc_op,
+                          Value accessIdx,
+                          OpBuilder &builder,
+                          bool use_dynamic_init,
+                          Value dynamic_init)
     {
       auto lowerBound = builder.create<ConstantIndexOp>(loc, 0);
       MemRefType resultMemTy = alloc_op.getDefiningOp()->getResult(0).getType().cast<MemRefType>();
@@ -225,17 +231,39 @@ namespace mlir
       assert(cur_memref.size() == 1 && " Only handle 1-D vector currently\n");
       if (cur_memref[0] == 1)
       { // Only 1 element in the array, no need to generate for loop
-        auto const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+        if (use_dynamic_init) {
+          /// For Numeric Phase with workspace transform, generate:
+          ///     %rowptr = memref.load %C.rowptr[%idx];
+          ///     memref.store %rowptr, %alloc_op[%const_index_0];
+          /// idx: accessIdx
+          /// C.rowptr: dynamic_init
+          comet_vdump(dynamic_init);
+          Value rowptr = builder.create<memref::LoadOp>(loc, dynamic_init, ValueRange{accessIdx});
+          auto const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
+          auto store_op = builder.create<memref::StoreOp>(loc, rowptr, alloc_op, ValueRange{const_index_0});
+          comet_vdump(rowptr);
+          comet_vdump(store_op);
+        } else {
+          /// alloc_op: W_id_list_size
+          /// cst_init: 0
+          ///     Generate: alloc_op[0] = cst_init;
+          ///     i.e.,   : W_id_list_size = 0;
+          auto const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
 #ifdef DEBUG_MODE_UTILS
-        auto store_op = builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
-        comet_vdump(store_op);
+          auto store_op = builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
+          comet_vdump(store_op);
 #else
-        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
+          builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
 #endif
 //        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
+        }
       }
       else
       {
+        /// alloc_op: a dense vector V
+        /// cst_init: 0
+        ///     Generate: alloc_op[accessIdx] = cst_init;
+        ///     i.e.,   : V[accessIdx] = 0;
 #ifdef DEBUG_MODE_UTILS
         auto store_op = builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{accessIdx});
         comet_vdump(store_op);

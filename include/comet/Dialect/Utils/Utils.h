@@ -56,7 +56,13 @@ namespace mlir
     Value insertAllocAndDealloc(MemRefType memtype, Location loc, PatternRewriter &rewriter);
     Value insertAllocAndInitialize(Location loc, MemRefType memtype, ValueRange allocValueRange, PatternRewriter &rewriter);
 //    void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter);
-    void insertInitialize(Location loc, Value cst_init, Value alloc_op, Value accessIdx, OpBuilder &builder);
+    void insertInitialize(Location loc,
+                          Value cst_init,
+                          Value alloc_op,
+                          Value accessIdx,
+                          OpBuilder &builder,
+                          bool use_dynamic_init,
+                          Value dynamic_init);
     bool hasFuncDeclaration(ModuleOp &module, std::string funcName);
     //bool isFuncInMod(std::string funcname, ModuleOp module);
 
