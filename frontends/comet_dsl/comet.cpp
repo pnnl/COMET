@@ -36,18 +36,22 @@
 #include "mlir/Support/TypeID.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
-#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
 
-#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
-#include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
-#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
+#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
+#include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
+#include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
+#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
+#include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
+#include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
+#include "mlir/Conversion/VectorToSCF/VectorToSCF.h"
 
 #include "mlir/IR/Verifier.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
@@ -70,7 +74,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 
-using namespace tensorAlgebra;
+using namespace mlir::tensorAlgebra;
 using namespace mlir::indexTree;
 
 #define DEBUG_TYPE "comet_dsl"
@@ -187,9 +191,8 @@ std::unique_ptr<tensorAlgebra::ModuleAST> parseInputFile(llvm::StringRef filenam
     return nullptr;
   }
   auto buffer = fileOrErr.get()->getBuffer();
-  // LexerBuffer lexer(buffer.begin(), buffer.end(), filename);
-  LexerBuffer lexer(buffer.begin(), buffer.end(), std::string(filename));
-  Parser parser(lexer);
+  tensorAlgebra::LexerBuffer lexer(buffer.begin(), buffer.end(), std::string(filename));
+  tensorAlgebra::Parser parser(lexer);
   return parser.parseModule();
 }
 
@@ -331,16 +334,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // =============================================================================
   // Operation based optimizations
   // =============================================================================
-  if (OptDenseTransposeOp) // Optimize Dense Transpose operation
-  {
-    // If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.copy, then
-    /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
-    /// HPTT: A High-Performance Tensor Transposition C++ Library
-    /// https://arxiv.org/abs/1704.04374
-    optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
-    // optPM.addPass(mlir::tensorAlgebra::createOptDenseTransposePass());
-  }
-
   if (OptMatmulTiling)
   {
     optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
@@ -378,6 +371,15 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::createTensorBufferizePass());
     pm.addPass(mlir::func::createFuncBufferizePass()); // Needed for func
 
+    if (OptDenseTransposeOp) // Optimize Dense Transpose operation
+    {
+      // If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.transpose, then
+      /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
+      /// HPTT: A High-Performance Tensor Transposition C++ Library
+      /// https://arxiv.org/abs/1704.04374
+      optPM.addPass(mlir::comet::createOptDenseTransposePass());
+    }
+
     // Dump index tree dialect.
     if (emitLoops)
     {
@@ -394,19 +396,46 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::comet::createLateLoweringPass());
+  optPM.addPass(mlir::createCanonicalizerPass());
   optPM.addPass(mlir::createCSEPass());
+
   // =============================================================================
 
   if (isLoweringToLLVM || emitLLVM)
   {
+    // Blanket-convert any remaining high-level vector ops to loops if any remain.
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
+    // Blanket-convert any remaining linalg ops to loops if any remain.
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertSCFToCFPass());
-    pm.addPass(mlir::memref::createExpandStridedMetadataPass()); // Needed for memref.expand_shape
+    // Blanket-convert any remaining affine ops if any remain.
     pm.addPass(mlir::createLowerAffinePass());
+    // Convert SCF to CF (always needed).
+    pm.addPass(mlir::createConvertSCFToCFPass());
+    // Sprinkle some cleanups.
+    pm.addPass(mlir::createCanonicalizerPass());
+    pm.addPass(mlir::createCSEPass());
+    // Blanket-convert any remaining linalg ops to LLVM if any remain.
+    pm.addPass(mlir::createConvertLinalgToLLVMPass());
+    // // Convert vector to LLVM (always needed).
+    pm.addPass(mlir::createConvertVectorToLLVMPass());
+    // // Convert Math to LLVM (always needed).
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertMathToLLVMPass());
+    // Expand complicated MemRef operations before lowering them.
+    pm.addPass(mlir::memref::createExpandStridedMetadataPass());
+    // The expansion may create affine expressions. Get rid of them.
+    pm.addPass(mlir::createLowerAffinePass());
+    // Convert MemRef to LLVM (always needed).
     pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createArithToLLVMConversionPass());
+    // Convert Func to LLVM (always needed).
     pm.addPass(mlir::createConvertFuncToLLVMPass());
+    // Convert Index to LLVM (always needed).
+    pm.addPass(mlir::createConvertIndexToLLVMPass());
+    // Convert remaining unrealized_casts (always needed).
     pm.addPass(mlir::createReconcileUnrealizedCastsPass());
+
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+    return 0;
   }
 
   if (mlir::failed(pm.run(*module)))

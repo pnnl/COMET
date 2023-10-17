@@ -55,11 +55,6 @@ namespace mlir
         ////////////////////////////////////
         ////////////////////////////////////
         ////////////////////////////////////
-        // Optimize dense transpose (linalg.copy) based on the following paper:
-        // HPTT: A High-Performance Tensor Transposition C++ Library
-        // https://arxiv.org/abs/1704.04374
-        std::unique_ptr<Pass> createOptDenseTransposePass(uint64_t tile_size = 1,
-                                                          bool seperate_tiles = false);
         std::unique_ptr<Pass> createFindOptimalTCFactorizationPass();
         std::unique_ptr<Pass> createLowerTAMulChainPass();
 
@@ -72,6 +67,13 @@ namespace mlir
 
         std::unique_ptr<Pass> createLinAlgMatmulTilingPass();
         std::unique_ptr<Pass> createLinAlgMatmulMicroKernelPass();
+
+        // Optimize dense transpose (linalg.copy) based on the following paper:
+        // HPTT: A High-Performance Tensor Transposition C++ Library
+        // https://arxiv.org/abs/1704.04374
+        std::unique_ptr<Pass> createOptDenseTransposePass(uint64_t tile_size = 1,
+                                                          bool seperate_tiles = false);
+                                                          
         std::unique_ptr<Pass> createLowerLinAlgFillPass();
 
         /// Create a pass for lowering tensor fill operation to linalg.fill
