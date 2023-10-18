@@ -1030,7 +1030,7 @@ namespace
               // infer the format
               mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorMultOp>(tensordecl.getDefiningOp()).getFormats();
               unsigned int i = opFormatsArrayAttr.size() - 1;
-              std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+              mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
               comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
               comet_debug() << " lhs_format: " << lhs_format << "\n";
@@ -1045,7 +1045,7 @@ namespace
               // infer the format
               mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getFormats();
               unsigned int i = opFormatsArrayAttr.size() - 1;
-              std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+              mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
               comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
               comet_debug() << " lhs_format: " << lhs_format << "\n";
@@ -1063,7 +1063,7 @@ namespace
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorMultOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
-            std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+            mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
             comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
             comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
@@ -1076,7 +1076,7 @@ namespace
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
-            std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+            mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
             comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
             comet_debug() << " lhs_format: " << lhs_format << "\n";
@@ -1090,7 +1090,7 @@ namespace
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorAddOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
-            std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+            mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
             comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
             comet_debug() << " lhs_format: " << lhs_format << "\n";
@@ -1104,7 +1104,7 @@ namespace
             // infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorSubtractOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
-            std::string lhs_format(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+            mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
             comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
             comet_debug() << " lhs_format: " << lhs_format << "\n";
