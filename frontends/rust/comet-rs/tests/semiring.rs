@@ -1,6 +1,6 @@
 use assert_cmd::Command;
 
-const EX_DIR: &str = "./target/debug/examples/";
+const EX_DIR: &str = "./target/release/examples/";
 
 fn remove_whitespace(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()

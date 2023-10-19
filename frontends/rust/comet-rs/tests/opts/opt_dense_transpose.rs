@@ -9,8 +9,7 @@ comet_rs::comet_fn! { opt_dense_transpose, {
     B = A.transpose([i, k, j, l]);
     B.print();
 },
-CometOption::[ DenseTranspose, TaToIt, ToLoops],
-MlirOption::[LowerAffine, ConvertScfToStd, ConvertStdToLlvm]
+CometOption::[ DenseTranspose, TaToIt, ToLoops, ToLlvm]
 }
 
 fn main() {

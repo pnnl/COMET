@@ -13,7 +13,6 @@ comet_rs::comet_fn! { dtranspose_mult_dense_dense, {
     D.print();
 
 },
-MlirOption::[ConvertLinalgToLoops, ConvertScfToStd, ConvertStdToLlvm]
 }
 
 fn main() {

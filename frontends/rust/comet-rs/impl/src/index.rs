@@ -147,11 +147,11 @@ impl std::cmp::PartialOrd for IndexStruct {
 impl IndexStruct {
     pub(crate) fn emit_mlir(&self) -> String {
         let mut res = "".to_string();
-        res = format!("{}%c{}{} = constant 0: index\n", res, self.mlir_id, 0);
-        res = format!("{}%c{}{} = constant 1: index\n", res, self.mlir_id, 1);
+        res = format!("{}%c{}{} = arith.constant 0: index\n", res, self.mlir_id, 0);
+        res = format!("{}%c{}{} = arith.constant 1: index\n", res, self.mlir_id, 1);
         if let Ok(val) = self.val() {
             res = format!(
-                "{}%c{}{} = constant {}: index\n",
+                "{}%c{}{} = arith.constant {}: index\n",
                 res, self.mlir_id, val, val
             );
             format!("{}%{} = \"ta.static_index_label\"(%c{}{}, %c{}{}, %c{}{}) : (index, index, index) -> !ta.range\n\n",res, self.mlir_id, self.mlir_id, 0, self.mlir_id, val, self.mlir_id,1)

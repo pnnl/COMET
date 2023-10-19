@@ -8,8 +8,7 @@ comet_rs::comet_fn! { ccsd_t1_21_ttgt_all_opts, {
     i0 = v * t2;
     i0.print();
 },
-CometOption::[BestPermTtgt, MatMulTiling, MatMulkernel, DenseTranspose, TcToTtgt],
-MlirOption::[LowerAffine, ConvertLinalgToLoops, ConvertLinalgToStd, ConvertLinalgToLlvm, ConvertScfToStd, ConvertStdToLlvm]
+CometOption::[BestPermTtgt, MatMulTiling, MatMulkernel, DenseTranspose, TcToTtgt, ToLlvm]
 }
 
 fn main() {

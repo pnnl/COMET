@@ -26,7 +26,8 @@ enum CometResult{
     Failure(String),    
 }
 
-fn create_lib(func_name: &str, mlir_str: &str, comet_opts: Vec<CometOption>, mlir_opts: Vec<MlirOption>) -> CometResult{
+// fn create_lib(func_name: &str, mlir_str: &str, comet_opts: Vec<CometOption>, mlir_opts: Vec<MlirOption>) -> CometResult{
+fn create_lib(func_name: &str, mlir_str: &str, comet_opts: Vec<CometOption>) -> CometResult{
     // println!("{}",env::var("CARGO_CRATE_NAME").unwrap());
     // for (key,value) in env::vars() {
     //     println!("{}={}",key,value);
@@ -111,36 +112,8 @@ fn create_lib(func_name: &str, mlir_str: &str, comet_opts: Vec<CometOption>, mli
             panic!("ERROR: failed to convert from rs to mlir {:?} option str {}", String::from_utf8_lossy(&output.stderr),cmd_str);
         }
     }
-    let mlir_file = base_filepath.clone().with_extension("mlir");
-    std::fs::write(&mlir_file, &output.stderr).expect("Unable to write file");
-
-    let mut cmd = Command::new(mlir_bin.clone().join("mlir-opt"));
-    for opt in mlir_opts {
-        cmd.arg(opt.as_str());
-    }
-    let output = cmd
-        .arg(mlir_file.to_str().unwrap())
-        .output()
-        .expect("Could not run mlir-opt");
-
-   
-    if !output.status.success() {
-        if cfg!(feature = "comet_errors_as_warnings") {
-            println!("ERROR: failed to convert from mlir to llvm {:?}", String::from_utf8_lossy(&output.stderr));
-            return CometResult::Failure(String::from_utf8_lossy(&output.stderr).to_string());
-        }
-        else {
-            println!("here");
-            panic!("ERROR: failed to convert from mlir to llvm {:?}", String::from_utf8_lossy(&output.stderr));
-        }
-    }
-    // assert!(
-    //     output.status.success(),
-    //     "{:?}",
-    //     String::from_utf8_lossy(&output.stderr)
-    // );
     let llvm_file = base_filepath.clone().with_extension("llvm");
-    std::fs::write(&llvm_file, &output.stdout).expect("Unable to write file");
+    std::fs::write(&llvm_file, &output.stderr).expect("Unable to write file");
 
     let bc_file = base_filepath.clone().with_extension("bc");
     let _status = Command::new(mlir_bin.clone().join("mlir-translate"))
@@ -249,6 +222,7 @@ impl Comet {
 enum CometOption{
     TcToTtgt,
     ToLoops,
+    ToLlvm,
     TaToIt,
     BestPermTtgt,
     MatMulTiling,
@@ -263,6 +237,7 @@ impl CometOption{
             CometOption::TcToTtgt =>"--convert-tc-to-ttgt",
             CometOption::ToLoops =>"--convert-to-loops",
             CometOption::TaToIt =>"--convert-ta-to-it",
+            CometOption::ToLlvm =>"--convert-to-llvm",
             CometOption::BestPermTtgt =>"-opt-bestperm-ttgt",
             CometOption::MatMulTiling =>"-opt-matmul-tiling",
             CometOption::MatMulkernel =>"-opt-matmul-mkernel",
@@ -297,6 +272,11 @@ impl CometOption {
                             "TaToIt" => {
                                 if !options.contains(&CometOption::TaToIt){
                                     options.push(CometOption::TaToIt);
+                                }
+                            },
+                            "ToLlvm" => {
+                                if !options.contains(&CometOption::ToLlvm){
+                                    options.push(CometOption::ToLlvm);
                                 }
                             },
                             "BestPermTtgt" => {
@@ -355,107 +335,6 @@ impl CometOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum MlirOption{
-    ConvertLinalgToLoops,
-    ConvertLinalgToStd,
-    ConvertLinalgToLlvm,
-    ToLoops,
-    ConvertScfToStd,
-    ConvertStdToLlvm,
-    LowerAffine,    
-}
-
-impl MlirOption{
-    fn as_str(&self) -> &'static str{
-        match self{
-            MlirOption::ConvertLinalgToLoops =>"--convert-linalg-to-loops",
-            MlirOption::ConvertLinalgToStd =>"--convert-linalg-to-std",
-            MlirOption::ConvertLinalgToLlvm =>"--convert-linalg-to-llvm",
-            MlirOption::ToLoops =>"--convert-to-loops",
-            MlirOption::ConvertScfToStd =>"--convert-scf-to-std",
-            MlirOption::ConvertStdToLlvm =>"--convert-std-to-llvm",
-            MlirOption::LowerAffine =>"--lower-affine",
-        }
-    }
-}
-
-impl MlirOption {
-    fn my_parse(input: ParseStream) -> syn::Result<Vec<Self>> {
-        let mut options = vec![];
-        let fork = input.fork();
-        if let Ok(mlir_opt) = fork.parse::<Ident>(){
-            if mlir_opt.to_string().as_str() == "MlirOption"{
-                fork.parse::<Token![::]>()?;
-                let content;
-                syn::bracketed!(content in fork);
-                while !content.is_empty() {
-                    if let Ok(opt) = content.parse::<Ident>(){                
-                        match opt.to_string().as_str() {
-                            "ConvertLinalgToLoops" => {
-                                if !options.contains(&MlirOption::ConvertLinalgToLoops){
-                                    options.push(MlirOption::ConvertLinalgToLoops);
-                                }
-                            },
-                            "ConvertLinalgToStd" => {
-                                if !options.contains(&MlirOption::ConvertLinalgToStd){
-                                    options.push(MlirOption::ConvertLinalgToStd);
-                                }
-                            },
-                            "ConvertLinalgToLlvm" => {
-                                if !options.contains(&MlirOption::ConvertLinalgToLlvm){
-                                    options.push(MlirOption::ConvertLinalgToLlvm);
-                                }
-                            },
-                            "ToLoops" => {
-                                if !options.contains(&MlirOption::ToLoops){
-                                    options.push(MlirOption::ToLoops);
-                                }
-                            },
-                            "ConvertScfToStd" => {
-                                if !options.contains(&MlirOption::ConvertScfToStd){
-                                    options.push(MlirOption::ConvertScfToStd);
-                                }
-                            },
-                            "ConvertStdToLlvm" => {
-                                if !options.contains(&MlirOption::ConvertStdToLlvm){
-                                    options.push(MlirOption::ConvertStdToLlvm);
-                                }
-                            },
-                            "LowerAffine" => {
-                                if !options.contains(&MlirOption::LowerAffine){
-                                    options.push(MlirOption::LowerAffine);
-                                }
-                            },
-                            _ => abort!(opt.span(),"Unknown MlirOption"),
-                        }
-                        if content.peek(Token![,]){
-                            content.parse::<Token![,]>()?;
-                        }
-                    }
-                    else{
-                        abort!(content.span(),"Unknown MlirOption");
-                    }
-                }
-            }
-            else{
-                return Err(syn::Error::new(
-                    mlir_opt.span(),
-                    "expected MlirOption",
-                ))
-            }
-        }
-        else{
-            return Err(syn::Error::new(
-                input.span(),
-                "expected MlirOption",
-            ))
-        }
-        input.advance_to(&fork);
-        Ok(options)
-    }
-}
-
 pub(crate) struct CometFn {
     pub name: Ident,
     lib_path: CometResult,
@@ -477,7 +356,7 @@ impl Parse for CometFn {
         };
         let mut object_id = 0;
 
-        let mut mlir_str = format!("module  {{\nfunc @{}() {{\n", name);
+        let mut mlir_str = format!("module  {{\nfunc.func @{}() {{\n", name);
         while !content.is_empty() {
             let fork = content.fork();
             match Comet::my_parse(&fork, &mut vars, &mut object_id) {
@@ -511,7 +390,7 @@ impl Parse for CometFn {
             }
         }
         
-        mlir_str += "\"ta.return\"(): () -> ()\n}\n}\n\n";
+        mlir_str += "return\n}\n}\n\n";
         // println!("{}", mlir_str);
         let mut opt_comp_workspace = true;
         // let mut sparse_env = String::new();
@@ -541,18 +420,7 @@ impl Parse for CometFn {
                 opts
             }
             Err(_) => {
-                vec![CometOption::TaToIt,CometOption::ToLoops]
-            }
-        };
-        let mlir_opts = match MlirOption::my_parse(&input){
-            Ok(opts) => {
-                if input.peek(Token![,]){
-                    input.parse::<Token![,]>()?;
-                }
-                opts
-            }
-            Err(_) => {
-                vec![MlirOption::ConvertScfToStd,MlirOption::ConvertStdToLlvm]
+                vec![CometOption::TaToIt,CometOption::ToLoops,CometOption::ToLlvm]
             }
         };
        
@@ -562,7 +430,7 @@ impl Parse for CometFn {
             }
         }
         // println!("{} {} {:?}",name,opt_comp_workspace,comet_opts);
-        let lib_path = create_lib(&name.clone().to_string(), &mlir_str,comet_opts,mlir_opts);
+        let lib_path = create_lib(&name.clone().to_string(), &mlir_str,comet_opts);
 
         // println!("sparse_env: {}", sparse_env);
         Ok(CometFn {

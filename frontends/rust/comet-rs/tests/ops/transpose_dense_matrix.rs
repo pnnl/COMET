@@ -7,8 +7,6 @@ comet_rs::comet_fn! { transpose_dense_mat, {
     B = A.transpose([j,i]);
     B.print();
 },
-CometOption::[ToLoops],
-MlirOption::[ConvertLinalgToLoops, ConvertScfToStd, ConvertStdToLlvm]
 }
 
 fn main() {
