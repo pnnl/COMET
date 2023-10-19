@@ -25,7 +25,7 @@
 
 #include "mlir/ExecutionEngine/RunnerUtils.h"
 
-// suppress all warnings coming from inclusion of blis.h in source tree
+/// suppress all warnings coming from inclusion of blis.h in source tree
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
@@ -42,10 +42,8 @@
 #ifdef _WIN32
 #ifndef COMET_BLIS_INTERFACE_EXPORT
 #ifdef comet_blis_interface_EXPORTS
-/* We are building this library */
 #define COMET_BLIS_INTERFACE_EXPORT __declspec(dllexport)
 #else
-/* We are using this library */
 #define COMET_BLIS_INTERFACE_EXPORT __declspec(dllimport)
 #endif // comet_blis_interface_EXPORTS
 #endif // COMET_BLIS_INTERFACE_EXPORT
@@ -66,7 +64,7 @@ _mlir_ciface_linalg_matmul_viewsxsxf64_viewsxsxf64_viewsxsxf64(
 #pragma GCC diagnostic pop
 #endif
 
-#endif // COMET_BLIS_INTERFACE_H_
+#endif /// COMET_BLIS_INTERFACE_H_
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #define bli_dgemm_asm_6x8 bli_dgemm_x86_ukr

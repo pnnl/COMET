@@ -39,37 +39,22 @@ using namespace mlir::indexTree;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LowerTensorAlgebraToIndexTreePass
-// #define DEBUG_MODE_LowerTensorAlgebraToIndexTreePass
-// #endif
-
-#ifdef DEBUG_MODE_LowerTensorAlgebraToIndexTreePass
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n->dump()
-#define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n.dump()
-#else
-#define comet_debug() if(true){}else llvm::errs()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+#undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
 using namespace mlir;
 
 namespace
 {
-
   struct LowerTensorAlgebraToIndexTreePass
       : public PassWrapper<LowerTensorAlgebraToIndexTreePass, OperationPass<func::FuncOp>>
   {
-     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTensorAlgebraToIndexTreePass)
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTensorAlgebraToIndexTreePass)
     void runOnOperation() override;
   };
-} // namespace
+} /// namespace
 
 Value getRealLhs(Operation *op)
 {
@@ -89,15 +74,16 @@ Value getRealLhs(Operation *op)
 
 Value getRealRhs(Operation *op)
 {
-  Operation *firstUser = op->getNextNode(); // this will return set_op for transpose, but messes up getUsers() or subsequent calls to it.
+  /// this will return set_op for transpose, but messes up getUsers() or subsequent calls to it.
+  Operation *firstUser = op->getNextNode();
   comet_pdump(firstUser);
-  // TODO: need to find out why user set_op is not showing up in users of TransposeOp
-  //       from the for loop below. once resolved, remove getNextNode().
-  // Operation *firstUser;
-  // for (auto user : op->getResult(0).getUsers())
+  /// TODO(gkestor): need to find out why user set_op is not showing up in users of TransposeOp
+  ///       from the for loop below. once resolved, remove getNextNode().
+  /// Operation *firstUser;
+  /// for (auto user : op->getResult(0).getUsers())
   //{
-  //  firstUser = user;
-  //  break;
+  ///  firstUser = user;
+  ///  break;
   //}
 
   if (isa<tensorAlgebra::TransposeOp>(op))
@@ -109,12 +95,12 @@ Value getRealRhs(Operation *op)
     }
     else
     {
-      assert(false && "Transpose has no set_op after it!");
+      llvm::errs() << "ERROR: Transpose has no set_op after it!\n";
     }
   }
   else
   {
-    // do nothing
+    /// do nothing
     return op->getResult(0);
   }
   return op->getResult(0);
@@ -145,7 +131,7 @@ IndicesType getUnion(IndicesType indices1, IndicesType indices2)
   return allIndices;
 }
 
-void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree>& tree)
+void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
 {
   Value rhs1_tensor = getRealRhs(op.getRhs1().getDefiningOp());
   Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
@@ -172,19 +158,19 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree>& tree)
   auto B = tree->getOrCreateTensor(rhs1_tensor, allFormats[0]);
   auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
   auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
-  Tensor* M;
+  Tensor *M;
   std::unique_ptr<UnitExpression> e;
-  if (mask_tensor != nullptr) // mask is an optional input
+  if (mask_tensor != nullptr) /// mask is an optional input
   {
     comet_debug() << "mask input provided by user\n";
-    M = tree->getOrCreateTensor(mask_tensor, allFormats[2]); // format same as lhs_tensor
+    M = tree->getOrCreateTensor(mask_tensor, allFormats[2]); /// format same as lhs_tensor
     e = make_unique<UnitExpression>(A, B, C, M, "*");
   }
   else
   {
     comet_debug() << "no mask input provided by user\n";
     e = make_unique<UnitExpression>(A, B, C, "*");
-  } 
+  }
 
   e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue());
   e->setMaskType(MaskingTypeAttr.cast<mlir::StringAttr>().getValue());
@@ -209,7 +195,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree>& tree)
 
     auto node = tree->addIndexNode(index, parent, idomain);
 
-    // If this index appears on the lhs too, set output domain for the index node
+    /// If this index appears on the lhs too, set output domain for the index node
     if (std::find(lhsIndices.begin(), lhsIndices.end(), index) != lhsIndices.end())
     {
       auto &odomain = outputDomains.at(index);
@@ -223,7 +209,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree>& tree)
 }
 
 template <typename T>
-void doElementWiseOp(T op, unique_ptr<Index_Tree>& tree)
+void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
 {
   Value rhs1_tensor = getRealRhs(op.getRhs1().getDefiningOp());
   Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
@@ -251,14 +237,14 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree>& tree)
   auto e = make_unique<UnitExpression>(A, B, C, "*");
 
   e->setOperation(op);
-  e->setSemiring(SemiringOp.template cast<mlir::StringAttr>().getValue()); // for element-wise multiplication
-  e->setMaskType(maskAttr); // for element-wise multiplication
+  e->setSemiring(SemiringOp.template cast<mlir::StringAttr>().getValue()); /// for element-wise multiplication
+  e->setMaskType(maskAttr);                                                /// for element-wise multiplication
   buildDefUseInfo(e.get());
 
   auto inputDomains = e->computeInputIterDomains();
   auto outputDomains = e->computeOutputIterDomains();
 
-  // RHS and LHS indices must be the same for elementwise multiplication
+  /// RHS and LHS indices must be the same for elementwise multiplication
   IndicesType allIndices = tree->getIndices(rhs1_tensor);
 
   auto lhsIndices = A->getIndices();
@@ -270,7 +256,7 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree>& tree)
 
     auto node = tree->addIndexNode(index, parent, idomain);
 
-    // If this index appears on the lhs too, set output domain for the index node
+    /// If this index appears on the lhs too, set output domain for the index node
     if (std::find(lhsIndices.begin(), lhsIndices.end(), index) != lhsIndices.end())
     {
       auto &odomain = outputDomains.at(index);
@@ -280,15 +266,15 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree>& tree)
     parent = node;
   }
   tree->addComputeNode(std::move(e), parent);
-  // cout << "print tree after tc\n";
-  // tree->print();
+  /// cout << "print tree after tc\n";
+  /// tree->print();
 }
 
-// helper for treeToDialect()
+/// helper for treeToDialect()
 Operation *getSetOpForTC(Operation *op)
 {
   assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubtractOp>(op));
-  // TODO: fix the issue with getUsers() after getRealRhs().
+  /// TODO(gkestor): fix the issue with getUsers() after getRealRhs().
   comet_debug() << "The following loop may cause issue!\n";
   Operation *firstUser;
   for (auto user : op->getResult(0).getUsers())
@@ -301,7 +287,7 @@ Operation *getSetOpForTC(Operation *op)
   return firstUser;
 }
 
-// helper for treeToDialect()
+/// helper for treeToDialect()
 IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Location &loc)
 {
   auto context = builder.getContext();
@@ -357,11 +343,11 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
     t_rhs.push_back(o->getValue());
   }
 
-  // check if mask exists and add to t_rhs
-  if (expr->getMask() != nullptr) 
+  /// check if mask exists and add to t_rhs
+  if (expr->getMask() != nullptr)
   {
     comet_debug() << "user has provided mask input\n";
-    t_rhs.push_back(expr->getMask()->getValue()); // add mask to IndexTreeComputeRHSOp
+    t_rhs.push_back(expr->getMask()->getValue()); /// add mask to IndexTreeComputeRHSOp
   }
 
   Value leafop_rhs = builder.create<indexTree::IndexTreeComputeRHSOp>(loc,
@@ -373,7 +359,7 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
                                                                       mlir::UnrankedTensorType::get(builder.getF64Type()), t_lhs,
                                                                       builder.getArrayAttr(allIndices_lhs),
                                                                       builder.getArrayAttr(allFormats_lhs));
-  bool comp_worksp_opt = false; // non-compressed workspace, this is a place-holder and it is updated in workspace transform pass.
+  bool comp_worksp_opt = false; /// non-compressed workspace, this is a place-holder and it is updated in workspace transform pass.
   llvm::StringRef semiring = expr->getSemiring();
   llvm::StringRef maskType = expr->getMaskType();
   auto leafop = builder.create<IndexTreeComputeOp>(loc, i64Type, leafop_rhs, leafop_lhs, builder.getBoolAttr(comp_worksp_opt), builder.getStringAttr(semiring), builder.getStringAttr(maskType));
@@ -412,7 +398,7 @@ void treeToDialect(Index_Tree *tree)
     {
       if (node->getChildren().empty())
       {
-        continue; // to skip nodes that become childless after fusion
+        continue; /// to skip nodes that become childless after fusion
       }
       SmallVector<Value, 8> children;
       for (auto c : node->getChildren())
@@ -420,7 +406,7 @@ void treeToDialect(Index_Tree *tree)
         assert(nodeToOp.count(c) > 0);
         children.push_back(nodeToOp[c]);
       }
-      // assert(!children.empty());
+      /// assert(!children.empty());
       SmallVector<int64_t, 1> indices;
       indices.push_back(node->getIndex());
       auto indicesAttr = builder.getI64ArrayAttr(indices);
@@ -480,7 +466,7 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
       }
       else if (isa<TensorAddOp>(&op) || isa<TensorSubtractOp>(&op))
       {
-        // elementwise addition and subtraction
+        /// elementwise addition and subtraction
         if (isa<TensorAddOp>(&op))
         {
           doElementWiseOp<TensorAddOp>(cast<TensorAddOp>(&op), tree);
@@ -498,13 +484,12 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
   if (formIndexTreeDialect)
   {
     comet_debug() << " Dumping Index tree IR\n";
-    // only do this for TensorMultOp or TensorElewsMultOp
+    /// only do this for TensorMultOp or TensorElewsMultOp
     treeToDialect(tree.get());
   }
 }
 
-// create all the passes.
-//
+/// create all the passes.
 std::unique_ptr<Pass> mlir::comet::createLowerTensorAlgebraToIndexTreePass()
 {
   comet_debug() << " Calling createLowerTensorAlgebraToIndexTreePass\n";

@@ -41,7 +41,7 @@ namespace mlir
     class RangeType : public Type::TypeBase<RangeType, Type, TypeStorage>
     {
     public:
-      // Used for generic hooks in TypeBase.
+      /// Used for generic hooks in TypeBase.
       using Base::Base;
 
       static RangeType get(MLIRContext *context)
@@ -51,7 +51,7 @@ namespace mlir
       }
     };
 
-  } // namespace tensorAlgebra
-} // namespace mlir
+  } /// namespace tensorAlgebra
+} /// namespace mlir
 
-#endif // TENSORALGEBRA_TYPES_H_
+#endif /// TENSORALGEBRA_TYPES_H_

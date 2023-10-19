@@ -55,7 +55,6 @@ namespace mlir
     MemRefType convertTensorToMemRef(TensorType type);
     Value insertAllocAndDealloc(MemRefType memtype, Location loc, PatternRewriter &rewriter);
     Value insertAllocAndInitialize(Location loc, MemRefType memtype, ValueRange allocValueRange, PatternRewriter &rewriter);
-//    void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter);
     void insertInitialize(Location loc,
                           Value cst_init,
                           Value alloc_op,
@@ -64,18 +63,18 @@ namespace mlir
                           bool use_dynamic_init,
                           Value dynamic_init);
     bool hasFuncDeclaration(ModuleOp &module, std::string funcName);
-    //bool isFuncInMod(std::string funcname, ModuleOp module);
 
     /*
-    * We should put template function definition in the header rather than in the cpp file.
-    * Reference:
-    * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
-    *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
-    * 2. How can I avoid linker errors with my template functions?
-    *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
-    */
+     * We should put template function definition in the header rather than in the cpp file.
+     * Reference:
+     * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
+     *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
+     * 2. How can I avoid linker errors with my template functions?
+     *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
+     */
     template <class T>
-    unsigned int findIndexInVector(std::vector<T> const &vec, T e) {
+    unsigned int findIndexInVector(std::vector<T> const &vec, T e)
+    {
       // Check if element e exists in vector
       auto it = std::find(vec.begin(), vec.end(), e);
 
@@ -86,30 +85,24 @@ namespace mlir
       if (it != vec.end())
       {
         ret = std::distance(vec.begin(), it);
-        //comet_debug() << " Element Found and its index location: " << ret << " \n";
       }
       else
       {
-        //comet_debug() << " Element Not Found\n";
         ret = vec.size();
       }
       return ret;
     }
 
     template <typename T>
-    void print_vector(std::vector<T> vec) {
+    void print_vector(std::vector<T> vec)
+    {
       for (auto n : vec)
       {
-        //comet_debug() << n << " ";
+        // comet_debug() << n << " ";
       }
-      //comet_debug() << "\n";
+      // comet_debug() << "\n";
     }
-    // template <class T>
-    // unsigned int findIndexInVector(std::vector<T> const &vec, T e);
-    // template <typename T>
-    // void print_vector(std::vector<T> vec);
-//    template <>
-//    void print_vector<bool>(std::vector<bool> vec);
+
     void print_vector_value(std::vector<Value> vec);
 
     std::string dump2str(Value t);
@@ -246,11 +239,11 @@ namespace mlir
                 ? true
                 : false;
 
-        // get M-N-K indices for gemm
+        /// get M-N-K indices for gemm
         std::tie(m_indices_, n_indices_, k_indices_) =
             getIndices(a_perm_, b_perm_, c_perm_);
 
-        // compute size map for each index
+        /// compute size map for each index
         for (size_t i = 0; i < a_perm_.size(); i++)
         {
           size_map_.insert({a_perm_[i], a_shape[i]});
@@ -264,7 +257,7 @@ namespace mlir
           size_map_.insert({c_perm_[i], c_shape[i]});
         }
 
-        // compute sizes for M-N-K sizes
+        /// compute sizes for M-N-K sizes
         m_size_ = 1;
         for (const auto &idx : m_indices_)
         {
@@ -400,7 +393,7 @@ namespace mlir
         }
         else
         {
-          // chose the permutation identified with which permutation_ order
+          /// chose the permutation identified with which permutation_ order
           std::tie(a_perm, b_perm, c_perm) = findPermutationsAtN(whichpermutation);
         }
         return std::make_tuple(a_perm, b_perm, c_perm);
@@ -424,7 +417,6 @@ namespace mlir
             {
               do
               {
-
                 if (curper == whichperm)
                 {
                   IndexVector a_idx, b_idx, c_idx;
@@ -489,7 +481,6 @@ namespace mlir
             {
               for (size_t i = 0; i < 2; i++)
               {
-
                 IndexVector a_idx, b_idx, c_idx;
                 uint64_t a_size, b_size, c_size;
                 double transposeTime = 0.0;
@@ -526,7 +517,7 @@ namespace mlir
                 if (b_perm_ != b_idx)
                 {
                   transposeTime +=
-                      // b_size is the memory size of B, the current heuristics is only based on memsize
+                      /// b_size is the memory size of B, the current heuristics is only based on memsize
                       getTransposeTime(b_size, getPermutation(b_perm_, b_idx));
                 }
 
@@ -580,9 +571,9 @@ namespace mlir
       bool inA_;
 
       std::string bestPermStr_;
-    }; // struct ContractionPlan
+    }; /// struct ContractionPlan
 
-  } // namespace tensorAlgebra
-} // namespace mlir
+  } /// namespace tensorAlgebra
+} /// namespace mlir
 
-#endif // TENSORALGEBRA_UTILS_H_
+#endif /// TENSORALGEBRA_UTILS_H_

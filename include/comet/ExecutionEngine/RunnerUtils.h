@@ -33,10 +33,8 @@
 #ifdef _WIN32
 #ifndef COMET_RUNNERUTILS_EXPORT
 #ifdef comet_runner_utils_EXPORTS
-// We are building this library
 #define COMET_RUNNERUTILS_EXPORT __declspec(dllexport)
 #else
-// We are using this library
 #define COMET_RUNNERUTILS_EXPORT __declspec(dllimport)
 #endif // comet_runner_utils_EXPORTS
 #endif // COMET_RUNNERUTILS_EXPORT
@@ -79,10 +77,10 @@ enum SparseFormatAttribute
 };
 
 /**************************************/
-// Currently exposed C API.
+/// Currently exposed C API.
 /**************************************/
 
-// Read matrices and tensors
+/// Read matrices and tensors
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f32(int32_t fileID,
                                                                  int32_t A1format, int32_t A1_tile_format,
                                                                  int32_t A2format, int32_t A2_tile_format,
@@ -94,13 +92,12 @@ extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f32(int32_t fileID,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                                            int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr, 
+                                                           int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_2D_f64(int32_t fileID,
-                                                                int32_t A1format, int32_t A1_tile_format,
-                                                                int32_t A2format, int32_t A2_tile_format,
-                                                                // int A1pos_rank, void *A1pos_ptr, char *filename, int32_t readMode);
+                                                                 int32_t A1format, int32_t A1_tile_format,
+                                                                 int32_t A2format, int32_t A2_tile_format,
                                                                  int A1pos_rank, void *A1pos_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f64(int32_t fileID,
@@ -109,7 +106,7 @@ extern "C" COMET_RUNNERUTILS_EXPORT void read_input_2D_f64(int32_t fileID,
                                                            int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
                                                            int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
                                                            int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                           int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr, 
+                                                           int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
                                                            int Aval_rank, void *Aval_ptr, int32_t readMode);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void read_input_sizes_3D_f32(int32_t fileID,
@@ -164,26 +161,26 @@ extern "C" COMET_RUNNERUTILS_EXPORT void transpose_2D_f32(int32_t A1format, int3
                                                           int sizes_rank, void *sizes_ptr);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void transpose_3D_f32(int32_t input_permutation, int32_t output_permutation,
-                                                        int32_t A1format, int32_t A1tile_format,
-                                                        int32_t A2format, int32_t A2tile_format,
-                                                        int32_t A3format, int32_t A3tile_format,
-                                                        int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                        int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
-                                                        int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                        int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
-                                                        int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                        int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
-                                                        int Aval_rank, void *Aval_ptr,
-                                                        int32_t B1format, int32_t B1tile_format,
-                                                        int32_t B2format, int32_t B2tile_format,
-                                                        int32_t B3format, int32_t B3tile_format,
-                                                        int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
-                                                        int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
-                                                        int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
-                                                        int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
-                                                        int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
-                                                        int B3tile_pos_rank, void *B3tile_pos_ptr, int B3tile_crd_rank, void *B3tile_crd_ptr,
-                                                        int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
+                                                          int32_t A1format, int32_t A1tile_format,
+                                                          int32_t A2format, int32_t A2tile_format,
+                                                          int32_t A3format, int32_t A3tile_format,
+                                                          int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                                          int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                                          int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                                          int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
+                                                          int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                                                          int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
+                                                          int Aval_rank, void *Aval_ptr,
+                                                          int32_t B1format, int32_t B1tile_format,
+                                                          int32_t B2format, int32_t B2tile_format,
+                                                          int32_t B3format, int32_t B3tile_format,
+                                                          int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                                                          int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
+                                                          int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                                                          int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
+                                                          int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
+                                                          int B3tile_pos_rank, void *B3tile_pos_ptr, int B3tile_crd_rank, void *B3tile_crd_ptr,
+                                                          int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void transpose_2D_f64(int32_t A1format, int32_t A1tile_format, int32_t A2format, int32_t A2tile_format,
                                                           int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
@@ -200,37 +197,37 @@ extern "C" COMET_RUNNERUTILS_EXPORT void transpose_2D_f64(int32_t A1format, int3
                                                           int sizes_rank, void *sizes_ptr);
 
 extern "C" COMET_RUNNERUTILS_EXPORT void transpose_3D_f64(int32_t input_permutation, int32_t output_permutation,
-                                                        int32_t A1format, int32_t A1tile_format,
-                                                        int32_t A2format, int32_t A2tile_format,
-                                                        int32_t A3format, int32_t A3tile_format,
-                                                        int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
-                                                        int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
-                                                        int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
-                                                        int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
-                                                        int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
-                                                        int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
-                                                        int Aval_rank, void *Aval_ptr,
-                                                        int32_t B1format, int32_t B1tile_format,
-                                                        int32_t B2format, int32_t B2tile_format,
-                                                        int32_t B3format, int32_t B3tile_format,
-                                                        int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
-                                                        int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
-                                                        int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
-                                                        int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
-                                                        int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
-                                                        int B3tile_pos_rank, void *B3tile_pos_ptr, int B3tile_crd_rank, void *B3tile_crd_ptr,
-                                                        int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
+                                                          int32_t A1format, int32_t A1tile_format,
+                                                          int32_t A2format, int32_t A2tile_format,
+                                                          int32_t A3format, int32_t A3tile_format,
+                                                          int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                                          int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                                          int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                                          int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
+                                                          int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                                                          int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
+                                                          int Aval_rank, void *Aval_ptr,
+                                                          int32_t B1format, int32_t B1tile_format,
+                                                          int32_t B2format, int32_t B2tile_format,
+                                                          int32_t B3format, int32_t B3tile_format,
+                                                          int B1pos_rank, void *B1pos_ptr, int B1crd_rank, void *B1crd_ptr,
+                                                          int B1tile_pos_rank, void *B1tile_pos_ptr, int B1tile_crd_rank, void *B1tile_crd_ptr,
+                                                          int B2pos_rank, void *B2pos_ptr, int B2crd_rank, void *B2crd_ptr,
+                                                          int B2tile_pos_rank, void *B2tile_pos_ptr, int B2tile_crd_rank, void *B2tile_crd_ptr,
+                                                          int B3pos_rank, void *B3pos_ptr, int B3crd_rank, void *B3crd_ptr,
+                                                          int B3tile_pos_rank, void *B3tile_pos_ptr, int B3tile_crd_rank, void *B3tile_crd_ptr,
+                                                          int Bval_rank, void *Bval_ptr, int sizes_rank, void *sizes_ptr);
 
-//===----------------------------------------------------------------------===//
-// Small runtime support library for timing execution, printing elapse time, printing GFLOPS
-//===----------------------------------------------------------------------===//
+///===----------------------------------------------------------------------===///
+/// Small runtime support library for timing execution, printing elapse time, printing GFLOPS
+//===----------------------------------------------------------------------===///
 extern "C" COMET_RUNNERUTILS_EXPORT double getTime();
 extern "C" COMET_RUNNERUTILS_EXPORT void printElapsedTime(double stime, double etime);
 extern "C" COMET_RUNNERUTILS_EXPORT void print_flops(double flops);
 
-//===----------------------------------------------------------------------===//
-// Small runtime support library for printing output scalar and tensors
-//===----------------------------------------------------------------------===//
+///===----------------------------------------------------------------------===///
+/// Small runtime support library for printing output scalar and tensors
+///===----------------------------------------------------------------------===///
 
 template <typename T>
 void printData(std::ostream &os, T *base, int64_t dim,
@@ -252,7 +249,8 @@ void printData(std::ostream &os, T *base, int64_t dim,
 template <typename T>
 void cometPrint(const DynamicMemRefType<T> &M)
 {
-    if (M.sizes[0] <= 0) {
+    if (M.sizes[0] <= 0)
+    {
         return;
     }
     std::cout << "data = " << std::endl;
@@ -267,27 +265,19 @@ void cometPrintMemRef(UnrankedMemRefType<T> &M)
     cometPrint(DynamicMemRefType<T>(M));
 }
 
-
-//===----------------------------------------------------------------------===//
-// Small runtime support library for memset for tensors
-//===----------------------------------------------------------------------===//
+///===----------------------------------------------------------------------===///
+/// Small runtime support library for memset for tensors
+//===----------------------------------------------------------------------===///
 
 template <typename T>
 void RTmemset(const DynamicMemRefType<T> &M)
 {
-    // std::cout << "memset" << std::endl;
-    // std::cout << "M.sizes[0]:" << M.sizes[0] << std::endl;
-    // std::cout << "M.sizes[1]:" << M.sizes[1] << std::endl;
-    // std::cout << "M.rank:" << M.rank << std::endl;
-
     unsigned num_elements = 1;
-    for (unsigned i = 0; i < M.rank; i++){
+    for (unsigned i = 0; i < M.rank; i++)
+    {
         num_elements = num_elements * M.sizes[0];
     }
-
-    //std::cout << "NumElements:" << num_elements << std::endl;
     memset(M.data, 0, sizeof(T) * num_elements);
-    //std::cout << "\n";
 }
 
 template <typename T>
@@ -296,19 +286,19 @@ void cometMemset(UnrankedMemRefType<T> &M)
     RTmemset(DynamicMemRefType<T>(M));
 }
 
-//===----------------------------------------------------------------------===//
-// Small runtime support library for std::sort indices
-//===----------------------------------------------------------------------===//
+///===----------------------------------------------------------------------===///
+/// Small runtime support library for std::sort indices
+///===----------------------------------------------------------------------===///
 
 template <typename T>
 void RTSortIndex(const DynamicMemRefType<T> &M, int64_t index_first, int64_t index_last)
 {
-  std::sort(M.data + index_first, M.data + index_last);
+    std::sort(M.data + index_first, M.data + index_last);
 }
 
 template <typename T>
 void cometSortIndex(UnrankedMemRefType<T> &M, int64_t index_first, int64_t index_last)
 {
-  RTSortIndex(DynamicMemRefType<T>(M), index_first, index_last);
+    RTSortIndex(DynamicMemRefType<T>(M), index_first, index_last);
 }
-#endif // COMET_EXECUTIONENGINE_RUNNERUTILS_H_
+#endif /// COMET_EXECUTIONENGINE_RUNNERUTILS_H_

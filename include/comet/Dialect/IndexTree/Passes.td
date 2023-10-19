@@ -26,9 +26,9 @@
 
 include "mlir/Pass/PassBase.td"
 
-//===----------------------------------------------------------------------===//
-// Kernel Fusion
-//===----------------------------------------------------------------------===//
+///===----------------------------------------------------------------------===///
+/// Kernel Fusion
+///===----------------------------------------------------------------------===///
 
 def IndexTreeKernelFusion : Pass<"indextree-kernel-fusion"> {
   let summary = "The redundancy-aware kernel fusion on index tree dialect for compound expressions";
@@ -43,9 +43,9 @@ def IndexTreeKernelFusion : Pass<"indextree-kernel-fusion"> {
   ];
 }
 
-//===----------------------------------------------------------------------===//
-// Workspace Transformations
-//===----------------------------------------------------------------------===//
+///===----------------------------------------------------------------------===///
+/// Workspace Transformations
+///===----------------------------------------------------------------------===///
 
 def IndexTreeWorkspaceTranformations: Pass<"indextree-workspace-transformations"> {
   let summary = "Compressed workspace transformation on IndexTree dialect"
@@ -62,4 +62,4 @@ def IndexTreeWorkspaceTranformations: Pass<"indextree-workspace-transformations"
 }
 
 
-#endif // COMET_DIALECT_INDEXTREE_PASSES
+#endif /// COMET_DIALECT_INDEXTREE_PASSES

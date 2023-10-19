@@ -21,7 +21,7 @@
 //
 // =============================================================================
 //
-// This file implements the dialect for the IT IR
+// This file implements the dialect for the Index Tree Dialect
 //
 //===----------------------------------------------------------------------===//
 #include <iostream>
@@ -46,9 +46,9 @@ using namespace mlir::indexTree;
 
 Type mlir::indexTree::IndexTreeDialect::parseType(DialectAsmParser &parser) const
 {
-  // Parse the main keyword for the type.
+  /// Parse the main keyword for the type.
   StringRef keyword;
-  // for "range" and "sptensor" type
+  /// for "range" and "sptensor" type
   if (parser.parseKeyword(&keyword))
     return Type();
 
@@ -57,20 +57,21 @@ Type mlir::indexTree::IndexTreeDialect::parseType(DialectAsmParser &parser) cons
   return Type();
 }
 
-// Print an instance of a type registered to the index tree dialect.
-// No type definition yet
+/// Print an instance of a type registered to the index tree dialect.
+/// No type definition yet
 void mlir::indexTree::IndexTreeDialect::printType(mlir::Type type,
-                           mlir::DialectAsmPrinter &printer) const {
-    return;
+                                                  mlir::DialectAsmPrinter &printer) const
+{
+  return;
 }
-
 
 #define GET_OP_CLASSES
 #include "comet/Dialect/IndexTree/IR/IndexTreeOps.cpp.inc"
 
 /// Dialect initialization, the instance will be owned by the context. This is
 /// the point of registration of types and operations for the dialect.
-void IndexTreeDialect::initialize() {
+void IndexTreeDialect::initialize()
+{
   addOperations<
 #define GET_OP_LIST
 #include "comet/Dialect/IndexTree/IR/IndexTreeOps.cpp.inc"

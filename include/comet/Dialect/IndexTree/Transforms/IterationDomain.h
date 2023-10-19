@@ -22,6 +22,7 @@
 #ifndef ITERATIONDOMAIN_H
 #define ITERATIONDOMAIN_H
 
+#include "llvm/Support/raw_ostream.h"
 #include <memory>
 #include <string>
 #include <iostream>
@@ -163,7 +164,7 @@ public:
 
   bool equals(BoolExpr *that)
   {
-    assert(false && "Unsupported boolean operation\n");
+    llvm::errs() << "ERROR: Unsupported boolean operation\n";
     return false;
   }
 

@@ -51,23 +51,9 @@ using namespace mlir::bufferization;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LowerTensorAlgebraToSCFPass
-// #define DEBUG_MODE_LowerTensorAlgebraToSCFPass
-// #endif
-
-#ifdef DEBUG_MODE_LowerTensorAlgebraToSCFPass
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n->dump()
-#define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n.dump()
-#else
-#define comet_debug() if(true){}else llvm::errs()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+#undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
 int64_t perm2num(std::vector<int64_t> vec)
@@ -86,7 +72,7 @@ int64_t perm2num(std::vector<int64_t> vec)
 }
 
 //===----------------------------------------------------------------------===//
-// TensorOps lowering RewritePatterns
+/// TensorOps lowering RewritePatterns
 //===----------------------------------------------------------------------===//
 namespace
 {
@@ -98,7 +84,6 @@ namespace
                                   PatternRewriter &rewriter) const final
     {
       comet_debug() << "ConstantOpLowering starts\n";
-      // auto module = op->getParentOfType<ModuleOp>();
       DenseElementsAttr constantValue = op.getValue();
       Location loc = op.getLoc();
 
@@ -113,33 +98,18 @@ namespace
         }
       }
 
-      // When lowering the constant operation, we allocate and assign the constant
-      // values to a corresponding memref allocation.
+      /// When lowering the constant operation, we allocate and assign the constant
+      /// values to a corresponding memref allocation.
       auto tensorType = op.getType().cast<TensorType>();
       auto memRefType = convertTensorToMemRef(tensorType);
 
       comet_debug() << "User_setop: " << user_setOp << "/n";
       Value alloc;
-      // TODO(gkestor): the following code should be checked with tensor operations
-      //  if (user_setOp)
-      //  {
-      //    mlir::Value rhs = setnewop.getRhs();
-      //    comet_debug() << "RHS:";
-      //    comet_vdump(rhs);
-      //    auto LabeledTensoroperands = rhs.getDefiningOp()->getOperands();
-      //    comet_vdump(LabeledTensoroperands[0]);
-
-      //   auto tensorload = cast<ToTensorOp>(LabeledTensoroperands[0].getDefiningOp());
-      //   alloc = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
-      // }
-      // else
-      // {
       alloc = rewriter.create<memref::AllocOp>(loc, memRefType);
-      //}
 
-      // We will be generating constant indices up-to the largest dimension.
-      // Create these constants up-front to avoid large amounts of redundant
-      // operations.
+      /// We will be generating constant indices up-to the largest dimension.
+      /// Create these constants up-front to avoid large amounts of redundant
+      /// operations.
       auto valueShape = memRefType.getShape();
       SmallVector<Value, 8> constantIndices;
 
@@ -151,20 +121,20 @@ namespace
       }
       else
       {
-        // This is the case of a tensor of rank 0.
+        /// This is the case of a tensor of rank 0.
         constantIndices.push_back(rewriter.create<ConstantIndexOp>(loc, 0));
       }
 
-      // The constant operation represents a multi-dimensional constant, so we
-      // will need to generate a store for each of the elements. The following
-      // functor recursively walks the dimensions of the constant shape,
-      // generating a store when the recursion hits the base case.
+      /// The constant operation represents a multi-dimensional constant, so we
+      /// will need to generate a store for each of the elements. The following
+      /// functor recursively walks the dimensions of the constant shape,
+      /// generating a store when the recursion hits the base case.
       SmallVector<Value, 2> indices;
       auto valueIt = constantValue.getValues<FloatAttr>().begin();
       std::function<void(uint64_t)> storeElements = [&](uint64_t dimension)
       {
-        // The last dimension is the base case of the recursion, at this point
-        // we store the element at the given index.
+        /// The last dimension is the base case of the recursion, at this point
+        /// we store the element at the given index.
         if (dimension == valueShape.size())
         {
           rewriter.create<memref::StoreOp>(
@@ -173,8 +143,8 @@ namespace
           return;
         }
 
-        // Otherwise, iterate over the current dimension and add the indices to
-        // the list.
+        /// Otherwise, iterate over the current dimension and add the indices to
+        /// the list.
         for (uint64_t i = 0, e = valueShape[dimension]; i != e; ++i)
         {
           indices.push_back(constantIndices[i]);
@@ -183,10 +153,10 @@ namespace
         }
       };
 
-      // Start the element storing recursion from the first dimension.
+      /// Start the element storing recursion from the first dimension.
       storeElements(/*dimension=*/0);
 
-      // Replace this operation with the generated alloc.
+      /// Replace this operation with the generated alloc.
       op.replaceAllUsesWith(alloc);
       rewriter.eraseOp(op);
 
@@ -196,7 +166,7 @@ namespace
   };
 
   //===----------------------------------------------------------------------===//
-  // Lowering dense and sparse tensor transpose
+  /// Lowering dense and sparse tensor transpose
   //===----------------------------------------------------------------------===//
   struct TensorTransposeLowering : public OpRewritePattern<tensorAlgebra::TransposeOp>
   {
@@ -221,20 +191,18 @@ namespace
       auto *ctx = op->getContext();
       auto inputType = op->getOperand(0).getType();
 
-      // Get tensor contraction expression through analyzing the index map
+      /// Get tensor contraction expression through analyzing the index map
       ArrayAttr indexMaps = op.getIndexingMaps();
       std::vector<std::vector<int64_t>> allPerms = getAllPerms(indexMaps);
 
-      // There are tensors for transpose operation: input and output tensors
+      /// There are tensors for transpose operation: input and output tensors
       unsigned int tensors_num = 2;
       tensorAlgebra::TensorSetOp setOp;
       Value lhs;
 
       if (inputType.isa<TensorType>())
-      { // for dense
+      { /// for dense
         comet_debug() << "Dense transpose\n";
-        // AffineMap inputPermuation = AffineMap::getPermutationMap(allPerms[0], ctx);
-        // AffineMap outputPermuation = AffineMap::getPermutationMap(allPerms[1], ctx);
 
         auto inputTensorLoadOp = cast<ToTensorOp>(op->getOperand(0).getDefiningOp());
         auto inputMemref = inputTensorLoadOp.getMemref();
@@ -245,7 +213,7 @@ namespace
           {
             setOp = cast<tensorAlgebra::TensorSetOp>(u);
             Value dstTensor = u->getOperand(1);
-            // TODO(gkestor): this following code block might be needed if we reintroduce label_tensor
+            /// TODO(gkestor): this following code block might be needed if we reintroduce label_tensor
             if (isa<tensorAlgebra::LabeledTensorOp>(dstTensor.getDefiningOp()))
             {
               Value dstTensor_labeledTensor = cast<tensorAlgebra::LabeledTensorOp>(dstTensor.getDefiningOp());
@@ -260,10 +228,8 @@ namespace
 
         comet_vdump(lhs);
         auto outputMemref = lhs.getDefiningOp()->getOperand(0);
-        // TODO(gkestor): linalg::CopyOp is deprecated
-        // auto copyOp = rewriter.create<linalg::CopyOp>(loc, inputMemref, outputMemref, inputPermuation, outputPermuation);
-        auto copyOp = rewriter.create<linalg::TransposeOp>(loc, inputMemref, outputMemref, llvm::ArrayRef<int64_t>(allPerms[1]));
-        comet_vdump(copyOp);
+        auto linalgTranspose = rewriter.create<linalg::TransposeOp>(loc, inputMemref, outputMemref, llvm::ArrayRef<int64_t>(allPerms[1]));
+        comet_vdump(linalgTranspose);
         Value res_value = rewriter.create<ToTensorOp>(loc, outputMemref);
 
         op.replaceAllUsesWith(res_value);
@@ -272,12 +238,12 @@ namespace
         return success();
       }
       else
-      { // for sparse tensors
+      { /// for sparse tensors
         int64_t pnum[2];
-        // print allPerms
+        /// print allPerms
         int i = 0;
         for (auto perm : allPerms)
-        { // lhs, rhs: from left to right order
+        { /// lhs, rhs: from left to right order
           pnum[i] = perm2num(perm);
           i++;
         }
@@ -295,7 +261,7 @@ namespace
         Type unrankedMemrefType_f64 = UnrankedMemRefType::get(f64Type, 0);
         Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
 
-        mlir::func::FuncOp transpose_func; // runtime call
+        mlir::func::FuncOp transpose_func; /// runtime call
 
         std::vector<std::vector<mlir::Value>> alloc_sizes_cast_vecs{tensors_num};
         std::vector<std::vector<mlir::Value>> allocs_for_sparse_tensors{tensors_num};
@@ -306,7 +272,7 @@ namespace
           if (isa<tensorAlgebra::TensorSetOp>(u))
           {
             setOp = cast<tensorAlgebra::TensorSetOp>(u);
-            mlir::Value lhs = setOp->getOperand(1); // dest tensor is the 2nd
+            mlir::Value lhs = setOp->getOperand(1); /// dest tensor is the 2nd
             tensors.push_back(lhs);
           }
         }
@@ -318,8 +284,7 @@ namespace
           unsigned int tensor_rank = tensor_rank_int_attr.getValue().getLimitedValue();
           comet_debug() << "ATTR_Val: " << tensor_rank << "\n";
 
-          //unsigned int tensor_rank = (tensors[n].getDefiningOp()->getNumOperands() - 2) / 5;
-                    comet_debug() << " tensor_rank: " << tensor_rank << "\n";
+          comet_debug() << " tensor_rank: " << tensor_rank << "\n";
           comet_debug() << " tensor[n]: "
                         << "\n";
           comet_pdump(tensors[n].getDefiningOp());
@@ -338,13 +303,13 @@ namespace
 
             if (i < 4 * tensor_rank)
             {
-              // indexes crd's
+              /// indexes crd's
               mlir::Value v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, alloc_op);
               alloc_sizes_cast_vecs[n].push_back(v);
             }
             else
             {
-              // NNZ vals
+              /// NNZ vals
               mlir::Value v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
               alloc_sizes_cast_vecs[n].push_back(v);
             }
@@ -370,31 +335,31 @@ namespace
         unsigned int rank_size = tensor_rank_int_attr.getValue().getLimitedValue();
         comet_debug() << "ATTR_Val: Rank_size: " << rank_size << "\n";
 
-        // dim format of input tensor
+        /// dim format of input tensor
         std::vector<Value>
             dim_formatIn = mlir::tensorAlgebra::getFormatsValueInt(formats_strIn, rank_size, rewriter, loc, i32Type);
 
-        // dim format of output tensor
+        /// dim format of output tensor
         std::vector<Value>
             dim_formatOut = mlir::tensorAlgebra::getFormatsValueInt(formats_strOut, rank_size, rewriter, loc, i32Type);
 
         if (rank_size == 2)
-        { // 2D
+        { /// 2D
           auto transpose2DF64Func = FunctionType::get(ctx,
-                            {i32Type, i32Type, i32Type, i32Type,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_f64,
-                            i32Type, i32Type, i32Type, i32Type,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_index, unrankedMemrefType_index,
-                            unrankedMemrefType_f64,
-                            unrankedMemrefType_index},
-                            {});  
+                                                      {i32Type, i32Type, i32Type, i32Type,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_f64,
+                                                       i32Type, i32Type, i32Type, i32Type,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_f64,
+                                                       unrankedMemrefType_index},
+                                                      {});
 
           std::string func_name = "transpose_2D_f64";
           if (!hasFuncDeclaration(module, func_name))
@@ -425,31 +390,31 @@ namespace
                                                    sparse_tensor_desc});
         }
         else if (rank_size == 3)
-        { // 3D
-          auto transpose3DF64Func = FunctionType::get(ctx, 
-                                          {i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_f64,
-                                          i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          i32Type, i32Type,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_index, unrankedMemrefType_index,
-                                          unrankedMemrefType_f64,
-                                          unrankedMemrefType_index},
-                                          {});
+        { /// 3D
+          auto transpose3DF64Func = FunctionType::get(ctx,
+                                                      {i32Type, i32Type,
+                                                       i32Type, i32Type,
+                                                       i32Type, i32Type,
+                                                       i32Type, i32Type,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_f64,
+                                                       i32Type, i32Type,
+                                                       i32Type, i32Type,
+                                                       i32Type, i32Type,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_index, unrankedMemrefType_index,
+                                                       unrankedMemrefType_f64,
+                                                       unrankedMemrefType_index},
+                                                      {});
 
           std::string func_name = "transpose_3D_f64";
           if (!hasFuncDeclaration(module, func_name))
@@ -460,7 +425,7 @@ namespace
           }
 
           rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{},
-                                         ValueRange{input_perm_num, output_perm_num,
+                                        ValueRange{input_perm_num, output_perm_num,
                                                    dim_formatIn[0], dim_formatIn[1], dim_formatIn[2],
                                                    dim_formatIn[3], dim_formatIn[4], dim_formatIn[5],
                                                    alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
@@ -483,19 +448,19 @@ namespace
         }
         else
         {
-          assert(false && "ERROR: Tensors greater than 3 are not currently supported.\n");
+          llvm::errs() << "ERROR: Tensors greater than 3 are not currently supported.\n";
         }
 
         rewriter.eraseOp(setOp);
         rewriter.eraseOp(op);
         return success();
 
-      } // end else sparse tensor
-    }   // Tensor TransposeLowering
+      } /// end else sparse tensor
+    }   /// Tensor TransposeLowering
   };
 
   //===----------------------------------------------------------------------===//
-  // ReduceOptoSCF RewritePatterns: Reduction operation lowering for sparse and dense tensors
+  /// ReduceOptoSCF RewritePatterns: Reduction operation lowering for sparse and dense tensors
   //===----------------------------------------------------------------------===//
   struct ReduceOpLowering : public OpRewritePattern<tensorAlgebra::ReduceOp>
   {
@@ -511,8 +476,8 @@ namespace
       auto f64Type = rewriter.getF64Type();
       auto inputType = op->getOperand(0).getType();
 
-      // Allocate memory for the result and initialized it
-      auto cst_zero = rewriter.create<ConstantIndexOp>(loc, 0); // need to access res alloc
+      /// Allocate memory for the result and initialized it
+      auto cst_zero = rewriter.create<ConstantIndexOp>(loc, 0); /// need to access res alloc
       MemRefType memTy_alloc_res = MemRefType::get({1}, f64Type);
       Value res = rewriter.create<memref::AllocOp>(loc, memTy_alloc_res);
       Value const_f64_0 = rewriter.create<ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
@@ -523,7 +488,7 @@ namespace
       comet_vdump(res);
 
       if (inputType.isa<TensorType>())
-      { // tensor is dense
+      { /// tensor is dense
         comet_debug() << "Input Tensor is dense\n";
         std::vector<Value> indices;
         auto alloc_op = op->getOperand(0).getDefiningOp()->getOperand(0);
@@ -550,20 +515,20 @@ namespace
           }
           auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
           auto step = rewriter.create<ConstantIndexOp>(loc, 1);
-          // create for loops
+          /// create for loops
           auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
           indices.push_back(loop.getInductionVar());
           rewriter.setInsertionPointToStart(loop.getBody());
         }
 
-        // Build loop body
+        /// Build loop body
         auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_op, indices);
         auto res_load = rewriter.create<memref::LoadOp>(loc, res, alloc_zero_loc);
         auto reduced = rewriter.create<AddFOp>(loc, load_rhs, res_load);
         rewriter.create<memref::StoreOp>(loc, reduced, res, alloc_zero_loc);
       }
       else
-      { // sparse tensor type
+      { /// sparse tensor type
         assert(inputType.isa<SparseTensorType>());
         comet_debug() << "Input Tensor is sparse\n";
 
@@ -571,12 +536,12 @@ namespace
         assert(isa<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp()));
         tensorAlgebra::SparseTensorConstructOp sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp());
 
-        int tensorRanks = sp_op.getTensorRank();        
+        int tensorRanks = sp_op.getTensorRank();
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
         comet_debug() << "Tensor to reduce:\n";
         comet_pdump(op->getOperand(0).getDefiningOp());
 
-        //  create the lowerBound, upperbound and step for loop
+        ///  create the lowerBound, upperbound and step for loop
         int indexValueSize = sp_op.getIndexValueSize();
         comet_debug() << "indexValueSize in SparseTensorConstructOp:" << indexValueSize << "\n";
 
@@ -590,22 +555,22 @@ namespace
         MemRefType resultMemTy = memAllocForNNZ.getDefiningOp()->getResult(0).getType().cast<MemRefType>();
         auto memRefRank = resultMemTy.getRank();
         comet_debug() << "memRefRank for alloc: " << memRefRank << "\n";
-        assert(memRefRank == 1); // Memref rank should be 1
+        assert(memRefRank == 1); /// Memref rank should be 1
 
         auto memRefDimSize = resultMemTy.getDimSize(memRefRank - 1);
         comet_debug() << "memRefDimSize for alloc: " << memRefDimSize << "\n";
 
         Value upperBound;
-        if (memRefDimSize == 1) // size of value array comes from temporary sparse tensor and Dimsize of alloc is one
+        if (memRefDimSize == 1) /// size of value array comes from temporary sparse tensor and Dimsize of alloc is one
         {
           upperBound = rewriter.create<memref::LoadOp>(loc, memAllocForNNZ, alloc_zero_loc);
         }
         else
         {
-          // size of value array comes from read_input_sizes_2D_f64, and alloc dimsize can be only expected size
+          /// size of value array comes from read_input_sizes_2D_f64, and alloc dimsize can be only expected size
           auto expectedMemRefSize = sp_op.getTotalParamCount();
           comet_debug() << "tensorRanks: " << tensorRanks << "\n";
-          comet_debug() << "expectedMemRefSize: " << expectedMemRefSize << "\n";          
+          comet_debug() << "expectedMemRefSize: " << expectedMemRefSize << "\n";
           assert(memRefDimSize == expectedMemRefSize);
           upperBound = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
         }
@@ -614,14 +579,14 @@ namespace
         auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
         auto step = rewriter.create<ConstantIndexOp>(loc, 1);
 
-        // create for loops
+        /// create for loops
         auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
         auto insertPt = rewriter.saveInsertionPoint();
         rewriter.setInsertionPointToStart(loop.getBody());
 
-        // Build loop body
-        int indexValuePtr = (tensorRanks * 4); // 4 corresponding to pos, crd
+        /// Build loop body
+        int indexValuePtr = (tensorRanks * 4); /// 4 corresponding to pos, crd
         auto alloc_op = op->getOperand(0).getDefiningOp()->getOperand(indexValuePtr).getDefiningOp()->getOperand(0);
         comet_debug() << " ValueAllocOp";
         comet_vdump(alloc_op);
@@ -631,18 +596,18 @@ namespace
         auto reduce = rewriter.create<AddFOp>(loc, load_rhs, res_load);
         rewriter.create<memref::StoreOp>(loc, reduce, res, alloc_zero_loc);
 
-        // need to restore the insertion point to the previous point
+        /// need to restore the insertion point to the previous point
         rewriter.restoreInsertionPoint(insertPt);
         comet_vdump(loop);
       }
 
-      // Important to replace all uses of this operation with the new one, otherwise, the current op won't be lowered.
+      /// Important to replace all uses of this operation with the new one, otherwise, the current op won't be lowered.
       op.replaceAllUsesWith(res);
       rewriter.eraseOp(op);
 
       return success();
     }
-  }; // ReduceOpLowering
+  }; /// ReduceOpLowering
 
   struct ScalarOpsLowering : public OpRewritePattern<tensorAlgebra::ScalarOp>
   {
@@ -653,11 +618,9 @@ namespace
       assert(isa<tensorAlgebra::ScalarOp>(op));
       comet_debug() << "ScalarOpsLowering starts\n";
 
-      // auto module = op->getParentOfType<ModuleOp>();
-
-      // Scalar operation could be between
-      //  1. two tensors (size of 1) and the output with a tensor of size 1
-      //  2. two F64 values and the output will be F64
+      /// Scalar operation could be between
+      ///  1. two tensors (size of 1) and the output with a tensor of size 1
+      ///  2. two F64 values and the output will be F64
       Location loc = op.getLoc();
       Value rhs = op.getRhs();
       Value lhs = op.getLhs();
@@ -686,8 +649,6 @@ namespace
         lhs = rewriter.create<memref::LoadOp>(loc, lhs, alloc_zero_loc);
       }
 
-      // assert((rhsType.isF64() || rhsType.isa<MemRefType>()) && (lhsType.isF64() || lhsType.isa<MemRefType>()) && "Scalar Operands data type must be either F64 or memref");
-
       Value res;
       bool res_comes_from_setop = false;
       for (auto u : op.getOperation()->getResult(0).getUsers())
@@ -712,7 +673,7 @@ namespace
       comet_vdump(lhs);
       comet_vdump(res);
 
-      // Op rhs and lhs
+      /// Op rhs and lhs
       auto arith_op_attr = op.getOpAttr();
       std::string op_attr(arith_op_attr.getValue());
       comet_debug() << "aritmetic op: " << op_attr << "\n";
@@ -735,11 +696,11 @@ namespace
       }
       else
       {
-        assert(false && "Unsuported Operation\n");
+        llvm::errs() << "ERROR: Unsuported Operation\n";
       }
 
       comet_vdump(res_val);
-      // store res_val to res
+      /// store res_val to res
       auto storeOp = rewriter.create<memref::StoreOp>(loc, res_val, res, alloc_zero_loc);
       comet_vdump(storeOp);
 
@@ -747,9 +708,9 @@ namespace
       rewriter.eraseOp(op);
       return success();
     }
-  }; // ScalarOpsLowering
+  }; /// ScalarOpsLowering
 
-} // end anonymous namespace.
+} /// end anonymous namespace.
 
 /// This is a partial lowering to linear algebra of the tensor algebra operations that are
 /// computationally intensive (like matmul for example...) while keeping the
@@ -762,15 +723,15 @@ namespace
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTensorAlgebraToSCFPass)
     void runOnOperation() override;
   };
-} // end anonymous namespace.
+} /// end anonymous namespace.
 
 void LowerTensorAlgebraToSCFPass::runOnOperation()
 {
   mlir::func::FuncOp function = getOperation();
-  
+
   if (function.getName() == "main")
   {
-    //  Verify that the given main has no inputs and results.
+    ///  Verify that the given main has no inputs and results.
     if (function.getNumArguments() || function.getFunctionType().getNumResults())
     {
       function.emitError("expected 'main' to have 0 inputs and 0 results");
@@ -778,13 +739,13 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
     }
   }
 
-  // The first thing to define is the conversion target. This will define the
-  // final target for this lowering.
+  /// The first thing to define is the conversion target. This will define the
+  /// final target for this lowering.
   ConversionTarget target(getContext());
 
-  // We define the specific operations, or dialects, that are legal targets for
-  // this lowering. In our case, we are lowering to a combination of the
-  // `LinAlg` and `Standard` dialects.
+  /// We define the specific operations, or dialects, that are legal targets for
+  /// this lowering. In our case, we are lowering to a combination of the
+  /// `LinAlg` and `Standard` dialects.
   target.addLegalDialect<LinalgDialect,
                          AffineDialect,
                          scf::SCFDialect,
@@ -794,19 +755,19 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
 
   target.addLegalOp<func::CallOp>();
 
-  // Now that the conversion target has been defined, we just need to provide
-  // the set of patterns that will lower the TA operations.
+  /// Now that the conversion target has been defined, we just need to provide
+  /// the set of patterns that will lower the TA operations.
 
   RewritePatternSet patterns(&getContext());
   patterns.insert<TensorTransposeLowering,
                   ReduceOpLowering,
                   ScalarOpsLowering,
                   ConstantOpLowering>(&getContext());
-  // With the target and rewrite patterns defined, we can now attempt the
-  // conversion. The conversion will signal failure if any of our `illegal`
-  // operations were not converted successfully.
+  /// With the target and rewrite patterns defined, we can now attempt the
+  /// conversion. The conversion will signal failure if any of our `illegal`
+  /// operations were not converted successfully.
 
-  // function.dump();
+  /// function.dump();
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     signalPassFailure();

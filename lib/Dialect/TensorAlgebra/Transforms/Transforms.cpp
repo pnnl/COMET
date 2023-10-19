@@ -52,8 +52,6 @@
 #define DEBUG_TYPE "comet-transforms"
 
 using namespace mlir;
-// using namespace mlir::edsc;
-// using namespace mlir::edsc::intrinsics;
 using namespace mlir::linalg;
 using namespace mlir::bufferization;
 
@@ -61,32 +59,17 @@ using namespace mlir::tensorAlgebra;
 using namespace mlir::indexTree;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_TRANSFORMS
-// #define DEBUG_MODE_TRANSFORMS
-// #endif
-
-#ifdef DEBUG_MODE_TRANSFORMS
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n->dump()
-#define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n.dump()
-#else
-#define comet_debug() if(true){}else llvm::errs()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+#undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
 std::vector<Value> dim_format;
 
-
 namespace
 {
-  // Chain of multiplication operations produces ChainSetOp 
-  // and it needs to be lowered
+  /// Chain of multiplication operations produces ChainSetOp
+  /// and it needs to be lowered
   struct ChainSetOpLowering : public ConversionPattern
   {
     ChainSetOpLowering(MLIRContext *ctx)
@@ -161,7 +144,6 @@ namespace
       {
         comet_debug() << "Neither MulOp, AddOp, nor LabeledTensorOp, it is: ";
         comet_pdump(rhs);
-        // return failure();
         comet_debug() << "ChainSetOpLowering end\n";
         return success();
       }
@@ -182,7 +164,7 @@ namespace
     }
   };
 
-  //TODO(gkestor): test TensorCopyLowering
+  /// TODO(gkestor): test TensorCopyLowering
   struct TensorCopyLowering : public ConversionPattern
   {
     TensorCopyLowering(MLIRContext *ctx)
@@ -203,10 +185,11 @@ namespace
       auto lhsMemref = lhsTensorLoadOp.getMemref();
 
       auto rhsTensorOperand = operands[1];
-      auto rhsTensorLoadOp = cast<ToTensorOp>(rhsTensorOperand.getDefiningOp());;
+      auto rhsTensorLoadOp = cast<ToTensorOp>(rhsTensorOperand.getDefiningOp());
+      ;
       auto rhsMemref = rhsTensorLoadOp.getMemref();
 
-      //TODO(gkestor): better way to cast AffineMap to ArrayRef<int64_t>
+      /// TODO(gkestor): better way to cast AffineMap to ArrayRef<int64_t>
       auto outPermMap = tensorCopyOp.getOutputPermAttr();
       std::vector<std::vector<int64_t>> allPerms = getAllPerms(dyn_cast<ArrayAttr>(outPermMap));
       auto copyOp = rewriter.create<linalg::TransposeOp>(loc, rhsMemref, lhsMemref, llvm::ArrayRef<int64_t>(allPerms[0]));
@@ -224,7 +207,7 @@ namespace
   };
 
   //===----------------------------------------------------------------------===//
-  // STCRemoveDeadOps RewritePatterns: SparseTensor Constant operations
+  /// STCRemoveDeadOps RewritePatterns: SparseTensor Constant operations
   //===----------------------------------------------------------------------===//
 
   struct RemoveDeadOpLowering : public OpRewritePattern<tensorAlgebra::TensorMultOp>
@@ -236,11 +219,11 @@ namespace
       assert(isa<tensorAlgebra::TensorMultOp>(op));
       comet_debug() << " erase TensorMultOp \n";
       comet_debug() << "--------------TensorContractionLowering in format\n";
-      // Here, should check the operands, at least one operand should be sparse;
-      // Otherwise, if all dense operands, just return.
+      /// Here, should check the operands, at least one operand should be sparse;
+      /// Otherwise, if all dense operands, just return.
       return success();
     }
-  }; // TensorContractionLowering
+  }; /// TensorContractionLowering
 
   template <typename TAOp>
   struct RemoveDeadTAOpLowering : public ConversionPattern
@@ -261,9 +244,9 @@ namespace
 
 }
 
-// =============================================================================
+/// =============================================================================
 //
-// These patterns lowers tensor multiplication chains into s series of ta.tc operations.
+/// These patterns lowers tensor multiplication chains into s series of ta.tc operations.
 //
 //===----------------------------------------------------------------------===//
 void mlir::tensorAlgebra::populateLowerTAMulChainPatterns(

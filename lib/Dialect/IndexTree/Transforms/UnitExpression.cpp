@@ -28,23 +28,9 @@ using std::map;
 using std::vector;
 
 // *********** For debug purpose *********//
-//#ifndef DEBUG_MODE_UnitExpression
-//#define DEBUG_MODE_UnitExpression
-//#endif
-
-#ifdef DEBUG_MODE_UnitExpression
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n->dump()
-#define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n.dump()
-#else
-#define comet_debug() if(true){}else llvm::errs()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+#undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
 /**
@@ -150,10 +136,10 @@ map<int, IterDomain *> UnitExpression::computeInputIterDomains()
     else if (opType == "+")
     {
       // TODO(gkestor): need support
+      llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: Unsupported operand\n";
     }
   }
 
-  // lhs->setDomain(indexDomains);
   return indexDomains;
 }
 

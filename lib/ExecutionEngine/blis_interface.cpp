@@ -44,7 +44,7 @@ void bli_dgemm_x86_ukr(
     auxinfo_t *restrict data,
     cntx_t *restrict cntx)
 {
-  // get the micro - arch
+  /// get the micro - arch
   const char *arch = bli_arch_string(bli_cpuid_query_id());
   // printf("arch: %s\n", arch);
 
@@ -60,7 +60,7 @@ void bli_dgemm_x86_ukr(
   }
   else
   {
-    llvm::errs() << "Undefined microkernel"
+    llvm::errs() << __FILE__ << " " << __LINE__ <<   "ERROR: Undefined microkernel"
                  << "\n";
   }
 }
@@ -88,29 +88,28 @@ void bli_dgemm_arm_ukr(
   }
   else
   {
-    llvm::errs() << "Undefined microkernel"
-                 << "\n";
+    llvm::errs() << __FILE__ << " " << __LINE__ <<  "Undefined microkernel" << "\n";
   }
 }
 #endif
 
-// generic arch-independent gemm microkernel reference implementation:
-// https://github.com/flame/blis/blob/master/config/template/kernels/3/bli_gemm_template_noopt_mxn.c
+/// generic arch-independent gemm microkernel reference implementation:
+/// https://github.com/flame/blis/blob/master/config/template/kernels/3/bli_gemm_template_noopt_mxn.c
 
-// implements, C := beta * C + alpha * A * B
-//   where C: m x n,
-//         A: m x k,
-//         B: k x n,
-//         alpha: scalar,
-//         beta: scalar.
-//
-//   param a: address of a micropanel of matrix A of dimension m x k, stored in column major order.
-//   param b: address of a micropanel of matrix B of dimension k x n, stored in row major order.
-//   param c: address of a matrix C of dimension m x n, stored according to rs_c and cs_c.
-//   param rs_c: row stride of matrix C (i.e.,: the distance to the next row, in units of matrix elements).
-//   param cs_c: column stride of matrix C (i.e.,: the distance to the next column, in units of matrix elements).
-//               rs_c == 1 && cs_c == 0: means contiguous col-storage desired for C,
-//               rs_c == 0 && cs_c == 1: means contiguous row-storage desired for C.
+/// implements, C := beta * C + alpha * A * B
+///   where C: m x n,
+///         A: m x k,
+///         B: k x n,
+///         alpha: scalar,
+///         beta: scalar.
+///
+///   param a: address of a micropanel of matrix A of dimension m x k, stored in column major order.
+///   param b: address of a micropanel of matrix B of dimension k x n, stored in row major order.
+///   param c: address of a matrix C of dimension m x n, stored according to rs_c and cs_c.
+///   param rs_c: row stride of matrix C (i.e.,: the distance to the next row, in units of matrix elements).
+///   param cs_c: column stride of matrix C (i.e.,: the distance to the next column, in units of matrix elements).
+///               rs_c == 1 && cs_c == 0: means contiguous col-storage desired for C,
+///               rs_c == 0 && cs_c == 1: means contiguous row-storage desired for C.
 
 void dgemm_generic_noopt_mxn(
     int64_t m,
@@ -135,11 +134,11 @@ void dgemm_generic_noopt_mxn(
 
   double ai, bj;
   double *abij;
-  double ab[MR * NR];           // holds the computed values
-  for (i = 0; i < MR * NR; i++) // initialization
+  double ab[MR * NR];           /// holds the computed values
+  for (i = 0; i < MR * NR; i++) /// initialization
     ab[i] = 0.0;
 
-  /* Perform a series of k rank-1 updates into ab. */
+  /// Perform a series of k rank-1 updates into ab.
   for (l = 0; l < k; ++l)
   {
     abij = ab;
@@ -150,7 +149,7 @@ void dgemm_generic_noopt_mxn(
       for (i = 0; i < MR; ++i)
       {
         ai = *(a + i);
-        *abij += ai * bj; // perform compute
+        *abij += ai * bj; /// perform compute
 
         abij += rs_ab;
       }
@@ -159,13 +158,13 @@ void dgemm_generic_noopt_mxn(
     b += NR;
   }
 
-  // scale by alpha
+  /// scale by alpha
   for (i = 0; i < MR * NR; i++)
   {
     ab[i] = (*alpha) * ab[i];
   }
 
-  // Scale c by beta and then add the scaled result in ab.
+  /// Scale c by beta and then add the scaled result in ab.
   for (j = 0; j < NR; ++j)
   {
     for (i = 0; i < MR; ++i)
@@ -224,8 +223,7 @@ extern "C" void _mlir_ciface_linalg_matmul_viewsxs_viewsxs_viewsxs(
   bli_auxinfo_set_next_a(A->data + A->offset, &data);
   bli_auxinfo_set_next_b(B->data + B->offset, &data);
 
-
-  // Partial tile
+  /// Partial tile
   if (A->sizes[0] < mr || B->sizes[1] < nr)
   {
     // printf("A->sizes[0]: %d\n", A->sizes[0]);

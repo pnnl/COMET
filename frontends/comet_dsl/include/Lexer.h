@@ -35,28 +35,13 @@
 #include <string>
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LEXER
-// #define DEBUG_MODE_LEXER
-// #endif
-
-#ifdef DEBUG_MODE_LEXER
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n->dump()
-#define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n.dump()
-#else
-#define comet_debug() llvm::nulls()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+#undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
 namespace tensorAlgebra
 {
-
   /// Structure definition a location in a file.
   struct Location
   {
@@ -90,7 +75,7 @@ namespace tensorAlgebra
     tok_identifier = -5,
     tok_number = -6,
 
-    // tensor algebra
+    /// tensor algebra
     tok_index_space = -7,
     tok_index_label = -8,
     tok_tensor = -9,
@@ -102,11 +87,11 @@ namespace tensorAlgebra
     tok_elews = -15,
     tok_semiring = -16,
     tok_monoid = -17,
-    tok_for = -18, // for loop
-    tok_end = -19,  // for loop-body end
-    tok_maskPush = -20, // push keyword for masking support
-    tok_maskPull = -21, // pull keyword for masking support
-    tok_maskAuto = -22  // auto keyword for masking support
+    tok_for = -18,      /// for loop
+    tok_end = -19,      /// for loop-body end
+    tok_maskPush = -20, /// push keyword for masking support
+    tok_maskPull = -21, /// pull keyword for masking support
+    tok_maskAuto = -22  /// auto keyword for masking support
   };
 
   enum SemiringOp : int
@@ -121,7 +106,7 @@ namespace tensorAlgebra
     semiring_pair = 107,
     semiring_second = 108,
     semiring_minus = 109,
-    semiring_noop = 110 // for monoids
+    semiring_noop = 110 /// for monoids
   };
 
   /// The Lexer is an abstract base class providing all the facilities that the
@@ -173,18 +158,18 @@ namespace tensorAlgebra
     /// Return the location for the beginning of the current token.
     Location getLastLocation() { return lastLocation; }
 
-    // Return the current line in the file.
+    /// Return the current line in the file.
     int getLine() { return curLineNum; }
 
-    // Return the current column in the file.
+    /// Return the current column in the file.
     int getCol() { return curCol; }
 
     Token lookAhead() { return LastChar; }
 
-    // Return 1st operator of semiring
+    /// Return 1st operator of semiring
     SemiringOp getSemiring1st() { return Op1st; }
 
-    // Return 2nd operator of semiring
+    /// Return 2nd operator of semiring
     SemiringOp getSemiring2nd() { return Op2nd; }
 
   private:
@@ -198,7 +183,7 @@ namespace tensorAlgebra
     /// needed.
     int getNextChar()
     {
-      // The current line buffer should not be empty unless it is the end of file.
+      /// The current line buffer should not be empty unless it is the end of file.
       if (curLineBuffer.empty())
         return EOF;
       ++curCol;
@@ -215,13 +200,13 @@ namespace tensorAlgebra
       return nextchar;
     }
 
-    // Check next char
+    /// Check next char
     int checkNextChar()
     {
-      // The current line buffer should not be empty unless it is the end of file.
+      /// The current line buffer should not be empty unless it is the end of file.
       if (curLineBuffer.empty())
         return EOF;
-      // ++curCol;
+      /// ++curCol;
       auto nextchar = curLineBuffer.front();
       comet_debug() << "next char: " << nextchar << "\n";
       return nextchar;
@@ -271,7 +256,7 @@ namespace tensorAlgebra
       }
       else
       {
-        llvm::errs() << __FILE__ << " " << __LINE__ << "[ERR] Undefined semiring operator. Please check syntax!\n";
+        llvm::errs() << __FILE__ << ":" << __LINE__ << "[ERR] Undefined semiring operator. Please check syntax!\n";
         exit(1);
       }
     }
@@ -312,18 +297,18 @@ namespace tensorAlgebra
     Token getTok()
     {
       comet_debug() << "go to next token\n";
-      // Skip any whitespace.
+      /// Skip any whitespace.
       while (isspace(LastChar))
         LastChar = Token(getNextChar());
       comet_debug() << "LastChar: " << LastChar << "\n";
 
-      // Save the current location before reading the token characters.
+      /// Save the current location before reading the token characters.
       lastLocation.line = curLineNum;
       lastLocation.col = curCol;
       comet_debug() << "lastLocation: " << lastLocation.line << " " << lastLocation.col << "\n";
 
       if (isalpha(LastChar))
-      { // identifier: [a-zA-Z][a-zA-Z0-9_]*
+      { /// identifier: [a-zA-Z][a-zA-Z0-9_]*
         comet_debug() << "LastChar (" << LastChar << ") isalpha\n";
         IdentifierStr = (char)LastChar;
         while (isalnum((LastChar = Token(getNextChar()))) || LastChar == '_')
@@ -333,8 +318,8 @@ namespace tensorAlgebra
           return tok_return;
         if (IdentifierStr == "def")
           return tok_def;
-        // var is used to define as a return value for utility functions
-        // such as "var t_start = getTime();""
+        /// var is used to define as a return value for utility functions
+        /// such as "var t_start = getTime();""
         if (IdentifierStr == "var")
           return tok_var;
         if (IdentifierStr == "IndexSpace")
@@ -410,7 +395,7 @@ namespace tensorAlgebra
         }
       }
 
-      // for "/home/a.mtx"
+      /// for "/home/a.mtx"
       if (LastChar == tok_quotation)
       {
         comet_debug() << " the token is \" \n";
@@ -431,7 +416,7 @@ namespace tensorAlgebra
         }
 
         comet_debug() << " " << IdentifierStr << "\n";
-        LastChar = Token(getNextChar()); // consume the other " symbol
+        LastChar = Token(getNextChar()); /// consume the other " symbol
         return tok_identifier;
       }
 
@@ -445,17 +430,17 @@ namespace tensorAlgebra
         comet_debug() << " the elewsStr: " << elewsStr << "\n";
         comet_debug() << " .* for elews\n";
         LastChar = Token(getNextChar());
-        Op1st = semiring_noop;  // default for element-wise mult op
-        Op2nd = semiring_times; // default for element-wise mult op
+        Op1st = semiring_noop;  /// default for element-wise mult op
+        Op2nd = semiring_times; /// default for element-wise mult op
         return tok_elews;
       }
 
-      // for semiring and monoid operations
-      // semiring: @(xx,xx)
-      // monoid: @(xx)
-      // TODO(rizwan): the above syntax needs to be followed strictly at this time.
-      //               the call to getSemiringStr() will however catch non-supported
-      //               semiring or monoid ops.
+      /// for semiring and monoid operations
+      /// semiring: @(xx,xx)
+      /// monoid: @(xx)
+      /// TODO(rizwan): the above syntax needs to be followed strictly at this time.
+      ///               the call to getSemiringStr() will however catch non-supported
+      ///               semiring or monoid ops.
       if (LastChar == '@' && checkNextChar() == '(')
       {
         comet_debug() << "semiring operations \n";
@@ -464,14 +449,14 @@ namespace tensorAlgebra
         semiringStr[0] = getSemiringStr();
 
         if (LastChar == ')')
-        { // it must be a monoid, don't call getSemiringStr()
-          // since it makes a call to getNextChar().
+        { /// it must be a monoid, don't call getSemiringStr()
+          /// since it makes a call to getNextChar().
           Op1st = semiring_noop;
           Op2nd = getSemiringOp(semiringStr[0]);
           return tok_monoid;
         }
         else
-        { // it must be a semiring, it's ok to call getSemiringStr()
+        { /// it must be a semiring, it's ok to call getSemiringStr()
           semiringStr[1] = getSemiringStr();
           Op1st = getSemiringOp(semiringStr[0]);
           Op2nd = getSemiringOp(semiringStr[1]);
@@ -480,7 +465,7 @@ namespace tensorAlgebra
       }
 
       if (isdigit(LastChar) || LastChar == '.')
-      { // Number: [0-9.]+
+      { /// Number: [0-9.]+
         std::string NumStr;
         do
         {
@@ -494,7 +479,7 @@ namespace tensorAlgebra
 
       if (LastChar == '#')
       {
-        // Comment until end of line.
+        /// Comment until end of line.
         do
           LastChar = Token(getNextChar());
         while (LastChar != EOF && LastChar != '\n' && LastChar != '\r');
@@ -503,11 +488,11 @@ namespace tensorAlgebra
           return getTok();
       }
 
-      // Check for end of file.  Don't eat the EOF.
+      /// Check for end of file.  Don't eat the EOF.
       if (LastChar == EOF)
         return tok_eof;
 
-      // Otherwise, just return the character as its ascii value.
+      /// Otherwise, just return the character as its ascii value.
       Token ThisChar = Token(LastChar);
       LastChar = Token(getNextChar());
       return ThisChar;
@@ -567,6 +552,6 @@ namespace tensorAlgebra
     }
     const char *current, *end;
   };
-} // namespace tensorAlgebra
+} /// namespace tensorAlgebra
 
-#endif // COMET_DSL_LEXER_H_
+#endif /// COMET_DSL_LEXER_H_

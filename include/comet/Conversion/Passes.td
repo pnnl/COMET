@@ -26,9 +26,9 @@
 
 include "mlir/Pass/PassBase.td"
 
-//===----------------------------------------------------------------------===//
-// IndexTreeToSCF
-//===----------------------------------------------------------------------===//
+///===----------------------------------------------------------------------===//
+/// IndexTreeToSCF
+///===----------------------------------------------------------------------===//
 
 def ConvertIndexTreeToSCF : Pass<"convert-it-to-scf"> {
   let summary = " "
@@ -60,9 +60,9 @@ def ConvertTensorAlgebraToIndexTree : Pass<"convert-ta-to-it"> {
   ];
 }
 
-//===----------------------------------------------------------------------===//
-// TensorAlgebraToSCF
-//===----------------------------------------------------------------------===//
+///===----------------------------------------------------------------------===//
+/// TensorAlgebraToSCF
+///===----------------------------------------------------------------------===//
 
 def ConvertTensorAlgebraToSCF : Pass<"convert-ta-to-scf"> {
   let summary = " "
@@ -77,4 +77,4 @@ def ConvertTensorAlgebraToSCF : Pass<"convert-ta-to-scf"> {
   ];
 }
 
-#endif // COMET_CONVERSION_PASSES
+#endif /// COMET_CONVERSION_PASSES

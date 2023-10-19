@@ -37,7 +37,7 @@ namespace mlir
     template <typename OpTy>
     class OwningOpRef;
     class ModuleOp;
-} // namespace mlir
+} /// namespace mlir
 
 namespace tensorAlgebra
 {
@@ -47,6 +47,6 @@ namespace tensorAlgebra
     /// or nullptr on failure.
     mlir::OwningOpRef<mlir::ModuleOp> mlirGen(mlir::MLIRContext &context,
                                               ModuleAST &moduleAST);
-} // namespace tensorAlgebra
+} /// namespace tensorAlgebra
 
-#endif // COMET_DSL_MLIRGEN_H_
+#endif /// COMET_DSL_MLIRGEN_H_

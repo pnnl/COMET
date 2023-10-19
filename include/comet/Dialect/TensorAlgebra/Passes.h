@@ -52,9 +52,6 @@ namespace mlir
         /// Create a pass to lower temporary sparse output tensor declarations - temporary sparse output is introduced in compound expressions
         std::unique_ptr<Pass> createSparseTempOutputTensorDeclLoweringPass();
 
-        ////////////////////////////////////
-        ////////////////////////////////////
-        ////////////////////////////////////
         std::unique_ptr<Pass> createFindOptimalTCFactorizationPass();
         std::unique_ptr<Pass> createLowerTAMulChainPass();
 
@@ -73,7 +70,7 @@ namespace mlir
         // https://arxiv.org/abs/1704.04374
         std::unique_ptr<Pass> createOptDenseTransposePass(uint64_t tile_size = 1,
                                                           bool seperate_tiles = false);
-                                                          
+
         std::unique_ptr<Pass> createLowerLinAlgFillPass();
 
         /// Create a pass for lowering tensor fill operation to linalg.fill

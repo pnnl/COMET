@@ -47,27 +47,13 @@ using namespace mlir::bufferization;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_LateLoweringPass
-// #define DEBUG_MODE_LateLoweringPass
-// #endif
-
-#ifdef DEBUG_MODE_LateLoweringPass
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n->dump()
-#define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n.dump()
-#else
-#define comet_debug() if(true){}else llvm::errs()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+#undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
 //===----------------------------------------------------------------------===//
-// Late lowering RewritePatterns
+/// Late lowering RewritePatterns
 //===----------------------------------------------------------------------===//
 
 namespace
@@ -99,7 +85,7 @@ namespace
       func::FuncOp print_func;
       auto inputType = op->getOperand(0).getType();
 
-      // If the Input type is scalar (F64)
+      /// If the Input type is scalar (F64)
       if (inputType.isa<FloatType>())
       {
         std::string print_scalar_f64Str = "printF64";
@@ -140,7 +126,7 @@ namespace
         }
         else
         {
-          // If the Input type is tensor
+          /// If the Input type is tensor
           if (inputType.isa<TensorType>())
           {
             auto rhs = op->getOperand(0).getDefiningOp();
@@ -165,13 +151,13 @@ namespace
             auto rhs = op->getOperand(0).getDefiningOp();
             for (int rsize = 0; rsize < sp_op.getDimArrayCount(); rsize += 2)
             {
-              // accessing xD_pos array and creating cast op for its alloc
+              /// accessing xD_pos array and creating cast op for its alloc
               auto xD_pos = rhs->getOperand(rsize).getDefiningOp();
               auto alloc_rhs = cast<memref::AllocOp>(xD_pos->getOperand(0).getDefiningOp());
               auto u = rewriter.create<memref::CastOp>(loc, unrankedMemref_index, alloc_rhs);
               rewriter.create<func::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
 
-              // accessing xD_crd array and creating cast op for its alloc
+              /// accessing xD_crd array and creating cast op for its alloc
               auto xD_crd = rhs->getOperand(rsize + 1).getDefiningOp();
               alloc_rhs = cast<memref::AllocOp>(xD_crd->getOperand(0).getDefiningOp());
               u = rewriter.create<memref::CastOp>(loc, unrankedMemref_index, alloc_rhs);
@@ -188,7 +174,7 @@ namespace
         }
       }
 
-      // Notify the rewriter that this operation has been removed.
+      /// Notify the rewriter that this operation has been removed.
       comet_pdump(op);
       rewriter.eraseOp(op);
       return success();
@@ -213,7 +199,7 @@ namespace
       if (!hasFuncDeclaration(module, getTimeStr))
       {
         auto getTimeFunc = FunctionType::get(ctx, {}, {FloatType::getF64(ctx)});
-        // func @getTime() -> f64
+        /// func @getTime() -> f64
         func::FuncOp func1 = func::FuncOp::create(op->getLoc(), getTimeStr,
                                                   getTimeFunc, ArrayRef<NamedAttribute>{});
         func1.setPrivate();
@@ -247,7 +233,7 @@ namespace
       if (!hasFuncDeclaration(module, printElapsedTimeStr))
       {
         auto printElapsedTimeFunc = FunctionType::get(ctx, {f64Type, f64Type}, {});
-        // func @printElapsedTime(f64, f64) -> ()
+        /// func @printElapsedTime(f64, f64) -> ()
         func::FuncOp func1 = func::FuncOp::create(op->getLoc(), printElapsedTimeStr,
                                                   printElapsedTimeFunc, ArrayRef<NamedAttribute>{});
         func1.setPrivate();
@@ -281,7 +267,7 @@ namespace
       if (!hasFuncDeclaration(module, printElapsedTimeStr))
       {
         auto printElapsedTimeFunc = FunctionType::get(ctx, {f64Type, f64Type}, {});
-        // func @printElapsedTime(f64, f64) -> ()
+        /// func @printElapsedTime(f64, f64) -> ()
         func::FuncOp func1 = func::FuncOp::create(op->getLoc(), printElapsedTimeStr,
                                                   printElapsedTimeFunc, ArrayRef<NamedAttribute>{});
         func1.setPrivate();
@@ -294,7 +280,7 @@ namespace
     }
   };
 
-} // end anonymous namespace.
+} /// end anonymous namespace.
 
 /// This is a partial lowering to linear algebra of the tensor algebra operations that are
 /// computationally intensive (like matmul for example...) while keeping the
@@ -307,18 +293,18 @@ namespace
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LateLoweringPass)
     void runOnOperation() override;
   };
-} // end anonymous namespace.
+} /// end anonymous namespace.
 
 void LateLoweringPass::runOnOperation()
 {
   func::FuncOp function = getOperation();
 
-  // Removing this check COMET will fail to lower source with functions other than
-  // main. However, this is in contrast with the assumption in EarlyLowering.cpp
-  // that all functions have been inlined.
+  /// Removing this check COMET will fail to lower source with functions other than
+  /// main. However, this is in contrast with the assumption in EarlyLowering.cpp
+  /// that all functions have been inlined.
   if (function.getName() == "main")
   {
-    //  Verify that the given main has no inputs and results.
+    ///  Verify that the given main has no inputs and results.
     if (function.getNumArguments() || function.getFunctionType().getNumResults())
     {
       function.emitError("expected 'main' to have 0 inputs and 0 results");
@@ -326,36 +312,36 @@ void LateLoweringPass::runOnOperation()
     }
   }
 
-  // The first thing to define is the conversion target. This will define the
-  // final target for this lowering.
+  /// The first thing to define is the conversion target. This will define the
+  /// final target for this lowering.
   ConversionTarget target(getContext());
 
   target.addIllegalDialect<tensorAlgebra::TADialect>();
 
-  // We define the specific operations, or dialects, that are legal targets for
-  // this lowering.
+  /// We define the specific operations, or dialects, that are legal targets for
+  /// this lowering.
   target.addLegalDialect<AffineDialect,
                          scf::SCFDialect,
                          ArithDialect,
                          memref::MemRefDialect,
                          bufferization::BufferizationDialect>();
 
-  // PrintOp Lowering insert function call, so mark some operations as a legal Operation
-  target.addLegalOp<func::CallOp,                          // for function calls
-                    tensorAlgebra::SparseTensorConstructOp, // in the case printing sparse tensor
-                    tensorAlgebra::TensorSetOp              // in the case assigning the result of the operation to the final output
+  /// PrintOp Lowering insert function call, so mark some operations as a legal Operation
+  target.addLegalOp<func::CallOp,                           /// for function calls
+                    tensorAlgebra::SparseTensorConstructOp, /// in the case printing sparse tensor
+                    tensorAlgebra::TensorSetOp              /// in the case assigning the result of the operation to the final output
                     >();
 
-  // Now that the conversion target has been defined, we just need to provide
-  // the set of patterns that will lower the TA operations.
+  /// Now that the conversion target has been defined, we just need to provide
+  /// the set of patterns that will lower the TA operations.
   RewritePatternSet patterns(&getContext());
   patterns.insert<PrintOpLowering,
                   GetTimeLowering,
                   PrintElapsedTimeLowering>(&getContext());
 
-  // With the target and rewrite patterns defined, we can now attempt the
-  // conversion. The conversion will signal failure if any of our `illegal`
-  // operations were not converted successfully.
+  /// With the target and rewrite patterns defined, we can now attempt the
+  /// conversion. The conversion will signal failure if any of our `illegal`
+  /// operations were not converted successfully.
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
     signalPassFailure();
