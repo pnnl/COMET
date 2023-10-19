@@ -21,7 +21,7 @@
 //
 // =============================================================================
 //
-// This file implements the AST for COMET Domain specific Language.
+// This file implements the Abstract Syntax Tree for COMET Domain specific Language.
 //
 //===----------------------------------------------------------------------===//
 
@@ -157,42 +157,21 @@ namespace tensorAlgebra
     static bool classof(const ExprAST *C) { return C->getKind() == Expr_Var; }
   };
 
-
   class FuncArgAST : public ExprAST
   {
     Location loc;
     std::string name;
     VarType type;
 
-    public:
-      FuncArgAST(Location loc, llvm::StringRef name, VarType type)
-        : ExprAST(Expr_FuncArg, loc), loc(std::move(loc)), name(name), type(std::move(type)){}
+  public:
+    FuncArgAST(Location loc, llvm::StringRef name, VarType type)
+        : ExprAST(Expr_FuncArg, loc), loc(std::move(loc)), name(name), type(std::move(type)) {}
 
-        llvm::StringRef getName() {return name;}
-        const VarType &getType() {return type;}
+    llvm::StringRef getName() { return name; }
+    const VarType &getType() { return type; }
 
-      static bool classof(const ExprAST *C) { return C->getKind() == Expr_FuncArg; }
+    static bool classof(const ExprAST *C) { return C->getKind() == Expr_FuncArg; }
   };
-  // /// Expression class for defining a variable.
-  // class VarDeclExprAST : public ExprAST
-  // {
-  //   std::string name;
-  //   VarType type;
-  //   std::unique_ptr<ExprAST> initVal;
-
-  // public:
-  //   VarDeclExprAST(Location loc, const std::string &name, VarType type,
-  //                  std::unique_ptr<ExprAST> initVal)
-  //       : ExprAST(Expr_VarDecl, loc), name(name), type(std::move(type)),
-  //         initVal(std::move(initVal)) {}
-
-  //   llvm::StringRef getName() { return name; }
-  //   ExprAST *getInitVal() { return initVal.get(); }
-  //   const VarType &getType() { return type; }
-
-  //   /// LLVM style RTTI
-  //   static bool classof(const ExprAST *C) { return C->getKind() == Expr_VarDecl; }
-  // };
 
   /// Expression class for defining a variable.
   class VarDeclExprAST : public ExprAST
@@ -297,7 +276,7 @@ namespace tensorAlgebra
   /// Expression class for an index label declaration, i.e. transpose(A[i,j], {j, i})
   class TransposeExprAST : public ExprAST
   {
-    std::string name; // tensor name
+    std::string name; /// tensor name
     std::vector<std::string> src_dims;
     std::vector<std::string> dst_dims;
 
@@ -348,7 +327,7 @@ namespace tensorAlgebra
 
   public:
     MaskExprAST(Location loc, const std::string &tensor_name,
-                         const std::string &maskType)
+                const std::string &maskType)
         : ExprAST(Expr_Mask, loc), tensor_name(tensor_name),
           maskType(maskType) {}
 
@@ -495,12 +474,12 @@ namespace tensorAlgebra
 
   public:
     CallExprAST(Location loc, const std::string &Callee,
-                std::vector<std::unique_ptr<ExprAST>>  Args)
+                std::vector<std::unique_ptr<ExprAST>> Args)
         : ExprAST(Expr_Call, loc), Callee(Callee), Args(std::move(Args)) {}
 
     llvm::StringRef getCallee() { return Callee; }
-    ExprAST*  getArg(int index) { return Args[index].get(); }
-    size_t getNumArgs() {return Args.size();}
+    ExprAST *getArg(int index) { return Args[index].get(); }
+    size_t getNumArgs() { return Args.size(); }
     /// LLVM style RTTI
     static bool classof(const ExprAST *C) { return C->getKind() == Expr_Call; }
   };
@@ -621,7 +600,7 @@ namespace tensorAlgebra
 
     const Location &loc() { return location; }
     const std::string &getName() const { return name; }
-    //TODO(gkestor): check FuncArgAST
+    // TODO(gkestor): check FuncArgAST
     const std::vector<std::unique_ptr<FuncArgAST>> &getArgs()
     {
       return args;
@@ -657,6 +636,6 @@ namespace tensorAlgebra
 
   void dump(ModuleAST &);
 
-} // namespace tensorAlgebra
+} /// namespace tensorAlgebra
 
-#endif // COMET_DSL_AST_H_
+#endif /// COMET_DSL_AST_H_

@@ -43,31 +43,17 @@
 #include <set>
 
 #define DEBUG_TYPE "ta-utils"
-// *********** For debug purpose *********//
-//#ifndef DEBUG_MODE_UTILS
-//#define DEBUG_MODE_UTILS
-//#endif
 
-#ifdef DEBUG_MODE_UTILS
-#define comet_debug() llvm::errs() << __FILE__ << ":" << __LINE__ << " "
-#define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
-  n->dump()
-#define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; \
-  n.dump()
-#else
-#define comet_debug() if(true){}else llvm::errs()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
+// *********** For debug purpose *********//
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+#undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
 std::string VALUETYPE = "f64";
 unsigned int TENSOR_NUMS = 3;
 unsigned int INPUT_TENSOR_NUMS = 2;
 
-// using namespace mlir::linalg;
 using namespace mlir::arith;
 using namespace mlir::indexTree;
 
@@ -102,25 +88,6 @@ namespace mlir
       return perm;
     }
 
-    // bool isFuncInMod(std::string funcname, ModuleOp module)
-    // {
-    //   comet_debug() << "Check functions in the module\n";
-    //   for (auto func : module.getOps<func::FuncOp>())
-    //   {
-    //     comet_debug() << "Current FuncOp: " << func.getName() << "\n";
-    //     if (func.getName().compare(funcname) == 0)
-    //     {
-    //       return true;
-    //     }
-    //     else
-    //     { // Not have function decl,
-    //       // check the body of func n to see if it contains callFunc that call funcname
-    //       func.getBody();
-    //     }
-    //   }
-    //   return false;
-    // }
-
     bool hasFuncDeclaration(ModuleOp &module, std::string funcName)
     {
       for (auto func : module.getOps<func::FuncOp>())
@@ -132,19 +99,19 @@ namespace mlir
       return false;
     }
 
-    // TODO(gkestor): review the use of this code
+    /// TODO(gkestor): review the use of this code
     /// Insert an allocation and deallocation for the given MemRefType.
     Value insertAllocAndDealloc(MemRefType memtype, Location loc,
                                 PatternRewriter &rewriter)
     {
-      // AllocOp is defined in memref Dialect
+      /// AllocOp is defined in memref Dialect
       auto alloc = rewriter.create<memref::AllocOp>(loc, memtype, rewriter.getI64IntegerAttr(32));
 
-      // Make sure to allocate at the beginning of the block.
+      /// Make sure to allocate at the beginning of the block.
       auto *parentBlock = alloc.getOperation()->getBlock();
 
-      // Make sure to deallocate this alloc at the end of the block. This is fine
-      // as functions have no control flow.
+      /// Make sure to deallocate this alloc at the end of the block. This is fine
+      /// as functions have no control flow.
       auto dealloc = rewriter.create<memref::DeallocOp>(loc, alloc);
       dealloc.getOperation()->moveBefore(&parentBlock->back());
       return alloc;
@@ -152,7 +119,7 @@ namespace mlir
 
     Value insertAllocAndInitialize(Location loc, MemRefType memtype, ValueRange allocValueRange, PatternRewriter &rewriter)
     {
-      // Memory allocation and initialization
+      /// Memory allocation and initialization
       Value alloc_op = rewriter.create<memref::AllocOp>(loc, memtype, allocValueRange);
       comet_debug() << "Alloc Op for initialization: ";
       comet_vdump(alloc_op);
@@ -181,10 +148,10 @@ namespace mlir
       }
       else
       {
-        llvm::errs() << __FILE__ << " " << __LINE__ << "Not supported memory reference type. Supported element Types are F32, F64, Index \n";
+        llvm::errs() << __FILE__ << ":" << __LINE__ << "Not supported memory reference type. Supported element Types are F32, F64, Index \n";
       }
 
-      // TODO(gkestor): add better initialization method based on the dimension, leverage linalg.copy or something else
+      /// TODO(gkestor): add better initialization method based on the dimension, leverage existing operations for initialization
       auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
       auto upperBound = alloc_op.getDefiningOp()->getOperand(0);
       auto step = rewriter.create<ConstantIndexOp>(loc, 1);
@@ -192,11 +159,11 @@ namespace mlir
       auto insertPt = rewriter.saveInsertionPoint();
       rewriter.setInsertionPointToStart(loop.getBody());
 
-      // Build loop body
+      /// Build loop body
       std::vector<Value> indices = {loop.getInductionVar()};
       rewriter.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{indices});
 
-      // need to restore the insertion point to the previous point
+      /// need to restore the insertion point to the previous point
       rewriter.restoreInsertionPoint(insertPt);
       comet_debug() << " insertAllocAndInitialize loop "
                     << "\n";
@@ -205,8 +172,7 @@ namespace mlir
       return alloc_op;
     }
 
-    // TODO(gkestor): review this code
-//    void insertInitialize(Location loc, Value cst_init, Value alloc_op, PatternRewriter &rewriter)
+    /// TODO(gkestor): review this code
     void insertInitialize(Location loc,
                           Value cst_init,
                           Value alloc_op,
@@ -224,14 +190,15 @@ namespace mlir
       {
         if (resultMemTy.isDynamicDim(i))
           cur_memref.push_back(ShapedType::kDynamic);
-        else // The constant dim size must NOT comes from the sparse matrix
+        else /// The constant dim size must NOT comes from the sparse matrix
           cur_memref.push_back(resultMemTy.getDimSize(i));
       }
 
       assert(cur_memref.size() == 1 && " Only handle 1-D vector currently\n");
       if (cur_memref[0] == 1)
-      { // Only 1 element in the array, no need to generate for loop
-        if (use_dynamic_init) {
+      { /// Only 1 element in the array, no need to generate for loop
+        if (use_dynamic_init)
+        {
           /// For Numeric Phase with workspace transform, generate:
           ///     %rowptr = memref.load %C.rowptr[%idx];
           ///     memref.store %rowptr, %alloc_op[%const_index_0];
@@ -243,11 +210,9 @@ namespace mlir
           auto store_op = builder.create<memref::StoreOp>(loc, rowptr, alloc_op, ValueRange{const_index_0});
           comet_vdump(rowptr);
           comet_vdump(store_op);
-        } else {
-          /// alloc_op: W_id_list_size
-          /// cst_init: 0
-          ///     Generate: alloc_op[0] = cst_init;
-          ///     i.e.,   : W_id_list_size = 0;
+        }
+        else
+        {
           auto const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
 #ifdef DEBUG_MODE_UTILS
           auto store_op = builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
@@ -255,7 +220,6 @@ namespace mlir
 #else
           builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
 #endif
-//        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{const_index_0});
         }
       }
       else
@@ -270,62 +234,12 @@ namespace mlir
 #else
         builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{accessIdx});
 #endif
-        /// ----------------- ///
-        /// Backup
-        /// ----------------- ///
-//        auto upperBound = builder.create<ConstantIndexOp>(loc, cur_memref[0]);
-//        auto step = builder.create<ConstantIndexOp>(loc, 1);
-//        auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-//        auto insertPt = builder.saveInsertionPoint();
-//        builder.setInsertionPointToStart(loop.getBody());
-//
-//        // Build loop body
-//        std::vector<Value> indices = {loop.getInductionVar()};
-//        builder.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{indices});
-//
-//        // need to restore the insertion point to the previous point
-//        builder.restoreInsertionPoint(insertPt);
-//        comet_debug() << " insertAllocAndInitialize loop "
-//                      << "\n";
-//        comet_vdump(loop);
       }
     }
 
-    // template <typename T>
-    // void print_vector(std::vector<T> vec)
-    // {
-    //   for (auto n : vec)
-    //   {
-    //     comet_debug() << n << " ";
-    //   }
-    //   comet_debug() << "\n";
-    // }
-
-    // template void print_vector<int>(std::vector<int> vec);
-
-    // template void print_vector<bool>(std::vector<bool> vec);
-    /*
-     * Reference:
-     * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
-     *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
-     * 2. How can I avoid linker errors with my template functions?
-     *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
-     */
-
-//    template <>
-//    void print_vector<bool>(std::vector<bool> vec)
-//    {
-//      // Special code for Array<bool>
-//      for (auto n : vec)
-//      {
-//        comet_debug() << n << " ";
-//      }
-//      comet_debug() << "\n";
-//    }
-
     void print_vector_value(std::vector<Value> vec)
     {
-// Special code for Array<bool>
+/// Special code for Array<bool>
 #ifdef DEBUG_MODE_UTILS
       for (auto n : vec)
       {
@@ -345,37 +259,13 @@ namespace mlir
       return rso.str();
     }
 
-    // template <class T>
-    // unsigned int findIndexInVector(std::vector<T> const &vec, T e)
-    // {
-    //   // Check if element e exists in vector
-    //   auto it = std::find(vec.begin(), vec.end(), e);
-
-    //   // It accepts a range and an element to search in the given range. If element is found then
-    //   // it returns an iterator to the first element in the given range that’s equal to given element,
-    //   // else it returns an end of the list.
-    //   unsigned int ret = 0;
-    //   if (it != vec.end())
-    //   {
-    //     ret = std::distance(vec.begin(), it);
-    //     comet_debug() << " Element Found and its index location: " << ret << " \n";
-    //   }
-    //   else
-    //   {
-    //     comet_debug() << " Element Not Found\n";
-    //     ret = vec.size();
-    //   }
-    //   return ret;
-    // }
-
-    // template unsigned int findIndexInVector<int>(std::vector<int> const &vec, int e);
     /*
-    * Reference:
-    * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
-    *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
-    * 2. How can I avoid linker errors with my template functions?
-    *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
-    */
+     * Reference:
+     * 1. Why can’t I separate the definition of my templates class from its declaration and put it inside a .cpp file?
+     *    https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl
+     * 2. How can I avoid linker errors with my template functions?
+     *    https://isocpp.org/wiki/faq/templates#separate-template-fn-defn-from-decl
+     */
 
     bool isDense(std::string s, std::string delim)
     {
@@ -404,7 +294,7 @@ namespace mlir
       return true;
     }
 
-    // Determine whether this index's loop in rhs1 should be merged or not
+    /// Determine whether this index's loop in rhs1 should be merged or not
     bool isMergedIndex(std::vector<std::string> format_vec, int cur_idx, int sumIndex)
     {
       if (format_vec[cur_idx] != "singleton")
@@ -427,7 +317,7 @@ namespace mlir
     std::vector<std::vector<int64_t>> getAllPerms(ArrayAttr indexMaps)
     {
       std::vector<std::vector<int64_t>> allPerms;
-      // Find summation indices
+      /// Find summation indices
       for (const auto &map : indexMaps)
       {
         auto affineMap = map.cast<AffineMapAttr>().getValue();
@@ -448,7 +338,7 @@ namespace mlir
       comet_debug() << " " << indexMaps.size() << " ";
 
       std::vector<std::vector<int64_t>> allPerms;
-      // Find summation indices
+      /// Find summation indices
       for (auto map : indexMaps)
       {
         comet_vdump(map);
@@ -471,7 +361,7 @@ namespace mlir
         else
         {
           llvm::errs() << __LINE__ << " Different type: ";
-          // map.getType().dump();
+          /// map.getType().dump();
         }
         allPerms.push_back(perm);
         comet_debug() << " ";
@@ -513,18 +403,18 @@ namespace mlir
       comet_debug() << "print rhs1, rhs2: \n";
       print_vector<unsigned int>(rhs1_perm);
       print_vector<unsigned int>(rhs2_perm);
-      // sparse * dense
-      // 0 1 2, 3 2 ==> 0, 1, 3, 2
-      // 0 1 2 3, 2 3 4 ==> 0, 1, 4
-      // 0 1 2 3, 4 1 5 3 ==> 0 4 1 2 5 3
-      // C[a, b, c, d] = A[e, a] * B[e, b, c, d];
+      /// sparse * dense
+      /// 0 1 2, 3 2 ==> 0, 1, 3, 2
+      /// 0 1 2 3, 2 3 4 ==> 0, 1, 4
+      /// 0 1 2 3, 4 1 5 3 ==> 0 4 1 2 5 3
+      /// C[a, b, c, d] = A[e, a] * B[e, b, c, d];
       std::vector<unsigned int> indexIterateOrder;
       std::vector<unsigned int> rhs1_samePos;
       for (unsigned int i = 0; i < rhs1_perm.size(); i++)
       {
         unsigned int pos = findIndexInVector(rhs2_perm, rhs1_perm[i]);
         if (pos < rhs2_perm.size())
-        { // found
+        { /// found
           rhs1_samePos.push_back(i);
           comet_debug() << __LINE__ << " pos: " << i << "\n";
         }
@@ -540,7 +430,7 @@ namespace mlir
       {
         unsigned int pos = findIndexInVector(rhs1_perm, rhs2_perm[i]);
         if (pos < rhs1_perm.size())
-        { // found
+        { /// found
           rhs2_samePos.push_back(i);
           comet_debug() << __LINE__ << " pos: " << i << "\n";
         }
@@ -557,8 +447,7 @@ namespace mlir
 
       for (unsigned int samep = 0; samep < rhs1_samePos.size(); samep++)
       {
-
-        // get rhs1 indices
+        /// get rhs1 indices
         if (samep == 0)
         {
           for (unsigned int i = 0; i < rhs1_samePos[samep]; i++)
@@ -594,16 +483,16 @@ namespace mlir
         indexIterateOrder.push_back(rhs2_perm[i]);
       }
 
-      // get rhs2 indices
+      /// get rhs2 indices
       print_vector<unsigned int>(indexIterateOrder);
 
       return indexIterateOrder;
     }
 
-    // for string delimiter
+    /// for string delimiter
     std::vector<std::string> stringSplit(std::string s, std::string delimiter)
     {
-      // comet_debug() << "split formats string: " << s << ", deli: "<< delimiter << ".\n";
+      /// comet_debug() << "split formats string: " << s << ", deli: "<< delimiter << ".\n";
 
       std::vector<std::string> res;
 
@@ -613,7 +502,7 @@ namespace mlir
         comet_debug() << "s[" << i << "]: " << s[i] << "\n";
         if (s[i] != delimiter[0] && s[i] != delimiter[1])
         {
-          // format.append(s[i]+"");
+          /// format.append(s[i]+"");
           format = format + s[i];
           comet_debug() << "format: " << format << "\n";
         }
@@ -635,7 +524,7 @@ namespace mlir
     {
       std::vector<std::vector<std::string>> allFormats(TENSOR_NUMS);
 
-      // format with each input matrix: ["CSR", "D", "D"] SpMM
+      /// format with each input matrix: ["CSR", "D", "D"] SpMM
       for (unsigned int i = 0; i < opFormatsArrayAttr.size(); i++)
       {
         std::string formats_str(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
@@ -651,7 +540,7 @@ namespace mlir
         }
         else if (formats_str.compare("ModeGeneric") == 0)
         {
-          // Currently only support modegeneric on 3 D tensor
+          /// Currently only support modegeneric on 3 D tensor
           assert(tensorDims == 3 && "formst is ModeGeneric, should be a 3D tensor.\n");
           allFormats[i].push_back("CN");
           allFormats[i].push_back("S");
@@ -732,11 +621,11 @@ namespace mlir
     {
       std::vector<std::vector<std::string>> allFormats(opFormatsArrayAttr.size());
 
-      // format with each input matrix: ["CSR", "D", "D"] SpMM
+      /// format with each input matrix: ["CSR", "D", "D"] SpMM
       for (unsigned int i = 0; i < opFormatsArrayAttr.size(); i++)
       {
         comet_debug() << " ";
-        // std::string formats_str;
+        /// std::string formats_str;
         if (opFormatsArrayAttr[i].dyn_cast<mlir::StringAttr>())
         {
           comet_debug() << " yes ";
@@ -796,17 +685,17 @@ namespace mlir
       else if (format.size() == 2 && (format[0].compare("CU") == 0 && format[1].compare("CU") == 0))
         format_ret = "DCSR";
 
-            else if (format.size() == 1 && format[0].compare("ELL") == 0)
+      else if (format.size() == 1 && format[0].compare("ELL") == 0)
         format_ret = "ELL";
-      // TODO: Individual attributes
+      /// TODO(gkestor): Individual attributes
 
       else if (format.size() == 1 && format[0].compare("BCSR") == 0)
         format_ret = "BCSR";
-      // TODO: Individual attributes
+      /// TODO(gkestor): Individual attributes
 
       else if (format.size() == 1 && format[0].compare("CSB") == 0)
         format_ret = "CSB";
-      // TODO: Individual attributes
+      /// TODO(gkestor): Individual attributes
 
       else if (format.size() == 3 && (format[0].compare("D") == 0 && format[1].compare("D") == 0 && format[2].compare("D") == 0))
         format_ret = "Dense";
@@ -822,7 +711,7 @@ namespace mlir
         format_ret = "ModeGeneric";
       else
       {
-        assert(false && "Unsupported formats\n");
+         llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Unsupported formats\n";
       }
 
       return format_ret;
@@ -840,19 +729,19 @@ namespace mlir
         }
         else
         {
-          // The index is not in this tensor, format is "", i.e. empty
+          /// The index is not in this tensor, format is "", i.e. empty
           formats[i] = "";
         }
       }
       comet_debug() << "formats[0], formats[1]: " << formats[0] << ", " << formats[1] << "\n";
-      // Currently only support mix sparse dense tensor contraction
+      /// Currently only support mix sparse dense tensor contraction
       std::string format;
-      // The index in both tensors are dense
+      /// The index in both tensors are dense
       if (formats[0].compare("D") == 0 && formats[1].compare("D") == 0)
       {
         format = "D";
       }
-      // The index only in one tensor
+      /// The index only in one tensor
       else if (formats[1].compare("") == 0)
       {
         assert(formats[0].compare("") != 0 && "index should be in rhs1\n");
@@ -863,7 +752,7 @@ namespace mlir
         assert(formats[1].compare("") != 0 && "index should be in rhs2\n");
         format = formats[1];
       }
-      // The index in one tensor is dense, another is sparse ==> sparse
+      /// The index in one tensor is dense, another is sparse ==> sparse
       else if (formats[1].compare("D") != 0)
       {
         format = formats[1];
@@ -884,7 +773,7 @@ namespace mlir
     bool checkIsElementwise(std::vector<std::vector<int>> allPerms)
     {
       bool isElementwise = false;
-      if (allPerms.size() > 1 && allPerms[0].size() == allPerms[1].size()) // to check the case sparse = dense, produced after workspace transformations
+      if (allPerms.size() > 1 && allPerms[0].size() == allPerms[1].size()) /// to check the case sparse = dense, produced after workspace transformations
       {
         if (std::equal(allPerms[0].begin(), allPerms[0].end(), allPerms[1].begin()))
         {
@@ -912,10 +801,10 @@ namespace mlir
 
     bool checkIsMixedMode(std::vector<std::vector<std::string>> formats)
     {
-      // TODO(gkestor): review the following code
+      /// TODO(gkestor): review the following code
       comet_debug() << "how many operands format:" << formats.size() << "\n";
       if (formats.size() == 2)
-      { // binary operation
+      { /// binary operation
         bool isFirstDense = checkIsDense(formats[0]);
         bool isSecondDense = checkIsDense(formats[1]);
 
@@ -927,39 +816,25 @@ namespace mlir
         else
           return false;
       }
-      if (formats.size() == 1) // new computeOp produces after workspace transformations. There is only one operand on rhs
+      if (formats.size() == 1) /// new computeOp produces after workspace transformations. There is only one operand on rhs
         return false;
-      // if (formats[0].size() == formats[1].size())       {
-      //   bool isFirstDense = checkIsDense(formats[0]);
-      //   bool isSecondDense = checkIsDense(formats[1]);
-
-      //   comet_debug() << "isFirstDense:" << isFirstDense << " isSecondDense: " << isSecondDense << "\n";
-      //   if ((isFirstDense && !isSecondDense) || (!isFirstDense && isSecondDense))
-      //   {
-      //     return true;
-      //   }
-      //   else
-      //     return false;
-      // }
-      // else
-      //   return false;
     }
 
     std::vector<Value> getFormatsValue(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IndexType indexType)
     {
-       Value format_unk = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(-1));
+      Value format_unk = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(-1));
       Value format_dense = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(0));
       Value format_compressed = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(1));
       Value format_compressednonunique = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(2));
       Value format_singleton = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(3));
-      // read_input_sizes_2D_f64 or read_input_sizes_3D_f64
+      /// read_input_sizes_2D_f64 or read_input_sizes_3D_f64
       comet_debug() << "\n";
       std::vector<Value> dim_format;
 
       if (rank_size == 2)
-      { // 2D
+      { /// 2D
         comet_debug() << " 2D\n";
-        // Value dim0_format, dim1_format;
+        /// Value dim0_format, dim1_format;
         if (formats_str.compare(0, 3, "CSR") == 0)
         {
           dim_format.push_back(format_dense);
@@ -975,28 +850,28 @@ namespace mlir
           dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
-        { // COO
+        { /// COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
-          else if (formats_str.compare(0, 3, "ELL") == 0)
-        { // ELL
+        else if (formats_str.compare(0, 3, "ELL") == 0)
+        { /// ELL
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 4, "BCSR") == 0)
-        { // BCSR
+        { /// BCSR
           dim_format.push_back(format_dense);
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
         }
         else if (formats_str.compare(0, 3, "CSB") == 0)
-        { // CSB
+        { /// CSB
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_compressed);
@@ -1031,9 +906,9 @@ namespace mlir
         }
       }
       else if (rank_size == 3)
-      { // 3D
+      { /// 3D
         comet_debug() << " 3D\n";
-        // Value dim0_format, dim1_format, dim2_format;
+        /// Value dim0_format, dim1_format, dim2_format;
         if (formats_str.compare(0, 3, "CSF") == 0)
         {
           dim_format.push_back(format_compressed);
@@ -1053,7 +928,7 @@ namespace mlir
           dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
-        { // COO
+        { /// COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
@@ -1115,14 +990,14 @@ namespace mlir
       Value format_compressed = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 1));
       Value format_compressednonunique = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 2));
       Value format_singleton = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 3));
-      // read_input_sizes_2D_f64 or read_input_sizes_3D_f64
+      /// read_input_sizes_2D_f64 or read_input_sizes_3D_f64
       comet_debug() << "\n";
       std::vector<Value> dim_format;
 
       if (rank_size == 2)
-      { // 2D
+      { /// 2D
         comet_debug() << " 2D\n";
-        // Value dim0_format, dim1_format;
+        /// Value dim0_format, dim1_format;
         if (formats_str.compare(0, 3, "CSR") == 0)
         {
           dim_format.push_back(format_dense);
@@ -1138,28 +1013,28 @@ namespace mlir
           dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
-        { // COO
-           dim_format.push_back(format_compressednonunique);
+        { /// COO
+          dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
-          else if (formats_str.compare(0, 3, "ELL") == 0)
-        { // ELL
+        else if (formats_str.compare(0, 3, "ELL") == 0)
+        { /// ELL
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 4, "BCSR") == 0)
-        { // BCSR
+        { /// BCSR
           dim_format.push_back(format_dense);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
         }
         else if (formats_str.compare(0, 3, "CSB") == 0)
-        { // CSB
+        { /// CSB
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_compressed);
@@ -1194,9 +1069,9 @@ namespace mlir
         }
       }
       else if (rank_size == 3)
-      { // 3D
+      { /// 3D
         comet_debug() << " 3D\n";
-        // Value dim0_format, dim1_format, dim2_format;
+        /// Value dim0_format, dim1_format, dim2_format;
         if (formats_str.compare(0, 3, "CSF") == 0)
         {
           dim_format.push_back(format_compressed);
@@ -1216,7 +1091,7 @@ namespace mlir
           dim_format.push_back(format_unk);
         }
         else if (formats_str.compare(0, 3, "COO") == 0)
-        { // COO
+        { /// COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
@@ -1228,7 +1103,7 @@ namespace mlir
         {
           std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
           comet_debug() << " format_vec.size(): " << format_vec.size() << " \n";
-          // print_vector<std::string>(format_vec);
+          /// print_vector<std::string>(format_vec);
           for (auto n : format_vec)
           {
             comet_debug() << "Current format attribute: " << n << "---\n";
@@ -1273,14 +1148,14 @@ namespace mlir
 
     unsigned int findIndexInVector_Value(std::vector<Value> vec, Value e)
     {
-      // Check if element e exists in vector
+      /// Check if element e exists in vector
       auto it = std::find(vec.begin(), vec.end(), e);
 
-      // It accepts a range and an element to search in the given range. If element is found then it returns an iterator to the first element in the given range that’s equal to given element, else it returns an end of the list.
+      /// It accepts a range and an element to search in the given range. If element is found then it returns an iterator to the first element in the given range that’s equal to given element, else it returns an end of the list.
       unsigned int ret = 0;
       if (it != vec.end())
       {
-        // Get index of element from iterator
+        /// Get index of element from iterator
         ret = std::distance(vec.begin(), it);
       }
       else
@@ -1330,7 +1205,7 @@ namespace mlir
       else if (isa<indexTree::IndexTreeComputeOp>(tcRootOp.getDefiningOp()))
       {
         indexTree::IndexTreeComputeOp leafop = dyn_cast<indexTree::IndexTreeComputeOp>(tcRootOp.getDefiningOp());
-        // comet_debug() <<  " dfsRootOpTree\n";
+        /// comet_debug() <<  " dfsRootOpTree\n";
         comet_vdump(leafop);
         ret.push_back(leafop);
       }
@@ -1345,10 +1220,10 @@ namespace mlir
       {
         comet_debug() << " ";
         comet_vdump(op);
-        // Should only one user in the index tree
+        /// Should only one user in the index tree
         for (auto n : op.getDefiningOp()->getUsers())
         {
-          // comet_debug() <<  " "; comet_pdump(n); comet_vdump(n->getResult(0));
+          /// comet_debug() <<  " "; comet_pdump(n); comet_vdump(n->getResult(0));
 
           bool isInTree = false;
           if (findIndexInVector_Value(dfsOps, n->getResult(0)) < dfsOps.size())
@@ -1387,7 +1262,7 @@ namespace mlir
         return perms;
       }
 
-      // perms_int >= 2
+      /// perms_int >= 2
       perms = perms_int[0];
       comet_debug() << " perms.size(): " << perms.size() << "\n";
       for (unsigned int i = 1; i < perms_int.size(); i++)
@@ -1395,7 +1270,7 @@ namespace mlir
         for (unsigned int j = 0; j < perms_int[i].size(); j++)
         {
           if (std::find(perms.begin(), perms.end(), perms_int[i][j]) == perms.end())
-          { // Not in
+          { /// Not in
             perms.push_back(perms_int[i][j]);
           }
         }
@@ -1508,8 +1383,8 @@ namespace mlir
       assert(opFormatsArrayAttr_rhs.size() == opPermsArrayAttr_rhs.size() && "not equal RHS formats size with perms size\n");
       assert(opFormatsArrayAttr_lhs.size() == opPermsArrayAttr_lhs.size() && "not equal LHS formats size with perms size\n");
 
-      // Get output format, vector of vector
-      // Convert ArrayAttr into
+      /// Get output format, vector of vector
+      /// Convert ArrayAttr into
       comet_debug() << "Start printing opFormats_rhs\n";
       std::vector<std::vector<std::string>> opFormats_rhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_rhs);
       comet_debug() << "End printing opFormats_rhs\n";
@@ -1538,8 +1413,8 @@ namespace mlir
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
       ArrayAttr opFormatsArrayAttr_lhs = itComputeOp_lhs.getAllFormats();
 
-      // Get output format, vector of vector
-      // Convert ArrayAttr into
+      /// Get output format, vector of vector
+      /// Convert ArrayAttr into
       std::vector<std::vector<std::string>> opFormats_rhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_rhs);
       std::vector<std::vector<std::string>> opFormats_lhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_lhs);
 
@@ -1553,8 +1428,8 @@ namespace mlir
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
       ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.getAllFormats();
 
-      // Get output format, vector of vector
-      // Convert ArrayAttr into
+      /// Get output format, vector of vector
+      /// Convert ArrayAttr into
       std::vector<std::vector<std::string>> opFormats_rhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_rhs);
 
       opFormats = opFormats_rhs;
@@ -1572,7 +1447,7 @@ namespace mlir
     /// Get the input tensors of the itCompute op
     void getInputTensorsOfComputeOp(Value computeOp, std::vector<Value> &inputTensors)
     {
-      // indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
+      /// indexTree::IndexTreeComputeOp itComputeOp = dyn_cast<indexTree::IndexTreeComputeOp>(computeOp.getDefiningOp());
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
       comet_debug() << " ";
       comet_vdump(itComputeOp_rhs);
@@ -1602,16 +1477,16 @@ namespace mlir
                         std::vector<unsigned int> &ids /* output */,
                         std::vector<std::string> &formats /* output */)
     {
-      // For each indices, find in each leaf, which tensor, the corresponding format
-      // If in all tensors, the formats of the index are D, then D
-      //                    If only one Sparse, then sparse
+      /// For each indices, find in each leaf, which tensor, the corresponding format
+      /// If in all tensors, the formats of the index are D, then D
+      ///                    If only one Sparse, then sparse
       comet_debug() << " getFormatsInfo:Start Current op\n";
       comet_vdump(cur_op);
       comet_debug() << " getFormatsInfo:indices.size(): " << indices.size() << "\n";
       for (unsigned long i = 0; i < indices.size(); i++)
       {
         comet_debug() << " getFormatsInfo:indices[" << i << "]: " << indices[i] << "\n";
-        // Info for each index
+        /// Info for each index
         std::string format;
         Value tensor;
         unsigned int id;
@@ -1623,7 +1498,7 @@ namespace mlir
 
         for (unsigned long j = 0; j < leafs.size(); j++)
         {
-          // Info for each index in leaf[j]
+          /// Info for each index in leaf[j]
           comet_debug() << " getFormatsInfo:LeafOp: ";
           comet_vdump(leafs[j]);
           std::string format_in_leaf;
@@ -1631,12 +1506,10 @@ namespace mlir
           unsigned int id_in_leaf;
           bool isSetInLeaf = false;
 
-          // get All perms and formats info
+          /// get All perms and formats info
           if (indexTree::IndexTreeComputeOp leafop = dyn_cast<mlir::indexTree::IndexTreeComputeOp>(leafs[j].getDefiningOp()))
           {
             comet_debug() << " getFormatsInfo:leafs[" << j << "] is computeOp\n";
-            // std::vector<std::vector<int64_t>> allPerms(leafop.getAllPerms().size());
-            // std::vector<std::vector<std::string>> allFormats(leafop.getAllFormats().size());
             std::vector<std::vector<std::string>> allFormats;
             std::vector<std::vector<int>> allPerms;
             std::vector<std::vector<bool>> inputOutputMapping;
@@ -1672,13 +1545,13 @@ namespace mlir
               comet_vdump(n);
             }
 #endif
-            // Check if this index is in this leaf's perms
+            /// Check if this index is in this leaf's perms
 
             std::vector<std::string> formats_local;
             std::vector<Value> tensors_local;
             std::vector<unsigned int> ids_local;
             std::vector<bool> rhs_vs_lhs;
-            // This leafOp contain multiple tensors.
+            /// This leafOp contain multiple tensors.
             comet_debug() << " getFormatsInfo:allPerms.size()" << allPerms.size() << "\n";
             for (unsigned long k = 0; k < allPerms.size(); k++)
             {
@@ -1688,7 +1561,7 @@ namespace mlir
               unsigned int idx = findIndexInVector(allPerms[k], indices[i]);
               comet_debug() << " getFormatsInfo:idx: " << idx << ", allPerms[" << k << "].size(): " << allPerms[k].size() << "\n";
               if (idx < allPerms[k].size())
-              { // In tensor k
+              { /// In tensor k
                 comet_debug() << " getFormatsInfo:AddingLocalFormat[" << k << "][" << idx << "]: " << allFormats[k][idx] << " ";
                 comet_vdump(leafop_tensors[k]);
                 formats_local.push_back(allFormats[k][idx]);
@@ -1705,7 +1578,7 @@ namespace mlir
               comet_vdump(tensors_local[k]);
             }
 
-            // analyze _local arrays, to get final formats, tensors, idx
+            /// analyze _local arrays, to get final formats, tensors, idx
             if (formats_local.size() > 0)
             {
               isSetInLeaf = true;
@@ -1716,26 +1589,22 @@ namespace mlir
               for (unsigned long k = 1; k < formats_local.size(); k++)
               {
                 if (format_in_leaf.compare(0, 1, "D") == 0 && formats_local[k].compare(0, 1, "D") != 0 && rhs_vs_lhs[k])
-                // if the next format in the local format is not dense and not output
-                // rhs_vs_lhs determines if the format comes from input (lhs) or output (rhs)
-                // C[i,j] =  A[i,k] * B[k, j] -> i is in both input A and output C
-                // -> j is in both input B and output C
-                // -> k is in both inputs A and B
-                // index format information stores in formats_local
+                /// if the next format in the local format is not dense and not output
+                /// rhs_vs_lhs determines if the format comes from input (lhs) or output (rhs)
+                /// C[i,j] =  A[i,k] * B[k, j] -> i is in both input A and output C
+                /// -> j is in both input B and output C
+                /// -> k is in both inputs A and B
+                /// index format information stores in formats_local
                 {
                   format_in_leaf = formats_local[k];
                   tensor_in_leaf = tensors_local[k];
                   id_in_leaf = ids_local[k];
-                  break; // Get the first sparse case
+                  break; /// Get the first sparse case
                 }
               }
             }
-            //  else
-            //  {
-            //     assert(false && "No local format information found\n");
-            //  }
 
-          } // if(indexTree::IndexTreeComputeOp leafop
+          } /// if(indexTree::IndexTreeComputeOp leafop
 
           if (isSetInLeaf)
           {
@@ -1745,12 +1614,8 @@ namespace mlir
             tensors_leafs.push_back(tensor_in_leaf);
             ids_leafs.push_back(id_in_leaf);
           }
-          //  else
-          //  {
-          //    assert(false && "Format information has not been found");
-          //  }
 
-        } // for(auto j = 0; j < leafs.size(); j++){
+        } /// for(auto j = 0; j < leafs.size(); j++){
 
         comet_debug() << " getFormatsInfo:formats_leafs.size(): " << formats_leafs.size() << "\n";
         for (unsigned long k = 0; k < formats_leafs.size(); k++)
@@ -1758,7 +1623,7 @@ namespace mlir
           comet_debug() << " getFormatsInfo:formats_leafs[k]:" << formats_leafs[k] << "\n";
         }
 
-        // analyze the _leafs info to get the current index format, tensor, id information
+        /// analyze the _leafs info to get the current index format, tensor, id information
         for (unsigned long j = 0; j < formats_leafs.size(); j++)
         {
           if (j == 0)
@@ -1771,17 +1636,13 @@ namespace mlir
           else
           {
             if (formats_leafs[j].compare(0, 1, "D") != 0)
-            { // not D
+            { /// not D
               format = formats_leafs[j];
               tensor = tensors_leafs[j];
               id = ids_leafs[j];
               isSet = true;
-              break; // Get the first sparse case
+              break; /// Get the first sparse case
             }
-            //  else
-            //  {
-            //    assert(false && "Unknown conditions\n");
-            //  }
           }
         }
 
@@ -1795,7 +1656,7 @@ namespace mlir
           ids.push_back(id);
         }
 
-      } // for(auto i = 0; i < indices.size(); i++){
+      } /// for(auto i = 0; i < indices.size(); i++){
     }
 
     /// Find leaves of tcRootOp in the Index Tree (dfsOp).
@@ -1820,8 +1681,7 @@ namespace mlir
         }
       }
 
-      // Each wp op in which tensors
-      // if(tcRootOp.getType().isa<indexTree::IndexTreeIndicesOp>()){
+      /// Each wp op in which tensors
       if (IndexTreeIndicesOp cur_op = dyn_cast<IndexTreeIndicesOp>(tcRootOp.getDefiningOp()))
       {
         comet_debug() << " ";
@@ -1843,7 +1703,7 @@ namespace mlir
     }
 
     /// new version for new children ops
-    // Only one user, because of the tree structure
+    /// Only one user, because of the tree structure
     void replaceOperands(Operation *itComputeOp, std::vector<Value> newComputeOps)
     {
       Operation *parentIndicesOp = *(itComputeOp->getResult(0).getUsers().begin());
@@ -1903,8 +1763,8 @@ namespace mlir
     {
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
       ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.getAllPerms();
-      // Get output format, vector of vector
-      // Convert ArrayAttr into
+      /// Get output format, vector of vector
+      /// Convert ArrayAttr into
       std::vector<std::vector<int>> opPerms_rhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_rhs);
       opPerms = opPerms_rhs;
     }
@@ -1915,8 +1775,8 @@ namespace mlir
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
       ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.getAllPerms();
 
-      // Get output format, vector of vector
-      // Convert ArrayAttr into
+      /// Get output format, vector of vector
+      /// Convert ArrayAttr into
       std::vector<std::vector<int>> opPerms_lhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_lhs);
 
       opPerms = opPerms_lhs;
@@ -1930,8 +1790,8 @@ namespace mlir
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
       ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.getAllPerms();
 
-      // Get output format, vector of vector
-      // Convert ArrayAttr into
+      /// Get output format, vector of vector
+      /// Convert ArrayAttr into
       std::vector<std::vector<int>> opPerms_rhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_rhs);
       std::vector<std::vector<int>> opPerms_lhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_lhs);
 
@@ -1943,13 +1803,13 @@ namespace mlir
                              std::vector<unsigned> &sourceOrder, std::vector<unsigned> &destOrder)
     {
       double loopCost = 0.0;
-      // for(unsigned i=1;i < dim_ ; ++i){ // column major: first one has no penalty
+      /// for(unsigned i=1;i < dim_ ; ++i){ /// column major: first one has no penalty
       for (unsigned i = 0; i < dim_ - 1; ++i)
-      { // row major: last one has no penalty
-        // const int idx = loopOrder[dim_-1-i];
-        // const int posB = findPos(idx, perm_);
-        int idx;      // position in sourceOrder
-        int posB = 0; // position in destOrder
+      { /// row major: last one has no penalty
+        /// const int idx = loopOrder[dim_-1-i];
+        /// const int posB = findPos(idx, perm_);
+        int idx;      /// position in sourceOrder
+        int posB = 0; /// position in destOrder
         for (unsigned ii = 0; ii < sourceOrder.size(); ii++)
         {
           if (sourceOrder[ii] == loopOrder[i])
@@ -1967,14 +1827,14 @@ namespace mlir
           }
         }
         /*column major: */
-        // int importanceA = (1<<(dim_ - idx)); // stride-1 has the most importance .
-        // int importanceB = (1<<(dim_ - posB));// subsequent indices are half as important
-        // int penalty = 10 * (1<<(i-1)); // smaller i has smaller penalty
+        /// int importanceA = (1<<(dim_ - idx)); /// stride-1 has the most importance .
+        /// int importanceB = (1<<(dim_ - posB));/// subsequent indices are half as important
+        /// int penalty = 10 * (1<<(i-1)); /// smaller i has smaller penalty
         /*row major: */
-        int importanceA = (1 << idx);               // stride-1 has the most importance. Larger pos, more important
-        int importanceB = (1 << posB);              // subsequent indices are half as important
-        int penalty = 10 * (1 << (dim_ - (i + 2))); // smaller i has larger penalty
-        double bias = 1.01;                         // destOrder is more important
+        int importanceA = (1 << idx);               /// stride-1 has the most importance. Larger pos, more important
+        int importanceB = (1 << posB);              /// subsequent indices are half as important
+        int penalty = 10 * (1 << (dim_ - (i + 2))); /// smaller i has larger penalty
+        double bias = 1.01;                         /// destOrder is more important
         loopCost += (importanceA + importanceB * bias) * penalty;
       }
 
@@ -1989,17 +1849,16 @@ namespace mlir
       for (unsigned i = 0; i < dim_; i++)
         loopOrder.push_back(i);
 
-      // create all loopOrders
+      /// create all loopOrders
       do
       {
-        // if ( destOrder[dim_-1] == 0 && loopOrder[dim_-1] != 0 )
         if (loopOrder[dim_ - 1] != destOrder[dim_ - 1] && loopOrder[dim_ - 1] != sourceOrder[dim_ - 1])
-          // ATTENTION: we skip all loop-orders where the stride-1 index is not the inner-most loop iff perm[0] == 0 (both for perf & correctness)
+          /// ATTENTION: we skip all loop-orders where the stride-1 index is not the inner-most loop iff perm[0] == 0 (both for perf & correctness)
           continue;
         loopOrders.push_back(loopOrder);
       } while (std::next_permutation(loopOrder.begin(), loopOrder.end()));
 
-      // Sort the loopOrders based on loopCostHeuristic results
+      /// Sort the loopOrders based on loopCostHeuristic results
       for (unsigned k = 0; k < loopOrders.size(); k++)
       {
         for (unsigned i = 0; i < loopOrders.size() - 1; i++)
@@ -2146,7 +2005,7 @@ namespace mlir
         {
           comet_debug() << " is TensorDeclOp\n";
 
-          // infer the format
+          /// infer the format
           auto lhs_format = dyn_cast<DenseTensorDeclOp>(defop).getFormat();
           comet_debug() << " lhs_format: " << lhs_format << "\n";
           formats.push_back(lhs_format);
@@ -2155,7 +2014,7 @@ namespace mlir
         {
           comet_debug() << " is TensorDeclOp\n";
 
-          // infer the format
+          /// infer the format
           auto lhs_format = dyn_cast<SparseTensorDeclOp>(defop).getFormat();
           comet_debug() << " lhs_format: " << lhs_format << "\n";
           formats.push_back(lhs_format);
@@ -2175,7 +2034,7 @@ namespace mlir
                                                              rhs1Tensor, rhs2Tensor,
                                                              lhsLabels, affineMapArrayAttr,
                                                              formatAttr, SemiringAttr, MaskingAttr,
-                                                             nullptr); //TODO: masking is an optional operand
+                                                             nullptr); /// TODO: masking is an optional operand
       tc.getOperation()->setAttr("__alpha__", rewriter.getF64FloatAttr(alpha));
       tc.getOperation()->setAttr("__beta__", rewriter.getF64FloatAttr(beta));
       comet_debug() << " ";
@@ -2286,8 +2145,8 @@ namespace mlir
       else if (isa<tensorAlgebra::DenseConstantOp>(lhsOp))
       {
         auto constOp = cast<tensorAlgebra::DenseConstantOp>(lhsOp);
-        // DenseElementsAttr denseAttr = constOp.getValue();
-        // auto attr = *(denseAttr.getAttributeValues().begin()); //GK changed
+        /// DenseElementsAttr denseAttr = constOp.getValue();
+        /// auto attr = *(denseAttr.getAttributeValues().begin()); //GK changed
         auto attr = constOp.getValueAttrName();
         auto f64Attr = attr.cast<FloatAttr>();
         alpha *= f64Attr.getValueAsDouble();
@@ -2295,8 +2154,8 @@ namespace mlir
       }
       else if (isa<tensorAlgebra::TensorAddOp>(lhsOp))
       {
-        // TODO(gkestor): further support needed
-        assert(false && "Not supported AddOp");
+        /// TODO(gkestor): further support needed
+        llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not supported AddOp\n";
       }
 
       if (isa<tensorAlgebra::LabeledTensorOp>(rhsOp))
@@ -2365,8 +2224,8 @@ namespace mlir
       else if (isa<tensorAlgebra::DenseConstantOp>(rhsOp))
       {
         auto constOp = cast<tensorAlgebra::DenseConstantOp>(rhsOp);
-        // DenseElementsAttr denseAttr = constOp.getValue();
-        // auto attr = *(denseAttr.getAttributeValues().begin());
+        /// DenseElementsAttr denseAttr = constOp.getValue();
+        /// auto attr = *(denseAttr.getAttributeValues().begin());
         auto attr = constOp.getValueAttrName();
         auto f64Attr = attr.cast<FloatAttr>();
         alpha *= f64Attr.getValueAsDouble();
@@ -2374,8 +2233,8 @@ namespace mlir
       }
       else if (isa<tensorAlgebra::TensorAddOp>(rhsOp))
       {
-        // TODO(gkestor): further support needed
-        assert(false && "Not supported AddOp");
+        /// TODO(gkestor): further support needed
+        llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not supported AddOp\n";
       }
 
       comet_debug() << "\n";
@@ -2533,8 +2392,6 @@ namespace mlir
         {
           comet_debug() << "\n";
           auto constOp = cast<tensorAlgebra::DenseConstantOp>(lhsOp);
-          // DenseElementsAttr denseAttr = constOp.getValue();
-          // auto attr = *(denseAttr.getAttributeValues().begin());
           auto attr = constOp.getValueAttrName();
           auto f64Attr = attr.cast<FloatAttr>();
           alpha *= f64Attr.getValueAsDouble();
@@ -2542,9 +2399,8 @@ namespace mlir
         }
         else if (isa<tensorAlgebra::TensorAddOp>(lhsOp))
         {
-          // Implement for AddOp support
-          // TODO(gkestor): further support needed
-          assert(false && "Not supported AddOp");
+          //// TODO(gkestor): further support needed
+          llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not supported AddOp\n";
         }
 
         if (isa<tensorAlgebra::LabeledTensorOp>(rhsOp))
@@ -2607,7 +2463,6 @@ namespace mlir
               rhs2Labels.push_back(lbl);
             }
             rhs2Tensor = ltOp.getTensor();
-            // auto rhs2AlphaAttr = ltOp.getAttr("__alpha__");
             auto rhs2AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
             rhs2Tensor.getDefiningOp()->setAttr("__alpha__", rhs2AlphaAttr);
             comet_debug() << "\n";
@@ -2617,8 +2472,6 @@ namespace mlir
         {
           comet_debug() << "\n";
           auto constOp = cast<tensorAlgebra::DenseConstantOp>(rhsOp);
-          // DenseElementsAttr denseAttr = constOp.getValue();
-          // auto attr = *(denseAttr.getAttributeValues().begin());
           auto attr = constOp.getValueAttrName();
           auto f64Attr = attr.cast<FloatAttr>();
           alpha *= f64Attr.getValueAsDouble();
@@ -2627,8 +2480,8 @@ namespace mlir
         }
         else if (isa<tensorAlgebra::TensorAddOp>(rhsOp))
         {
-          // TODO(gkestor): further support needed
-          assert(false && "Not supported AddOp");
+          //// TODO(gkestor): further support needed
+          llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not supported AddOp\n";
         }
 
         if (is_rhs_constant && is_lhs_constant)
@@ -2684,8 +2537,8 @@ namespace mlir
       }
       else if (isa<tensorAlgebra::TensorAddOp>(op))
       {
-        // TODO(gkestor): further support needed
-        assert(false && "Not supported AddOp");
+        //// TODO(gkestor): further support needed
+        llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not supported AddOp\n";
       }
     }
 
@@ -2738,7 +2591,7 @@ namespace mlir
       return reassociation;
     }
 
-  } // namespace tensorAlgebra
-} // namespace mlir
+  } //// namespace tensorAlgebra
+} //// namespace mlir
 
-#endif // UTILS_H_
+#endif //// UTILS_H_

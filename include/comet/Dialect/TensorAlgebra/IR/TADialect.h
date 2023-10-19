@@ -39,7 +39,6 @@
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/IR/PatternMatch.h"
 
-
 /// Include the auto-generated header file containing the declaration of the Tensor Algebra
 /// dialect.
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h.inc"
@@ -59,7 +58,7 @@ namespace mlir
     namespace detail
     {
       struct SparseTensorTypeStorage;
-    } // end namespace detail
+    } /// end namespace detail
 
     void populateMultiOpFactorizationPatterns(
         RewritePatternSet &patterns, MLIRContext *context);
@@ -73,29 +72,8 @@ namespace mlir
     void populateSTCRemoveDeadOpsPatterns(
         RewritePatternSet &patterns, MLIRContext *context);
 
-    // /// This is the definition of the Tensor Algebra (TA) dialect. A dialect inherits from
-    // /// mlir::Dialect and registers custom attributes, operations, and types (in its
-    // /// constructor). It can also override some general behavior exposed via virtual
-    // /// methods.
-    // class TADialect : public mlir::Dialect
-    // {
-    // public:
-    //   explicit TADialect(mlir::MLIRContext *ctx);
-
-    //   /// Provide a utility accessor to the dialect namespace. This is used by
-    //   /// several utilities for casting between dialects.
-    //   static llvm::StringRef getDialectNamespace() { return "ta"; }
-
-    //   /// Parse a type registered to this dialect.
-    //   Type parseType(DialectAsmParser &parser) const override;
-
-    //   /// Print a type registered to this dialect.
-    //   void printType(Type type, DialectAsmPrinter &printer) const override;
-    // };
-
-
     //===----------------------------------------------------------------------===//
-    // Tensor Algebra Types
+    /// Tensor Algebra Types
     //===----------------------------------------------------------------------===//
 
     /// This class defines the TA sparse tensor type. It represents a collection of
@@ -122,7 +100,7 @@ namespace mlir
       size_t getNumElementTypes() { return getElementTypes().size(); }
     };
 
-  } // end namespace tensorAlgebra
-} // end namespace mlir
+  } /// end namespace tensorAlgebra
+} /// end namespace mlir
 
-#endif // TENSORALGEBRA_DIALECT_H_
+#endif /// TENSORALGEBRA_DIALECT_H_

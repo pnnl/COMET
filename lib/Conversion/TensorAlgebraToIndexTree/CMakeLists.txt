@@ -12,10 +12,7 @@ add_mlir_conversion_library(COMETTensorAlgebraToIndexTree
 
   LINK_LIBS PUBLIC
   COMETIndexTreeDialect
-  #MLIRArithDialect
   MLIRIR
-  #MLIRMemRefDialect
-  #MLIRSCFDialect
   MLIRPass
   MLIRTransforms
   )

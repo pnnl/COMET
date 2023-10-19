@@ -35,13 +35,6 @@ include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
-// // Provide a definition of the 'TA' dialect in the ODS framework so that we
-// // can define our operations.
-// def IndexTreeDialect : Dialect {
-//   let name = "it";
-//   let cppNamespace = ""; 
-// }
-
 
 // Provide a definition of the 'it' dialect in the ODS framework so that we
 // can define our operations.
@@ -89,7 +82,7 @@ def IndexTreeComputeOp : IndexTree_Op<"Compute", [Pure]>{
   }];
 
   //TODO(gkestor): rethink the use of comp_worksp_opt, should we decouple that?
-  // MaskType attribute: {push, pull, auto, none}
+  /// MaskType attribute: {push, pull, auto, none}
   let arguments = (ins Variadic<AnyType>:$rhs, AnyType:$lhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring, StrAttr:$MaskType);
 
   let results = (outs I64:$output);

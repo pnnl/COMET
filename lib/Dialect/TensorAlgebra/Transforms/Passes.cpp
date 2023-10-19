@@ -19,13 +19,11 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// TODO(gkestor): check these header files
-#include "mlir/Pass/Pass.h"
-
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 
+#include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Builders.h"
@@ -70,24 +68,10 @@ using namespace mlir::bufferization;
 using namespace tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #ifndef DEBUG_MODE_PASSES
-// #define DEBUG_MODE_PASSES
-// #endif
-
-#ifdef DEBUG_MODE_PASSES
-#define comet_debug() llvm::errs() << __FILE__ << " " << __LINE__ << " "
-#define comet_pdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n->dump()
-#define comet_vdump(n)                                \
-  llvm::errs() << __FILE__ << " " << __LINE__ << " "; \
-  n.dump()
-#else
-#define comet_debug() if(true){}else llvm::errs()
-#define comet_pdump(n)
-#define comet_vdump(n)
-#endif
-
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+#undef COMET_DEBUG_MODE
+// *********** For debug purpose *********//
 
 namespace
 {
@@ -99,8 +83,8 @@ namespace
     void runOnOperation() override;
 
     void FindOptimalTCFactorization(tensorAlgebra::TensorSetOp op);
-  }; // class FindOptimalTCFactorizationPass
-} // End anonymous namespace
+  }; ///  class FindOptimalTCFactorizationPass
+} ///  End anonymous namespace
 
 namespace
 {
@@ -126,7 +110,7 @@ namespace
     void runOnOperation() override;
   };
 
-} // end anonymous namespace.
+} ///  end anonymous namespace.
 
 void removeAllUsers(Operation *op)
 {
@@ -207,7 +191,7 @@ optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
     labelIdMap[op] = id++;
   }
 
-  // go through each and every permutation of result vector.
+  ///  go through each and every permutation of result vector.
   do
   {
     totalCost = 0;
@@ -228,9 +212,9 @@ optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
         remainingLabels.insert(lblSet.begin(), lblSet.end());
       }
 
-      // find intersection of {rhs1Labels, rhs2Labels}, {remainingLabels}
+      ///  find intersection of {rhs1Labels, rhs2Labels}, {remainingLabels}
       auto lhsLabels = findOutput(rhs1Labels, rhs2Labels, remainingLabels);
-      // find difference of {rhs1Labels, rhs2Labels}, {lhsLabels}
+      ///  find difference of {rhs1Labels, rhs2Labels}, {lhsLabels}
       sumLabels.push_back(getSumLabels(rhs1Labels, rhs2Labels, lhsLabels));
       auto permA = getLabelPerm(rhs1Labels, labelIdMap);
       auto permB = getLabelPerm(rhs2Labels, labelIdMap);
@@ -244,13 +228,13 @@ optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
       ContractionPlan plan{permA, tensorShapeA,
                            permB, tensorShapeB,
                            permC, tensorShapeC};
-      // make getTotal optional to include only the operation count or
-      // plus the cost  operation transpose
+      ///  make getTotal optional to include only the operation count or
+      ///  plus the cost  operation transpose
       totalCost += plan.getTotalTime();
       rhs1Labels = lhsLabels;
     }
-    
-    // update global
+
+    ///  update global
     if (totalCost <= minCost)
     {
       minCost = totalCost;
@@ -269,9 +253,8 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   OpBuilder builder(op);
   comet_pdump(op);
   auto operands = op->getOperands();
-  // auto module = op->getParentOfType<ModuleOp>();
   auto loc = op->getLoc();
-  auto lhsOp = operands[0].getDefiningOp(); // TensorMultOp
+  auto lhsOp = operands[0].getDefiningOp(); ///  TensorMultOp
   auto rhsOp = operands[1].getDefiningOp();
 
   std::vector<Operation *> MultOpsToRemove;
@@ -282,7 +265,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
 
   comet_debug() << "Chain Multiplication Factorization begin...\n";
 
-  // collect all operands from series of ta.tc ops
+  ///  collect all operands from series of ta.tc ops
   if (isa<tensorAlgebra::TensorMultOp>(lhsOp))
   {
     std::stack<Operation *> stack;
@@ -312,9 +295,9 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   }
 
   std::map<Operation *, Value> labelValues;
-  // IndexLabelStaticOp to size map
+  ///  IndexLabelStaticOp to size map
   std::map<Operation *, int64_t> lblSizes;
-  // LabeledTensorOp to label set map
+  ///  LabeledTensorOp to label set map
   std::map<Operation *, std::vector<Operation *>> lblMaps;
 
   for (auto op : inLTOps)
@@ -334,15 +317,11 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
     lblMaps[op] = labelVec;
   }
 
-  // auto outLabels = cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getLabels();
-  // LTOpsToRemove.push_back(cast<tensorAlgebra::LabeledTensorOp>(rhsOp).getOperation());
   auto outLabels = cast<tensorAlgebra::DenseTensorDeclOp>(rhsOp).getLabels();
-  // LTOpsToRemove.push_back(cast<tensorAlgebra::DenseTensorDeclOp>(rhsOp).getOperation());
   std::vector<Operation *> outLabelVec;
   for (auto lbl : outLabels)
   {
     auto lblOp = lbl.getDefiningOp();
-    // comet_debug() << " outlabels: " << lbl << "\n";
     outLabelVec.push_back(lblOp);
   }
   lblMaps[lhsOp] = outLabelVec;
@@ -355,14 +334,14 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   bool same_order = hasSameOrder(getReverseIdentityPermutation(order.size()), order);
 
   comet_debug() << "Same order " << same_order << "\n";
-  // updated ta dialect generation.
+  ///  updated ta dialect generation.
   if (!same_order)
   {
 
     Value newRhs1, newRhs2;
-    std::vector<Value> ___newSumLabels; // needed for intermediate tensor information
+    std::vector<Value> ___newSumLabels; ///  needed for intermediate tensor information
 
-    newRhs1 = inLTValues[inLTOps[order[0]]]; // updated later for subsequent ta.tc ops in the chain
+    newRhs1 = inLTValues[inLTOps[order[0]]]; ///  updated later for subsequent ta.tc ops in the chain
     for (size_t i = 1; i < order.size(); i++)
     {
       newRhs2 = inLTValues[inLTOps[order[i]]];
@@ -381,16 +360,15 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
         remainingLabels.insert(lblSet.begin(), lblSet.end());
       }
       auto lhsLabels = findOutput(rhs1Labels, rhs2Labels, remainingLabels);
-      // find difference of {rhs1Labels, rhs2Labels}, {lhsLabels}
+      ///  find difference of {rhs1Labels, rhs2Labels}, {lhsLabels}
       auto tempLabelsOps = getSumLabels(rhs1Labels, rhs2Labels, lhsLabels);
 
       for (auto lbl : lhsLabels)
       {
         newSumLabels.push_back(labelValues[lbl]);
-        // comet_vdump(labelValues[lbl]);
       }
       if (!isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
-      { // store the output label values for subsequent ta.tc ops
+      { ///  store the output label values for subsequent ta.tc ops
         ___newSumLabels = newSumLabels;
       }
 
@@ -401,10 +379,9 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       {
         new_lhs_lbls_value.push_back(labelValues[lbl]);
         new_all_lbls_value.push_back(labelValues[lbl]);
-        // comet_vdump(labelValues[lbl]);
       }
       if (isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
-      { // retrieve the labels from prev iteration.
+      { ///  retrieve the labels from prev iteration.
         new_rhs_lbls_value = ___newSumLabels;
         for (auto lbl : new_rhs_lbls_value)
         {
@@ -413,11 +390,10 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
           {
             new_all_lbls_value.push_back(lbl);
           }
-          // comet_vdump(lbl);
         }
       }
       else
-      { // retrieve the labels from lblMaps
+      { ///  retrieve the labels from lblMaps
         for (auto lbl : rhs1Labels)
         {
           new_rhs_lbls_value.push_back(labelValues[lbl]);
@@ -426,11 +402,10 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
           {
             new_all_lbls_value.push_back(labelValues[lbl]);
           }
-          // comet_vdump(labelValues[lbl]);
         }
       }
 
-      // formats
+      ///  formats
       SmallVector<mlir::StringRef, 8> formats;
       if (isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()))
       {
@@ -449,7 +424,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
         formats.push_back(rhs_format);
       }
       if (isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
-      { // for series of ta.tc case
+      { ///  for series of ta.mul case
         auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).getFormat();
         formats.push_back(lhs_format);
         formats.push_back(lhs_format);
@@ -516,7 +491,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       auto MaskingAttr = builder.getStringAttr("none");
       Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
                                                                newSumLabels, affineMapArrayAttr, strAttr, SemiringAttr,
-                                                               MaskingAttr, nullptr);  //TODO: masking is an optional operand
+                                                               MaskingAttr, nullptr);
       tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
       tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
       comet_debug() << "New operation " << tcop << "\n";
@@ -555,7 +530,6 @@ void LowerTAMulChainPass::runOnOperation()
   ConversionTarget target(getContext());
   target.addLegalDialect<ArithDialect>();
 
-  // target.addIllegalDialect<tensorAlgebra::TADialect>();
   target.addLegalOp<tensorAlgebra::PrintOp,
                     tensorAlgebra::TAReturnOp,
                     tensorAlgebra::ReduceOp,
@@ -588,12 +562,12 @@ void STCRemoveDeadOpsPass::runOnOperation()
   ConversionTarget target(getContext());
 
   func::FuncOp func = getOperation();
-  target.addLegalDialect<mlir::linalg::LinalgDialect, 
-                          ArithDialect, 
-                          scf::SCFDialect, 
-                          AffineDialect, memref::MemRefDialect, 
-                          bufferization::BufferizationDialect>();
-  
+  target.addLegalDialect<mlir::linalg::LinalgDialect,
+                         ArithDialect,
+                         scf::SCFDialect,
+                         AffineDialect, memref::MemRefDialect,
+                         bufferization::BufferizationDialect>();
+
   target.addLegalOp<tensorAlgebra::TensorMultOp>();
   RewritePatternSet patterns(&getContext());
   populateSTCRemoveDeadOpsPatterns(patterns, &getContext());
@@ -613,7 +587,7 @@ std::unique_ptr<Pass> mlir::comet::createLowerTAMulChainPass()
   return std::make_unique<LowerTAMulChainPass>();
 }
 
-// Lower sparse tensor algebra operation to loops
+///  Lower sparse tensor algebra operation to loops
 std::unique_ptr<Pass> mlir::comet::createSTCRemoveDeadOpsPass()
 {
   return std::make_unique<STCRemoveDeadOpsPass>();
