@@ -8,8 +8,7 @@ comet_rs::comet_fn! { ccsd_t1_21_ttgt, {
     i0 = v * t2;
     i0.print();
 },
-CometOption::[TcToTtgt, ToLoops],
-MlirOption::[ ConvertLinalgToLoops,ConvertScfToStd, ConvertLinalgToLlvm, ConvertStdToLlvm]
+CometOption::[TcToTtgt, ToLoops, ToLlvm]
 }
 
 fn main() {

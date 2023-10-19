@@ -8,12 +8,9 @@ comet_rs::comet_fn! { ccsd_t1_4_ttgt_bestperm, {
     i0 = v * t2;
     i0.print();
 },
-CometOption::[BestPermTtgt, TcToTtgt],
-MlirOption::[ConvertLinalgToLoops, ConvertLinalgToStd, ConvertLinalgToLlvm, ConvertScfToStd, ConvertStdToLlvm]
-}
+CometOption::[BestPermTtgt, TcToTtgt, ToLlvm]}
 
 fn main() {
     ccsd_t1_4_ttgt_bestperm();
 }
-
 

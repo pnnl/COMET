@@ -11,9 +11,7 @@ comet_rs::comet_fn! { dtranspose_eltwise_dense_dense, {
     D = B .* C;
     D.print();
 
-},
-MlirOption::[ConvertLinalgToLoops, ConvertScfToStd, ConvertStdToLlvm]
-}
+},}
 
 fn main() {
     dtranspose_eltwise_dense_dense();

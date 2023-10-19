@@ -8,8 +8,6 @@ comet_rs::comet_fn! { transpose_dense_tensor, {
     B = A.transpose([j, i, k]);
     B.print();
 }
-CometOption::[ToLoops],
-MlirOption::[ConvertLinalgToLoops, ConvertScfToStd, ConvertStdToLlvm]
 }
 
 fn main() {

@@ -8,9 +8,7 @@ comet_rs::comet_fn! { mult_spgemm_csr_csr_csr, {
     let C = Tensor::<f64>::csr([a, c]);
     C = A * B;
     C.print();
-} 
-MlirOption::[ConvertScfToStd,ConvertStdToLlvm]
-}
+}}
 
 fn main() {
     mult_spgemm_csr_csr_csr(); 

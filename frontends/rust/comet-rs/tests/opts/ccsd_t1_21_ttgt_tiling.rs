@@ -8,9 +8,7 @@ comet_rs::comet_fn! { ccsd_t1_21_ttgt_tiling, {
     i0 = v * t2;
     i0.print();
 },
-CometOption::[MatMulTiling, TcToTtgt],
-MlirOption::[LowerAffine, ConvertLinalgToLoops, ConvertLinalgToStd, ConvertLinalgToLlvm, ConvertScfToStd, ConvertStdToLlvm]}
-
+CometOption::[MatMulTiling, TcToTtgt, ToLlvm]}
 fn main() {
     ccsd_t1_21_ttgt_tiling();
 }
