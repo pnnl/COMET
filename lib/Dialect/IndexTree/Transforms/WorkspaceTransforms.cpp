@@ -29,22 +29,10 @@
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h""
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/DialectConversion.h"
-#include "llvm/ADT/Sequence.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/Verifier.h"
-#include "mlir/IR/Types.h"
 
 #include "llvm/Support/Debug.h"
 #include <iostream>
@@ -76,8 +64,6 @@ using llvm::StringRef;
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
-#define TENSOR_NUMS 3
-#define INPUT_TENSOR_NUMS 2
 
 const bool compressedworkspace = true;
 

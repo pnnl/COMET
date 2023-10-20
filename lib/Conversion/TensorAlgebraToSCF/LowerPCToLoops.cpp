@@ -29,13 +29,8 @@
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
-#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/DialectConversion.h"
-#include "llvm/ADT/Sequence.h"
-#include "llvm/Support/Debug.h"
 
 #include <queue>
 #include <vector>

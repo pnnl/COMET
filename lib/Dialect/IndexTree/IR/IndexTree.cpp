@@ -24,8 +24,6 @@
 #include "comet/Dialect/IndexTree/IR/IndexTree.h"
 #include "comet/Dialect/IndexTree/Transforms/UnitExpression.h"
 
-#include "mlir/IR/Block.h"
-#include "mlir/IR/Operation.h"
 
 using namespace std;
 

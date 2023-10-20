@@ -29,10 +29,6 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 
-#include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/DialectConversion.h"
-#include "llvm/ADT/Sequence.h"
 
 #include <limits>
 #include <map>

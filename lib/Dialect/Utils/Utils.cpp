@@ -30,13 +30,7 @@
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/BuiltinDialect.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/PatternMatch.h"
 
 #include "llvm/Support/Debug.h"
 
@@ -50,9 +44,8 @@
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
+/// TODO(gkestor): supports only f64 -  need generalization
 std::string VALUETYPE = "f64";
-unsigned int TENSOR_NUMS = 3;
-unsigned int INPUT_TENSOR_NUMS = 2;
 
 using namespace mlir::arith;
 using namespace mlir::indexTree;
@@ -522,8 +515,7 @@ namespace mlir
 
     std::vector<std::vector<std::string>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms)
     {
-      std::vector<std::vector<std::string>> allFormats(TENSOR_NUMS);
-
+      std::vector<std::vector<std::string>> allFormats(allPerms.size());
       /// format with each input matrix: ["CSR", "D", "D"] SpMM
       for (unsigned int i = 0; i < opFormatsArrayAttr.size(); i++)
       {
@@ -661,7 +653,7 @@ namespace mlir
     /// Get the format of the tensor
     std::string getTensorFormat(std::vector<std::vector<std::string>> allFormats, unsigned int tensor_id)
     {
-      assert(tensor_id < TENSOR_NUMS && "illegal tensor_id\n");
+      assert(tensor_id < allFormats.size() && "illegal tensor_id\n");
       std::string format_ret = "";
       std::vector<std::string> format = allFormats[tensor_id];
 
@@ -719,9 +711,9 @@ namespace mlir
 
     std::string getFormat(std::vector<unsigned int> allLocs, std::vector<std::vector<unsigned int>> allPerms, std::vector<std::vector<std::string>> allFormats)
     {
-      std::vector<std::string> formats(INPUT_TENSOR_NUMS);
+      std::vector<std::string> formats(allFormats.size());
 
-      for (unsigned int i = 0; i < INPUT_TENSOR_NUMS; i++)
+      for (unsigned int i = 0; i < allFormats.size(); i++)
       {
         if (allLocs[i] < allPerms[i].size())
         {

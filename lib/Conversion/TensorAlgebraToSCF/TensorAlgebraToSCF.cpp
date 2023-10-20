@@ -33,17 +33,9 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/DialectConversion.h"
-#include "llvm/ADT/Sequence.h"
-#include "mlir/IR/BuiltinOps.h"
-
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/Matchers.h"
-#include "mlir/IR/PatternMatch.h"
+
 
 using namespace mlir;
 using namespace mlir::arith;
@@ -228,8 +220,7 @@ namespace
 
         comet_vdump(lhs);
         auto outputMemref = lhs.getDefiningOp()->getOperand(0);
-        auto linalgTranspose = rewriter.create<linalg::TransposeOp>(loc, inputMemref, outputMemref, llvm::ArrayRef<int64_t>(allPerms[1]));
-        comet_vdump(linalgTranspose);
+        rewriter.create<linalg::TransposeOp>(loc, inputMemref, outputMemref, llvm::ArrayRef<int64_t>(allPerms[1]));
         Value res_value = rewriter.create<ToTensorOp>(loc, outputMemref);
 
         op.replaceAllUsesWith(res_value);
@@ -632,7 +623,6 @@ namespace
       auto lhsType = op->getOperand(1).getType();
 
       auto f64Type = rewriter.getF64Type();
-      Type unrankedMemrefType_f64 = UnrankedMemRefType::get(f64Type, 0);
       Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
       comet_vdump(const_index_0);
       std::vector<Value> alloc_zero_loc = {const_index_0};
@@ -747,7 +737,6 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
   /// this lowering. In our case, we are lowering to a combination of the
   /// `LinAlg` and `Standard` dialects.
   target.addLegalDialect<LinalgDialect,
-                         AffineDialect,
                          scf::SCFDialect,
                          ArithDialect,
                          memref::MemRefDialect,

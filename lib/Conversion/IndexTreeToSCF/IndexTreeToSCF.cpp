@@ -29,7 +29,6 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 
-#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -38,16 +37,7 @@
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Pass/Pass.h"
-
-#include "llvm/ADT/Sequence.h"
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dominance.h"
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/Verifier.h"
-#include "mlir/IR/Types.h"
-
 
 #include "llvm/Support/Debug.h"
 #include "llvm/ADT/StringSet.h"
@@ -86,8 +76,6 @@ namespace comet
 #include "comet/Conversion/Passes.h.inc"
 } /// namespace comet
 
-#define TENSOR_NUMS 3
-#define INPUT_TENSOR_NUMS 2
 
 namespace
 {

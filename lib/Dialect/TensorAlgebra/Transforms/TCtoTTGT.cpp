@@ -34,11 +34,6 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
-#include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/DialectConversion.h"
-#include "llvm/ADT/Sequence.h"
-#include "mlir/IR/BuiltinTypes.h"
-
 #include <limits>
 #include <map>
 #include <set>

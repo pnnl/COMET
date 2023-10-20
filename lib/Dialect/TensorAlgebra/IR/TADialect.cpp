@@ -29,12 +29,10 @@
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TATypes.h"
 
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
-#include "mlir/Transforms/InliningUtils.h"
+
 
 using namespace mlir;
 using namespace mlir::tensorAlgebra;

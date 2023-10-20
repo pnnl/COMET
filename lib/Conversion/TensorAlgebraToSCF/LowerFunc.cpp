@@ -2,7 +2,6 @@
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -74,7 +73,7 @@ namespace
 
     void getDependentDialects(DialectRegistry &registry) const override
     {
-      registry.insert<AffineDialect, func::FuncDialect, memref::MemRefDialect>();
+      registry.insert<func::FuncDialect, memref::MemRefDialect>();
     }
     void runOnOperation() final;
   };
@@ -133,7 +132,7 @@ void FuncOpLoweringPass::runOnOperation()
   /// We define the specific operations, or dialects, that are legal targets for
   /// this lowering. In our case, we are lowering to a combination of the
   /// `Affine`, `Arith`, `Func`, and `MemRef` dialects.
-  target.addLegalDialect<AffineDialect, BuiltinDialect, arith::ArithDialect,
+  target.addLegalDialect<BuiltinDialect, arith::ArithDialect,
                          func::FuncDialect, memref::MemRefDialect>();
 
   /// We also define the Toy dialect as Illegal so that the conversion will fail

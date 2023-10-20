@@ -38,9 +38,8 @@
 #include <unordered_map>
 #include <typeinfo>
 
+/// TODO(gkestor): supports only f64 -  need generalization
 extern std::string VALUETYPE;
-extern unsigned int TENSOR_NUMS;
-extern unsigned int INPUT_TENSOR_NUMS;
 
 using namespace mlir::linalg;
 

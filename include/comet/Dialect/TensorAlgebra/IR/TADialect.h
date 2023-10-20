@@ -36,7 +36,6 @@
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/Interfaces/CallInterfaces.h"
 #include "mlir/Interfaces/CastInterfaces.h"
-#include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/IR/PatternMatch.h"
 
 /// Include the auto-generated header file containing the declaration of the Tensor Algebra
