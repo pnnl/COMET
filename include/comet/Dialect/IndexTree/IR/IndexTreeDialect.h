@@ -30,9 +30,6 @@
 
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/PatternMatch.h"
-#include "mlir/IR/AffineMap.h"
-#include "mlir/Interfaces/SideEffectInterfaces.h"
 
 /// Include the auto-generated header file containing the declaration of the index tree
 /// dialect.

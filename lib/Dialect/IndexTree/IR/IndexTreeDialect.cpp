@@ -27,13 +27,9 @@
 #include <iostream>
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 
-#include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/Operation.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Transforms/InliningUtils.h"
-#include "mlir/IR/BuiltinTypes.h"
+
 
 using namespace mlir;
 using namespace mlir::indexTree;
