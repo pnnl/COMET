@@ -622,7 +622,7 @@ namespace
       auto rhsType = op->getOperand(0).getType();
       auto lhsType = op->getOperand(1).getType();
 
-      auto f64Type = rewriter.getF64Type();
+      [[maybe_unused]] auto f64Type = rewriter.getF64Type();
       Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
       comet_vdump(const_index_0);
       std::vector<Value> alloc_zero_loc = {const_index_0};
@@ -691,7 +691,7 @@ namespace
 
       comet_vdump(res_val);
       /// store res_val to res
-      auto storeOp = rewriter.create<memref::StoreOp>(loc, res_val, res, alloc_zero_loc);
+      [[maybe_unused]] auto storeOp = rewriter.create<memref::StoreOp>(loc, res_val, res, alloc_zero_loc);
       comet_vdump(storeOp);
 
       op.replaceAllUsesWith(res);

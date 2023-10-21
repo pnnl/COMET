@@ -174,7 +174,7 @@ namespace mlir
                           bool use_dynamic_init,
                           Value dynamic_init)
     {
-      auto lowerBound = builder.create<ConstantIndexOp>(loc, 0);
+      [[maybe_unused]] auto lowerBound = builder.create<ConstantIndexOp>(loc, 0);
       MemRefType resultMemTy = alloc_op.getDefiningOp()->getResult(0).getType().cast<MemRefType>();
       std::vector<Value> cur_indices;
       std::vector<int64_t> cur_memref;
@@ -200,7 +200,7 @@ namespace mlir
           comet_vdump(dynamic_init);
           Value rowptr = builder.create<memref::LoadOp>(loc, dynamic_init, ValueRange{accessIdx});
           auto const_index_0 = builder.create<ConstantIndexOp>(loc, 0);
-          auto store_op = builder.create<memref::StoreOp>(loc, rowptr, alloc_op, ValueRange{const_index_0});
+          [[maybe_unused]] auto store_op = builder.create<memref::StoreOp>(loc, rowptr, alloc_op, ValueRange{const_index_0});
           comet_vdump(rowptr);
           comet_vdump(store_op);
         }
@@ -810,6 +810,8 @@ namespace mlir
       }
       if (formats.size() == 1) /// new computeOp produces after workspace transformations. There is only one operand on rhs
         return false;
+
+      return false;
     }
 
     std::vector<Value> getFormatsValue(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IndexType indexType)

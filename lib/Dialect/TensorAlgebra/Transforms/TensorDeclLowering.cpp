@@ -1054,7 +1054,7 @@ namespace
     {
 
       comet_debug() << "--------------DenseTensorDeclarationLowering in format begin\n";
-      auto module = op->getParentOfType<ModuleOp>(); /// debuging purposes
+      [[maybe_unused]] auto module = op->getParentOfType<ModuleOp>(); /// debuging purposes
       comet_debug() << "\n\n";
 
       comet_vdump(op);

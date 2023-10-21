@@ -385,7 +385,9 @@ namespace tensorAlgebra
           while (isalnum((LastChar = Token(getNextChar()))) || LastChar == '_' || LastChar == '/' || LastChar == '.')
           {
             if (LastChar == '/')
+            {
               comet_debug() << '/' << "\n";
+            }
             comet_debug() << IdentifierStr << "\n";
             IdentifierStr += (char)LastChar;
           }

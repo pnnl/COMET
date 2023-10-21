@@ -70,13 +70,13 @@ int getMatrixReadOption(int32_t readMode)
 template <typename T>
 struct CooTuple
 {
-  int row;
-  int col;
+  uint64_t row;
+  uint64_t col;
   T val;
 
   CooTuple() {}
-  CooTuple(int row, int col) : row(row), col(col) {}
-  CooTuple(int row, int col, T val) : row(row), col(col), val(val) {}
+  CooTuple(uint64_t row, uint64_t col) : row(row), col(col) {}
+  CooTuple(uint64_t row, uint64_t col, T val) : row(row), col(col), val(val) {}
 };
 
 //===----------------------------------------------------------------------===//
@@ -801,8 +801,8 @@ struct EllpackMatrix
     /// Calculate the column count
     uint64_t max = 0;
     uint64_t buffer = 0;
-    int current = -1;
-
+    // int current = -1;
+    uint64_t current = num_nonzeros > 0 ? coo_matrix->coo_tuples[0].row : 0;
     for (uint64_t i = 0; i < num_nonzeros; i++)
     {
       if (coo_matrix->coo_tuples[i].row == current)
@@ -2054,7 +2054,7 @@ void read_input_2D(int32_t fileID,
     desc_A1pos->data[0] = ellpack_matrix.num_rows;
     desc_A1tile_pos->data[0] = ellpack_matrix.num_cols;
 
-    for (int i = 0; i < ellpack_matrix.num_cols * ellpack_matrix.num_rows; i++)
+    for (uint64_t i = 0; i < ellpack_matrix.num_cols * ellpack_matrix.num_rows; i++)
     {
       desc_A2crd->data[i] = ellpack_matrix.col_crd[i];
       desc_Aval->data[i] = ellpack_matrix.Aval[i];

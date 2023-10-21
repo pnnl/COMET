@@ -112,11 +112,11 @@ struct GenericCallOpLowering : public OpRewritePattern<mlir::tensorAlgebra::Gene
     /// We lower "toy.return" directly to "func.return".
     if (op.getResults().size() > 0)
     {
-      auto res = rewriter.replaceOpWithNewOp<func::CallOp>(op, op->getAttrOfType<SymbolRefAttr>("callee"), mlir::UnrankedTensorType::get(rewriter.getF64Type()), op.getOperands());
+      rewriter.replaceOpWithNewOp<func::CallOp>(op, op->getAttrOfType<SymbolRefAttr>("callee"), mlir::UnrankedTensorType::get(rewriter.getF64Type()), op.getOperands());
     }
     else
     {
-      auto res = rewriter.replaceOpWithNewOp<func::CallOp>(op, op->getAttrOfType<SymbolRefAttr>("callee"), mlir::TypeRange(), op.getOperands());
+      rewriter.replaceOpWithNewOp<func::CallOp>(op, op->getAttrOfType<SymbolRefAttr>("callee"), mlir::TypeRange(), op.getOperands());
     }
 
     return success();

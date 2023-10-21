@@ -31,7 +31,7 @@ IterDomain *IterDomain::makeDomain(Tensor *tensor, int dim)
 {
   auto d = make_unique<IterDomain>(tensor, dim);
   auto p = d.get();
-  domains.push_back(move(d));
+  domains.push_back(std::move(d));
   return p;
 }
 
@@ -39,7 +39,7 @@ IterDomain *IterDomain::conjunct(IterDomain *a, IterDomain *b)
 {
   auto d = make_unique<IterDomain>('*', a, b);
   auto p = d.get();
-  domains.push_back(move(d));
+  domains.push_back(std::move(d));
   return p;
 }
 

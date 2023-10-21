@@ -229,7 +229,7 @@ namespace
       /// Arguments type are uniformly unranked tensors.
       llvm::SmallVector<mlir::Type, 4> arg_types(proto.getArgs().size(),
                                                  getType(VarType{}));
-      auto func_type = builder.getFunctionType(arg_types, llvm::None);
+      auto func_type = builder.getFunctionType(arg_types, std::nullopt);
       return builder.create<mlir::tensorAlgebra::FuncOp>(location, proto.getName(),
                                                          func_type);
     }

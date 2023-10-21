@@ -95,7 +95,7 @@ namespace mlir
     template <typename T>
     void print_vector(std::vector<T> vec)
     {
-      for (auto n : vec)
+      for ([[maybe_unused]] auto n : vec)
       {
         // comet_debug() << n << " ";
       }

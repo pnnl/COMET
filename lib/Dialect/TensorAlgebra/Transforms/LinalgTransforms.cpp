@@ -45,6 +45,7 @@
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wcast-qual"
 #include "blis.h"
 #endif
 
@@ -52,6 +53,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wtype-limits"
+#pragma GCC diagnostic ignored "-Wcast-qual"
 #include "blis.h"
 #endif
 
@@ -243,7 +245,7 @@ namespace
 void get_level3_blocksizes(int *mc, int *kc, int *nc, int *mr, int *nr, int size_dt)
 {
   /// Query a native context.
-  cntx_t *cntx = (cntx_t *)bli_gks_query_nat_cntx();
+  const cntx_t *cntx = bli_gks_query_nat_cntx();
 
   *mc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_MC, cntx);
   *kc = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_KC, cntx);
