@@ -150,7 +150,7 @@ void IndexTreeKernelFusionPass::test(mlir::func::FuncOp &funcop)
                   level = 0;
                   comet_pdump(op);
                   auto rootOp = dyn_cast<indexTree::IndexTreeOp>(*op);
-                  Value computeOp = rootOp.getOperation()->getOperand(0);
+                  [[maybe_unused]] Value computeOp = rootOp.getOperation()->getOperand(0);
                   comet_vdump(computeOp);
                 } else if (llvm::isa<indexTree::IndexTreeIndicesOp>(*op)) {
                   comet_debug() << "level: " << level++ << "\n";
@@ -159,9 +159,9 @@ void IndexTreeKernelFusionPass::test(mlir::func::FuncOp &funcop)
                   auto indicesOp = dyn_cast<indexTree::IndexTreeIndicesOp>(*op);
                   int numOperands = indicesOp.getOperation()->getNumOperands();
                   for (int oper_i = 0; oper_i < numOperands; ++oper_i) {
-                    Value oper = indicesOp.getOperation()->getOperand(oper_i);
+                    // Value oper = indicesOp.getOperation()->getOperand(oper_i);
                     comet_debug() << "Operand " << oper_i << ": ";
-                    comet_vdump(oper);
+                    comet_vdump(indicesOp.getOperation()->getOperand(oper_i));
                   }
                   ArrayAttr idsArrayAttr = indicesOp.getIndices();
                   for (auto ida: idsArrayAttr) {
@@ -176,9 +176,8 @@ void IndexTreeKernelFusionPass::test(mlir::func::FuncOp &funcop)
                   int num_operands = computeOp.getOperation()->getNumOperands();
                   for (int op_i = 0; op_i < num_operands; ++op_i) {
 
-                    auto op = computeOp.getOperand(op_i);
                     comet_debug() << "Operand " << op_i << ": ";
-                    comet_vdump(op);
+                    comet_vdump(computeOp.getOperand(op_i));
                   }
 
                   bool is_comp_worksp_opt = computeOp.getCompWorkspOpt();
@@ -595,7 +594,7 @@ void IndexTreeKernelFusionPass::replaceOldTensorFillOp(
       auto value_attr = fill_op.getValueAttr();
 
       OpBuilder builder(user);
-      auto new_fill_op = builder.create<tensorAlgebra::TensorFillOp>(
+      [[maybe_unused]] auto new_fill_op = builder.create<tensorAlgebra::TensorFillOp>(
           user->getLoc(),
           new_dense_tensor_decl,
           value_attr);
@@ -650,7 +649,7 @@ void IndexTreeKernelFusionPass::replaceOldLinalgFillOp(
       ///  mlir::Value memref;
       if (llvm::isa<tensorAlgebra::DenseTensorDeclOp>(new_tensor_load.getDefiningOp()))
       {
-        auto new_fill_op = builder.create<tensorAlgebra::TensorFillOp>(
+        [[maybe_unused]] auto new_fill_op = builder.create<tensorAlgebra::TensorFillOp>(
             user->getLoc(),
             new_tensor_load,
             builder.getF64FloatAttr(0));
@@ -663,7 +662,7 @@ void IndexTreeKernelFusionPass::replaceOldLinalgFillOp(
       {
         /// For GNN kernel.
         mlir::Value memref = llvm::dyn_cast<ToTensorOp>(new_tensor_load.getDefiningOp()).getMemref();
-        auto new_fill_op = builder.create<linalg::FillOp>(
+        [[maybe_unused]] auto new_fill_op = builder.create<linalg::FillOp>(
             user->getLoc(),
             constant_op,
             memref);
@@ -994,7 +993,7 @@ void IndexTreeKernelFusionPass::reduceTensorDimension(std::vector<mlir::Operatio
     auto users = tensor.getUsers();
 
     comet_debug() << "users\n";
-    for (auto u : users)
+    for ([[maybe_unused]] auto u : users)
     {
       comet_pdump(u);
     }

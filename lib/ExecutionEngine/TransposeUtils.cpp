@@ -508,8 +508,8 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
   auto *desc_A1tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1tile_crd_ptr);
   auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
   auto *desc_A2crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2crd_ptr);
-  auto *desc_A2tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_pos_ptr);
-  auto *desc_A2tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_crd_ptr);
+  [[maybe_unused]] auto *desc_A2tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_pos_ptr);
+  [[maybe_unused]] auto *desc_A2tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_crd_ptr);
   auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
 
   auto *desc_B1pos = static_cast<StridedMemRefType<int64_t, 1> *>(B1pos_ptr);
@@ -607,7 +607,7 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
     /// Rearrange the values
     int val_sz = desc_Aval->sizes[0];
     int rows = desc_A1pos->data[0];
-    int cols = desc_A1tile_pos->data[0];
+    // int cols = desc_A1tile_pos->data[0];
     int index = 0;
 
     for (int i = 0; i < rows; i++)

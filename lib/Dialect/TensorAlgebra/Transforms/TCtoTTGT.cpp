@@ -83,7 +83,7 @@ static bool arePermutations(const std::vector<T> &vec1,
 
 /// Detect whether memref dims [dim, dim + extent) can be reshaped without
 /// copies.
-static bool isReshapableDimBand(unsigned dim, unsigned extent,
+[[maybe_unused]] static bool isReshapableDimBand(unsigned dim, unsigned extent,
                                 ArrayRef<int64_t> sizes,
                                 ArrayRef<AffineExpr> strides)
 {
@@ -244,18 +244,18 @@ namespace
       std::vector<unsigned int> lhsInPerm = getIdentityPermutation(allPerms[2].size());
 
       AffineMapAttr rhs1OutMapAttr = AffineMapAttr::get(AffineMap::getPermutationMap(rhs1OutPerm, ctx));
-      AffineMap rhs1InMap = AffineMap::getPermutationMap(rhs1InPerm, ctx);
-      AffineMap rhs1OutMap = AffineMap::getPermutationMap(rhs1OutPerm, ctx);
+      [[maybe_unused]] AffineMap rhs1InMap = AffineMap::getPermutationMap(rhs1InPerm, ctx);   /// [PT] Remove?
+      [[maybe_unused]] AffineMap rhs1OutMap = AffineMap::getPermutationMap(rhs1OutPerm, ctx); /// [PT] Remove?
 
       AffineMapAttr rhs2OutMapAttr =
           AffineMapAttr::get(AffineMap::getPermutationMap(rhs2OutPerm, ctx));
-      AffineMap rhs2InMap = AffineMap::getPermutationMap(rhs2InPerm, ctx);
-      AffineMap rhs2OutMap = AffineMap::getPermutationMap(rhs2OutPerm, ctx);
+      [[maybe_unused]] AffineMap rhs2InMap = AffineMap::getPermutationMap(rhs2InPerm, ctx);   /// [PT] Remove?
+      [[maybe_unused]] AffineMap rhs2OutMap = AffineMap::getPermutationMap(rhs2OutPerm, ctx); /// [PT] Remove?
 
       AffineMapAttr lhsOutMapAttr =
           AffineMapAttr::get(AffineMap::getPermutationMap(lhsOutPerm, ctx));
-      AffineMap lhsInMap = AffineMap::getPermutationMap(lhsInPerm, ctx);
-      AffineMap lhsOutMap = AffineMap::getPermutationMap(lhsOutPerm, ctx);
+      [[maybe_unused]] AffineMap lhsInMap = AffineMap::getPermutationMap(lhsInPerm, ctx);   /// [PT] Remove?
+      [[maybe_unused]] AffineMap lhsOutMap = AffineMap::getPermutationMap(lhsOutPerm, ctx); /// [PT] Remove?
 
       Value rhs1Alloc = rhs1Memref;
       Value rhs2Alloc = rhs2Memref;
@@ -336,8 +336,6 @@ namespace
           rewriter.create<linalg::TransposeOp>(loc, lhsMemref, lhsAlloc, llvm::ArrayRef<int64_t>(lhsOutPerm_int64));
         }
       }
-
-      RankedTensorType collapsedTensorType;
 
       Value rhs1Reshape = rhs1Alloc;
       Value rhs2Reshape = rhs2Alloc;
@@ -539,7 +537,7 @@ namespace
       /// Create linalg matmul op
       linalg::MatmulOp matmulop;
       linalg::MatvecOp matvecop;
-      Value res_value;
+
       if (isRHS1SumPermutation)
       {
         comet_debug() << "\n";
