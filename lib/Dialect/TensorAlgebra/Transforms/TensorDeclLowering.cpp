@@ -702,11 +702,11 @@ namespace
           /// For 3D, consider CSF
           else if (dst_rank == 3)
           {
-            if (src_format.compare("CSF") == 0)
+            if (src_format.compare("CSF") == 0) /// [PT] Code for CSF does not work properly
             {
               comet_debug() << " 3D CSF transpose to 3D CSF\n";
               array_sizes_vec.push_back(cst_index_2);
-              mlir::Value src_nnz = src_input.getDefiningOp()->getOperand(13);
+              mlir::Value src_nnz = src_input.getDefiningOp()->getOperand(25); 
               mlir::Value src_nnz_add1 = rewriter.create<AddIOp>(loc, src_nnz, cst_index_1);
               comet_debug() << "AddIOp generated for nnz for CSF:\n";
               comet_vdump(src_nnz_add1);
