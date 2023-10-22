@@ -2220,9 +2220,7 @@ namespace
                                         allValueAccessIdx[2]);
       }
     }
-    //puts("--------");
   }
-  //puts("AFTER- PASS");
 
   /// ----------------- ///
   /// Generate Cij = Wj node, gathering the results in the workspace to the sparse output C.val.
@@ -4211,12 +4209,9 @@ namespace
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerIndexTreeToSCFPass)
     void runOnOperation() override;
 
-      assert(isa<indexTree::IndexTreeOp>(rootOp));
-      comet_debug() << "\nIndexTreeIRLowering in LowerIndexTreeIRToSCF\n";
-      //comet_pdump(rootOp.getOperation()->getParentOp());
-      // Here, should check the operands, at least one operand should be sparse;
-      // Otherwise, if all dense operands, just return.
-      // rootOp only contains one workspace child, no indices
+    void doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &rootOp,
+                                  OpBuilder &builder);
+  };
 
 } /// end anonymous namespace.
 
