@@ -1752,8 +1752,6 @@ namespace
         llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
         signalPassFailure();
       }
-
-      //function.dump();
     }
   };
 
