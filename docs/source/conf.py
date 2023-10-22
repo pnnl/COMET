@@ -3,8 +3,8 @@
 # -- Project information
 
 project = 'COMET'
-copyright = '2022, Pacific Northwest National Laboratory'
-author = 'Rizwan A. Ashraf, Ryan Friese, Roberto Gioiosa and Gokcen Kestor'
+copyright = '2023, Pacific Northwest National Laboratory'
+author = 'Rizwan A. Ashraf, Ryan Friese, Polykarpos Thomadakis, Zhen Peng, Roberto Gioiosa and Gokcen Kestor'
 
 release = '0.1'
 version = '0.1'

@@ -10,6 +10,7 @@ For a quick reference on the usage of these optimizations, see the :doc:`passes`
    optimizations/ttgt
    optimizations/permute
    optimizations/workspace
+   optimizations/two-phase
    optimizations/expression
    optimizations/transpose
 

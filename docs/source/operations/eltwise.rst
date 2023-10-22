@@ -28,7 +28,7 @@ The following is an example of element-wise multiplication of a sparse matrix an
      Tensor<double> C([i, j], {COO});
 
      # Tensor Fill operation
-     A[i, j] = read_from_file(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
+     A[i, j] = comet_read(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
      B[i, j] = 3.0;                        # initialize the dense matrix with all 3.0s
 
      C[i, j] = A[i, j] .* B[i, j];          # perform element-wise multiplication
@@ -50,8 +50,8 @@ The following is an example of element-wise multiplication of a sparse matrix an
      Tensor<double> C([i, j], {CSR});
 
      # Tensor Fill operation
-     A[i, j] = read_from_file(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
-     B[i, j] = read_from_file(1);          # read in a sparse matrix @SPARSE_FILE_NAME1
+     A[i, j] = comet_read(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
+     B[i, j] = comet_read(1);          # read in a sparse matrix @SPARSE_FILE_NAME1
 
      C[i, j] = A[i, j] .* B[i, j];         # perform element-wise multiplication
 

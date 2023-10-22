@@ -29,7 +29,7 @@ The following is an example of SpMM (sparse matrix-dense matrix multiplication) 
      Tensor<double> C([i, k], {Dense});
 
      # Tensor Fill operation
-     A[i, j] = read_from_file(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
+     A[i, j] = comet_read(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
      B[j, k] = random();                   # initialize the dense matrix with random values
      C[i, k] = 0.0;                        # initialize the dense matrix with all 0s
 
@@ -54,8 +54,8 @@ The following is an example of spGEMM (sparse matrix-sparse matrix multiplicatio
      Tensor<double> C([i, k], {CSR});
 
      # Tensor Fill operation
-     A[i, j] = read_from_file(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
-     B[j, k] = read_from_file(1);          # read in a sparse matrix @SPARSE_FILE_NAME1
+     A[i, j] = comet_read(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
+     B[j, k] = comet_read(1);          # read in a sparse matrix @SPARSE_FILE_NAME1
 
      # Tensor Contraction
      C[i, k] = A[i, j] * B[j, k];          # perform spGEMM

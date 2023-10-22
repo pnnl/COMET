@@ -39,13 +39,13 @@ Index Tree Dialect
 The IT dialect inside COMET is used to represent the loop order and the computation information for a tensor expression via an index tree. 
 The index tree representation consists of two types of nodes: index nodes and compute nodes.
 The index nodes contain a list of indices for nested for-loops to iterate on (includes the order). Compute nodes contain the compute statements of the tensor expression.
-A sparse tensor contraction operation in TA dialect is converted to ``itree``, ``itIndices`` and ``itCompute`` operations corresponding to the root node, index node and compute node of the index tree, respectively.
+A sparse tensor contraction operation in TA dialect is converted to ``itree``, ``Indices`` and ``Compute`` operations corresponding to the root node, index node and compute node of the index tree, respectively.
 
 The computational kernel code that is a combination of *scf* and *std* dialects is generated based on the types of inputs.
 The IT dialect conversion starts from root of the index tree.
-The code generation algorithm traverses the index tree in depth-first order to generate operations for each node, including inner tree node ``itIndices`` and leaf node ``itCompute``.
-The ``itIndices`` operations are converted to ``scf.for`` operation. Whereas, the ``itCompute`` operations are converted into a set of standard dialect operations.
-They will be put into the body of the generated for loops, which are generated from the parent operation of the ``itCompute`` operation.
+The code generation algorithm traverses the index tree in depth-first order to generate operations for each node, including inner tree node ``Indices`` and leaf node ``Compute``.
+The ``Indices`` operations are converted to ``scf.for`` operation. Whereas, the ``Compute`` operations are converted into a set of standard dialect operations.
+They will be put into the body of the generated for loops, which are generated from the parent operation of the ``Compute`` operation.
 
 The conversion to loops in *scf* dialect enables optimizations to be applied using MLIR.
 Here, low-level optimizations are applied to enable execution on target architecture.

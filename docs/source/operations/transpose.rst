@@ -52,7 +52,7 @@ The following is an example of Transposing CSR matrices in COMET DSL:
      Tensor<double> B([j, i], CSR);
 
      # Tensor Readfile Operation      
-     A[i, j] = read_from_file(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
+     A[i, j] = comet_read(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
 
      # Tensor Transpose
      B[j, i] = transpose(A[i, j], {j, i}); # perform sparse transpose @SORT_TYPE

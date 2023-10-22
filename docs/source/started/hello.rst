@@ -28,17 +28,17 @@ This section will go over steps to compile your first COMET DSL program, once CO
      print(C);                             # print the matrix
    } 
 
-*Convert TA dialect to IT dialect using* ``--convert-ta-to-it`` *pass, and then to loops using* ``--convert-to-loops`` *pass. These passes are available in* ``comet-opt`` *that should be located in* ``build/bin``:
+Convert *TA dialect* to *IT dialect* using ``--convert-ta-to-it`` pass, and then to *loops (SCF dialect)* using ``--convert-to-loops`` pass. These passes are available in ``comet-opt`` that should be located in ``build/bin``:
 ::
 
    $ comet-opt --convert-ta-to-it --convert-to-loops myFirst.ta &> myFirst.mlir
    
-*Convert loops (SCF dialect) to std dialect using* ``--convert-scf-to-std`` *pass and then std to LLVM dialect using* ``--convert-std-to-llvm`` *pass. These passes are available in mlir-opt that should be located in* ``llvm/build/bin``:
+Convert *loops (SCF dialect)* to *std dialect* using ``--convert-scf-to-std`` pass and then *std* to *LLVM dialect* using ``--convert-std-to-llvm`` pass. These passes are available in mlir-opt that should be located in ``llvm/build/bin``:
 ::
 
    $ mlir-opt --convert-scf-to-std --convert-std-to-llvm myFirst.mlir &> myFirst.llvm 
 
-*Execute LLVM on CPU using* ``mlir-cpu-runner`` *that is located in* ``llvm/build/bin``. *The shared libraries (* ``libcomet_runner_utils`` *and* ``libmlir_runner_utils``  *) are utilized for runtime calls.*
+Execute *LLVM dialect* on CPU using ``mlir-cpu-runner`` that is located in ``llvm/build/bin``. The shared libraries (``libcomet_runner_utils`` and ``libmlir_runner_utils``) are utilized for runtime calls.
 ::
    
    $ mlir-cpu-runner myFirst.llvm -O3 -e main -entry-point-result=void -shared-libs=build/lib/libcomet_runner_utils.dylib,llvm/build/lib/libmlir_runner_utils.dylib

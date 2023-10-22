@@ -27,7 +27,7 @@ The following is an example of applying SUM to COO matrices in COMET DSL:
      Tensor<double> A([i, j], {COO});      # declare a sparse tensor in COO format
 
      # Tensor Fill Operation 
-     A[i, j] = read_from_file(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
+     A[i, j] = comet_read(0);          # read in a sparse matrix @SPARSE_FILE_NAME0
 
      # Reduction operation
      var a = SUM(A[i, j]);                 # perform the reduction operation
@@ -48,7 +48,7 @@ The following is an example of applying SUM to CSF tensors in COMET DSL:
      Tensor<double> A([i, j, k], {CSF});   # declare a sparse tensor in CSF format
 
      # Tensor Fill Operation 
-     A[i, j, k] = read_from_file(0);       # read in a sparse matrix @SPARSE_FILE_NAME0
+     A[i, j, k] = comet_read(0);       # read in a sparse matrix @SPARSE_FILE_NAME0
 
      # Reduction Operation
      var a = SUM(A[i, j, k]);              # perform the reduction operation for 3D tensor
