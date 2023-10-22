@@ -263,9 +263,9 @@ class NewVisitor(ast.NodeVisitor):
     
     def create_binOp(self, node, operands, no_assign):
         out_id = self.tcurr
+        op0_sems = self.tsemantics[operands[0]]
+        op1_sems = self.tsemantics[operands[1]]
         if not isinstance(node.op, ast.MatMult):
-            op0_sems = self.tsemantics[operands[0]]
-            op1_sems = self.tsemantics[operands[1]]
             
             if 'labels' not in op0_sems:
                 labels = []
@@ -292,6 +292,7 @@ class NewVisitor(ast.NodeVisitor):
 
             s = 'a'
             indices = "".join(chr(ord(s)+i) for i in range(len(op_semantics['labels'])))
+        self.need_opt_comp_workspace = op0_sems['format'] == CSR and op1_sems['format'] == CSR
         if isinstance(node.op, ast.Add):
             self.ops.append(("+", operands, indices +','+indices+'->'+indices, self.tcurr))
 
@@ -388,7 +389,7 @@ class NewVisitor(ast.NodeVisitor):
                     indices = 'a,ab->b'
                 # elif len(op1['shape']) == 1 and len(op2['shape']) == 1:
                 #     shape = [1,0]
-            self.need_opt_comp_workspace = op1['format'] or op2['format']
+            
             # self.ops.append(("c", operands, iLabels, self.tcurr, mask, mask_type, semiring))
             self.ops.append(("c", operands, indices, self.tcurr, mask[0], mask[1], None, no_assign))
             format = self.sp_matmult_conversions[op1['format']][op2['format']]
