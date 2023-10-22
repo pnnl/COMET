@@ -211,8 +211,7 @@ def comment_unneeded_sparse(input_, arg_vals):
 
             # while(found != 7):
             # With tiles
-            while(found != 11):
-
+            while(found != 9):
                 if "memref.load " + alloc in input[i]:
                     idx = input[i].split('=')[0].lstrip().strip()
                     indexes.append(idx)
@@ -222,7 +221,8 @@ def comment_unneeded_sparse(input_, arg_vals):
         elif 'memref.alloc(' in input[i]:
             line = input[i]
             idx = line[line.find('(') + 1: line.find(')')]
-            if idx in indexes[:-1]:
+            # if idx in indexes[:-1]:
+            if idx in indexes:
                 indexes.remove(idx)
                 allocs.append(line.split('=')[0].rstrip().strip())
                 cur_lines = []
@@ -253,17 +253,18 @@ def comment_unneeded_sparse(input_, arg_vals):
                 lline = input[j]
                 if cast + " = memref.cast" in lline:
                     alloc = lline.split()[3].lstrip().strip()
-                    returns.append((alloc, i))
+                    type = lline.split(":")[1].split("to")[0].strip()
+                    returns.append((alloc, i, type))
         elif ("return" in input[i]) and len(returns) > 1 and not return_found:
             return_found = True
             add = ""
             for k, r in enumerate(returns[:-1]):
-                add += "\t\tmemref.store {}, %marg{}[%c0] : memref<1xmemref<?xindex>>\n".format(r[0], k)
+                add += "\t\tmemref.store {}, %marg{}[%c0] : memref<1x{}>\n".format(r[0], k, r[2] )
                 # input[r[1]] = "//from sparse" + input[r[1]]
                 input[r[1]] = ""
             # input[returns[-1][1]] = "//from sparse" + input[returns[-1][1]]
             input[returns[-1][1]] = ""
-            add += "\t\tmemref.store {}, %marg{}[%c0] : memref<1xmemref<?xf64>>\n".format(returns[-1][0], len(returns)-1)
+            add += "\t\tmemref.store {}, %marg{}[%c0] : memref<1x{}>\n".format(returns[-1][0], len(returns)-1, returns[-1][2])
             add += "\t\treturn"
             input[i] = add
 
@@ -290,7 +291,7 @@ def comment_unneeded_sparse(input_, arg_vals):
 # \t}\n\
 # }\n'
     # With tiles
-            input[1] = input[1].replace(")", ", %marg0: memref<1xmemref<?xindex>>, %marg1: memref<1xmemref<?xindex>>, %marg2: memref<1xmemref<?xindex>>, %marg3: memref<1xmemref<?xindex>>, %marg4: memref<1xmemref<?xindex>>, %marg5: memref<1xmemref<?xindex>>, %marg6: memref<1xmemref<?xindex>>, %marg7: memref<1xmemref<?xindex>>, %marg8: memref<1xmemref<?xf64>>)")
+            input[1] = input[1].replace(")", ", %marg0: memref<1x{}>, %marg1: memref<1x{}>, %marg2: memref<1x{}>, %marg3: memref<1x{}>, %marg4: memref<1x{}>, %marg5: memref<1x{}>, %marg6: memref<1x{}>, %marg7: memref<1x{}>, %marg8: memref<1x{}>)".format(*[x[2] for x in returns]))
     input[-1] = '\n  func.func @dealloc(%to_dealloc: memref<?xindex>, %to_dealloc1: memref<?xindex>, %to_dealloc2: memref<?xindex>, %to_dealloc3: memref<?xindex>, %to_dealloc4: memref<?xindex>, %to_dealloc5: memref<?xindex>, %to_dealloc6: memref<?xindex>, %to_dealloc7: memref<?xindex>, %to_dealloc8: memref<?xf64>){\n \
 \t\tmemref.dealloc %to_dealloc : memref<?xindex>\n \
 \t\tmemref.dealloc %to_dealloc1 : memref<?xindex>\n \
