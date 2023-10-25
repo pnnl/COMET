@@ -315,7 +315,11 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
     SmallVector<int64_t, 8> indices;
     for (size_t j = 0; j < allPerms[i].size(); j++)
     {
-      indexMap[allPerms[i][j]] = expr->getOperands()[i]->getIndices()[j];
+      if (indexMap.find(allPerms[i][j]) == indexMap.end())
+      {
+        indexMap[allPerms[i][j]] = expr->getOperands()[i]->getIndices()[j];
+      }
+      comet_debug() << allPerms[i][j] << " " << indexMap[allPerms[i][j]] << " \n";
       indices.push_back(indexMap[allPerms[i][j]]);
     }
     allIndices_rhs.push_back(builder.getI64ArrayAttr(indices));
@@ -345,7 +349,7 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
     SmallVector<int64_t, 8> indices;
     for (auto index : allPerms[2])
     {
-      comet_debug() << index << " \n";
+      comet_debug() << index << " " << indexMap[index] << " \n";
       indices.push_back(indexMap[index]);
     }
     allIndices_lhs.push_back(builder.getI64ArrayAttr(indices));
