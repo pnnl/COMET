@@ -39,7 +39,7 @@ using namespace mlir::indexTree;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -149,6 +149,14 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   comet_vdump(mask_tensor);
 
   auto allPerms = getAllPerms(op.getIndexingMaps());
+  for(auto p: allPerms)
+  {
+    for(auto pp: p)
+    {
+      comet_debug() << pp << "\n";
+    }
+  }
+  comet_debug() << op.getIndexingMaps() << "\n";
   auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
   auto SemiringOp = op.getSemiringAttr();
   auto MaskingTypeAttr = op.getMaskTypeAttr();
@@ -164,12 +172,12 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   {
     comet_debug() << "mask input provided by user\n";
     M = tree->getOrCreateTensor(mask_tensor, allFormats[2]); /// format same as lhs_tensor
-    e = make_unique<UnitExpression>(A, B, C, M, "*");
+    e = make_unique<UnitExpression>(A, B, C, M, "*", op.getIndexingMaps());
   }
   else
   {
     comet_debug() << "no mask input provided by user\n";
-    e = make_unique<UnitExpression>(A, B, C, "*");
+    e = make_unique<UnitExpression>(A, B, C, "*", op.getIndexingMaps());
   }
 
   e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue());
@@ -234,7 +242,7 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
   auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
   auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
 
-  auto e = make_unique<UnitExpression>(A, B, C, "*");
+  auto e = make_unique<UnitExpression>(A, B, C, "*", op.getIndexingMaps());
 
   e->setOperation(op);
   e->setSemiring(SemiringOp.template cast<mlir::StringAttr>().getValue()); /// for element-wise multiplication
@@ -293,27 +301,55 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
   auto context = builder.getContext();
   IntegerType i64Type = IntegerType::get(context, 64);
   auto expr = node->getExpression();
-
+  auto indexingMaps = expr->getindexingMaps();
+  for (const auto &map : indexingMaps)
+  {
+    auto affineMap = map.cast<AffineMapAttr>().getValue();
+    comet_debug() << affineMap << "\n";
+  }
+  auto allPerms = getAllPerms(indexingMaps);
+  std::map<int64_t,int64_t> indexMap;
   SmallVector<Attribute, 8> allIndices_rhs;
-  for (auto t : expr->getOperands())
+  for (size_t i = 0; i < 2; i++)
   {
     SmallVector<int64_t, 8> indices;
-    for (auto index : t->getIndices())
+    for (size_t j = 0; j < allPerms[i].size(); j++)
     {
-      indices.push_back(index);
+      indexMap[allPerms[i][j]] = expr->getOperands()[i]->getIndices()[j];
+      indices.push_back(indexMap[allPerms[i][j]]);
     }
     allIndices_rhs.push_back(builder.getI64ArrayAttr(indices));
   }
+  // for (auto t : expr->getOperands())
+  // {
+  //   SmallVector<int64_t, 8> indices;
+  //   for (auto index : t->getIndices())
+  //   {
+  //     indices.push_back(index);
+  //   }
+  //   allIndices_rhs.push_back(builder.getI64ArrayAttr(indices));
+  // }
   SmallVector<Attribute, 8> allIndices_lhs;
-  for (auto t : expr->getResults())
-  {
+  // for (auto t : expr->getResults())
+  // {
+  //   SmallVector<int64_t, 8> indices;
+  //   for (auto index : t->getIndices())
+  //   {
+  //     comet_debug() << index << " \n";
+  //     indices.push_back(index);
+  //   }
+  //   allIndices_lhs.push_back(builder.getI64ArrayAttr(indices));
+  // }
+  // for (auto t : expr->getResults())
+  // {
     SmallVector<int64_t, 8> indices;
-    for (auto index : t->getIndices())
+    for (auto index : allPerms[2])
     {
-      indices.push_back(index);
+      comet_debug() << index << " \n";
+      indices.push_back(indexMap[index]);
     }
     allIndices_lhs.push_back(builder.getI64ArrayAttr(indices));
-  }
+  // }
 
   SmallVector<Attribute, 8> allFormats_rhs;
   for (auto t : expr->getOperands())
@@ -359,6 +395,8 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
                                                                       mlir::UnrankedTensorType::get(builder.getF64Type()), t_lhs,
                                                                       builder.getArrayAttr(allIndices_lhs),
                                                                       builder.getArrayAttr(allFormats_lhs));
+  comet_vdump(leafop_lhs);
+
   bool comp_worksp_opt = false; /// non-compressed workspace, this is a place-holder and it is updated in workspace transform pass.
   llvm::StringRef semiring = expr->getSemiring();
   llvm::StringRef maskType = expr->getMaskType();

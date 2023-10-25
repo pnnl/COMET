@@ -36,6 +36,7 @@ class UnitExpression
   string opType;
   llvm::StringRef semiring;
   llvm::StringRef maskType;
+  mlir::ArrayAttr indexingMaps;
   int numOps = 2;
 
   bool traceDomainCompute = false;
@@ -43,12 +44,20 @@ class UnitExpression
 public:
   UnitExpression(Tensor *output,
                  Tensor *operand1,
-                 Tensor *operand2, string op)
-      : output(output), opType(op)
+                 Tensor *operand2, string op, mlir::ArrayAttr indexingMaps)
+      : output(output), opType(op), indexingMaps(indexingMaps)
   {
     operands.push_back(operand1);
     operands.push_back(operand2);
   }
+  // UnitExpression(Tensor *output,
+  //                Tensor *operand1,
+  //                Tensor *operand2, string op)
+  //     : output(output), opType(op)
+  // {
+  //   operands.push_back(operand1);
+  //   operands.push_back(operand2);
+  // }
 
   UnitExpression(Tensor *output,
                  Tensor *operand1,
@@ -67,12 +76,19 @@ public:
                  Tensor *operand1,
                  Tensor *operand2,
                  Tensor *mask,
-                 string op)
-      : output(output), mask(mask), opType(op)
+                 string op,
+                 mlir::ArrayAttr indexingMaps)
+      : output(output), mask(mask), opType(op), indexingMaps(indexingMaps)
   {
     operands.push_back(operand1);
     operands.push_back(operand2);
   } /// constructor with mask operand
+
+
+  mlir::ArrayAttr getindexingMaps()
+  {
+    return indexingMaps;
+  }
 
   Tensor *getLHS()
   {
