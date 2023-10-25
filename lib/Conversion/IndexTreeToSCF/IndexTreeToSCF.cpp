@@ -65,7 +65,7 @@ using llvm::StringRef;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -4241,7 +4241,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
 
   std::vector<mlir::Value> wp_ops;
   dfsRootOpTree(rootOp.getChildren(), wp_ops);
-#ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+// #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   comet_debug() << " wp_ops.size(): " << wp_ops.size() << "\n";
   for (auto n : wp_ops)
   {
@@ -4249,7 +4249,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
     comet_vdump(n);
     /// Declare opsTree
   }
-#endif
+// #endif
 
   /// In ops vector, for each op, the parent of each op can get from getUsers()
   /// Since it's a tree structure, only one user ==> which is the parent

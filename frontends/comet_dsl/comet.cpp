@@ -397,13 +397,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::comet::createLateLoweringPass());
-  optPM.addPass(mlir::createCanonicalizerPass());
   optPM.addPass(mlir::createCSEPass());
 
   /// =============================================================================
 
   if (isLoweringToLLVM || emitLLVM)
   {
+    optPM.addPass(mlir::createCanonicalizerPass());
     /// Blanket-convert any remaining high-level vector ops to loops if any remain.
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
     /// Blanket-convert any remaining linalg ops to loops if any remain.
