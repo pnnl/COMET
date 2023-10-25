@@ -247,13 +247,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
   optPM.addPass(mlir::comet::createRemoveLabeledTensorOpsPass());
 
-  /// Check to see if we are dumping to TA dialect.
-  if (emitTA)
-  {
-    if (mlir::failed(pm.run(*module)))
-      return 4;
-    return 0;
-  }
 
   ///  =============================================================================
   ///  High-level optimization at the TA dialect
@@ -277,6 +270,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   ///  =============================================================================
   optPM.addPass(mlir::comet::createTensorAlgebraCheckImplicitTensorDeclPass());
   ///  =============================================================================
+  /// Check to see if we are dumping to TA dialect.
+  if (emitTA)
+  {
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+    return 0;
+  }
 
   /// ===================================================================================
   /// Lowering of TC (tensor contraction) operation to Index Tree dialect
