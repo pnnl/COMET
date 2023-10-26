@@ -35,7 +35,7 @@
 #include <map>
 #include <set>
 #include <stack>
-
+// #include <iostream>
 #define DEBUG_TYPE "comet-passes"
 
 using namespace mlir;
@@ -44,7 +44,7 @@ using namespace mlir::bufferization;
 using namespace tensorAlgebra;
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -329,7 +329,6 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       std::vector<Operation *> rhs2Labels = lblMaps.at(inLTOps[order[i]]);
       std::set<Operation *> remainingLabels(lblMaps.at(lhsOp).begin(),
                                             lblMaps.at(lhsOp).end());
-
       for (size_t j = i + 1; j < order.size(); j++)
       {
         auto lblSet = lblMaps.at(inLTOps[order[j]]);
@@ -346,21 +345,20 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       if (!isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
       { ///  store the output label values for subsequent ta.tc ops
         ___newSumLabels = newSumLabels;
+        
       }
 
       std::vector<Value> new_all_lbls_value;
       std::vector<Value> new_lhs_lbls_value;
       std::vector<Value> new_rhs_lbls_value;
-      for (auto lbl : rhs2Labels)
-      {
-        new_lhs_lbls_value.push_back(labelValues[lbl]);
-        new_all_lbls_value.push_back(labelValues[lbl]);
-      }
+
       if (isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
       { ///  retrieve the labels from prev iteration.
         new_rhs_lbls_value = ___newSumLabels;
         for (auto lbl : new_rhs_lbls_value)
         {
+          comet_vdump(lbl);
+
           auto result1 = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), lbl);
           if (result1 == new_all_lbls_value.end())
           {
@@ -372,6 +370,12 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       { ///  retrieve the labels from lblMaps
         for (auto lbl : rhs1Labels)
         {
+          comet_pdump(lbl);
+          comet_debug() << labelValues[lbl] << "\n";
+          if(labelValues.find(lbl) == labelValues.end() )
+          {
+            exit(11);
+          }
           new_rhs_lbls_value.push_back(labelValues[lbl]);
           auto result1 = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), labelValues[lbl]);
           if (result1 == new_all_lbls_value.end())
@@ -379,6 +383,24 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
             new_all_lbls_value.push_back(labelValues[lbl]);
           }
         }
+      }
+
+      for (auto lbl : rhs2Labels)
+      {
+        comet_pdump(lbl);
+        comet_debug() << labelValues[lbl] << "\n";
+
+                  if(labelValues.find(lbl) == labelValues.end() )
+          {
+            exit(11);
+          }
+        new_lhs_lbls_value.push_back(labelValues[lbl]);
+        auto result1 = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), labelValues[lbl]);
+        if (result1 == new_all_lbls_value.end())
+        {
+          new_all_lbls_value.push_back(labelValues[lbl]);
+        }
+        // new_all_lbls_value.push_back(labelValues[lbl]);
       }
 
       ///  formats
@@ -409,32 +431,66 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
 
       std::vector<int> lhs_lbls;
       std::vector<int> rhs_lbls;
-      for (unsigned int i = 0; i < new_all_lbls_value.size(); i++)
-      {
-        auto result1 = std::find(new_lhs_lbls_value.begin(), new_lhs_lbls_value.end(), new_all_lbls_value[i]);
-        if (result1 != new_lhs_lbls_value.end())
-        {
-          lhs_lbls.push_back(i);
-        }
+      // for (unsigned int i = 0; i < new_all_lbls_value.size(); i++)
+      // {
+      //   comet_debug() << i <<" " << new_all_lbls_value[i] <<"\n";
+      //   auto result1 = std::find(new_lhs_lbls_value.begin(), new_lhs_lbls_value.end(), new_all_lbls_value[i]);
+      //   if (result1 != new_lhs_lbls_value.end())
+      //   {
+      //     comet_debug() << "LHS LBLS: " << i <<"\n";
 
-        auto result2 = std::find(new_rhs_lbls_value.begin(), new_rhs_lbls_value.end(), new_all_lbls_value[i]);
-        if (result2 != new_rhs_lbls_value.end())
-        {
-          rhs_lbls.push_back(i);
-        }
+      //     lhs_lbls.push_back(i);
+      //   }
+
+      //   auto result2 = std::find(new_rhs_lbls_value.begin(), new_rhs_lbls_value.end(), new_all_lbls_value[i]);
+      //   if (result2 != new_rhs_lbls_value.end())
+      //   {
+      //     comet_debug() << "RHS LBLS: " << i <<"\n";
+
+      //     rhs_lbls.push_back(i);
+      //   }
+      // }
+
+      for(auto e: new_lhs_lbls_value)
+      {
+        auto index = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) -  new_all_lbls_value.begin();
+        comet_debug() << index <<" " << new_all_lbls_value[index] <<"\n";
+        lhs_lbls.push_back(index);
       }
 
-      std::vector<int> sum_lbls;
-      std::set_intersection(lhs_lbls.begin(), lhs_lbls.end(), rhs_lbls.begin(), rhs_lbls.end(), std::back_inserter(sum_lbls));
-      std::vector<int> all_lbls;
-      std::set_union(lhs_lbls.begin(), lhs_lbls.end(), rhs_lbls.begin(), rhs_lbls.end(), std::back_inserter(all_lbls));
+      for(auto e: new_rhs_lbls_value)
+      {
+        auto index =  std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) -  new_all_lbls_value.begin();
+        comet_debug() << index <<" " << new_all_lbls_value[index] <<"\n";
+
+        rhs_lbls.push_back(index);
+      }
       std::vector<int> ret_lbls;
-      std::set_difference(all_lbls.begin(), all_lbls.end(), sum_lbls.begin(), sum_lbls.end(), std::back_inserter(ret_lbls));
+
+      for(auto e: newSumLabels)
+      {
+        auto index =  std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) -  new_all_lbls_value.begin();
+        comet_debug() << index <<" " << new_all_lbls_value[index] <<"\n";
+
+        ret_lbls.push_back(index);
+      }
+      comet_debug() << "\n";
+      auto sorted_lhs = lhs_lbls;
+      std::sort(sorted_lhs.begin(), sorted_lhs.end());
+      auto sorted_rhs = rhs_lbls;
+      std::sort(sorted_rhs.begin(), sorted_rhs.end());
+      // std::vector<int> sum_lbls;
+      // std::set_intersection(sorted_lhs.begin(), sorted_lhs.end(), sorted_rhs.begin(), sorted_rhs.end(), std::back_inserter(sum_lbls));
+      std::vector<int> all_lbls;
+      std::set_union(sorted_lhs.begin(), sorted_lhs.end(), sorted_rhs.begin(), sorted_rhs.end(), std::back_inserter(all_lbls));
+      // std::vector<int> ret_lbls;
+      // std::set_difference(all_lbls.begin(), all_lbls.end(), sum_lbls.begin(), sum_lbls.end(), std::back_inserter(ret_lbls));
 
       std::map<int, mlir::AffineExpr> expr_map;
       unsigned dim = 0;
       for (const auto &lbl : all_lbls)
       {
+        comet_debug() << "All LBLS: " << lbl << "\n";
         expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
       }
 
