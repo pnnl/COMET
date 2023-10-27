@@ -28,7 +28,7 @@
 using namespace std;
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -101,10 +101,11 @@ void Index_Tree::print(string msg)
 IndicesType Index_Tree::getIndices(mlir::Value v)
 {
   IndicesType indices;
-
+  comet_vdump(v);
   void *ilabel;
   for (unsigned int i = 0; i < v.getDefiningOp()->getNumOperands(); i++)
   {
+    comet_debug() << v.getDefiningOp() << "\n";
     comet_vdump(v.getDefiningOp()->getOperand(i));
     ilabel = v.getDefiningOp()->getOperand(i).getAsOpaquePointer();
     if (indexLabelToId.count(ilabel) == 0)
@@ -117,6 +118,43 @@ IndicesType Index_Tree::getIndices(mlir::Value v)
     comet_debug() << "Index Label just added to the list:" << indexLabelToId[ilabel] << "\n";
     indices.push_back(indexLabelToId[ilabel]);
   }
+
+  return indices;
+}
+
+IndicesType Index_Tree::getIndices2(std::vector<int64_t>& perms)
+{
+  IndicesType indices;
+
+  void *ilabel;
+  for(auto p: perms) 
+  {
+    ilabel = (void*)p; 
+    if (indexLabelToId.count(ilabel) == 0)
+    {
+      comet_debug() << "Index Label just created:" << indexID << "\n";
+      indexLabelToId[ilabel] = indexID;
+      indexID++;
+    }
+    comet_debug() << "Index Label just added to the list:" << indexLabelToId[ilabel] << "\n";
+    indices.push_back(indexLabelToId[ilabel]);
+  }
+
+  // for (unsigned int i = 0; i < v.getDefiningOp()->getNumOperands(); i++)
+  // {
+  //   comet_debug() << v.getDefiningOp() << "\n";
+  //   comet_vdump(v.getDefiningOp()->getOperand(i));
+  //   ilabel = v.getDefiningOp()->getOperand(i).getAsOpaquePointer();
+  //   if (indexLabelToId.count(ilabel) == 0)
+  //   {
+  //     comet_debug() << "Index Label just created:" << indexID << "\n";
+  //     indexLabelToId[ilabel] = indexID;
+  //     indexID++;
+  //   }
+
+  //   comet_debug() << "Index Label just added to the list:" << indexLabelToId[ilabel] << "\n";
+  //   indices.push_back(indexLabelToId[ilabel]);
+  // }
 
   return indices;
 }
@@ -143,6 +181,32 @@ Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, FormatsType &formats)
   assert(valueToTensor.count(vp) > 0);
   assert(valueToTensor[vp] != nullptr);
   return valueToTensor[vp].get();
+}
+
+Tensor *Index_Tree::getOrCreateTensor2(mlir::Value v, std::vector<int64_t>& perms, FormatsType &formats)
+{
+  IndicesType indices = getIndices2(perms);
+  comet_debug() << "Num Indices: " << indices.size() << ", Num formats " << formats.size() << "\n";
+  void *vp = v.getAsOpaquePointer();
+  // if (valueToTensor.count(vp) == 0)
+  {
+    // valueToTensor[vp] = std::make_unique<Tensor>(v, indices, formats);
+  }
+  // else
+  // {
+  //   auto t = valueToTensor[vp].get();
+  //   auto tIndices = t->getIndices();
+  //   assert(tIndices.size() == indices.size());
+  //   for (unsigned long i = 0; i < indices.size(); i++)
+  //   {
+  //     assert(tIndices[i] == indices[i]);
+  //   }
+  // }
+
+  // assert(valueToTensor.count(vp) > 0);
+  // assert(valueToTensor[vp] != nullptr);
+  // return valueToTensor[vp].get();
+  return new Tensor(v, indices, formats);
 }
 
 TreeNode *Index_Tree::addComputeNode(unique_ptr<UnitExpression> expr, TreeNode *parent)
