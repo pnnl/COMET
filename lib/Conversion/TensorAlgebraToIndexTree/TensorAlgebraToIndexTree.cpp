@@ -163,9 +163,12 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
 
   assert(allPerms.size() == 3);
 
-  auto B = tree->getOrCreateTensor(rhs1_tensor, allFormats[0]);
-  auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
-  auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
+  auto B = tree->getOrCreateTensor2(rhs1_tensor, allPerms[0], allFormats[0]);
+  auto C = tree->getOrCreateTensor2(rhs2_tensor, allPerms[1], allFormats[1]);
+  auto A = tree->getOrCreateTensor2(lhs_tensor, allPerms[2], allFormats[2]);
+  // auto B = tree->getOrCreateTensor(rhs1_tensor, allFormats[0]);
+  // auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
+  // auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
   Tensor *M;
   std::unique_ptr<UnitExpression> e;
   if (mask_tensor != nullptr) /// mask is an optional input
@@ -189,8 +192,11 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   auto inputDomains = e->computeInputIterDomains();
   auto outputDomains = e->computeOutputIterDomains();
 
-  IndicesType rhs1_indices = tree->getIndices(rhs1_tensor);
-  IndicesType rhs2_indices = tree->getIndices(rhs2_tensor);
+  // IndicesType rhs1_indices = tree->getIndices(rhs1_tensor);
+  // IndicesType rhs2_indices = tree->getIndices(rhs2_tensor);
+
+  IndicesType rhs1_indices = tree->getIndices2(allPerms[0]);
+  IndicesType rhs2_indices = tree->getIndices2(allPerms[1]);
   IndicesType allIndices = getUnion(rhs1_indices, rhs2_indices);
 
   auto lhsIndices = A->getIndices();
@@ -209,6 +215,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
       auto &odomain = outputDomains.at(index);
       node->setOutputDomain(odomain);
     }
+    comet_debug() << "index " << index <<"\n";
 
     parent = node;
   }
@@ -310,49 +317,49 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
   auto allPerms = getAllPerms(indexingMaps);
   std::map<int64_t,int64_t> indexMap;
   SmallVector<Attribute, 8> allIndices_rhs;
-  for (size_t i = 0; i < 2; i++)
-  {
-    SmallVector<int64_t, 8> indices;
-    for (size_t j = 0; j < allPerms[i].size(); j++)
-    {
-      if (indexMap.find(allPerms[i][j]) == indexMap.end())
-      {
-        indexMap[allPerms[i][j]] = expr->getOperands()[i]->getIndices()[j];
-      }
-      comet_debug() << allPerms[i][j] << " " << indexMap[allPerms[i][j]] << " \n";
-      indices.push_back(indexMap[allPerms[i][j]]);
-    }
-    allIndices_rhs.push_back(builder.getI64ArrayAttr(indices));
-  }
-  // for (auto t : expr->getOperands())
+  // for (size_t i = 0; i < 2; i++)
   // {
   //   SmallVector<int64_t, 8> indices;
-  //   for (auto index : t->getIndices())
+  //   for (size_t j = 0; j < allPerms[i].size(); j++)
   //   {
-  //     indices.push_back(index);
+  //     if (indexMap.find(allPerms[i][j]) == indexMap.end())
+  //     {
+  //       indexMap[allPerms[i][j]] = expr->getOperands()[i]->getIndices()[j];
+  //     }
+  //     comet_debug() << allPerms[i][j] << " " << indexMap[allPerms[i][j]] << " \n";
+  //     indices.push_back(indexMap[allPerms[i][j]]);
   //   }
   //   allIndices_rhs.push_back(builder.getI64ArrayAttr(indices));
   // }
-  SmallVector<Attribute, 8> allIndices_lhs;
-  // for (auto t : expr->getResults())
-  // {
-  //   SmallVector<int64_t, 8> indices;
-  //   for (auto index : t->getIndices())
-  //   {
-  //     comet_debug() << index << " \n";
-  //     indices.push_back(index);
-  //   }
-  //   allIndices_lhs.push_back(builder.getI64ArrayAttr(indices));
-  // }
-  // for (auto t : expr->getResults())
-  // {
+  for (auto t : expr->getOperands())
+  {
     SmallVector<int64_t, 8> indices;
-    for (auto index : allPerms[2])
+    for (auto index : t->getIndices())
     {
-      comet_debug() << index << " " << indexMap[index] << " \n";
-      indices.push_back(indexMap[index]);
+      indices.push_back(index);
+    }
+    allIndices_rhs.push_back(builder.getI64ArrayAttr(indices));
+  }
+  SmallVector<Attribute, 8> allIndices_lhs;
+  for (auto t : expr->getResults())
+  {
+    SmallVector<int64_t, 8> indices;
+    for (auto index : t->getIndices())
+    {
+      comet_debug() << index << " \n";
+      indices.push_back(index);
     }
     allIndices_lhs.push_back(builder.getI64ArrayAttr(indices));
+  }
+  // for (auto t : expr->getResults())
+  // {
+    // SmallVector<int64_t, 8> indices;
+    // for (auto index : allPerms[2])
+    // {
+    //   comet_debug() << index << " " << indexMap[index] << " \n";
+    //   indices.push_back(indexMap[index]);
+    // }
+    // allIndices_lhs.push_back(builder.getI64ArrayAttr(indices));
   // }
 
   SmallVector<Attribute, 8> allFormats_rhs;

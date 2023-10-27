@@ -64,7 +64,7 @@ using llvm::StringRef;
 #define DEBUG_TYPE "partial-fusion"
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -894,6 +894,7 @@ void IndexTreeKernelFusionPass::doKernelFusion(
       {
         if (llvm::isa<indexTree::IndexTreeIndicesOp>(operand.getDefiningOp()))
         {
+          comet_pdump(operand.getDefiningOp());
           operands.push_back(operand.getDefiningOp());
         }
       }
@@ -901,11 +902,12 @@ void IndexTreeKernelFusionPass::doKernelFusion(
 
     buffer.push_back(std::move(operands));
   }
-
+  comet_debug() << "Buffer size " << buffer.size() << "\n";
   while (!buffer.empty())
   {
     std::vector<mlir::Operation *> operands = buffer.front();
     buffer.pop_front();
+    comet_debug() << "Buffer size " << buffer.size() << "\n";
     if (operands.size() < 2)
     {
       /// Too few nodes to fuse
@@ -920,6 +922,10 @@ void IndexTreeKernelFusionPass::doKernelFusion(
       /// Note: The host is the latest one, otherwise the fused nodes are not in correct usage order and got Error:
 
       mlir::Operation *host = operands[host_i];
+      comet_debug() <<host << "host\n"; 
+      comet_debug() << "host\n"; 
+      comet_pdump(host);
+
       if (is_clustered[host_i])
       {
         continue;
@@ -937,6 +943,8 @@ void IndexTreeKernelFusionPass::doKernelFusion(
         }
         mlir::Operation *node = operands[node_i];
         int node_index = getIndicesOpsIndex(node);
+        comet_debug() << "node\n"; 
+        comet_pdump(node);
         /// Check if node_i can be fused with host_i
         if (node_index == host_index)
         {
@@ -969,10 +977,13 @@ void IndexTreeKernelFusionPass::doKernelFusion(
       for (int node_i = cluster.size() - 2; node_i >= 0; --node_i)
       {
         mlir::Operation *node = cluster[node_i];
+        comet_debug() << "Erasing \n";
         for (auto u : node->getUsers())
         {
+          comet_pdump(u);
           u->erase();
         }
+        comet_pdump(node);
         node->erase();
       }
     }
