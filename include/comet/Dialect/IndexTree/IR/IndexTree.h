@@ -198,7 +198,10 @@ class Index_Tree
   unsigned int indexID = 0;
 
 public:
+  IndicesType getIndices2(std::vector<int64_t>& perms);
   Tensor *getOrCreateTensor(mlir::Value v, FormatsType &formats);
+  Tensor *getOrCreateTensor2(mlir::Value v, std::vector<int64_t>& perms, FormatsType &formats);
+
   IndicesType getIndices(mlir::Value v);
 
   vector<TreeNode *> getNodes();
