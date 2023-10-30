@@ -28,7 +28,7 @@ after some optimizations.
 
 ```
 $ git clone https://github.com/pnnl/COMET.git
-$ export COMET_SRC=`pwd`\COMET
+$ export COMET_SRC=`pwd`/COMET
 $ cd $COMET_SRC
 $ git submodule init
 $ git submodule update
