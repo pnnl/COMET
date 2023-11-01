@@ -16,6 +16,7 @@ add_llvm_library(COMETIndexTreeDialect
 add_dependencies(
   COMETIndexTreeDialect
   COMETIndexTreeOpsIncGen
+  COMETIndexTreeTypesIncGen
   COMETIndexTreePassIncGen
   MLIRSupport
   )

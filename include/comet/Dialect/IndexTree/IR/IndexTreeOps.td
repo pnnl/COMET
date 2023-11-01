@@ -35,32 +35,21 @@ include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
-
-// Provide a definition of the 'it' dialect in the ODS framework so that we
-// can define our operations.
-def IndexTreeDialect : Dialect {
-  let name = "it";
-  let cppNamespace = "::mlir::indexTree"; 
-
-  // We set this bit to generate the declarations for the dialect's type parsing
-  // and printing hooks.
-  let useDefaultTypePrinterParser = 1;
-  
-}
+include "comet/Dialect/IndexTree/IR/IndexTreeTypes.td"
 
 // Base class for ta dialect operations. This operation inherits from the base
 // `Op` class in OpBase.td, and provides:
 //   * The parent dialect of the operation.
 //   * The mnemonic for the operation, or the name without the dialect prefix.
 //   * A list of traits for the operation.
-class IndexTree_Op<string mnemonic, list<Trait> traits = []> :
-    Op<IndexTreeDialect, mnemonic, traits>;
+class IT_Op<string mnemonic, list<Trait> traits = []> :
+    Op<IT_Dialect, mnemonic, traits>;
             
 //===----------------------------------------------------------------------===//
 // Index Tree Operations
 //===----------------------------------------------------------------------===//
 
-def IndexTreeComputeLHSOp : IndexTree_Op<"ComputeLHS", [Pure]>{
+def IndexTreeComputeLHSOp : IT_Op<"ComputeLHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
@@ -68,7 +57,7 @@ def IndexTreeComputeLHSOp : IndexTree_Op<"ComputeLHS", [Pure]>{
   let results = (outs AnyType:$output);
 }
 
-def IndexTreeComputeRHSOp : IndexTree_Op<"ComputeRHS", [Pure]>{
+def IndexTreeComputeRHSOp : IT_Op<"ComputeRHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
@@ -76,7 +65,7 @@ def IndexTreeComputeRHSOp : IndexTree_Op<"ComputeRHS", [Pure]>{
   let results = (outs AnyType:$output);
 }
 
-def IndexTreeComputeOp : IndexTree_Op<"Compute", [Pure]>{
+def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
   let summary = "";
   let description = [{
   }];
@@ -85,37 +74,89 @@ def IndexTreeComputeOp : IndexTree_Op<"Compute", [Pure]>{
   /// MaskType attribute: {push, pull, auto, none}
   let arguments = (ins Variadic<AnyType>:$rhs, AnyType:$lhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring, StrAttr:$MaskType);
 
-  let results = (outs I64:$output);
+  let results = (outs IndexTree_ComputeNodeType:$output);
 
    //TODO(gkestor): add verifier
   //let hasVerifier = 1;
   
 }
 
-def IndexTreeIndicesOp : IndexTree_Op<"Indices", [Pure]>{
-  let summary = "";
+
+def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
+  let summary = "Create an index variable bound to a specific computation.";
   let description = [{
   }];
-  // Added `iterator_type` to the IndexTreeIndicesOp. It is analogous the `iterator_types` in the `linalg.generic` op.
-  // Candidate options: parallel, reduction, window, serial, default. What options should support needs further consideration.
-  // References: https://mlir.llvm.org/docs/Dialects/Linalg/#linalggeneric-linalggenericop
-  let arguments = (ins Variadic<AnyType>:$children, ArrayAttr:$indices, StrAttr:$iterator_type);
-  let results = (outs I64:$output);
 
-   //TODO(gkestor): add verifier
-  //let hasVerifier = 1; 
+  let arguments = (
+    ins Variadic<IndexTree_NodeType>:$children,
+    ArrayAttr:$indices,
+    OptionalAttr<DeviceMappingArrayAttr>:$mapping
+  );
+
+  let results = (outs IndexTree_IndexNodeType:$output);
 }
 
+def IndexTreeDerivedIndicesOp : IndexTree_Op<"DerivedIndexOp", [Pure]>{
+  let summary = "Create an index variable derviced from a provenance graph.";
+  let description = [{
+  }];
+
+  let arguments = (
+    ins Variadic<IndexTree_NodeType>:$children,
+    IndexTree_ProvenanceGraphType:$prov_graph,
+    DefaultValuedAttr<I32Attr, "0">:$graph_index,
+    OptionalAttr<DeviceMappingArrayAttr>:$mapping
+  );
+
+  let results = (outs IndexTree_IndexNodeType:$output);
+}
+
+//TODO(alok): Figure out return type. Eventually want ops to return a (sparse?) tensor
 def IndexTreeOp : IndexTree_Op<"itree", [Pure]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins AnyType:$children);
+  let arguments = (ins IndexTree_IndexNodeType:$children);
   let results = (outs I64:$output);
+}
 
-   //TODO(gkestor): add verifier
-  //let hasVerifier = 1; 
+class IndexTree_TransformOp<string mnemonic> 
+    : IndexTree_Op<mnemonic, [Pure]> {
+  // Base class for Index transformations
+  let results = (outs IndexTree_ProvenanceGraphType:$output);
+}
+
+def IndexTree_TransformCollapseOp : IndexTree_TransformOp<"collapse"> {
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins IndexTree_IndexNodeType:$first, IndexTree_IndexNodeType:$second);
+}
+
+def IndexTree_TransformSplitOp : IndexTree_TransformOp<"split"> {
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins IndexTree_IndexNodeType:$src);
+}
+
+def IndexTree_TransformPosOp : IndexTree_TransformOp<"pos"> {
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins IndexTree_IndexNodeType:$src);
+}
+
+def IndexTree_TransformCoordOp : IndexTree_TransformOp<"coord"> {
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins IndexTree_IndexNodeType:$src);
 }
 
 #endif // INDEXTREE_OPS
