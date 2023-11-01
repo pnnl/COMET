@@ -29,6 +29,7 @@
 
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/SCF/IR/DeviceMappingInterface.h"
 
 
 using namespace mlir;

@@ -1,4 +1,4 @@
-add_llvm_library(COMETIndexTreeDialect
+add_mlir_dialect_library(COMETIndexTreeDialect
   IR/IndexTreeDialect.cpp
   IR/IndexTree.cpp
 
@@ -10,16 +10,13 @@ add_llvm_library(COMETIndexTreeDialect
 
   ADDITIONAL_HEADER_DIRS
   ${COMET_MAIN_INCLUDE_DIR}/comet/Dialect/IndexTree
-  )
 
-
-add_dependencies(
-  COMETIndexTreeDialect
+  DEPENDS
   COMETIndexTreeOpsIncGen
   COMETIndexTreeTypesIncGen
   COMETIndexTreePassIncGen
   MLIRSupport
-  )
 
-target_link_libraries(COMETIndexTreeDialect MLIRIR)
-
+  LINK_LIBS PUBLIC
+  MLIRIR
+)
