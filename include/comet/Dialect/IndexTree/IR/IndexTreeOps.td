@@ -21,7 +21,7 @@
 //
 // =============================================================================
 //
-// Defines the operations of the IT dialect.
+// Defines the operations of the IndexTree dialect.
 //
 //===----------------------------------------------------------------------===//
 
@@ -34,6 +34,7 @@ include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/Dialect/SCF/IR/DeviceMappingInterface.td"
 
 include "comet/Dialect/IndexTree/IR/IndexTreeTypes.td"
 
@@ -42,14 +43,14 @@ include "comet/Dialect/IndexTree/IR/IndexTreeTypes.td"
 //   * The parent dialect of the operation.
 //   * The mnemonic for the operation, or the name without the dialect prefix.
 //   * A list of traits for the operation.
-class IT_Op<string mnemonic, list<Trait> traits = []> :
-    Op<IT_Dialect, mnemonic, traits>;
+class IndexTree_Op<string mnemonic, list<Trait> traits = []> :
+    Op<IndexTreeDialect, mnemonic, traits>;
             
 //===----------------------------------------------------------------------===//
 // Index Tree Operations
 //===----------------------------------------------------------------------===//
 
-def IndexTreeComputeLHSOp : IT_Op<"ComputeLHS", [Pure]>{
+def IndexTreeComputeLHSOp : IndexTree_Op<"ComputeLHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
@@ -57,7 +58,7 @@ def IndexTreeComputeLHSOp : IT_Op<"ComputeLHS", [Pure]>{
   let results = (outs AnyType:$output);
 }
 
-def IndexTreeComputeRHSOp : IT_Op<"ComputeRHS", [Pure]>{
+def IndexTreeComputeRHSOp : IndexTree_Op<"ComputeRHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
