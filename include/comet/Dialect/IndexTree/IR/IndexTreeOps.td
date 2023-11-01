@@ -90,8 +90,7 @@ def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
 
   let arguments = (
     ins Variadic<IndexTree_NodeType>:$children,
-    ArrayAttr:$indices,
-    OptionalAttr<DeviceMappingArrayAttr>:$mapping
+    ArrayAttr:$indices
   );
 
   let results = (outs IndexTree_IndexNodeType:$output);
@@ -105,8 +104,7 @@ def IndexTreeDerivedIndicesOp : IndexTree_Op<"DerivedIndexOp", [Pure]>{
   let arguments = (
     ins Variadic<IndexTree_NodeType>:$children,
     IndexTree_ProvenanceGraphType:$prov_graph,
-    DefaultValuedAttr<I32Attr, "0">:$graph_index,
-    OptionalAttr<DeviceMappingArrayAttr>:$mapping
+    DefaultValuedAttr<I32Attr, "0">:$graph_index
   );
 
   let results = (outs IndexTree_IndexNodeType:$output);
