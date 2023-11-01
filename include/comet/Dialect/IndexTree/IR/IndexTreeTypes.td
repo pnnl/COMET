@@ -21,7 +21,7 @@ def IndexTree_IndexNodeType : IndexTree_Type<"IndexNode", "index"> {
   }];
 }
 
-def IndexTree_NodeType = AnyTypeOf<[IndexTree_ComputeNodeType, IndexTree_IndexNodeType]>;
+def IndexTree_NodeType : AnyTypeOf<[IndexTree_ComputeNodeType, IndexTree_IndexNodeType]>;
 
 def IndexTree_ProvenanceGraphType : IndexTree_Type<"ProvenanceGraph", "prov_graph"> {
     let summary = "Provenance graph for index tree transformations";

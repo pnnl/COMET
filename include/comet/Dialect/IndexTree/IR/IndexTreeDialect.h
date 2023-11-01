@@ -33,7 +33,7 @@
 
 /// Include the auto-generated header file containing the declaration of the index tree
 /// dialect.
-#include "comet/Dialect/IndexTree/IR/ITDialect.h.inc"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h.inc"
 
 /// Include the auto-generated header file containing the declaration of the index tree
 /// types.
@@ -57,10 +57,10 @@
 //     /// mlir::Dialect and registers custom attributes, operations, and types (in its
 //     /// constructor). It can also override some general behavior exposed via virtual
 //     /// methods.
-//     class ITDialect : public mlir::Dialect
+//     class IndexTreeDialect : public mlir::Dialect
 //     {
 //     public:
-//       explicit ITDialect(mlir::MLIRContext *ctx);
+//       explicit IndexTreeDialect(mlir::MLIRContext *ctx);
 
 //       /// Provide a utility accessor to the dialect namespace. This is used by
 //       /// several utilities for casting between dialects.
@@ -71,7 +71,7 @@
 //     };
 // //===----------------------------------------------------------------------===//
 // #define GET_OP_CLASSES
-// #include "comet/Dialect/IndexTree/IR/ITOps.h.inc"
+// #include "comet/Dialect/IndexTree/IR/IndexTreeOps.h.inc"
 
 //   } // end namespace indexTree
 // } // end namespace mlir
