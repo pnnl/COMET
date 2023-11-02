@@ -1,0 +1,11 @@
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [a] = [?];
+	IndexLabel [b] = [?];           
+
+	#Tensor Declarations
+	Tensor<double> A([a, b], {BCSR});
+    A[a, b] = comet_read(0);
+	print(A);
+}
+

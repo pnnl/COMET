@@ -911,6 +911,211 @@ struct EllpackMatrix
   }
 };
 
+///===----------------------------------------------------------------------===//
+/// BCSR matrix type
+///===----------------------------------------------------------------------===//
+
+template <typename T>
+struct BCSRMatrix
+{
+  uint64_t num_blocks;
+
+  uint64_t block_rows;
+  uint64_t block_cols;
+  
+  uint64_t *colptr;
+  uint64_t *colidx;
+  uint64_t colptr_len;
+  uint64_t colidx_len;
+  
+  T *Aval;
+  uint64_t value_len;
+  
+  bool has_values(uint64_t i, uint64_t mi, uint64_t j, uint64_t mj, CooMatrix<T> *coo_matrix) {
+    for (uint64_t bi = i; bi<mi; bi++) {
+      for (uint64_t bj = j; bj<mj; bj++) {
+        for (uint64_t p = 0; p<coo_matrix->num_nonzeros; p++) {
+          auto coord = coo_matrix->coo_tuples[p];
+          if (coord.row == bi && coord.col == bj) {
+            return true;
+          }
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  /// Initializer
+  void Init(CooMatrix<T> *coo_matrix, bool verbose = false)
+  {
+    //num_rows = coo_matrix->num_rows;
+    //num_cols = 0;
+    uint64_t num_nonzeros = coo_matrix->num_nonzeros;
+
+    /// Sort by rows, then columns
+    if (verbose)
+      printf("Ordering...");
+    fflush(stdout);
+    std::stable_sort(coo_matrix->coo_tuples, coo_matrix->coo_tuples + num_nonzeros, CooComparatorRow());
+    if (verbose)
+      printf("done.");
+    fflush(stdout);
+
+    /// Calculate the column count
+    uint64_t max = 0;
+    uint64_t buffer = 0;
+    // int current = -1;
+    uint64_t current = num_nonzeros > 0 ? coo_matrix->coo_tuples[0].row : 0;
+    for (uint64_t i = 0; i < num_nonzeros; i++)
+    {
+      if (coo_matrix->coo_tuples[i].row == current)
+      {
+        ++buffer;
+      }
+      else
+      {
+        if (buffer > max)
+          max = buffer;
+        buffer = 1;
+        current = coo_matrix->coo_tuples[i].row;
+      }
+    }
+    if (buffer > max)
+      max = buffer;
+    //num_cols = max;
+    
+    // Temporary
+    num_blocks = 1;
+    block_rows = 1;
+    block_cols = 1;
+    colptr_len = 1;
+    colidx_len = 1;
+    value_len = 1;
+    
+    ///////////////////////////////////////////////
+    //for (uint64_t p = 0; p<coo_matrix->num_nonzeros; p++) {
+    //  auto coord = coo_matrix->coo_tuples[p];
+    //  printf("(%d, %d, %.0f)\n", coord.row, coord.col, coord.val);
+    //}
+    
+    ///////////////////////////////////////////////
+    uint64_t rows = coo_matrix->num_rows;
+    uint64_t cols = coo_matrix->num_cols;
+    //printf("Num_rows: %d | Num_cols: %d\n", rows, cols);
+    
+    std::vector<int> A2pos_nc;
+    std::vector<int> A2crd;
+    std::vector<double> Aval_nc;
+    
+    // Step 1: Determine block size
+    // TODO: Let us think about this. For now, quick solution
+    block_rows = rows/2;
+    block_cols = cols/2;
+    //printf("Block_rows: %d | Block_cols: %d\n", block_rows, block_cols);
+    
+    // Step 2: Examine the blocks
+    // We only want the blocks with values
+    //
+    // From here, we can start building the A2 dimension
+    //
+    for (uint64_t i=0; i<rows; i+=block_rows) {
+      for (uint64_t j=0; j<cols; j+=block_cols) {
+        // Note: for A2_crd, corresponds to j, divide by "block_cols"
+        // to get the block position
+        
+        // Check the block and see if it has values
+        // If so, we use it
+        if (has_values(i, i+block_rows, j, j+block_cols, coo_matrix)) {
+          A2pos_nc.push_back(i/block_rows);
+          A2crd.push_back(j/block_cols);
+          
+          // Add all the values including the padded zeros
+          //
+          // To do this, we first search the COO array for a non-zero
+          // value. If there is no such value, then we add the
+          // index with a zero.
+          //
+          for (uint64_t bi = i; bi<(i+block_rows); bi++) {
+            for (uint64_t bj = j; bj<(j+block_cols); bj++) {
+              bool found = false;
+              for (uint64_t p = 0; p<coo_matrix->num_nonzeros; p++) {
+                auto coord = coo_matrix->coo_tuples[p];
+                if (coord.row == bi && coord.col == bj) {
+                  Aval_nc.push_back(coord.val);
+                  found = true;
+                  break;
+                }
+              }
+              
+              if (found == false) {
+                Aval_nc.push_back(0);
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Compress the row coordinates
+    std::vector<int> A2pos;
+    A2pos.push_back(0);
+    
+    int curr = A2pos_nc[0];
+    int curr_end = 1;
+    for (uint64_t i = 1; i<A2pos_nc.size(); i++) {
+      if (A2pos_nc[i] != curr) {
+        A2pos.push_back(curr_end);
+        curr = A2pos_nc[i];
+      }
+      curr_end += 1;
+    }
+    A2pos.push_back(curr_end);
+    
+    int A1pos = A2pos.size() - 1;
+    
+    // Copy all the elements over
+    num_blocks = A1pos;
+    colptr_len = A2pos.size();
+    colidx_len = A2crd.size();
+    value_len = Aval_nc.size();
+    
+    colptr = new uint64_t[A2pos.size()];
+    colidx = new uint64_t[A2crd.size()];
+    Aval = new T[Aval_nc.size()];
+    
+    for (uint64_t i = 0; i<A2pos.size(); i++) {
+      colptr[i] = A2pos[i];
+    }
+    
+    for (uint64_t i = 0; i<A2crd.size(); i++) {
+      colidx[i] = A2crd[i];
+    }
+    
+    for (uint64_t i = 0; i<Aval_nc.size(); i++) {
+      Aval[i] = Aval_nc[i];
+    }
+  }
+
+  /// Clear matrix
+  void Clear()
+  {
+    delete[] Aval;
+  }
+
+  /// The constructor- calls the initializer
+  BCSRMatrix(CooMatrix<T> *coo_matrix, bool verbose = false)
+  {
+    Init(coo_matrix, verbose);
+  }
+
+  /// Destructor
+  ~BCSRMatrix()
+  {
+    Clear();
+  }
+};
+
 //===----------------------------------------------------------------------===//
 /// COO tensor 3D type.  A COO tensor is just a vector of edge tuples.  Tuples are sorted
 /// first by first dim, then by second dim and so on.
@@ -1756,20 +1961,6 @@ void read_input_sizes_2D(int32_t fileID,
     EllpackMatrix<T> ellpack_matrix(FileReader.coo_matrix);
     int cols = ellpack_matrix.num_cols * ellpack_matrix.num_rows;
 
-    /*
-    desc_sizes->data[0] = 1;              // A1pos
-    desc_sizes->data[1] = 1;              // A1crd
-    desc_sizes->data[2] = 1;              // A2pos
-    desc_sizes->data[3] = cols;           // A2crd
-    desc_sizes->data[4] = 1;              // A1_tile_pos
-    desc_sizes->data[5] = 1;              // A1_tile_crd
-    desc_sizes->data[6] = 0;              // A2_tile_pos
-    desc_sizes->data[7] = 0;              // A2_tile_crd
-    desc_sizes->data[8] = cols;           // Controls count of value dimension
-    desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
-    desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
-    */
-
     desc_sizes->data[0] = 1;    /// A1pos
     desc_sizes->data[1] = 1;    /// A1crd
     desc_sizes->data[2] = 1;    /// A1_tile_pos
@@ -1796,7 +1987,30 @@ void read_input_sizes_2D(int32_t fileID,
   /// BCSR
   else if (A1format == Dense && A2format == Compressed_nonunique && A1_tile_format == Dense && A2_tile_format == Dense)
   {
-    puts("BCSR");
+    BCSRMatrix<T> bcsr_matrix(FileReader.coo_matrix);
+
+    desc_sizes->data[0] = 1;                            /// A1pos
+    desc_sizes->data[1] = 1;                            /// A1crd
+    desc_sizes->data[2] = 1;                            /// A1_tile_pos
+    desc_sizes->data[3] = 1;                            /// A1_tile_crd
+    desc_sizes->data[4] = bcsr_matrix.colptr_len;       /// A2pos
+    desc_sizes->data[5] = bcsr_matrix.colidx_len;       /// A2crd
+    desc_sizes->data[6] = 1;                            /// A2_tile_pos
+    desc_sizes->data[7] = 1;                            /// A2_tile_crd
+    desc_sizes->data[8] = bcsr_matrix.value_len;
+    desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
+
+    /*****************DEBUG******************/
+    //std::cout << "BCSR detail: \n"
+    //           << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
+    //           << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
+    //           << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
+    //           << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
+    //           << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
+    //           << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
+    //           << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
+    /*****************DEBUG******************/
   }
   /// CSB
   else if (A1format == Compressed_unique && A2format == singleton && A1_tile_format == Dense && A2_tile_format == Dense)
@@ -2061,12 +2275,29 @@ void read_input_2D(int32_t fileID,
     }
   }
   /// BCSR
-  /*else if (A1format == Dense && A2format == Compressed_nonunique && A3format == Dense && A4format == Dense)
+  else if (A1format == Dense && A1_tile_format == Dense && A2format == Compressed_nonunique && A2_tile_format == Dense)
   {
-    puts("BCSR");
+    BCSRMatrix<T> bcsr_matrix(FileReader.coo_matrix);
+    FileReader.FileReaderWrapperFinalize();
+    
+    desc_A1pos->data[0] = bcsr_matrix.num_blocks;
+    desc_A1tile_pos->data[0] = bcsr_matrix.block_rows;
+    desc_A2tile_pos->data[0] = bcsr_matrix.block_cols;
+    
+    for (uint64_t i = 0; i<bcsr_matrix.colptr_len; i++) {
+        desc_A2pos->data[i] = bcsr_matrix.colptr[i];
+    }
+    
+    for (uint64_t i = 0; i<bcsr_matrix.colidx_len; i++) {
+        desc_A2crd->data[i] = bcsr_matrix.colidx[i];
+    }
+    
+    for (uint64_t i = 0; i<bcsr_matrix.value_len; i++) {
+      desc_Aval->data[i] = bcsr_matrix.Aval[i];
+    }
   }
   /// CSB
-  else if (A1format == Compressed_unique && A2format == singleton && A3format == Dense && A4format == Dense)
+  /*else if (A1format == Compressed_unique && A2format == singleton && A3format == Dense && A4format == Dense)
   {
     puts("CSB");
   }*/
