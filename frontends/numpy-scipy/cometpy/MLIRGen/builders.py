@@ -5,8 +5,8 @@ import itertools
 from typing import Dict, List, Tuple, Sequence, Union
 from collections import OrderedDict
 from ast import operator
-from MLIRGen import types_mlir
-from MLIRGen.types import *
+from cometpy.MLIRGen import types_mlir
+from cometpy.MLIRGen.types import *
 
 
 class Dialect:

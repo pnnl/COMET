@@ -28,6 +28,7 @@ import sys
 import time
 import ctypes
 from ctypes import *
+import cometpy.cfg as cfg
 import atexit
 import uuid
 import scipy as scp
@@ -41,10 +42,10 @@ platform_args = ""
 
 
 if("macOS" in platform.platform()):
-    comet_runner_util = "../build/lib/libcomet_runner_utils.dylib"
+    comet_runner_util = cfg.comet_path+"/lib/libcomet_runner_utils.dylib"
     platform_args = "-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/ "
 elif("Linux" in platform.platform()):
-    comet_runner_util = "../build/lib/libcomet_runner_utils.so"
+    comet_runner_util = cfg.comet_path+"/lib/libcomet_runner_utils.so"
 else:
     print("error: Support available only for Linux and macOS")
     sys.exit()
@@ -55,8 +56,6 @@ def cleanup():
             os.remove(f)
             # pass
 atexit.register(cleanup)
-p = subprocess.run(['../llvm/build/bin/llvm-config', '--host-target'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-llvm_cfg_out = p.stdout.decode().strip()  # This only needs to run once and should be possible to generate at compile time
 
 class memref_i64(Structure):
     _fields_ = [ ('mem_aligned', POINTER(c_longlong)), ('mem', POINTER(c_longlong)), ('offset', c_longlong), ('dim', c_longlong), ('stride', c_longlong)]
@@ -99,7 +98,7 @@ def lower_ta_to_mlir(mlir_in, mlir_lower_flags, uuid_s):
     else:
         f = open(scf_out_file, 'wb')
 
-    path_to_comet = "../build/bin/comet-opt"
+    path_to_comet = cfg.comet_path+"/bin/comet-opt"
 
     command = path_to_comet + mlir_lower_flags + mlir_in
 
@@ -312,7 +311,7 @@ def comment_unneeded_sparse(input_, arg_vals):
 
 def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
 
-    path_to_comet = "../build/bin/comet-opt"
+    path_to_comet = cfg.comet_path+"/bin/comet-opt"
     command = path_to_comet + mlir_lower_flags + mlir_in
     p = subprocess.run(shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,close_fds=False)
     if p.returncode != 0:
@@ -343,7 +342,7 @@ def lower_scf_to_llvm(scf_in, scf_lower_flags, uuid_s):
     # llvm_out_file = 'einsum.llvm'
 
     # path_to_mliropt = "../llvm/build/bin/mlir-opt"
-    path_to_cometopt = "../build/bin/comet-opt"
+    path_to_cometopt = cfg.comet_path+"/bin/comet-opt"
 
     command = path_to_cometopt + scf_lower_flags + scf_in
     # command = path_to_cometopt + scf_lower_flags + ' 38ee2ea1-6e20-439f-b7c0-73d7fa6b7da5loops.mlir'
@@ -492,12 +491,12 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
 
     llvmir_file = uuid_s+'.ll'
 
-    path_to_cometopt = "../build/bin/comet-opt"
+    path_to_cometopt = cfg.comet_path+"/bin/comet-opt"
     to_llvm_command = path_to_cometopt + scf_lower_flags + llvm_in
-    translate_mlir_command = "../llvm/build/bin/mlir-translate --mlir-to-llvmir -- " 
+    translate_mlir_command = cfg.llvm_path+"/bin/mlir-translate --mlir-to-llvmir -- " 
 
     libname =   "./lib"+llvmir_file+func_name+".so"
-    gcc_command = "../llvm/build/bin/clang -march=native -mtune=native -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L ../build/lib/ -Wl,-rpath,../build/lib/ -lcomet_runner_utils -"
+    gcc_command = cfg.llvm_path+"/bin/clang -march=native -mtune=native -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L {0}/lib/ -Wl,-rpath,{0}/lib/ -lcomet_runner_utils -".format(cfg.comet_path)
 
     # We merge all several calls in a single call to the shell in order to only pay the overhead of process creation once.
     # 1. Call comet to lower scf code to llvm

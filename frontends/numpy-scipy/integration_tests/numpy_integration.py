@@ -7,8 +7,8 @@ import os
 import sys
 
 def run_test_case(test_file):
-    print("Running", test_file,end= " ")
-    p = subprocess.run(['python3', test_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    print("Running", test_file, end=" ")
+    p = subprocess.run( 'cd '+'/'.join(test_file.split('/')[:-1])+' && python3 '+test_file.split('/')[-1], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     if(p.returncode != 0):
         ret = "FAILED"
         # print(ret)
@@ -26,16 +26,8 @@ def run_test_case(test_file):
 if __name__ == '__main__':
     categories = ['ops', 'opts', 'kernels', 'compound_exps', 'semiring']
     files = []
-    if not os.path.exists("../llvm/"):
-        os.symlink("../../llvm", "../llvm")
-    if not os.path.exists("../build/"):
-        os.symlink("../../build", "../build")
 
     for c in categories:
-        if not os.path.exists("./"+c+"/comet.py"):
-            os.symlink("../../comet.py","./"+c+"/comet.py")
-        if not os.path.exists("./"+c+"/MLIRGen"):
-            os.symlink("../../MLIRGen","./"+c+"/MLIRGen")
         files = files + glob.glob("./"+c+"/test_*.py")
 
 
@@ -71,10 +63,3 @@ if __name__ == '__main__':
                 print('='*40)
                 print(failed_test[1])
                 print('*'*40)
-
-    for c in categories:
-        os.unlink("./"+c+"/comet.py")
-        os.unlink("./"+c+"/MLIRGen")
-
-    os.unlink("../llvm")
-    os.unlink("../build")

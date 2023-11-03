@@ -1,4 +1,4 @@
-import comet
+from cometpy import comet
 import scipy as sp
 import numpy as np
 
