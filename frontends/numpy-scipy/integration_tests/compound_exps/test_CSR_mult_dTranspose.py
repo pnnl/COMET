@@ -1,7 +1,7 @@
 import time
 import numpy as np
 import scipy as sp
-import comet
+from cometpy import comet
 
 def run_numpy(A,B):
 	C = A @  B.transpose()
@@ -14,7 +14,7 @@ def run_comet_with_jit(A, B):
 
 	return C
 
-A = sp.sparse.csr_array(sp.io.mmread("../../../integration_test/data/test_rank2.mtx"))
+A = sp.sparse.csr_array(sp.io.mmread("../../../../integration_test/data/test_rank2.mtx"))
 B = np.full([5, A.shape[1]], 3.2,  dtype=float)
 C = np.full([A.shape[0], 5], 0.0,  dtype=float)
 expected_result = run_numpy(A,B)

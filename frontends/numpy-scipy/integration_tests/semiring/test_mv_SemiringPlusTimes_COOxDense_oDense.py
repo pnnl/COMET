@@ -1,4 +1,4 @@
-import comet
+from cometpy import comet
 import scipy as sp
 import numpy as np
 
@@ -9,7 +9,7 @@ def run_comet(A,B):
     return C
 
 
-A = sp.sparse.coo_array(sp.io.mmread("../../../integration_test/data/test_rank2.mtx"))
+A = sp.sparse.coo_array(sp.io.mmread("../../../../integration_test/data/test_rank2.mtx"))
 B = np.full((A.shape[1]), 1.7)
 
 res = run_comet(A,B)

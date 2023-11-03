@@ -1,7 +1,7 @@
 import time
 import numpy as np
 import scipy as sp
-import comet
+from cometpy import comet
 
 def run_numpy(v,t1):
 	i0 = np.einsum('cima,mc->ia', v,t1)

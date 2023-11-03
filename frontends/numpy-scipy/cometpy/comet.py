@@ -36,9 +36,9 @@ from typing import Any
 # import comet
 import numpy as np
 import scipy as sp
-from MLIRGen import lowering
-from MLIRGen import builders
-from MLIRGen.types import *
+from cometpy.MLIRGen import lowering
+from cometpy.MLIRGen import builders
+from cometpy.MLIRGen.types import *
 #import time
 
 def get_format(A):

@@ -1,8 +1,7 @@
 import time
 import numpy as np
 import scipy as sp
-import comet
-
+from cometpy import comet
 def run_numpy(A,B):
 	C = np.einsum('ij,jk->ik', A,B)
 
