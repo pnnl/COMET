@@ -1476,15 +1476,19 @@ namespace mlir
     /// Get the perms and formats of the itCompute op
     void getFormatsPermsOfComputeOp(Value computeOp,
                                     std::vector<std::vector<std::string>> &opFormats,
+                                    std::vector<std::vector<std::string>> &opBlocks,
                                     std::vector<std::vector<int>> &opPerms,
                                     std::vector<std::vector<bool>> &inputOutputMapping)
     {
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
       ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.getAllFormats();
+      ArrayAttr opBlocksArrayAttr_rhs = itComputeOp_rhs.getAllBlocks();
       ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.getAllPerms();
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
       ArrayAttr opFormatsArrayAttr_lhs = itComputeOp_lhs.getAllFormats();
+      ArrayAttr opBlocksArrayAttr_lhs = itComputeOp_lhs.getAllBlocks();
       ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.getAllPerms();
+      ///TODO(patrick) We should probably verify the block sizes
       assert(opFormatsArrayAttr_rhs.size() == opPermsArrayAttr_rhs.size() && "not equal RHS formats size with perms size\n");
       assert(opFormatsArrayAttr_lhs.size() == opPermsArrayAttr_lhs.size() && "not equal LHS formats size with perms size\n");
 
@@ -1493,17 +1497,25 @@ namespace mlir
       comet_debug() << "Start printing opFormats_rhs\n";
       std::vector<std::vector<std::string>> opFormats_rhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_rhs);
       comet_debug() << "End printing opFormats_rhs\n";
+      comet_debug() << "Start printing opBlocks_rhs\n";
+      std::vector<std::vector<std::string>> opBlocks_rhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_rhs);
+      comet_debug() << "End printing opBlocks_rhs\n";
       std::vector<std::vector<int>> opPerms_rhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_rhs);
       std::vector<std::vector<bool>> inputMapping = createInputOutputMapping(opPermsArrayAttr_rhs, true);
 
       comet_debug() << "Start printing opFormats_lhs\n";
       std::vector<std::vector<std::string>> opFormats_lhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_lhs);
       comet_debug() << "End printing opFormats_lhs\n";
+      comet_debug() << "Start printing opBlocks_lhs\n";
+      std::vector<std::vector<std::string>> opBlocks_lhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_lhs);
+      comet_debug() << "End printing opBlocks_lhs\n";
       std::vector<std::vector<int>> opPerms_lhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_lhs);
       std::vector<std::vector<bool>> outputMapping = createInputOutputMapping(opPermsArrayAttr_lhs, false);
 
       opFormats = opFormats_rhs;
       opFormats.insert(opFormats.end(), opFormats_lhs.begin(), opFormats_lhs.end());
+      opBlocks = opBlocks_rhs;
+      opBlocks.insert(opBlocks.end(), opBlocks_lhs.begin(), opBlocks_lhs.end());
       opPerms = opPerms_rhs;
       opPerms.insert(opPerms.end(), opPerms_lhs.begin(), opPerms_lhs.end());
       inputOutputMapping = inputMapping;
@@ -1616,10 +1628,11 @@ namespace mlir
           {
             comet_debug() << " getFormatsInfo:leafs[" << j << "] is computeOp\n";
             std::vector<std::vector<std::string>> allFormats;
+            std::vector<std::vector<std::string>> allBlocks;
             std::vector<std::vector<int>> allPerms;
             std::vector<std::vector<bool>> inputOutputMapping;
             OpBuilder builder(leafop);
-            getFormatsPermsOfComputeOp(leafop, allFormats, allPerms, inputOutputMapping);
+            getFormatsPermsOfComputeOp(leafop, allFormats, allBlocks, allPerms, inputOutputMapping);
 
             comet_debug() << " getFormatsInfo:Allformats allFormats.size(): " << allFormats.size() << "\n";
             for (auto m : allFormats)

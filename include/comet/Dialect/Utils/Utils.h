@@ -211,6 +211,7 @@ namespace mlir
 
     void getFormatsPermsOfComputeOp(Value computeOp,
                                     std::vector<std::vector<std::string>> &opFormats,
+                                    std::vector<std::vector<std::string>> &opBlocks,
                                     std::vector<std::vector<int>> &opPerms,
                                     std::vector<std::vector<bool>> &inputOutputMapping);
 
