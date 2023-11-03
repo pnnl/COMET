@@ -566,22 +566,17 @@ namespace mlir
         else if (formats_str.compare("ELL") == 0)
         {
           allFormats[i].push_back("D");
-          allFormats[i].push_back("D");
           allFormats[i].push_back("S");
         }
         else if (formats_str.compare("BCSR") == 0)
         {
           allFormats[i].push_back("D");
-          allFormats[i].push_back("D");
           allFormats[i].push_back("CN");
-          allFormats[i].push_back("D");
         }
         else if (formats_str.compare("CSB") == 0)
         {
           allFormats[i].push_back("D");
-          allFormats[i].push_back("D");
           allFormats[i].push_back("CU");
-          allFormats[i].push_back("S");
         }
         else if (formats_str.compare("COO") == 0)
         {
