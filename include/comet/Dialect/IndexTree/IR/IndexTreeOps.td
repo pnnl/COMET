@@ -64,7 +64,7 @@ def IndexTreeComputeLHSOp : IndexTree_Op<"ComputeLHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
-  let arguments = (ins Variadic<AnyType>:$tensors, ArrayAttr:$allPerms, ArrayAttr:$allFormats);
+  let arguments = (ins Variadic<AnyType>:$tensors, ArrayAttr:$allPerms, ArrayAttr:$allFormats, ArrayAttr:$allBlocks);
   let results = (outs AnyType:$output);
 }
 
@@ -72,7 +72,7 @@ def IndexTreeComputeRHSOp : IndexTree_Op<"ComputeRHS", [Pure]>{
   let summary = "";
   let description = [{}];
 
-  let arguments = (ins Variadic<AnyType>:$tensors, ArrayAttr:$allPerms, ArrayAttr:$allFormats);
+  let arguments = (ins Variadic<AnyType>:$tensors, ArrayAttr:$allPerms, ArrayAttr:$allFormats, ArrayAttr:$allBlocks);
   let results = (outs AnyType:$output);
 }
 

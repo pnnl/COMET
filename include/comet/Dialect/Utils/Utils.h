@@ -126,6 +126,7 @@ namespace mlir
     std::vector<unsigned> getSumIndices(std::vector<unsigned> rhs_perm, std::vector<unsigned> rhs_perm_free);
     std::vector<unsigned> getIndexIterateOrder(std::vector<unsigned> rhs1_perm, std::vector<unsigned> rhs2_perm);
     std::vector<std::vector<std::string>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms);
+    std::vector<std::vector<std::string>> getAllBlocks(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms);
     bool checkIsElementwise(std::vector<std::vector<int>> allPerms);
     bool checkIsMixedMode(std::vector<std::vector<std::string>> formats);
     bool checkIsDense(std::vector<std::string> format);

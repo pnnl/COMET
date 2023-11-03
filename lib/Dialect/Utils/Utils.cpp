@@ -625,6 +625,100 @@ namespace mlir
       }
       return allFormats;
     }
+    
+    ///
+    /// Returns the block attributes for each format
+    ///
+    std::vector<std::vector<std::string>> getAllBlocks(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms)
+    {
+      std::vector<std::vector<std::string>> allBlocks(allPerms.size());
+      /// block format with each input matrix: ["CSR", "D", "D"] SpMM
+      for (unsigned int i = 0; i < opFormatsArrayAttr.size(); i++)
+      {
+        std::string formats_str(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+        unsigned int tensorDims = allPerms[i].size();
+
+        comet_debug() << "format_str: " << formats_str << ", tensorDims: " << tensorDims << "\n";
+
+        if (formats_str.compare("CSR") == 0)
+        {
+          assert(tensorDims == 2 && "formst is CSR, should be a 2D tensor.\n");
+          allBlocks[i].push_back("UNK");
+          allBlocks[i].push_back("UNK");
+        }
+        else if (formats_str.compare("ModeGeneric") == 0)
+        {
+          /// Currently only support modegeneric on 3 D tensor
+          assert(tensorDims == 3 && "formst is ModeGeneric, should be a 3D tensor.\n");
+          allBlocks[i].push_back("UNK");
+          allBlocks[i].push_back("UNK");
+          allBlocks[i].push_back("UNK");
+        }
+        else if (formats_str.compare("DCSR") == 0 || formats_str.compare("CSF") == 0)
+        {
+          assert(tensorDims > 1 && "formst is DCSR or CSF, should be more than 1D.\n");
+          for (unsigned int d = 0; d < tensorDims; d++)
+          {
+            allBlocks[i].push_back("UNK");
+          }
+        }
+        else if (formats_str.compare("ELL") == 0)
+        {
+          allBlocks[i].push_back("D");
+          allBlocks[i].push_back("UNK");
+        }
+        else if (formats_str.compare("BCSR") == 0)
+        {
+          allBlocks[i].push_back("D");
+          allBlocks[i].push_back("D");
+        }
+        else if (formats_str.compare("CSB") == 0)
+        {
+          allBlocks[i].push_back("UNK");
+          allBlocks[i].push_back("UNK");
+        }
+        else if (formats_str.compare("COO") == 0)
+        {
+          assert(tensorDims > 1 && "formst is COO, should be more than 1D.\n");
+          for (unsigned int d = 0; d < tensorDims; d++)
+          {
+            if (d == 0)
+            {
+              allBlocks[i].push_back("UNK");
+              comet_debug() << "UNK\n";
+            }
+            else
+            {
+              allBlocks[i].push_back("UNK");
+              comet_debug() << "UNK\n";
+            }
+          }
+        }
+        else if (formats_str.compare("Dense") == 0)
+        {
+          for (unsigned int d = 0; d < tensorDims; d++)
+          {
+            allBlocks[i].push_back("UNK");
+          }
+        }
+        else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
+        {
+          allBlocks[i] = stringSplit(formats_str, ", ");
+        }
+        else
+        {
+          llvm::errs() << "Unsupported formats: " << formats_str << " (tensor dimes: " << tensorDims << ") \n";
+        }
+
+        comet_debug() << "allBlocks[" << i << "].size(): " << allBlocks[i].size() << "\n";
+        for (auto n : allBlocks[i])
+        {
+          comet_debug() << "block: " << n << "\n";
+          LLVM_DEBUG(llvm::dbgs() << "block: " << n << "\n");
+        }
+      }
+      return allBlocks;
+    }
 
     std::vector<std::vector<std::string>> getAllFormatsWorkspace(ArrayAttr opFormatsArrayAttr)
     {
