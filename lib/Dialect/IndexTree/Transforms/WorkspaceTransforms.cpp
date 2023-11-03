@@ -671,7 +671,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   
   /// Convert blocks string array into StrAttr
   std::vector<std::string> c3_blocks_str_0 = {"UNK"};
-  std::vector<std::string> c3_blocks_str_1 = opFormats[2];
+  std::vector<std::string> c3_blocks_str_1 = opBlocks[2];
   std::vector<std::vector<std::string>> c3_blocks_str = {c3_blocks_str_0, c3_blocks_str_1};
 
   std::vector<mlir::Value> c3_rhs = workspaceTensors;
@@ -779,7 +779,7 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
     std::vector<std::vector<std::string>> opBlocks;
     std::vector<std::vector<int>> opPerms;
     std::vector<std::vector<bool>> inputOutputMapping;
-    getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
+    getFormatsPermsOfComputeOp(computeOp, opFormats, opBlocks, opPerms, inputOutputMapping);
     comet_debug() << " \n";
     for (auto n : opFormats)
     {
@@ -903,8 +903,8 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       std::vector<std::string> c2_formats_str_1 = {"D"};
       std::vector<std::vector<std::string>> c2_formats_str = {c2_formats_str_0, c2_formats_str_1};
       
-      std::vector<std::string> c2_blocks_str_0 = opFormats[sparseDimsInput[0].tensorId];
-      std::vector<std::string> c2_blocks_str_1 = {"D"};
+      std::vector<std::string> c2_blocks_str_0 = opBlocks[sparseDimsInput[0].tensorId];
+      std::vector<std::string> c2_blocks_str_1 = {"UNK"};
       std::vector<std::vector<std::string>> c2_blocks_str = {c2_blocks_str_0, c2_blocks_str_1};
 
       std::vector<mlir::Value> c2_rhs = {tensors_rhs[sparseDimsInput[0].tensorId]};
@@ -1081,7 +1081,7 @@ void IndexTreeWorkspaceTransformationsPass::CompressedWorkspaceTransforms(mlir::
                 std::vector<std::vector<std::string>> opBlocks;
                 std::vector<std::vector<int>> opPerms;
                 std::vector<std::vector<bool>> inputOutputMapping;
-                getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
+                getFormatsPermsOfComputeOp(computeOp, opFormats, opBlocks, opPerms, inputOutputMapping);
 
 #ifdef DEBUG_MODE_WorkspaceTransformsPass
                 comet_debug() << "Print opFormats:\n";

@@ -185,9 +185,10 @@ namespace
                   comet_debug() <<  " is_comp_worksp_opt: " << is_comp_worksp_opt << " semiring: " << semiring << "\n";
 
                   std::vector<std::vector<std::string>> opFormats;
+                  std::vector<std::vector<std::string>> opBlocks;
                   std::vector<std::vector<int>> opPerms;
                   std::vector<std::vector<bool> > inputOutputMapping;
-                  getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
+                  getFormatsPermsOfComputeOp(computeOp, opFormats, opBlocks, opPerms, inputOutputMapping);
                   /// opFormats
                   comet_debug() << "[";
                   for (auto strings: opFormats) {
@@ -537,7 +538,7 @@ mlir::Value IndexTreeKernelFusionPass::createReducedComputeRHS(
     SmallVector<StringRef, 8> blocks;
     if (b_i == tensor_id)
     { /// for the new reduced tensor
-      blocks.insert(blocks.end(), old_formats_strs[b_i].begin() + rank_base, old_blocks_strs[b_i].end());
+      blocks.insert(blocks.end(), old_blocks_strs[b_i].begin() + rank_base, old_blocks_strs[b_i].end());
     }
     else
     { /// for other remaining old operands
