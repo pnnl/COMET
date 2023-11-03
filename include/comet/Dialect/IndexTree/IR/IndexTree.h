@@ -214,7 +214,7 @@ class Index_Tree
 
 public:
   IndicesType getIndices(std::vector<mlir::Value> &lbls);
-  Tensor *getOrCreateTensor(mlir::Value v, std::vector<mlir::Value> &allIndexLabels, FormatsType &formats);
+  Tensor *getOrCreateTensor(mlir::Value v, std::vector<mlir::Value> &allIndexLabels, FormatsType &formats, BlocksType &blocks);
 
   vector<TreeNode *> getNodes();
 

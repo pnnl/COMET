@@ -1,314 +1,544 @@
-module attributes {llvm.data_layout = ""} {
-  llvm.func @malloc(i64) -> !llvm.ptr<i8>
-  llvm.func @main() {
-    %0 = llvm.mlir.constant(0 : index) : i64
-    %1 = llvm.mlir.constant(1 : index) : i64
-    %2 = llvm.mlir.constant(13 : index) : i64
-    %3 = llvm.mlir.constant(1 : index) : i64
-    %4 = llvm.mlir.constant(0 : index) : i64
-    %5 = llvm.mlir.constant(2 : index) : i64
-    %6 = llvm.mlir.constant(3 : index) : i64
-    %7 = llvm.mlir.constant(0 : i32) : i32
-    %8 = llvm.mlir.constant(1 : i32) : i32
-    %9 = llvm.mlir.constant(4 : index) : i64
-    %10 = llvm.mlir.constant(5 : index) : i64
-    %11 = llvm.mlir.constant(6 : index) : i64
-    %12 = llvm.mlir.constant(7 : index) : i64
-    %13 = llvm.mlir.constant(0.000000e+00 : f64) : f64
-    %14 = llvm.mlir.constant(8 : index) : i64
-    %15 = llvm.mlir.null : !llvm.ptr<i64>
-    %16 = llvm.getelementptr %15[13] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
-    %17 = llvm.ptrtoint %16 : !llvm.ptr<i64> to i64
-    %18 = llvm.call @malloc(%17) : (i64) -> !llvm.ptr<i8>
-    %19 = llvm.bitcast %18 : !llvm.ptr<i8> to !llvm.ptr<i64>
-    %20 = llvm.mlir.undef : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>
-    %21 = llvm.insertvalue %19, %20[0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %22 = llvm.insertvalue %19, %21[1] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %23 = llvm.insertvalue %0, %22[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %24 = llvm.insertvalue %2, %23[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %25 = llvm.insertvalue %1, %24[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %26 = llvm.alloca %1 x !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %25, %26 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %27 = llvm.bitcast %26 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %28 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %29 = llvm.insertvalue %1, %28[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %30 = llvm.insertvalue %27, %29[1] : !llvm.struct<(i64, ptr<i8>)> 
-    llvm.call @read_input_sizes_2D_f64(%7, %4, %4, %5, %4, %1, %27, %8) {filename = "SPARSE_FILE_NAME0"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i32) -> ()
-    %31 = llvm.load %19 : !llvm.ptr<i64>
-    %32 = llvm.getelementptr %19[1] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
-    %33 = llvm.load %32 : !llvm.ptr<i64>
-    %34 = llvm.getelementptr %19[2] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
-    %35 = llvm.load %34 : !llvm.ptr<i64>
-    %36 = llvm.getelementptr %19[3] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
-    %37 = llvm.load %36 : !llvm.ptr<i64>
-    %38 = llvm.getelementptr %19[4] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
-    %39 = llvm.load %38 : !llvm.ptr<i64>
-    %40 = llvm.getelementptr %19[5] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
-    %41 = llvm.load %40 : !llvm.ptr<i64>
-    %42 = llvm.getelementptr %19[6] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
-    %43 = llvm.load %42 : !llvm.ptr<i64>
-    %44 = llvm.getelementptr %19[7] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
-    %45 = llvm.load %44 : !llvm.ptr<i64>
-    %46 = llvm.getelementptr %19[8] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
-    %47 = llvm.load %46 : !llvm.ptr<i64>
-    %48 = llvm.mlir.null : !llvm.ptr<i64>
-    %49 = llvm.getelementptr %48[%31] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    %50 = llvm.ptrtoint %49 : !llvm.ptr<i64> to i64
-    %51 = llvm.call @malloc(%50) : (i64) -> !llvm.ptr<i8>
-    %52 = llvm.bitcast %51 : !llvm.ptr<i8> to !llvm.ptr<i64>
-    %53 = llvm.mlir.undef : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>
-    %54 = llvm.insertvalue %52, %53[0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %55 = llvm.insertvalue %52, %54[1] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %56 = llvm.insertvalue %0, %55[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %57 = llvm.insertvalue %31, %56[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %58 = llvm.insertvalue %1, %57[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb1(%4 : i64)
-  ^bb1(%59: i64):  // 2 preds: ^bb0, ^bb2
-    %60 = llvm.icmp "slt" %59, %31 : i64
-    llvm.cond_br %60, ^bb2, ^bb3
-  ^bb2:  // pred: ^bb1
-    %61 = llvm.getelementptr %52[%59] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %4, %61 : !llvm.ptr<i64>
-    %62 = llvm.add %59, %3  : i64
-    llvm.br ^bb1(%62 : i64)
-  ^bb3:  // pred: ^bb1
-    %63 = llvm.alloca %1 x !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %58, %63 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %64 = llvm.bitcast %63 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %65 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %66 = llvm.insertvalue %1, %65[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %67 = llvm.insertvalue %64, %66[1] : !llvm.struct<(i64, ptr<i8>)> 
-    %68 = llvm.mlir.null : !llvm.ptr<i64>
-    %69 = llvm.getelementptr %68[%33] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    %70 = llvm.ptrtoint %69 : !llvm.ptr<i64> to i64
-    %71 = llvm.call @malloc(%70) : (i64) -> !llvm.ptr<i8>
-    %72 = llvm.bitcast %71 : !llvm.ptr<i8> to !llvm.ptr<i64>
-    %73 = llvm.mlir.undef : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>
-    %74 = llvm.insertvalue %72, %73[0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %75 = llvm.insertvalue %72, %74[1] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %76 = llvm.insertvalue %0, %75[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %77 = llvm.insertvalue %33, %76[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %78 = llvm.insertvalue %1, %77[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb4(%4 : i64)
-  ^bb4(%79: i64):  // 2 preds: ^bb3, ^bb5
-    %80 = llvm.icmp "slt" %79, %33 : i64
-    llvm.cond_br %80, ^bb5, ^bb6
-  ^bb5:  // pred: ^bb4
-    %81 = llvm.getelementptr %72[%79] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %4, %81 : !llvm.ptr<i64>
-    %82 = llvm.add %79, %3  : i64
-    llvm.br ^bb4(%82 : i64)
-  ^bb6:  // pred: ^bb4
-    %83 = llvm.alloca %1 x !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %78, %83 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %84 = llvm.bitcast %83 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %85 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %86 = llvm.insertvalue %1, %85[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %87 = llvm.insertvalue %84, %86[1] : !llvm.struct<(i64, ptr<i8>)> 
-    %88 = llvm.mlir.null : !llvm.ptr<i64>
-    %89 = llvm.getelementptr %88[%35] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    %90 = llvm.ptrtoint %89 : !llvm.ptr<i64> to i64
-    %91 = llvm.call @malloc(%90) : (i64) -> !llvm.ptr<i8>
-    %92 = llvm.bitcast %91 : !llvm.ptr<i8> to !llvm.ptr<i64>
-    %93 = llvm.mlir.undef : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>
-    %94 = llvm.insertvalue %92, %93[0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %95 = llvm.insertvalue %92, %94[1] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %96 = llvm.insertvalue %0, %95[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %97 = llvm.insertvalue %35, %96[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %98 = llvm.insertvalue %1, %97[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb7(%4 : i64)
-  ^bb7(%99: i64):  // 2 preds: ^bb6, ^bb8
-    %100 = llvm.icmp "slt" %99, %35 : i64
-    llvm.cond_br %100, ^bb8, ^bb9
-  ^bb8:  // pred: ^bb7
-    %101 = llvm.getelementptr %92[%99] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %4, %101 : !llvm.ptr<i64>
-    %102 = llvm.add %99, %3  : i64
-    llvm.br ^bb7(%102 : i64)
-  ^bb9:  // pred: ^bb7
-    %103 = llvm.alloca %1 x !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %98, %103 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %104 = llvm.bitcast %103 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %105 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %106 = llvm.insertvalue %1, %105[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %107 = llvm.insertvalue %104, %106[1] : !llvm.struct<(i64, ptr<i8>)> 
-    %108 = llvm.mlir.null : !llvm.ptr<i64>
-    %109 = llvm.getelementptr %108[%37] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    %110 = llvm.ptrtoint %109 : !llvm.ptr<i64> to i64
-    %111 = llvm.call @malloc(%110) : (i64) -> !llvm.ptr<i8>
-    %112 = llvm.bitcast %111 : !llvm.ptr<i8> to !llvm.ptr<i64>
-    %113 = llvm.mlir.undef : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>
-    %114 = llvm.insertvalue %112, %113[0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %115 = llvm.insertvalue %112, %114[1] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %116 = llvm.insertvalue %0, %115[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %117 = llvm.insertvalue %37, %116[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %118 = llvm.insertvalue %1, %117[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb10(%4 : i64)
-  ^bb10(%119: i64):  // 2 preds: ^bb9, ^bb11
-    %120 = llvm.icmp "slt" %119, %37 : i64
-    llvm.cond_br %120, ^bb11, ^bb12
-  ^bb11:  // pred: ^bb10
-    %121 = llvm.getelementptr %112[%119] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %4, %121 : !llvm.ptr<i64>
-    %122 = llvm.add %119, %3  : i64
-    llvm.br ^bb10(%122 : i64)
-  ^bb12:  // pred: ^bb10
-    %123 = llvm.alloca %1 x !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %118, %123 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %124 = llvm.bitcast %123 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %125 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %126 = llvm.insertvalue %1, %125[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %127 = llvm.insertvalue %124, %126[1] : !llvm.struct<(i64, ptr<i8>)> 
-    %128 = llvm.mlir.null : !llvm.ptr<i64>
-    %129 = llvm.getelementptr %128[%39] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    %130 = llvm.ptrtoint %129 : !llvm.ptr<i64> to i64
-    %131 = llvm.call @malloc(%130) : (i64) -> !llvm.ptr<i8>
-    %132 = llvm.bitcast %131 : !llvm.ptr<i8> to !llvm.ptr<i64>
-    %133 = llvm.mlir.undef : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>
-    %134 = llvm.insertvalue %132, %133[0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %135 = llvm.insertvalue %132, %134[1] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %136 = llvm.insertvalue %0, %135[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %137 = llvm.insertvalue %39, %136[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %138 = llvm.insertvalue %1, %137[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb13(%4 : i64)
-  ^bb13(%139: i64):  // 2 preds: ^bb12, ^bb14
-    %140 = llvm.icmp "slt" %139, %39 : i64
-    llvm.cond_br %140, ^bb14, ^bb15
-  ^bb14:  // pred: ^bb13
-    %141 = llvm.getelementptr %132[%139] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %4, %141 : !llvm.ptr<i64>
-    %142 = llvm.add %139, %3  : i64
-    llvm.br ^bb13(%142 : i64)
-  ^bb15:  // pred: ^bb13
-    %143 = llvm.alloca %1 x !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %138, %143 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %144 = llvm.bitcast %143 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %145 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %146 = llvm.insertvalue %1, %145[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %147 = llvm.insertvalue %144, %146[1] : !llvm.struct<(i64, ptr<i8>)> 
-    %148 = llvm.mlir.null : !llvm.ptr<i64>
-    %149 = llvm.getelementptr %148[%41] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    %150 = llvm.ptrtoint %149 : !llvm.ptr<i64> to i64
-    %151 = llvm.call @malloc(%150) : (i64) -> !llvm.ptr<i8>
-    %152 = llvm.bitcast %151 : !llvm.ptr<i8> to !llvm.ptr<i64>
-    %153 = llvm.mlir.undef : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>
-    %154 = llvm.insertvalue %152, %153[0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %155 = llvm.insertvalue %152, %154[1] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %156 = llvm.insertvalue %0, %155[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %157 = llvm.insertvalue %41, %156[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %158 = llvm.insertvalue %1, %157[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb16(%4 : i64)
-  ^bb16(%159: i64):  // 2 preds: ^bb15, ^bb17
-    %160 = llvm.icmp "slt" %159, %41 : i64
-    llvm.cond_br %160, ^bb17, ^bb18
-  ^bb17:  // pred: ^bb16
-    %161 = llvm.getelementptr %152[%159] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %4, %161 : !llvm.ptr<i64>
-    %162 = llvm.add %159, %3  : i64
-    llvm.br ^bb16(%162 : i64)
-  ^bb18:  // pred: ^bb16
-    %163 = llvm.alloca %1 x !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %158, %163 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %164 = llvm.bitcast %163 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %165 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %166 = llvm.insertvalue %1, %165[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %167 = llvm.insertvalue %164, %166[1] : !llvm.struct<(i64, ptr<i8>)> 
-    %168 = llvm.mlir.null : !llvm.ptr<i64>
-    %169 = llvm.getelementptr %168[%43] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    %170 = llvm.ptrtoint %169 : !llvm.ptr<i64> to i64
-    %171 = llvm.call @malloc(%170) : (i64) -> !llvm.ptr<i8>
-    %172 = llvm.bitcast %171 : !llvm.ptr<i8> to !llvm.ptr<i64>
-    %173 = llvm.mlir.undef : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>
-    %174 = llvm.insertvalue %172, %173[0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %175 = llvm.insertvalue %172, %174[1] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %176 = llvm.insertvalue %0, %175[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %177 = llvm.insertvalue %43, %176[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %178 = llvm.insertvalue %1, %177[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb19(%4 : i64)
-  ^bb19(%179: i64):  // 2 preds: ^bb18, ^bb20
-    %180 = llvm.icmp "slt" %179, %43 : i64
-    llvm.cond_br %180, ^bb20, ^bb21
-  ^bb20:  // pred: ^bb19
-    %181 = llvm.getelementptr %172[%179] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %4, %181 : !llvm.ptr<i64>
-    %182 = llvm.add %179, %3  : i64
-    llvm.br ^bb19(%182 : i64)
-  ^bb21:  // pred: ^bb19
-    %183 = llvm.alloca %1 x !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %178, %183 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %184 = llvm.bitcast %183 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %185 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %186 = llvm.insertvalue %1, %185[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %187 = llvm.insertvalue %184, %186[1] : !llvm.struct<(i64, ptr<i8>)> 
-    %188 = llvm.mlir.null : !llvm.ptr<i64>
-    %189 = llvm.getelementptr %188[%45] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    %190 = llvm.ptrtoint %189 : !llvm.ptr<i64> to i64
-    %191 = llvm.call @malloc(%190) : (i64) -> !llvm.ptr<i8>
-    %192 = llvm.bitcast %191 : !llvm.ptr<i8> to !llvm.ptr<i64>
-    %193 = llvm.mlir.undef : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>
-    %194 = llvm.insertvalue %192, %193[0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %195 = llvm.insertvalue %192, %194[1] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %196 = llvm.insertvalue %0, %195[2] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %197 = llvm.insertvalue %45, %196[3, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %198 = llvm.insertvalue %1, %197[4, 0] : !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb22(%4 : i64)
-  ^bb22(%199: i64):  // 2 preds: ^bb21, ^bb23
-    %200 = llvm.icmp "slt" %199, %45 : i64
-    llvm.cond_br %200, ^bb23, ^bb24
-  ^bb23:  // pred: ^bb22
-    %201 = llvm.getelementptr %192[%199] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    llvm.store %4, %201 : !llvm.ptr<i64>
-    %202 = llvm.add %199, %3  : i64
-    llvm.br ^bb22(%202 : i64)
-  ^bb24:  // pred: ^bb22
-    %203 = llvm.alloca %1 x !llvm.struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %198, %203 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %204 = llvm.bitcast %203 : !llvm.ptr<struct<(ptr<i64>, ptr<i64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %205 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %206 = llvm.insertvalue %1, %205[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %207 = llvm.insertvalue %204, %206[1] : !llvm.struct<(i64, ptr<i8>)> 
-    %208 = llvm.mlir.null : !llvm.ptr<f64>
-    %209 = llvm.getelementptr %208[%47] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
-    %210 = llvm.ptrtoint %209 : !llvm.ptr<f64> to i64
-    %211 = llvm.call @malloc(%210) : (i64) -> !llvm.ptr<i8>
-    %212 = llvm.bitcast %211 : !llvm.ptr<i8> to !llvm.ptr<f64>
-    %213 = llvm.mlir.undef : !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)>
-    %214 = llvm.insertvalue %212, %213[0] : !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %215 = llvm.insertvalue %212, %214[1] : !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %216 = llvm.insertvalue %0, %215[2] : !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %217 = llvm.insertvalue %47, %216[3, 0] : !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> 
-    %218 = llvm.insertvalue %1, %217[4, 0] : !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> 
-    llvm.br ^bb25(%4 : i64)
-  ^bb25(%219: i64):  // 2 preds: ^bb24, ^bb26
-    %220 = llvm.icmp "slt" %219, %47 : i64
-    llvm.cond_br %220, ^bb26, ^bb27
-  ^bb26:  // pred: ^bb25
-    %221 = llvm.getelementptr %212[%219] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
-    llvm.store %13, %221 : !llvm.ptr<f64>
-    %222 = llvm.add %219, %3  : i64
-    llvm.br ^bb25(%222 : i64)
-  ^bb27:  // pred: ^bb25
-    %223 = llvm.alloca %1 x !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)>>
-    llvm.store %218, %223 : !llvm.ptr<struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)>>
-    %224 = llvm.bitcast %223 : !llvm.ptr<struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
-    %225 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
-    %226 = llvm.insertvalue %1, %225[0] : !llvm.struct<(i64, ptr<i8>)> 
-    %227 = llvm.insertvalue %224, %226[1] : !llvm.struct<(i64, ptr<i8>)> 
-    llvm.call @read_input_2D_f64(%7, %4, %4, %5, %4, %1, %64, %1, %84, %1, %104, %1, %124, %1, %144, %1, %164, %1, %184, %1, %204, %1, %224, %8) {filename = "SPARSE_FILE_NAME0"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i32) -> ()
-    llvm.call @comet_print_memref_i64(%1, %64) : (i64, !llvm.ptr<i8>) -> ()
-    llvm.call @comet_print_memref_i64(%1, %84) : (i64, !llvm.ptr<i8>) -> ()
-    llvm.call @comet_print_memref_i64(%1, %104) : (i64, !llvm.ptr<i8>) -> ()
-    llvm.call @comet_print_memref_i64(%1, %124) : (i64, !llvm.ptr<i8>) -> ()
-    llvm.call @comet_print_memref_i64(%1, %144) : (i64, !llvm.ptr<i8>) -> ()
-    llvm.call @comet_print_memref_i64(%1, %164) : (i64, !llvm.ptr<i8>) -> ()
-    llvm.call @comet_print_memref_i64(%1, %184) : (i64, !llvm.ptr<i8>) -> ()
-    llvm.call @comet_print_memref_i64(%1, %204) : (i64, !llvm.ptr<i8>) -> ()
-    llvm.call @comet_print_memref_f64(%1, %224) : (i64, !llvm.ptr<i8>) -> ()
-    llvm.return
+// -----// IR Dump After {anonymous}::FuncOpLoweringPass () //----- //
+#map = affine_map<(d0, d1) -> (d0, d1)>
+#map1 = affine_map<(d0, d1) -> (d1, d0)>
+module {
+  func.func @main() {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %0 = "ta.dynamic_index_label"(%c0, %c1) : (index, index) -> !ta.range
+    %c0_0 = arith.constant 0 : index
+    %c1_1 = arith.constant 1 : index
+    %1 = "ta.dynamic_index_label"(%c0_0, %c1_1) : (index, index) -> !ta.range
+    %2 = "ta.sparse_tensor_decl"(%0, %1) {format = "CSR", temporal_tensor = false} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+    %3 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+    %4 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+    "ta.fill_from_file"(%2) {filename = "SPARSE_FILE_NAME0", readMode = 1 : i32} : (tensor<?x?xf64>) -> ()
+    "ta.fill"(%3) {value = 1.000000e+00 : f64} : (tensor<?x?xf64>) -> ()
+    %5 = "ta.mul"(%2, %3, %1, %0) {MaskType = "none", __alpha__ = 1.000000e+00 : f64, __beta__ = 0.000000e+00 : f64, formats = ["CSR", "Dense", "Dense"], indexing_maps = [#map, #map1, #map1], operand_segment_sizes = array<i32: 1, 1, 2, 0>, semiring = "plusxy_times"} : (tensor<?x?xf64>, tensor<?x?xf64>, !ta.range, !ta.range) -> tensor<?x?xf64>
+    "ta.set_op"(%5, %4) {__beta__ = 0.000000e+00 : f64} : (tensor<?x?xf64>, tensor<?x?xf64>) -> ()
+    "ta.print"(%2) : (tensor<?x?xf64>) -> ()
+    "ta.print"(%3) : (tensor<?x?xf64>) -> ()
+    "ta.print"(%4) : (tensor<?x?xf64>) -> ()
+    return
   }
-  llvm.func @read_input_2D_f64(i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i32) attributes {sym_visibility = "private"}
-  llvm.func @read_input_sizes_2D_f64(i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i32) attributes {sym_visibility = "private"}
-  llvm.func @comet_sort_index(i64, !llvm.ptr<i8>, i64, i64) attributes {sym_visibility = "private"}
-  llvm.func @comet_print_memref_f64(i64, !llvm.ptr<i8>) attributes {sym_visibility = "private"}
-  llvm.func @comet_print_memref_i64(i64, !llvm.ptr<i8>) attributes {sym_visibility = "private"}
 }
+
+
+// -----// IR Dump After {anonymous}::RemoveLabeledTensorOpPass () //----- //
+func.func @main() {
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %0 = "ta.dynamic_index_label"(%c0, %c1) : (index, index) -> !ta.range
+  %c0_0 = arith.constant 0 : index
+  %c1_1 = arith.constant 1 : index
+  %1 = "ta.dynamic_index_label"(%c0_0, %c1_1) : (index, index) -> !ta.range
+  %2 = "ta.sparse_tensor_decl"(%0, %1) {format = "CSR", temporal_tensor = false} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  %3 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  %4 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  "ta.fill_from_file"(%2) {filename = "SPARSE_FILE_NAME0", readMode = 1 : i32} : (tensor<?x?xf64>) -> ()
+  "ta.fill"(%3) {value = 1.000000e+00 : f64} : (tensor<?x?xf64>) -> ()
+  %5 = "ta.mul"(%2, %3, %1, %0) {MaskType = "none", __alpha__ = 1.000000e+00 : f64, __beta__ = 0.000000e+00 : f64, formats = ["CSR", "Dense", "Dense"], indexing_maps = [affine_map<(d0, d1) -> (d0, d1)>, affine_map<(d0, d1) -> (d1, d0)>, affine_map<(d0, d1) -> (d1, d0)>], operand_segment_sizes = array<i32: 1, 1, 2, 0>, semiring = "plusxy_times"} : (tensor<?x?xf64>, tensor<?x?xf64>, !ta.range, !ta.range) -> tensor<?x?xf64>
+  "ta.set_op"(%5, %4) {__beta__ = 0.000000e+00 : f64} : (tensor<?x?xf64>, tensor<?x?xf64>) -> ()
+  "ta.print"(%2) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%3) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%4) : (tensor<?x?xf64>) -> ()
+  return
+}
+
+// -----// IR Dump After {anonymous}::LowerTAMulChainPass () //----- //
+func.func @main() {
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %0 = "ta.dynamic_index_label"(%c0, %c1) : (index, index) -> !ta.range
+  %c0_0 = arith.constant 0 : index
+  %c1_1 = arith.constant 1 : index
+  %1 = "ta.dynamic_index_label"(%c0_0, %c1_1) : (index, index) -> !ta.range
+  %2 = "ta.sparse_tensor_decl"(%0, %1) {format = "CSR", temporal_tensor = false} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  %3 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  %4 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  "ta.fill_from_file"(%2) {filename = "SPARSE_FILE_NAME0", readMode = 1 : i32} : (tensor<?x?xf64>) -> ()
+  "ta.fill"(%3) {value = 1.000000e+00 : f64} : (tensor<?x?xf64>) -> ()
+  %5 = "ta.mul"(%2, %3, %1, %0) {MaskType = "none", __alpha__ = 1.000000e+00 : f64, __beta__ = 0.000000e+00 : f64, formats = ["CSR", "Dense", "Dense"], indexing_maps = [affine_map<(d0, d1) -> (d0, d1)>, affine_map<(d0, d1) -> (d1, d0)>, affine_map<(d0, d1) -> (d1, d0)>], operand_segment_sizes = array<i32: 1, 1, 2, 0>, semiring = "plusxy_times"} : (tensor<?x?xf64>, tensor<?x?xf64>, !ta.range, !ta.range) -> tensor<?x?xf64>
+  "ta.set_op"(%5, %4) {__beta__ = 0.000000e+00 : f64} : (tensor<?x?xf64>, tensor<?x?xf64>) -> ()
+  "ta.print"(%2) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%3) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%4) : (tensor<?x?xf64>) -> ()
+  return
+}
+
+// -----// IR Dump After {anonymous}::TensorAlgebraCheckImplicitTensorDeclPass () //----- //
+func.func @main() {
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %0 = "ta.dynamic_index_label"(%c0, %c1) : (index, index) -> !ta.range
+  %c0_0 = arith.constant 0 : index
+  %c1_1 = arith.constant 1 : index
+  %1 = "ta.dynamic_index_label"(%c0_0, %c1_1) : (index, index) -> !ta.range
+  %2 = "ta.sparse_tensor_decl"(%0, %1) {format = "CSR", temporal_tensor = false} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  %3 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  %4 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  "ta.fill_from_file"(%2) {filename = "SPARSE_FILE_NAME0", readMode = 1 : i32} : (tensor<?x?xf64>) -> ()
+  "ta.fill"(%3) {value = 1.000000e+00 : f64} : (tensor<?x?xf64>) -> ()
+  %5 = "ta.mul"(%2, %3, %1, %0) {MaskType = "none", __alpha__ = 1.000000e+00 : f64, __beta__ = 0.000000e+00 : f64, formats = ["CSR", "Dense", "Dense"], indexing_maps = [affine_map<(d0, d1) -> (d0, d1)>, affine_map<(d0, d1) -> (d1, d0)>, affine_map<(d0, d1) -> (d1, d0)>], operand_segment_sizes = array<i32: 1, 1, 2, 0>, semiring = "plusxy_times"} : (tensor<?x?xf64>, tensor<?x?xf64>, !ta.range, !ta.range) -> tensor<?x?xf64>
+  "ta.set_op"(%5, %4) {__beta__ = 0.000000e+00 : f64} : (tensor<?x?xf64>, tensor<?x?xf64>) -> ()
+  "ta.print"(%2) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%3) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%4) : (tensor<?x?xf64>) -> ()
+  return
+}
+
+// -----// IR Dump After {anonymous}::LowerTensorAlgebraToIndexTreePass () //----- //
+func.func @main() {
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %0 = "ta.dynamic_index_label"(%c0, %c1) : (index, index) -> !ta.range
+  %c0_0 = arith.constant 0 : index
+  %c1_1 = arith.constant 1 : index
+  %1 = "ta.dynamic_index_label"(%c0_0, %c1_1) : (index, index) -> !ta.range
+  %2 = "ta.sparse_tensor_decl"(%0, %1) {format = "CSR", temporal_tensor = false} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  %3 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  %4 = "ta.dense_tensor_decl"(%1, %0) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  "ta.fill_from_file"(%2) {filename = "SPARSE_FILE_NAME0", readMode = 1 : i32} : (tensor<?x?xf64>) -> ()
+  "ta.fill"(%3) {value = 1.000000e+00 : f64} : (tensor<?x?xf64>) -> ()
+  %5 = "it.ComputeRHS"(%2, %3) {allBlocks = [["UNK", "UNK"], ["UNK", "UNK"]], allFormats = [["D", "CU"], ["D", "D"]], allPerms = [[0, 1], [1, 0]]} : (tensor<?x?xf64>, tensor<?x?xf64>) -> tensor<*xf64>
+  %6 = "it.ComputeLHS"(%4) {allBlocks = [["UNK", "UNK"]], allFormats = [["D", "D"]], allPerms = [[1, 0]]} : (tensor<?x?xf64>) -> tensor<*xf64>
+  %7 = "it.Compute"(%5, %6) {MaskType = "none", comp_worksp_opt = false, semiring = "plusxy_times"} : (tensor<*xf64>, tensor<*xf64>) -> i64
+  %8 = "it.Indices"(%7) {indices = [1]} : (i64) -> i64
+  %9 = "it.Indices"(%8) {indices = [0]} : (i64) -> i64
+  %10 = "it.itree"(%9) : (i64) -> i64
+  "ta.print"(%2) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%3) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%4) : (tensor<?x?xf64>) -> ()
+  return
+}
+
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1144  SparseInputTensorDeclOpLowering in format begin
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1145 %2 = "ta.sparse_tensor_decl"(%0, %1) {format = "CSR", temporal_tensor = false} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1156  --- CSR
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1158  2
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1168 
+Check the tensor is input or output
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1169 %5 = "it.ComputeRHS"(%2, %3) {allBlocks = [["UNK", "UNK"], ["UNK", "UNK"]], allFormats = [["D", "CU"], ["D", "D"]], allPerms = [[0, 1], [1, 0]]} : (tensor<?x?xf64>, tensor<?x?xf64>) -> tensor<*xf64>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1245  used in ta.itComputeRHS op
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1168 
+Check the tensor is input or output
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1169 "ta.print"(%2) : (tensor<?x?xf64>) -> ()
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1260  the tensor is in PrintOp
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1168 
+Check the tensor is input or output
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1169 "ta.fill_from_file"(%2) {filename = "SPARSE_FILE_NAME0", readMode = 1 : i32} : (tensor<?x?xf64>) -> ()
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1256  the tensor is in fill_from_file op
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1287  isOutputTensor: 0
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1296  CSR isDense: 0
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1301  Sparse input tensor 
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1356  filename: SPARSE_FILE_NAME0
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1360  SPARSE_FILE_NAME0
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1363  readMode: 1
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1367 sp_decl.getParameterCount(): 13
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1370  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1371 %alloc = memref.alloc() : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1376  Get the dim_format
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1395  Parsed fileID: 0
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1413  2D
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:291 Inserting insertReadFileLibCall
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:311  Rank Size is 2
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:346 Adding read_input_2D_f64 to the module
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:373 Adding read_input_sizes_2D_f64 to the module
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %2 = memref.load %alloc[%c0_4] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %3 = memref.load %alloc[%c1_5] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %4 = memref.load %alloc[%c2_6] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %5 = memref.load %alloc[%c3_7] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %6 = memref.load %alloc[%c4] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %7 = memref.load %alloc[%c5] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %8 = memref.load %alloc[%c6] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %9 = memref.load %alloc[%c7] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %10 = memref.load %alloc[%c8] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %11 = memref.load %alloc[%c9] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %12 = memref.load %alloc[%c10] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %13 = memref.load %alloc[%c11] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1466  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1467 %14 = memref.load %alloc[%c12] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1477 %2 = memref.load %alloc[%c0_4] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1479  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1480 %alloc_8 = memref.alloc(%2) : memref<?xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1477 %3 = memref.load %alloc[%c1_5] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1479  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1480 %alloc_13 = memref.alloc(%3) : memref<?xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1477 %4 = memref.load %alloc[%c2_6] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1479  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1480 %alloc_18 = memref.alloc(%4) : memref<?xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1477 %5 = memref.load %alloc[%c3_7] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1479  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1480 %alloc_23 = memref.alloc(%5) : memref<?xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1477 %6 = memref.load %alloc[%c4] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1479  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1480 %alloc_28 = memref.alloc(%6) : memref<?xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1477 %7 = memref.load %alloc[%c5] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1479  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1480 %alloc_33 = memref.alloc(%7) : memref<?xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1477 %8 = memref.load %alloc[%c6] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1479  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1480 %alloc_38 = memref.alloc(%8) : memref<?xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1477 %9 = memref.load %alloc[%c7] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1479  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1480 %alloc_43 = memref.alloc(%9) : memref<?xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1492  /home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1493 %alloc_48 = memref.alloc(%10) : memref<?xf64>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1556  Generate read_input_2D or read_input_3D functions
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1603 SparseTensorConstructOp generated for input sparse tensor:
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1604 %24 = ta.sptensor_construct(%15, %16, %17, %18, %19, %20, %21, %22, %23, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12) {tensor_rank = 2 : i32} : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index>)
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1612 %0 = "ta.dynamic_index_label"(%c0, %c1) : (index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1613 %0 = "ta.dynamic_index_label"(%c0, %c1) : (index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1622 %25 = "ta.static_index_label"(%c0, %11, %c1) : (index, index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1612 %1 = "ta.dynamic_index_label"(%c0_0, %c1_1) : (index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1613 %1 = "ta.dynamic_index_label"(%c0_0, %c1_1) : (index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1622 %26 = "ta.static_index_label"(%c0_0, %12, %c1_1) : (index, index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1668  SparseInputTensorDeclOpLowering in format end
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1803 ---------------SparseTensorDeclLoweringPass end
+// -----// IR Dump After {anonymous}::SparseTensorDeclLoweringPass () //----- //
+func.func @main() {
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %0 = "ta.dynamic_index_label"(%c0, %c1) : (index, index) -> !ta.range
+  %c0_0 = arith.constant 0 : index
+  %c1_1 = arith.constant 1 : index
+  %1 = "ta.dynamic_index_label"(%c0_0, %c1_1) : (index, index) -> !ta.range
+  %alloc = memref.alloc() : memref<13xindex>
+  %cast = memref.cast %alloc : memref<13xindex> to memref<*xindex>
+  %c-1 = arith.constant -1 : index
+  %c0_2 = arith.constant 0 : index
+  %c1_3 = arith.constant 1 : index
+  %c2 = arith.constant 2 : index
+  %c3 = arith.constant 3 : index
+  %c0_i32 = arith.constant 0 : i32
+  %c1_i32 = arith.constant 1 : i32
+  call @read_input_sizes_2D_f64(%c0_i32, %c0_2, %c-1, %c1_3, %c-1, %cast, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, i32) -> ()
+  %c0_4 = arith.constant 0 : index
+  %2 = memref.load %alloc[%c0_4] : memref<13xindex>
+  %c1_5 = arith.constant 1 : index
+  %3 = memref.load %alloc[%c1_5] : memref<13xindex>
+  %c2_6 = arith.constant 2 : index
+  %4 = memref.load %alloc[%c2_6] : memref<13xindex>
+  %c3_7 = arith.constant 3 : index
+  %5 = memref.load %alloc[%c3_7] : memref<13xindex>
+  %c4 = arith.constant 4 : index
+  %6 = memref.load %alloc[%c4] : memref<13xindex>
+  %c5 = arith.constant 5 : index
+  %7 = memref.load %alloc[%c5] : memref<13xindex>
+  %c6 = arith.constant 6 : index
+  %8 = memref.load %alloc[%c6] : memref<13xindex>
+  %c7 = arith.constant 7 : index
+  %9 = memref.load %alloc[%c7] : memref<13xindex>
+  %c8 = arith.constant 8 : index
+  %10 = memref.load %alloc[%c8] : memref<13xindex>
+  %c9 = arith.constant 9 : index
+  %11 = memref.load %alloc[%c9] : memref<13xindex>
+  %c10 = arith.constant 10 : index
+  %12 = memref.load %alloc[%c10] : memref<13xindex>
+  %c11 = arith.constant 11 : index
+  %13 = memref.load %alloc[%c11] : memref<13xindex>
+  %c12 = arith.constant 12 : index
+  %14 = memref.load %alloc[%c12] : memref<13xindex>
+  %alloc_8 = memref.alloc(%2) : memref<?xindex>
+  %c0_9 = arith.constant 0 : index
+  %c0_10 = arith.constant 0 : index
+  %c1_11 = arith.constant 1 : index
+  scf.for %arg0 = %c0_10 to %2 step %c1_11 {
+    memref.store %c0_9, %alloc_8[%arg0] : memref<?xindex>
+  }
+  %cast_12 = memref.cast %alloc_8 : memref<?xindex> to memref<*xindex>
+  %alloc_13 = memref.alloc(%3) : memref<?xindex>
+  %c0_14 = arith.constant 0 : index
+  %c0_15 = arith.constant 0 : index
+  %c1_16 = arith.constant 1 : index
+  scf.for %arg0 = %c0_15 to %3 step %c1_16 {
+    memref.store %c0_14, %alloc_13[%arg0] : memref<?xindex>
+  }
+  %cast_17 = memref.cast %alloc_13 : memref<?xindex> to memref<*xindex>
+  %alloc_18 = memref.alloc(%4) : memref<?xindex>
+  %c0_19 = arith.constant 0 : index
+  %c0_20 = arith.constant 0 : index
+  %c1_21 = arith.constant 1 : index
+  scf.for %arg0 = %c0_20 to %4 step %c1_21 {
+    memref.store %c0_19, %alloc_18[%arg0] : memref<?xindex>
+  }
+  %cast_22 = memref.cast %alloc_18 : memref<?xindex> to memref<*xindex>
+  %alloc_23 = memref.alloc(%5) : memref<?xindex>
+  %c0_24 = arith.constant 0 : index
+  %c0_25 = arith.constant 0 : index
+  %c1_26 = arith.constant 1 : index
+  scf.for %arg0 = %c0_25 to %5 step %c1_26 {
+    memref.store %c0_24, %alloc_23[%arg0] : memref<?xindex>
+  }
+  %cast_27 = memref.cast %alloc_23 : memref<?xindex> to memref<*xindex>
+  %alloc_28 = memref.alloc(%6) : memref<?xindex>
+  %c0_29 = arith.constant 0 : index
+  %c0_30 = arith.constant 0 : index
+  %c1_31 = arith.constant 1 : index
+  scf.for %arg0 = %c0_30 to %6 step %c1_31 {
+    memref.store %c0_29, %alloc_28[%arg0] : memref<?xindex>
+  }
+  %cast_32 = memref.cast %alloc_28 : memref<?xindex> to memref<*xindex>
+  %alloc_33 = memref.alloc(%7) : memref<?xindex>
+  %c0_34 = arith.constant 0 : index
+  %c0_35 = arith.constant 0 : index
+  %c1_36 = arith.constant 1 : index
+  scf.for %arg0 = %c0_35 to %7 step %c1_36 {
+    memref.store %c0_34, %alloc_33[%arg0] : memref<?xindex>
+  }
+  %cast_37 = memref.cast %alloc_33 : memref<?xindex> to memref<*xindex>
+  %alloc_38 = memref.alloc(%8) : memref<?xindex>
+  %c0_39 = arith.constant 0 : index
+  %c0_40 = arith.constant 0 : index
+  %c1_41 = arith.constant 1 : index
+  scf.for %arg0 = %c0_40 to %8 step %c1_41 {
+    memref.store %c0_39, %alloc_38[%arg0] : memref<?xindex>
+  }
+  %cast_42 = memref.cast %alloc_38 : memref<?xindex> to memref<*xindex>
+  %alloc_43 = memref.alloc(%9) : memref<?xindex>
+  %c0_44 = arith.constant 0 : index
+  %c0_45 = arith.constant 0 : index
+  %c1_46 = arith.constant 1 : index
+  scf.for %arg0 = %c0_45 to %9 step %c1_46 {
+    memref.store %c0_44, %alloc_43[%arg0] : memref<?xindex>
+  }
+  %cast_47 = memref.cast %alloc_43 : memref<?xindex> to memref<*xindex>
+  %alloc_48 = memref.alloc(%10) : memref<?xf64>
+  %cst = arith.constant 0.000000e+00 : f64
+  %c0_49 = arith.constant 0 : index
+  %c1_50 = arith.constant 1 : index
+  scf.for %arg0 = %c0_49 to %10 step %c1_50 {
+    memref.store %cst, %alloc_48[%arg0] : memref<?xf64>
+  }
+  %cast_51 = memref.cast %alloc_48 : memref<?xf64> to memref<*xf64>
+  call @read_input_2D_f64(%c0_i32, %c0_2, %c-1, %c1_3, %c-1, %cast_12, %cast_17, %cast_22, %cast_27, %cast_32, %cast_37, %cast_42, %cast_47, %cast_51, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
+  %15 = bufferization.to_tensor %alloc_8 : memref<?xindex>
+  %16 = bufferization.to_tensor %alloc_13 : memref<?xindex>
+  %17 = bufferization.to_tensor %alloc_18 : memref<?xindex>
+  %18 = bufferization.to_tensor %alloc_23 : memref<?xindex>
+  %19 = bufferization.to_tensor %alloc_28 : memref<?xindex>
+  %20 = bufferization.to_tensor %alloc_33 : memref<?xindex>
+  %21 = bufferization.to_tensor %alloc_38 : memref<?xindex>
+  %22 = bufferization.to_tensor %alloc_43 : memref<?xindex>
+  %23 = bufferization.to_tensor %alloc_48 : memref<?xf64>
+  %24 = ta.sptensor_construct(%15, %16, %17, %18, %19, %20, %21, %22, %23, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12) {tensor_rank = 2 : i32} : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index) -> (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index>)
+  %25 = "ta.static_index_label"(%c0, %11, %c1) : (index, index, index) -> !ta.range
+  %26 = "ta.static_index_label"(%c0_0, %12, %c1_1) : (index, index, index) -> !ta.range
+  %27 = "ta.dense_tensor_decl"(%26, %25) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  %28 = "ta.dense_tensor_decl"(%26, %25) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+  "ta.fill"(%27) {value = 1.000000e+00 : f64} : (tensor<?x?xf64>) -> ()
+  %29 = "it.ComputeRHS"(%24, %27) {allBlocks = [["UNK", "UNK"], ["UNK", "UNK"]], allFormats = [["D", "CU"], ["D", "D"]], allPerms = [[0, 1], [1, 0]]} : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index>, tensor<?x?xf64>) -> tensor<*xf64>
+  %30 = "it.ComputeLHS"(%28) {allBlocks = [["UNK", "UNK"]], allFormats = [["D", "D"]], allPerms = [[1, 0]]} : (tensor<?x?xf64>) -> tensor<*xf64>
+  %31 = "it.Compute"(%29, %30) {MaskType = "none", comp_worksp_opt = false, semiring = "plusxy_times"} : (tensor<*xf64>, tensor<*xf64>) -> i64
+  %32 = "it.Indices"(%31) {indices = [1]} : (i64) -> i64
+  %33 = "it.Indices"(%32) {indices = [0]} : (i64) -> i64
+  %34 = "it.itree"(%33) : (i64) -> i64
+  "ta.print"(%24) : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index>) -> ()
+  "ta.print"(%27) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%28) : (tensor<?x?xf64>) -> ()
+  return
+}
+
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1056 --------------DenseTensorDeclarationLowering in format begin
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1058 
+
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1060 %27 = "ta.dense_tensor_decl"(%26, %25) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+-----------------------------------
+memref<?x?xf64>
+-----------------------------------
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1077 %26 = "ta.static_index_label"(%c0_0, %12, %c1_1) : (index, index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1083 %12 = memref.load %alloc[%c10] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1077 %25 = "ta.static_index_label"(%c0, %11, %c1) : (index, index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1083 %11 = memref.load %alloc[%c9] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1092 %29 = "it.ComputeRHS"(%24, %27) {allBlocks = [["UNK", "UNK"], ["UNK", "UNK"]], allFormats = [["D", "CU"], ["D", "D"]], allPerms = [[0, 1], [1, 0]]} : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index>, tensor<?x?xf64>) -> tensor<*xf64>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1092 "ta.print"(%27) : (tensor<?x?xf64>) -> ()
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1092 "ta.fill"(%27) {value = 1.000000e+00 : f64} : (tensor<?x?xf64>) -> ()
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1097  AllocOp for initialization is_filled: 1 
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1103 %alloc_52 = memref.alloc(%12, %11) : memref<?x?xf64>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1115  TensorLoad:
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1116 %27 = bufferization.to_tensor %alloc_52 : memref<?x?xf64>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1122 --------------DenseTensorDeclarationLowering in format end
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1123 
+
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1056 --------------DenseTensorDeclarationLowering in format begin
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1058 
+
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1060 %29 = "ta.dense_tensor_decl"(%26, %25) {format = "Dense"} : (!ta.range, !ta.range) -> tensor<?x?xf64>
+-----------------------------------
+memref<?x?xf64>
+-----------------------------------
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1077 %26 = "ta.static_index_label"(%c0_0, %12, %c1_1) : (index, index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1083 %12 = memref.load %alloc[%c10] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1077 %25 = "ta.static_index_label"(%c0, %11, %c1) : (index, index, index) -> !ta.range
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1083 %11 = memref.load %alloc[%c9] : memref<13xindex>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1092 %31 = "it.ComputeLHS"(%29) {allBlocks = [["UNK", "UNK"]], allFormats = [["D", "D"]], allPerms = [[1, 0]]} : (tensor<?x?xf64>) -> tensor<*xf64>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1092 "ta.print"(%29) : (tensor<?x?xf64>) -> ()
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1097  AllocOp for initialization is_filled: 0 
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1109 %101 = "memref.alloc"(%36, %34) {operand_segment_sizes = array<i32: 2, 0>} : (index, index) -> memref<?x?xf64>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1115  TensorLoad:
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1116 %105 = "bufferization.to_tensor"(%101) : (memref<?x?xf64>) -> tensor<?x?xf64>
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1122 --------------DenseTensorDeclarationLowering in format end
+/home/patrick/Work/PNNL/COMET/lib/Dialect/TensorAlgebra/Transforms/TensorDeclLowering.cpp:1123 
+
+loc("first.ta":8:2): error: 'memref.store' op store index operand count not equal to memref rank
+// -----// IR Dump After {anonymous}::DenseTensorDeclLoweringPass Failed () //----- //
+"func.func"() ({
+  %0 = "arith.constant"() {value = 0 : index} : () -> index
+  %1 = "arith.constant"() {value = 1 : index} : () -> index
+  %2 = "ta.dynamic_index_label"(%0, %1) : (index, index) -> !ta.range
+  %3 = "arith.constant"() {value = 0 : index} : () -> index
+  %4 = "arith.constant"() {value = 1 : index} : () -> index
+  %5 = "ta.dynamic_index_label"(%3, %4) : (index, index) -> !ta.range
+  %6 = "memref.alloc"() {operand_segment_sizes = array<i32: 0, 0>} : () -> memref<13xindex>
+  %7 = "memref.cast"(%6) : (memref<13xindex>) -> memref<*xindex>
+  %8 = "arith.constant"() {value = -1 : index} : () -> index
+  %9 = "arith.constant"() {value = 0 : index} : () -> index
+  %10 = "arith.constant"() {value = 1 : index} : () -> index
+  %11 = "arith.constant"() {value = 2 : index} : () -> index
+  %12 = "arith.constant"() {value = 3 : index} : () -> index
+  %13 = "arith.constant"() {value = 0 : i32} : () -> i32
+  %14 = "arith.constant"() {value = 1 : i32} : () -> i32
+  "func.call"(%13, %9, %8, %10, %8, %7, %14) {callee = @read_input_sizes_2D_f64, filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, i32) -> ()
+  %15 = "arith.constant"() {value = 0 : index} : () -> index
+  %16 = "memref.load"(%6, %15) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %17 = "arith.constant"() {value = 1 : index} : () -> index
+  %18 = "memref.load"(%6, %17) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %19 = "arith.constant"() {value = 2 : index} : () -> index
+  %20 = "memref.load"(%6, %19) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %21 = "arith.constant"() {value = 3 : index} : () -> index
+  %22 = "memref.load"(%6, %21) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %23 = "arith.constant"() {value = 4 : index} : () -> index
+  %24 = "memref.load"(%6, %23) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %25 = "arith.constant"() {value = 5 : index} : () -> index
+  %26 = "memref.load"(%6, %25) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %27 = "arith.constant"() {value = 6 : index} : () -> index
+  %28 = "memref.load"(%6, %27) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %29 = "arith.constant"() {value = 7 : index} : () -> index
+  %30 = "memref.load"(%6, %29) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %31 = "arith.constant"() {value = 8 : index} : () -> index
+  %32 = "memref.load"(%6, %31) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %33 = "arith.constant"() {value = 9 : index} : () -> index
+  %34 = "memref.load"(%6, %33) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %35 = "arith.constant"() {value = 10 : index} : () -> index
+  %36 = "memref.load"(%6, %35) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %37 = "arith.constant"() {value = 11 : index} : () -> index
+  %38 = "memref.load"(%6, %37) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %39 = "arith.constant"() {value = 12 : index} : () -> index
+  %40 = "memref.load"(%6, %39) {nontemporal = false} : (memref<13xindex>, index) -> index
+  %41 = "memref.alloc"(%16) {operand_segment_sizes = array<i32: 1, 0>} : (index) -> memref<?xindex>
+  %42 = "arith.constant"() {value = 0 : index} : () -> index
+  %43 = "arith.constant"() {value = 0 : index} : () -> index
+  %44 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%43, %16, %44) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%42, %41, %arg0) {nontemporal = false} : (index, memref<?xindex>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %45 = "memref.cast"(%41) : (memref<?xindex>) -> memref<*xindex>
+  %46 = "memref.alloc"(%18) {operand_segment_sizes = array<i32: 1, 0>} : (index) -> memref<?xindex>
+  %47 = "arith.constant"() {value = 0 : index} : () -> index
+  %48 = "arith.constant"() {value = 0 : index} : () -> index
+  %49 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%48, %18, %49) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%47, %46, %arg0) {nontemporal = false} : (index, memref<?xindex>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %50 = "memref.cast"(%46) : (memref<?xindex>) -> memref<*xindex>
+  %51 = "memref.alloc"(%20) {operand_segment_sizes = array<i32: 1, 0>} : (index) -> memref<?xindex>
+  %52 = "arith.constant"() {value = 0 : index} : () -> index
+  %53 = "arith.constant"() {value = 0 : index} : () -> index
+  %54 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%53, %20, %54) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%52, %51, %arg0) {nontemporal = false} : (index, memref<?xindex>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %55 = "memref.cast"(%51) : (memref<?xindex>) -> memref<*xindex>
+  %56 = "memref.alloc"(%22) {operand_segment_sizes = array<i32: 1, 0>} : (index) -> memref<?xindex>
+  %57 = "arith.constant"() {value = 0 : index} : () -> index
+  %58 = "arith.constant"() {value = 0 : index} : () -> index
+  %59 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%58, %22, %59) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%57, %56, %arg0) {nontemporal = false} : (index, memref<?xindex>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %60 = "memref.cast"(%56) : (memref<?xindex>) -> memref<*xindex>
+  %61 = "memref.alloc"(%24) {operand_segment_sizes = array<i32: 1, 0>} : (index) -> memref<?xindex>
+  %62 = "arith.constant"() {value = 0 : index} : () -> index
+  %63 = "arith.constant"() {value = 0 : index} : () -> index
+  %64 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%63, %24, %64) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%62, %61, %arg0) {nontemporal = false} : (index, memref<?xindex>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %65 = "memref.cast"(%61) : (memref<?xindex>) -> memref<*xindex>
+  %66 = "memref.alloc"(%26) {operand_segment_sizes = array<i32: 1, 0>} : (index) -> memref<?xindex>
+  %67 = "arith.constant"() {value = 0 : index} : () -> index
+  %68 = "arith.constant"() {value = 0 : index} : () -> index
+  %69 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%68, %26, %69) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%67, %66, %arg0) {nontemporal = false} : (index, memref<?xindex>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %70 = "memref.cast"(%66) : (memref<?xindex>) -> memref<*xindex>
+  %71 = "memref.alloc"(%28) {operand_segment_sizes = array<i32: 1, 0>} : (index) -> memref<?xindex>
+  %72 = "arith.constant"() {value = 0 : index} : () -> index
+  %73 = "arith.constant"() {value = 0 : index} : () -> index
+  %74 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%73, %28, %74) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%72, %71, %arg0) {nontemporal = false} : (index, memref<?xindex>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %75 = "memref.cast"(%71) : (memref<?xindex>) -> memref<*xindex>
+  %76 = "memref.alloc"(%30) {operand_segment_sizes = array<i32: 1, 0>} : (index) -> memref<?xindex>
+  %77 = "arith.constant"() {value = 0 : index} : () -> index
+  %78 = "arith.constant"() {value = 0 : index} : () -> index
+  %79 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%78, %30, %79) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%77, %76, %arg0) {nontemporal = false} : (index, memref<?xindex>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %80 = "memref.cast"(%76) : (memref<?xindex>) -> memref<*xindex>
+  %81 = "memref.alloc"(%32) {operand_segment_sizes = array<i32: 1, 0>} : (index) -> memref<?xf64>
+  %82 = "arith.constant"() {value = 0.000000e+00 : f64} : () -> f64
+  %83 = "arith.constant"() {value = 0 : index} : () -> index
+  %84 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%83, %32, %84) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%82, %81, %arg0) {nontemporal = false} : (f64, memref<?xf64>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %85 = "memref.cast"(%81) : (memref<?xf64>) -> memref<*xf64>
+  "func.call"(%13, %9, %8, %10, %8, %45, %50, %55, %60, %65, %70, %75, %80, %85, %14) {callee = @read_input_2D_f64, filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
+  %86 = "bufferization.to_tensor"(%41) : (memref<?xindex>) -> tensor<?xindex>
+  %87 = "bufferization.to_tensor"(%46) : (memref<?xindex>) -> tensor<?xindex>
+  %88 = "bufferization.to_tensor"(%51) : (memref<?xindex>) -> tensor<?xindex>
+  %89 = "bufferization.to_tensor"(%56) : (memref<?xindex>) -> tensor<?xindex>
+  %90 = "bufferization.to_tensor"(%61) : (memref<?xindex>) -> tensor<?xindex>
+  %91 = "bufferization.to_tensor"(%66) : (memref<?xindex>) -> tensor<?xindex>
+  %92 = "bufferization.to_tensor"(%71) : (memref<?xindex>) -> tensor<?xindex>
+  %93 = "bufferization.to_tensor"(%76) : (memref<?xindex>) -> tensor<?xindex>
+  %94 = "bufferization.to_tensor"(%81) : (memref<?xf64>) -> tensor<?xf64>
+  %95 = "ta.sptensor_construct"(%86, %87, %88, %89, %90, %91, %92, %93, %94, %16, %18, %20, %22, %24, %26, %28, %30, %32, %34, %36) {tensor_rank = 2 : i32} : (tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index) -> !ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index>
+  %96 = "ta.static_index_label"(%0, %34, %1) : (index, index, index) -> !ta.range
+  %97 = "ta.static_index_label"(%3, %36, %4) : (index, index, index) -> !ta.range
+  %98 = "memref.alloc"(%36, %34) {alignment = 32 : i64, operand_segment_sizes = array<i32: 2, 0>} : (index, index) -> memref<?x?xf64>
+  %99 = "bufferization.to_tensor"(%98) : (memref<?x?xf64>) -> tensor<?x?xf64>
+  %100 = "memref.alloc"(%36, %34) {alignment = 32 : i64, operand_segment_sizes = array<i32: 2, 0>} : (index, index) -> memref<?x?xf64>
+  %101 = "arith.constant"() {value = 0.000000e+00 : f64} : () -> f64
+  %102 = "arith.constant"() {value = 0 : index} : () -> index
+  %103 = "arith.constant"() {value = 1 : index} : () -> index
+  "scf.for"(%102, %36, %103) ({
+  ^bb0(%arg0: index):
+    "memref.store"(%101, %100, %arg0) {nontemporal = false} : (f64, memref<?x?xf64>, index) -> ()
+    "scf.yield"() : () -> ()
+  }) : (index, index, index) -> ()
+  %104 = "bufferization.to_tensor"(%100) : (memref<?x?xf64>) -> tensor<?x?xf64>
+  "ta.fill"(%99) {value = 1.000000e+00 : f64} : (tensor<?x?xf64>) -> ()
+  %105 = "it.ComputeRHS"(%95, %99) {allBlocks = [["UNK", "UNK"], ["UNK", "UNK"]], allFormats = [["D", "CU"], ["D", "D"]], allPerms = [[0, 1], [1, 0]]} : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index>, tensor<?x?xf64>) -> tensor<*xf64>
+  %106 = "it.ComputeLHS"(%104) {allBlocks = [["UNK", "UNK"]], allFormats = [["D", "D"]], allPerms = [[1, 0]]} : (tensor<?x?xf64>) -> tensor<*xf64>
+  %107 = "it.Compute"(%105, %106) {MaskType = "none", comp_worksp_opt = false, semiring = "plusxy_times"} : (tensor<*xf64>, tensor<*xf64>) -> i64
+  %108 = "it.Indices"(%107) {indices = [1]} : (i64) -> i64
+  %109 = "it.Indices"(%108) {indices = [0]} : (i64) -> i64
+  %110 = "it.itree"(%109) : (i64) -> i64
+  "ta.print"(%95) : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index>) -> ()
+  "ta.print"(%99) : (tensor<?x?xf64>) -> ()
+  "ta.print"(%104) : (tensor<?x?xf64>) -> ()
+  "func.return"() : () -> ()
+}) {function_type = () -> (), sym_name = "main"} : () -> ()
+

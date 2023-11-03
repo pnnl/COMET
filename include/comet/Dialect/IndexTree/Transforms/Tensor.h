@@ -35,6 +35,7 @@
 
 typedef std::vector<unsigned int> IndicesType;
 typedef std::vector<std::string> FormatsType;
+typedef std::vector<std::string> BlocksType;
 typedef std::vector<IterDomain *> DomainsType;
 
 using std::make_shared;
@@ -53,6 +54,7 @@ private:
   string name;
   IndicesType indices;
   FormatsType format;
+  BlocksType block;
   IndicesType hidden;
   DomainsType domains;
   UnitExpression *definingExpr = nullptr;
@@ -61,12 +63,13 @@ private:
 public:
   static int count;
 
-  Tensor(mlir::Value &value, IndicesType &indices, vector<string> &format)
+  Tensor(mlir::Value &value, IndicesType &indices, vector<string> &format, vector<string> &block)
   {
     // assert(format.size() == indices.size());
     this->value = value;
     this->indices = indices;
     this->format = format;
+    this->block = block;
     id = count++;
     domains = std::vector<IterDomain *>(indices.size());
   }
@@ -153,6 +156,21 @@ public:
   void setFormat(const vector<string> &format)
   {
     Tensor::format = format;
+  }
+  
+  const string &getBlock(int i) const
+  {
+    return block.at(i);
+  }
+
+  BlocksType &getBlocks()
+  {
+    return block;
+  }
+
+  void setBlock(const vector<string> &block)
+  {
+    Tensor::block = block;
   }
 
   void setHiddenIndices(IndicesType &hiddenIndices)

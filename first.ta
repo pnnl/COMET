@@ -1,11 +1,19 @@
 def main() {
 	#IndexLabel Declarations
 	IndexLabel [a] = [?];
-	IndexLabel [b] = [?];           
-
-	#Tensor Declarations
-	Tensor<double> A([a, b], {BCSR});
+	IndexLabel [b] = [?];   
+    
+	Tensor<double> A([a, b], {CSR});
+	Tensor<double> B([b, a], {Dense});
+	Tensor<double> C([b, a], {Dense});
+	
     A[a, b] = comet_read(0);
+    B[b, a] = 1.0;
+    C[b, a] = A[a, b] * B[b, a];
+    #C[b, a] = 1.0;
+    
 	print(A);
+	print(B);
+	print(C);
 }
 
