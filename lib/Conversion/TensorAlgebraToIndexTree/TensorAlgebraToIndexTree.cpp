@@ -148,39 +148,33 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   comet_debug() << "mask-tensor\n";
   comet_vdump(mask_tensor);
 
+  std::vector<mlir::Value> rhs1_labels = op.getRhs1IndexLabels();
+  std::vector<mlir::Value> rhs2_labels = op.getRhs2IndexLabels();
+  std::vector<mlir::Value> lhs_labels = op.getResultIndexLabels();
+
   auto allPerms = getAllPerms(op.getIndexingMaps());
-  for(auto p: allPerms)
-  {
-    for(auto pp: p)
-    {
-      comet_debug() << pp << "\n";
-    }
-  }
-  comet_debug() << op.getIndexingMaps() << "\n";
+  assert(allPerms.size() == 3);
+
   auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
   auto SemiringOp = op.getSemiringAttr();
   auto MaskingTypeAttr = op.getMaskTypeAttr();
 
-  assert(allPerms.size() == 3);
+  auto B = tree->getOrCreateTensor3(rhs1_tensor, rhs1_labels, allFormats[0]);
+  auto C = tree->getOrCreateTensor3(rhs2_tensor, rhs2_labels, allFormats[1]);
+  auto A = tree->getOrCreateTensor3(lhs_tensor,  lhs_labels, allFormats[2]);
 
-  auto B = tree->getOrCreateTensor2(rhs1_tensor, allPerms[0], allFormats[0]);
-  auto C = tree->getOrCreateTensor2(rhs2_tensor, allPerms[1], allFormats[1]);
-  auto A = tree->getOrCreateTensor2(lhs_tensor, allPerms[2], allFormats[2]);
-  // auto B = tree->getOrCreateTensor(rhs1_tensor, allFormats[0]);
-  // auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
-  // auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
   Tensor *M;
   std::unique_ptr<UnitExpression> e;
   if (mask_tensor != nullptr) /// mask is an optional input
   {
     comet_debug() << "mask input provided by user\n";
     M = tree->getOrCreateTensor(mask_tensor, allFormats[2]); /// format same as lhs_tensor
-    e = make_unique<UnitExpression>(A, B, C, M, "*", op.getIndexingMaps());
+    e = make_unique<UnitExpression>(A, B, C, M, "*");
   }
   else
   {
     comet_debug() << "no mask input provided by user\n";
-    e = make_unique<UnitExpression>(A, B, C, "*", op.getIndexingMaps());
+    e = make_unique<UnitExpression>(A, B, C, "*");
   }
 
   e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue());
@@ -192,11 +186,9 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   auto inputDomains = e->computeInputIterDomains();
   auto outputDomains = e->computeOutputIterDomains();
 
-  // IndicesType rhs1_indices = tree->getIndices(rhs1_tensor);
-  // IndicesType rhs2_indices = tree->getIndices(rhs2_tensor);
+  IndicesType rhs1_indices = tree->getIndices3(rhs1_labels);
+  IndicesType rhs2_indices = tree->getIndices3(rhs2_labels);
 
-  IndicesType rhs1_indices = tree->getIndices2(allPerms[0]);
-  IndicesType rhs2_indices = tree->getIndices2(allPerms[1]);
   IndicesType allIndices = getUnion(rhs1_indices, rhs2_indices);
 
   auto lhsIndices = A->getIndices();
@@ -226,6 +218,10 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
 template <typename T>
 void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
 {
+  std::vector<mlir::Value> rhs1_labels = op.getRhs1IndexLabels();
+  std::vector<mlir::Value> rhs2_labels = op.getRhs2IndexLabels();
+  std::vector<mlir::Value> lhs_labels = op.getResultIndexLabels();
+
   Value rhs1_tensor = getRealRhs(op.getRhs1().getDefiningOp());
   Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
   Value lhs_tensor = getRealLhs(op);
@@ -245,11 +241,11 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
 
   assert(allPerms.size() == 3);
 
-  auto B = tree->getOrCreateTensor(rhs1_tensor, allFormats[0]);
-  auto C = tree->getOrCreateTensor(rhs2_tensor, allFormats[1]);
-  auto A = tree->getOrCreateTensor(lhs_tensor, allFormats[2]);
+  auto B = tree->getOrCreateTensor3(rhs1_tensor, rhs1_labels, allFormats[0]);
+  auto C = tree->getOrCreateTensor3(rhs2_tensor, rhs2_labels, allFormats[1]);
+  auto A = tree->getOrCreateTensor3(lhs_tensor,  lhs_labels, allFormats[2]);
 
-  auto e = make_unique<UnitExpression>(A, B, C, "*", op.getIndexingMaps());
+  auto e = make_unique<UnitExpression>(A, B, C, "*");
 
   e->setOperation(op);
   e->setSemiring(SemiringOp.template cast<mlir::StringAttr>().getValue()); /// for element-wise multiplication
@@ -260,7 +256,7 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
   auto outputDomains = e->computeOutputIterDomains();
 
   /// RHS and LHS indices must be the same for elementwise multiplication
-  IndicesType allIndices = tree->getIndices(rhs1_tensor);
+  IndicesType allIndices = tree->getIndices3(rhs1_labels);
 
   auto lhsIndices = A->getIndices();
   TreeNode *parent = tree->getRoot();
@@ -308,29 +304,8 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
   auto context = builder.getContext();
   IntegerType i64Type = IntegerType::get(context, 64);
   auto expr = node->getExpression();
-  auto indexingMaps = expr->getindexingMaps();
-  for (const auto &map : indexingMaps)
-  {
-    auto affineMap = map.cast<AffineMapAttr>().getValue();
-    comet_debug() << affineMap << "\n";
-  }
-  auto allPerms = getAllPerms(indexingMaps);
-  std::map<int64_t,int64_t> indexMap;
   SmallVector<Attribute, 8> allIndices_rhs;
-  // for (size_t i = 0; i < 2; i++)
-  // {
-  //   SmallVector<int64_t, 8> indices;
-  //   for (size_t j = 0; j < allPerms[i].size(); j++)
-  //   {
-  //     if (indexMap.find(allPerms[i][j]) == indexMap.end())
-  //     {
-  //       indexMap[allPerms[i][j]] = expr->getOperands()[i]->getIndices()[j];
-  //     }
-  //     comet_debug() << allPerms[i][j] << " " << indexMap[allPerms[i][j]] << " \n";
-  //     indices.push_back(indexMap[allPerms[i][j]]);
-  //   }
-  //   allIndices_rhs.push_back(builder.getI64ArrayAttr(indices));
-  // }
+
   for (auto t : expr->getOperands())
   {
     SmallVector<int64_t, 8> indices;
@@ -340,6 +315,7 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
     }
     allIndices_rhs.push_back(builder.getI64ArrayAttr(indices));
   }
+
   SmallVector<Attribute, 8> allIndices_lhs;
   for (auto t : expr->getResults())
   {
@@ -351,16 +327,6 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
     }
     allIndices_lhs.push_back(builder.getI64ArrayAttr(indices));
   }
-  // for (auto t : expr->getResults())
-  // {
-    // SmallVector<int64_t, 8> indices;
-    // for (auto index : allPerms[2])
-    // {
-    //   comet_debug() << index << " " << indexMap[index] << " \n";
-    //   indices.push_back(indexMap[index]);
-    // }
-    // allIndices_lhs.push_back(builder.getI64ArrayAttr(indices));
-  // }
 
   SmallVector<Attribute, 8> allFormats_rhs;
   for (auto t : expr->getOperands())
@@ -372,6 +338,7 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
     }
     allFormats_rhs.push_back(builder.getStrArrayAttr(formats));
   }
+
   SmallVector<Attribute, 8> allFormats_lhs;
   for (auto t : expr->getResults())
   {

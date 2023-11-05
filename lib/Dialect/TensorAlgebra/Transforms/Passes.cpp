@@ -450,30 +450,37 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       //     rhs_lbls.push_back(i);
       //   }
       // }
-
-      for(auto e: new_lhs_lbls_value)
-      {
-        auto index = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) -  new_all_lbls_value.begin();
-        comet_debug() << index <<" " << new_all_lbls_value[index] <<"\n";
-        lhs_lbls.push_back(index);
-      }
+      std::vector<Value> all_labels;
 
       for(auto e: new_rhs_lbls_value)
       {
+        all_labels.push_back(e);
         auto index =  std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) -  new_all_lbls_value.begin();
         comet_debug() << index <<" " << new_all_lbls_value[index] <<"\n";
 
         rhs_lbls.push_back(index);
       }
+      
+      for(auto e: new_lhs_lbls_value)
+      {
+        all_labels.push_back(e);
+        auto index = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) -  new_all_lbls_value.begin();
+        comet_debug() << index <<" " << new_all_lbls_value[index] <<"\n";
+        lhs_lbls.push_back(index);
+      }
+
       std::vector<int> ret_lbls;
 
       for(auto e: newSumLabels)
       {
+        all_labels.push_back(e);
         auto index =  std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) -  new_all_lbls_value.begin();
         comet_debug() << index <<" " << new_all_lbls_value[index] <<"\n";
 
         ret_lbls.push_back(index);
       }
+
+      
       comet_debug() << "\n";
       auto sorted_lhs = lhs_lbls;
       std::sort(sorted_lhs.begin(), sorted_lhs.end());
@@ -518,11 +525,10 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
           mlir::AffineMap::get(dim, 0, lhs_exprs, context),
           mlir::AffineMap::get(dim, 0, ret_exprs, context)};
       auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
-
       auto SemiringAttr = builder.getStringAttr("plusxy_times");
       auto MaskingAttr = builder.getStringAttr("none");
       Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
-                                                               newSumLabels, affineMapArrayAttr, strAttr, SemiringAttr,
+                                                               all_labels, affineMapArrayAttr, strAttr, SemiringAttr,
                                                                MaskingAttr, nullptr);
       tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
       tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));

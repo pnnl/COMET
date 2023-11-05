@@ -104,12 +104,13 @@ void addTensorDecl(t op)
   std::string ret_format;
   if (isa<tensorAlgebra::TransposeOp>(op))
   {
-    for (unsigned int i = 1; i < op.getOperation()->getNumOperands(); i++)
-    {
-      comet_debug() << " ";
-      comet_vdump(op.getOperation()->getOperand(i));
-      lbls_value.push_back(op.getOperation()->getOperand(i));
-    }
+    lbls_value = op.getResultIndexLabels(); 
+    // for (unsigned int i = 1; i < op.getOperation()->getNumOperands(); i++)
+    // {
+    //   comet_debug() << " ";
+    //   comet_vdump(op.getOperation()->getOperand(i));
+    //   lbls_value.push_back(op.getOperation()->getOperand(i));
+    // }
     ret_value = op.getOperation()->getResult(0);
 
     mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<tensorAlgebra::TransposeOp>(op.getOperation()).getFormats();
@@ -117,36 +118,84 @@ void addTensorDecl(t op)
     std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
     ret_format = ret_format_local;
   }
-  else if (isa<TensorMultOp>(op) ||
-           isa<TensorElewsMultOp>(op) ||
-           isa<TensorAddOp>(op) ||
-           isa<TensorSubtractOp>(op))
+  else if (isa<TensorMultOp>(op)) 
   {
-    for (unsigned int i = 2; i < op.getOperation()->getNumOperands(); i++)
+    auto multop = cast<TensorMultOp>(op);
+    for(auto lbl: multop.getResultIndexLabels())
     {
-      comet_debug() << " ";
-      comet_vdump(op.getOperation()->getOperand(i));
-      lbls_value.push_back(op.getOperation()->getOperand(i));
+      lbls_value.push_back(lbl);
     }
     ret_value = op.getOperation()->getResult(0);
-
-    mlir::ArrayAttr opFormatsArrayAttr;
-    if (isa<tensorAlgebra::TensorMultOp>(op))
-      opFormatsArrayAttr = dyn_cast<TensorMultOp>(op.getOperation()).getFormats();
-
-    if (isa<tensorAlgebra::TensorElewsMultOp>(op))
-      opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(op.getOperation()).getFormats();
-
-    if (isa<tensorAlgebra::TensorAddOp>(op))
-      opFormatsArrayAttr = dyn_cast<TensorAddOp>(op.getOperation()).getFormats();
-
-    if (isa<tensorAlgebra::TensorSubtractOp>(op))
-      opFormatsArrayAttr = dyn_cast<TensorSubtractOp>(op.getOperation()).getFormats();
-
+    mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorMultOp>(op.getOperation()).getFormats();
     unsigned int i = opFormatsArrayAttr.size() - 1;
     std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
     ret_format = ret_format_local;
   }
+  else if (isa<TensorElewsMultOp>(op)) 
+  {
+    auto multop = cast<TensorElewsMultOp>(op);
+    for(auto lbl: multop.getResultIndexLabels())
+    {
+      lbls_value.push_back(lbl);
+    }
+    ret_value = op.getOperation()->getResult(0);
+    mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(op.getOperation()).getFormats();
+    unsigned int i = opFormatsArrayAttr.size() - 1;
+    std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+    ret_format = ret_format_local;
+  }
+  else if (isa<TensorAddOp>(op)) 
+  {
+    auto multop = cast<TensorElewsMultOp>(op);
+    for(auto lbl: multop.getResultIndexLabels())
+    {
+      lbls_value.push_back(lbl);
+    }
+    ret_value = op.getOperation()->getResult(0);
+    mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(op.getOperation()).getFormats();
+    unsigned int i = opFormatsArrayAttr.size() - 1;
+    std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+    ret_format = ret_format_local;
+  }
+  else if (isa<TensorSubtractOp>(op))
+  {
+    auto multop = cast<TensorElewsMultOp>(op);
+    for(auto lbl: multop.getResultIndexLabels())
+    {
+      lbls_value.push_back(lbl);
+    }
+    ret_value = op.getOperation()->getResult(0);
+    mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(op.getOperation()).getFormats();
+    unsigned int i = opFormatsArrayAttr.size() - 1;
+    std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+    ret_format = ret_format_local;
+  }
+  // {
+  //   for (unsigned int i = 2; i < op.getOperation()->getNumOperands(); i++)
+  //   {
+  //     comet_debug() << " ";
+  //     comet_vdump(op.getOperation()->getOperand(i));
+  //     lbls_value.push_back(op.getOperation()->getOperand(i));
+  //   }
+  //   ret_value = op.getOperation()->getResult(0);
+
+  //   mlir::ArrayAttr opFormatsArrayAttr;
+  //   if (isa<tensorAlgebra::TensorMultOp>(op))
+  //     opFormatsArrayAttr = dyn_cast<TensorMultOp>(op.getOperation()).getFormats();
+
+  //   if (isa<tensorAlgebra::TensorElewsMultOp>(op))
+  //     opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(op.getOperation()).getFormats();
+
+  //   if (isa<tensorAlgebra::TensorAddOp>(op))
+  //     opFormatsArrayAttr = dyn_cast<TensorAddOp>(op.getOperation()).getFormats();
+
+  //   if (isa<tensorAlgebra::TensorSubtractOp>(op))
+  //     opFormatsArrayAttr = dyn_cast<TensorSubtractOp>(op.getOperation()).getFormats();
+
+  //   unsigned int i = opFormatsArrayAttr.size() - 1;
+  //   std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+  //   ret_format = ret_format_local;
+  // }
   else
   {
     llvm::errs() << __FILE__ << " " << __LINE__ <<  "ERROR: Unexpected operation\n";

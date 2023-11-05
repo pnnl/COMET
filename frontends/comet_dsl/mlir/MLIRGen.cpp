@@ -71,13 +71,14 @@ using llvm::Twine;
 using StringSet = std::set<std::string>;
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
 namespace
 {
+
   enum class ElType
   {
     inv = 0b1000,
@@ -138,7 +139,13 @@ namespace
   {
     return ElType(static_cast<int>(first) | static_cast<int>(second));
   }
-
+  
+  template<typename T>
+  std::vector<mlir::Value> getOperationResultIndexLabels(mlir::Operation* op)
+  {
+    auto cast_op =  cast<T>(op);
+    return cast_op.getResultIndexLabels();
+  }
   // Implementation of a simple MLIR emission from the Tensor Algebra AST.
   ///
   // This will emit operations that are specific to the Tensor Algebra language,
@@ -341,6 +348,7 @@ namespace
 
         for (const auto &lbl : lblsSet)
         {
+          comet_debug()<< lbl << "\n";
           lhs_lbls.insert(lbl);
         }
       }
@@ -367,6 +375,7 @@ namespace
         auto lblsVec = cast<LabeledTensorExprAST>(rhsAST)->getLabelNames();
         for (const auto &lbl : lblsVec)
         {
+          comet_debug()<< lbl << "\n";
           rhs_lbls.insert(lbl);
         }
       }
@@ -634,28 +643,25 @@ namespace
             lhs_lbls_value.push_back(lhs_labeledtensor.getDefiningOp()->getOperand(i));
           }
         }
-        else if (isa<TensorMultOp>(lhs_labeledtensor.getDefiningOp()) ||
-                 isa<TensorElewsMultOp>(lhs_labeledtensor.getDefiningOp()) ||
-                 isa<TensorAddOp>(lhs_labeledtensor.getDefiningOp()) ||
-                 isa<TensorSubtractOp>(lhs_labeledtensor.getDefiningOp()))
+        else if (isa<TensorMultOp>(lhs_labeledtensor.getDefiningOp()))
         {
-          // check the output indices of ta.mul(), if it is
-          for (unsigned int i = 2; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
-          {
-
-            comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
-            lhs_lbls_value.push_back(lhs_labeledtensor.getDefiningOp()->getOperand(i));
-          }
+          lhs_lbls_value = getOperationResultIndexLabels<TensorMultOp>(lhs_labeledtensor.getDefiningOp());
         }
+        else if (isa<TensorElewsMultOp>(lhs_labeledtensor.getDefiningOp()))
+        {
+          lhs_lbls_value = getOperationResultIndexLabels<TensorElewsMultOp>(lhs_labeledtensor.getDefiningOp());
+        } 
+        else if (isa<TensorAddOp>(lhs_labeledtensor.getDefiningOp()))
+        {
+          lhs_lbls_value = getOperationResultIndexLabels<TensorAddOp>(lhs_labeledtensor.getDefiningOp());
+        } 
+        else if (isa<TensorSubtractOp>(lhs_labeledtensor.getDefiningOp()))
+        {
+          lhs_lbls_value = getOperationResultIndexLabels<TensorSubtractOp>(lhs_labeledtensor.getDefiningOp());
+        } 
         else if (isa<mlir::tensorAlgebra::TransposeOp>(lhs_labeledtensor.getDefiningOp()))
         {
-          /// check the output indices of ta.tc(), if it is
-          for (unsigned int i = 1; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
-          {
-
-            comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
-            lhs_lbls_value.push_back(lhs_labeledtensor.getDefiningOp()->getOperand(i));
-          }
+          lhs_lbls_value = getOperationResultIndexLabels<mlir::tensorAlgebra::TransposeOp>(lhs_labeledtensor.getDefiningOp());
         }
         else
         {
@@ -682,28 +688,25 @@ namespace
             rhs_lbls_value.push_back(rhs_labeledtensor.getDefiningOp()->getOperand(i));
           }
         }
-        else if (isa<TensorMultOp>(rhs_labeledtensor.getDefiningOp()) ||
-                 isa<TensorElewsMultOp>(rhs_labeledtensor.getDefiningOp()) ||
-                 isa<TensorAddOp>(rhs_labeledtensor.getDefiningOp()) ||
-                 isa<TensorSubtractOp>(rhs_labeledtensor.getDefiningOp()))
-        {
-          /// check the output indices of ta.tc(), if it is
-          for (unsigned int i = 2; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
-          {
-
-            comet_vdump(rhs_labeledtensor.getDefiningOp()->getOperand(i));
-            rhs_lbls_value.push_back(rhs_labeledtensor.getDefiningOp()->getOperand(i));
-          }
+        else if (isa<TensorMultOp>(rhs_labeledtensor.getDefiningOp()))
+        { 
+          rhs_lbls_value = getOperationResultIndexLabels<TensorMultOp>(rhs_labeledtensor.getDefiningOp());
         }
+        else if (isa<TensorElewsMultOp>(rhs_labeledtensor.getDefiningOp()))
+        {
+          rhs_lbls_value = getOperationResultIndexLabels<TensorElewsMultOp>(rhs_labeledtensor.getDefiningOp());
+        } 
+        else if (isa<TensorAddOp>(rhs_labeledtensor.getDefiningOp()))
+        {
+          rhs_lbls_value = getOperationResultIndexLabels<TensorAddOp>(rhs_labeledtensor.getDefiningOp());
+        } 
+        else if (isa<TensorSubtractOp>(rhs_labeledtensor.getDefiningOp()))
+        {
+          rhs_lbls_value = getOperationResultIndexLabels<TensorSubtractOp>(rhs_labeledtensor.getDefiningOp());
+        } 
         else if (isa<mlir::tensorAlgebra::TransposeOp>(rhs_labeledtensor.getDefiningOp()))
         {
-          /// check the output indices of ta.tc(), if it is
-          for (unsigned int i = 1; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
-          {
-
-            comet_vdump(rhs_labeledtensor.getDefiningOp()->getOperand(i));
-            rhs_lbls_value.push_back(rhs_labeledtensor.getDefiningOp()->getOperand(i));
-          }
+          rhs_lbls_value = getOperationResultIndexLabels<mlir::tensorAlgebra::TransposeOp>(rhs_labeledtensor.getDefiningOp());
         }
         else
         {
@@ -773,6 +776,13 @@ namespace
         }
         comet_debug() << " print ret_lbls\n";
         for (auto n : ret_lbls)
+        {
+          comet_debug() << n << " \n";
+        }
+        comet_debug() << "\n";
+
+        comet_debug() << " print all_lbls\n";
+        for (auto n : all_lbls)
         {
           comet_debug() << n << " \n";
         }
@@ -1023,6 +1033,14 @@ namespace
         assert(tensors.size() == 2 && " less than 2 input tensors for ta.mul or ta.elews_mul\n");
 
         std::vector<mlir::Value> labels;
+        for (auto i : lhs_lbls)
+        {
+          labels.push_back(all_lbls_value[i]);
+        }
+        for (auto i : rhs_lbls)
+        {
+          labels.push_back(all_lbls_value[i]);
+        }
         for (auto i : ret_lbls)
         {
           labels.push_back(all_lbls_value[i]);
@@ -1373,10 +1391,12 @@ namespace
         {
           if (isa<IndexLabelStaticOp>(var.getDefiningOp()))
           {
+            comet_vdump(var);
             labels.push_back(var);
           }
           else if (isa<IndexLabelDynamicOp>(var.getDefiningOp()))
           {
+            comet_vdump(var);
             labels.push_back(var);
           }
           else
@@ -1400,6 +1420,7 @@ namespace
             cast<DenseTensorDeclOp>(tensor_op.getDefiningOp()).getResult().getType();
         value = builder.create<LabeledTensorOp>(
             loc(lbl_tensor.loc()), return_type, tensor_op, labels);
+            comet_vdump(value);
       }
       else if (isa<SparseTensorDeclOp>(tensor_op.getDefiningOp()))
       {
@@ -1407,6 +1428,7 @@ namespace
             cast<SparseTensorDeclOp>(tensor_op.getDefiningOp()).getResult().getType();
         value = builder.create<LabeledTensorOp>(
             loc(lbl_tensor.loc()), return_type, tensor_op, labels);
+            comet_vdump(value);
       }
 
       return value;
@@ -1692,7 +1714,12 @@ namespace
 
       /// Secondly, Look at the lhs
       std::vector<LabeledTensorExprAST *> exprs{&lhsLT};
+      std::vector<mlir::Value> all_lbls_value;
       std::vector<mlir::Value> lhs_lbls_value;
+      for(auto lbl_val: rhs_tensor.getDefiningOp()->getOperands())
+      {
+        all_lbls_value.push_back(lbl_val);
+      }
       for (auto e : exprs)
       {
         auto lhsLT_tensor_name = e->getTensorName();
@@ -1710,6 +1737,7 @@ namespace
             for (unsigned int i = 0; i < lhsLT_op.getDefiningOp()->getNumOperands(); i++)
             {
               lhs_lbls_value.push_back(lhsLT_op.getDefiningOp()->getOperand(i));
+              all_lbls_value.push_back(lhsLT_op.getDefiningOp()->getOperand(i));
             }
           }
           else if (isa<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()))
@@ -1722,6 +1750,7 @@ namespace
             for (unsigned int i = 0; i < lhsLT_op.getDefiningOp()->getNumOperands(); i++)
             {
               lhs_lbls_value.push_back(lhsLT_op.getDefiningOp()->getOperand(i));
+              all_lbls_value.push_back(lhsLT_op.getDefiningOp()->getOperand(i));
             }
           }
           else
@@ -1730,6 +1759,7 @@ namespace
           }
         }
       }
+
       comet_debug() << " formats.size(): " << formats.size() << "\n";
       auto strAttr = builder.getStrArrayAttr(formats);
 
@@ -1737,7 +1767,7 @@ namespace
 
       comet_debug() << " create TransposeOp\n";
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), lhs_tensor.getType(),
-                                                                       rhs_tensor, lhs_lbls_value, affineMapArrayAttr, strAttr);
+                                                                       rhs_tensor, all_lbls_value, affineMapArrayAttr, strAttr);
       builder.create<TensorSetOp>(loc(transpose.loc()), t.getDefiningOp()->getResult(0), lhs_tensor);
       comet_vdump(t);
 
@@ -1814,16 +1844,44 @@ namespace
       /// Secondly, Look at the lhs
       /// Collect labels values
       std::vector<mlir::Value> lhs_labels_val;
+      std::vector<mlir::Value> all_labels_val;
+      for (const auto &lbl_str : rhs_lbls)
+      {
+        if (auto var = symbolTable.lookup(lbl_str))
+        {
+          if (isa<IndexLabelStaticOp>(var.getDefiningOp()))
+          {
+            all_labels_val.push_back(var);
+          }
+          else if (isa<IndexLabelDynamicOp>(var.getDefiningOp()))
+          {
+            all_labels_val.push_back(var);
+          }
+          else
+          {
+            emitError(loc(transpose.loc()), "Index label variable required '")
+                << lbl_str << "'";
+          }
+        }
+        else
+        {
+          emitError(loc(transpose.loc()),
+                    " Unknown variable TransposeExprAST' ")
+              << lbl_str << "'";
+        }
+      }
       for (const auto &lbl_str : lhs_lbls)
       {
         if (auto var = symbolTable.lookup(lbl_str))
         {
           if (isa<IndexLabelStaticOp>(var.getDefiningOp()))
           {
+            all_labels_val.push_back(var);
             lhs_labels_val.push_back(var);
           }
           else if (isa<IndexLabelDynamicOp>(var.getDefiningOp()))
           {
+            all_labels_val.push_back(var);
             lhs_labels_val.push_back(var);
           }
           else
@@ -1881,7 +1939,7 @@ namespace
 
       comet_debug() << " create TransposeOp\n";
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), return_type,
-                                                                       rhs_tensor, lhs_labels_val, affineMapArrayAttr, strAttr);
+                                                                       rhs_tensor, all_labels_val, affineMapArrayAttr, strAttr);
       builder.create<TensorSetOp>(loc(transpose.loc()), t.getDefiningOp()->getResult(0), lhs_tensor);
       comet_vdump(t);
 
@@ -2524,9 +2582,22 @@ namespace
       auto all_lbls = rhsBinOp->getLabels();
 
       std::vector<mlir::Value> lhs_lbls_value;
+      std::vector<mlir::Value> all_lbls_value;
       for (auto n : lhs_lbls)
       {
         lhs_lbls_value.push_back(symbolTable.lookup(n));
+      }
+      for (auto n : rhs1_lbls)
+      {
+        all_lbls_value.push_back(symbolTable.lookup(n));
+      }
+      for (auto n : rhs2_lbls)
+      {
+        all_lbls_value.push_back(symbolTable.lookup(n));
+      }
+      for (auto n : lhs_lbls)
+      {
+        all_lbls_value.push_back(symbolTable.lookup(n));
       }
 
       std::map<std::string, mlir::AffineExpr> expr_map;
@@ -2619,7 +2690,7 @@ namespace
         auto op = builder.create<TensorAddOp>(loc(tensor_op.loc()),
                                               tensors[2].getType(),
                                               tensors[0], tensors[1],
-                                              lhs_lbls_value,
+                                              all_lbls_value,
                                               affineMapArrayAttr,
                                               strAttr, SemiringAttr,
                                               MaskingAttr);
@@ -2634,7 +2705,7 @@ namespace
         auto op = builder.create<TensorSubtractOp>(loc(tensor_op.loc()),
                                                    tensors[2].getType(),
                                                    tensors[0], tensors[1],
-                                                   lhs_lbls_value,
+                                                   all_lbls_value,
                                                    affineMapArrayAttr,
                                                    strAttr, SemiringAttr,
                                                    MaskingAttr);
@@ -2647,7 +2718,7 @@ namespace
         auto op = builder.create<TensorMultOp>(loc(tensor_op.loc()),
                                                tensors[2].getType(),
                                                tensors[0], tensors[1],
-                                               lhs_lbls_value,
+                                               all_lbls_value,
                                                affineMapArrayAttr,
                                                strAttr, SemiringAttr,
                                                MaskingAttr, maskVal);
@@ -2660,7 +2731,7 @@ namespace
       }
       else if (binop == tok_elews || binop == tok_monoid)
       {
-        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], lhs_lbls_value, affineMapArrayAttr, strAttr, SemiringAttr, MaskingAttr);
+        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], all_lbls_value, affineMapArrayAttr, strAttr, SemiringAttr, MaskingAttr);
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
