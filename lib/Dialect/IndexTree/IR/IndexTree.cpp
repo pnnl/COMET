@@ -98,6 +98,26 @@ void Index_Tree::print(string msg)
   getRoot()->print(0);
 }
 
+IndicesType Index_Tree::getIndices3(std::vector<mlir::Value>& lbls)
+{
+  IndicesType indices;
+
+  for(auto lbl: lbls)
+  {
+    comet_vdump(lbl);
+    void* lbl_ptr = lbl.getAsOpaquePointer();
+    if(indexLabelToId.count(lbl_ptr) == 0)
+    {
+      comet_debug() << "Index Label just created:" << indexID << "\n";
+      indexLabelToId[lbl_ptr] = indexID;
+      indexID++;
+    }
+    indices.push_back(indexLabelToId[lbl_ptr]);
+  }
+
+  return indices;
+}
+
 IndicesType Index_Tree::getIndices(mlir::Value v)
 {
   IndicesType indices;
@@ -186,6 +206,32 @@ Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, FormatsType &formats)
 Tensor *Index_Tree::getOrCreateTensor2(mlir::Value v, std::vector<int64_t>& perms, FormatsType &formats)
 {
   IndicesType indices = getIndices2(perms);
+  comet_debug() << "Num Indices: " << indices.size() << ", Num formats " << formats.size() << "\n";
+  void *vp = v.getAsOpaquePointer();
+  // if (valueToTensor.count(vp) == 0)
+  {
+    // valueToTensor[vp] = std::make_unique<Tensor>(v, indices, formats);
+  }
+  // else
+  // {
+  //   auto t = valueToTensor[vp].get();
+  //   auto tIndices = t->getIndices();
+  //   assert(tIndices.size() == indices.size());
+  //   for (unsigned long i = 0; i < indices.size(); i++)
+  //   {
+  //     assert(tIndices[i] == indices[i]);
+  //   }
+  // }
+
+  // assert(valueToTensor.count(vp) > 0);
+  // assert(valueToTensor[vp] != nullptr);
+  // return valueToTensor[vp].get();
+  return new Tensor(v, indices, formats);
+}
+
+Tensor *Index_Tree::getOrCreateTensor3(mlir::Value v, std::vector<mlir::Value>& allIndexLabels, FormatsType &formats)
+{
+  IndicesType indices = getIndices3(allIndexLabels);
   comet_debug() << "Num Indices: " << indices.size() << ", Num formats " << formats.size() << "\n";
   void *vp = v.getAsOpaquePointer();
   // if (valueToTensor.count(vp) == 0)

@@ -381,6 +381,51 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
   /// Return value
   let results = (outs TA_AnyTensor);
 
+  let extraClassDeclaration = [{
+    std::vector<mlir::Value> getRhs1IndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = 0;
+      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+
+    }
+
+    std::vector<mlir::Value> getRhs2IndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
+      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
+      
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+
+    }
+
+    std::vector<mlir::Value> getResultIndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
+      size_t end = getIndexLabels().size();
+
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+    }
+
+  }];
   //TODO(gkestor): add verifier
   //let hasVerifier = 1;
   
@@ -401,6 +446,52 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
                    OptionalAttr<StrAttr>:$MaskType); 
   
   let results = (outs TA_AnyTensor);
+
+  let extraClassDeclaration = [{
+    std::vector<mlir::Value> getRhs1IndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = 0;
+      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+
+    }
+
+    std::vector<mlir::Value> getRhs2IndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
+      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
+      
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+
+    }
+
+    std::vector<mlir::Value> getResultIndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
+      size_t end = getIndexLabels().size();
+
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+    }
+
+  }];
 
   //TODO(gkestor): add verifier
   //let hasVerifier = 1;
@@ -429,6 +520,38 @@ def TransposeOp : TA_Op<"transpose",[Pure]> {
   
   let results = (outs TA_AnyTensor); 
 
+
+
+  let extraClassDeclaration = [{
+    std::vector<mlir::Value> getRhsIndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = 0;
+      size_t end = static_cast<size_t>(getRhs().getType().cast<TensorType>().getRank());
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+
+    }
+
+    std::vector<mlir::Value> getResultIndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = static_cast<size_t>(getRhs().getType().cast<TensorType>().getRank());
+      size_t end = getIndexLabels().size();
+
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+    }
+
+  }];
   //TODO(gkestor): add verifier
   //let hasVerifier = 1;
 }
@@ -500,6 +623,51 @@ def TensorAddOp : TA_Op<"add",
   
   let results = (outs TA_AnyTensor);
 
+  let extraClassDeclaration = [{
+    std::vector<mlir::Value> getRhs1IndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = 0;
+      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+
+    }
+
+    std::vector<mlir::Value> getRhs2IndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
+      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
+      
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+
+    }
+
+    std::vector<mlir::Value> getResultIndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
+      size_t end = getIndexLabels().size();
+
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+    }
+
+  }];
 }
 
 def TensorSubtractOp : TA_Op<"subtract",
@@ -520,6 +688,51 @@ def TensorSubtractOp : TA_Op<"subtract",
   
   let results = (outs TA_AnyTensor);
 
+  let extraClassDeclaration = [{
+    std::vector<mlir::Value> getRhs1IndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = 0;
+      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+
+    }
+
+    std::vector<mlir::Value> getRhs2IndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
+      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
+      
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+
+    }
+
+    std::vector<mlir::Value> getResultIndexLabels()
+    {
+      std::vector<mlir::Value> labels;
+      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
+      size_t end = getIndexLabels().size();
+
+      for(size_t i = start; i < end; i++ )
+      {
+        labels.push_back(getIndexLabels()[i]);
+      }
+
+      return labels;
+    }
+
+  }];
 }
 
 //TODO(gkestor): support other datatypes
