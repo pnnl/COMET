@@ -247,7 +247,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
   optPM.addPass(mlir::comet::createRemoveLabeledTensorOpsPass());
 
-
   ///  =============================================================================
   ///  High-level optimization at the TA dialect
   ///  Such as finding the optimal ordering of dense tensor contractions, or reformulating tensor contractions
@@ -384,6 +383,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Dump index tree dialect.
     if (emitLoops)
     {
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
       if (mlir::failed(pm.run(*module)))
         return 4;
       return 0;
@@ -397,6 +398,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::comet::createLateLoweringPass());
+  pm.addPass(mlir::createCanonicalizerPass());
   optPM.addPass(mlir::createCSEPass());
 
   /// =============================================================================
