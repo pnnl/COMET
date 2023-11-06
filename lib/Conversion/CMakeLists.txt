@@ -1,3 +1,3 @@
-add_subdirectory(IndexTreeToSCF)
+# add_subdirectory(IndexTreeToSCF)
 add_subdirectory(TensorAlgebraToIndexTree)
 add_subdirectory(TensorAlgebraToSCF)

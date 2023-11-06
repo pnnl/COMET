@@ -23,7 +23,7 @@ set(LIBS
   COMETUtils
   COMETTensorAlgebraDialect
   COMETIndexTreeDialect
-  COMETIndexTreeToSCF
+  # COMETIndexTreeToSCF
 )
 
 target_link_libraries(comet-opt 

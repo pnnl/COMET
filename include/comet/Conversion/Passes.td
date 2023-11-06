@@ -30,18 +30,18 @@ include "mlir/Pass/PassBase.td"
 /// IndexTreeToSCF
 ///===----------------------------------------------------------------------===//
 
-def ConvertIndexTreeToSCF : Pass<"convert-it-to-scf"> {
-  let summary = " "
-                "";
-  let description = [{
-
-      }];
-  let constructor = "comet::createLowerIndexTreeToSCFPass()";
-  let dependentDialects = [
-    "memref::MemRefDialect",
-    "scf::SCFDialect"
-  ];
-}
+//def ConvertIndexTreeToSCF : Pass<"convert-it-to-scf"> {
+//  let summary = " "
+//                "";
+//  let description = [{
+//
+//      }];
+//  let constructor = "comet::createLowerIndexTreeToSCFPass()";
+//  let dependentDialects = [
+//    "memref::MemRefDialect",
+//    "scf::SCFDialect"
+//  ];
+//}
 
 //===----------------------------------------------------------------------===//
 // TensorAlgebraToIndexTree
@@ -64,17 +64,17 @@ def ConvertTensorAlgebraToIndexTree : Pass<"convert-ta-to-it"> {
 /// TensorAlgebraToSCF
 ///===----------------------------------------------------------------------===//
 
-def ConvertTensorAlgebraToSCF : Pass<"convert-ta-to-scf"> {
-  let summary = " "
-                "";
-  let description = [{
-
-      }];
-  let constructor = "comet::createLowerTensorAlgebraToSCFPass()";
-  let dependentDialects = [
-    "memref::MemRefDialect",
-    "scf::SCFDialect"
-  ];
-}
+//def ConvertTensorAlgebraToSCF : Pass<"convert-ta-to-scf"> {
+//  let summary = " "
+//                "";
+//  let description = [{
+//
+//      }];
+//  let constructor = "comet::createLowerTensorAlgebraToSCFPass()";
+//  let dependentDialects = [
+//    "memref::MemRefDialect",
+//    "scf::SCFDialect"
+//  ];
+//}
 
 #endif /// COMET_CONVERSION_PASSES

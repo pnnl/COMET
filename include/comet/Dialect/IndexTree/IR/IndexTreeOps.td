@@ -37,6 +37,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Dialect/SCF/IR/DeviceMappingInterface.td"
 
 include "comet/Dialect/IndexTree/IR/IndexTreeTypes.td"
+include "comet/Dialect/TensorAlgebra/IR/TATypes.td"
 
 // Base class for ta dialect operations. This operation inherits from the base
 // `Op` class in OpBase.td, and provides:
@@ -50,20 +51,39 @@ class IndexTree_Op<string mnemonic, list<Trait> traits = []> :
 // Index Tree Operations
 //===----------------------------------------------------------------------===//
 
-def IndexTreeComputeLHSOp : IndexTree_Op<"ComputeLHS", [Pure]>{
-  let summary = "";
+def IndexTreeOp : IndexTree_Op<"itree", [Pure]>{
+  let summary = "Conceptually create an index tree";
   let description = [{}];
 
-  let arguments = (ins Variadic<AnyType>:$tensors, ArrayAttr:$allPerms, ArrayAttr:$allFormats);
-  let results = (outs AnyType:$output);
+  let results = (outs IndexTree_TreeType:$output);
 }
 
-def IndexTreeComputeRHSOp : IndexTree_Op<"ComputeRHS", [Pure]>{
+def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
+  let summary = "Create an index variable bound to a specific computation.";
+  let description = [{
+  }];
+
+  let arguments = (
+    ins IndexTree_NodeType:$parent
+  );
+
+  let results = (outs IndexTree_IndexNodeType:$output);
+}
+
+def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure]>{
   let summary = "";
   let description = [{}];
 
-  let arguments = (ins Variadic<AnyType>:$tensors, ArrayAttr:$allPerms, ArrayAttr:$allFormats);
-  let results = (outs AnyType:$output);
+  let arguments = (ins AnyType:$tensor, Variadic<IndexTree_IndexNodeType>:$indices);
+  let results = (outs IndexTree_OperandType:$output);
+}
+
+def IndexTreeMaskedOperandOp : IndexTree_Op<"MaskedOperandOp", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins AnyType:$tensor, TA_AnyTensor:$mask, Variadic<IndexTree_IndexNodeType>:$indices);
+  let results = (outs IndexTree_OperandType:$output);
 }
 
 def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
@@ -73,27 +93,13 @@ def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
 
   //TODO(gkestor): rethink the use of comp_worksp_opt, should we decouple that?
   /// MaskType attribute: {push, pull, auto, none}
-  let arguments = (ins Variadic<AnyType>:$rhs, AnyType:$lhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring, StrAttr:$MaskType);
+  let arguments = (ins IndexTree_IndexNodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring);
 
-  let results = (outs IndexTree_ComputeNodeType:$output);
+  let results = (outs TA_AnyTensor);
 
    //TODO(gkestor): add verifier
   //let hasVerifier = 1;
   
-}
-
-
-def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
-  let summary = "Create an index variable bound to a specific computation.";
-  let description = [{
-  }];
-
-  let arguments = (
-    ins Variadic<IndexTree_NodeType>:$children,
-    ArrayAttr:$indices
-  );
-
-  let results = (outs IndexTree_IndexNodeType:$output);
 }
 
 def IndexTreeDerivedIndicesOp : IndexTree_Op<"DerivedIndexOp", [Pure]>{
@@ -101,23 +107,12 @@ def IndexTreeDerivedIndicesOp : IndexTree_Op<"DerivedIndexOp", [Pure]>{
   let description = [{
   }];
 
-  let arguments = (
-    ins Variadic<IndexTree_NodeType>:$children,
+  let arguments = (ins
     IndexTree_ProvenanceGraphType:$prov_graph,
     DefaultValuedAttr<I32Attr, "0">:$graph_index
   );
 
   let results = (outs IndexTree_IndexNodeType:$output);
-}
-
-//TODO(alok): Figure out return type. Eventually want ops to return a (sparse?) tensor
-def IndexTreeOp : IndexTree_Op<"itree", [Pure]>{
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins IndexTree_IndexNodeType:$children);
-  let results = (outs I64:$output);
 }
 
 class IndexTree_TransformOp<string mnemonic> 
@@ -131,7 +126,7 @@ def IndexTree_TransformCollapseOp : IndexTree_TransformOp<"collapse"> {
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_IndexNodeType:$first, IndexTree_IndexNodeType:$second);
+  let arguments = (ins IndexTree_IndexNodeType:$dest);
 }
 
 def IndexTree_TransformSplitOp : IndexTree_TransformOp<"split"> {
@@ -139,7 +134,7 @@ def IndexTree_TransformSplitOp : IndexTree_TransformOp<"split"> {
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_IndexNodeType:$src);
+  let arguments = (ins IndexTree_IndexNodeType:$dest1, IndexTree_IndexNodeType:$dest2);
 }
 
 def IndexTree_TransformPosOp : IndexTree_TransformOp<"pos"> {
@@ -147,7 +142,7 @@ def IndexTree_TransformPosOp : IndexTree_TransformOp<"pos"> {
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_IndexNodeType:$src);
+  let arguments = (ins IndexTree_IndexNodeType:$dest);
 }
 
 def IndexTree_TransformCoordOp : IndexTree_TransformOp<"coord"> {
@@ -155,7 +150,7 @@ def IndexTree_TransformCoordOp : IndexTree_TransformOp<"coord"> {
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_IndexNodeType:$src);
+  let arguments = (ins IndexTree_IndexNodeType:$dest);
 }
 
 #endif // INDEXTREE_OPS
