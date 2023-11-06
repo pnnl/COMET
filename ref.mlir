@@ -84,15 +84,13 @@ module {
         %11 = memref.load %alloc_9[%c0] : memref<?xindex>
         %12 = memref.load %alloc_9[%c1] : memref<?xindex>
         scf.for %arg2 = %11 to %12 step %c1 {
-          %13 = memref.load %alloc_9[%c0] : memref<?xindex>
-          scf.for %arg3 = %c0 to %13 step %c1 {
-            %14 = memref.load %alloc_19[%arg0, %arg1] : memref<4x?xf64>
-            %15 = memref.load %alloc_17[%arg3] : memref<?xf64>
-            %16 = memref.load %alloc_20[%arg0, %arg3] : memref<4x?xf64>
-            %17 = arith.mulf %14, %15 : f64
-            %18 = arith.addf %16, %17 : f64
-            memref.store %18, %alloc_20[%arg0, %arg3] : memref<4x?xf64>
-          }
+          %13 = memref.load %alloc_11[%arg2] : memref<?xindex>
+          %14 = memref.load %alloc_19[%arg0, %arg1] : memref<4x?xf64>
+          %15 = memref.load %alloc_17[%arg2] : memref<?xf64>
+          %16 = memref.load %alloc_20[%arg0, %13] : memref<4x?xf64>
+          %17 = arith.mulf %14, %15 : f64
+          %18 = arith.addf %16, %17 : f64
+          memref.store %18, %alloc_20[%arg0, %13] : memref<4x?xf64>
         }
       }
     }
