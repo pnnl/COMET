@@ -26,6 +26,7 @@
 //===----------------------------------------------------------------------===//
 #include <iostream>
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
+#include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -34,6 +35,7 @@
 
 using namespace mlir;
 using namespace mlir::indexTree;
+using namespace mlir::tensorAlgebra;
 
 //===----------------------------------------------------------------------===//
 // IndexTreeDialect
@@ -56,6 +58,11 @@ using namespace mlir::indexTree;
 /// the point of registration of types and operations for the dialect.
 void IndexTreeDialect::initialize()
 {
+  addTypes<
+#define GET_TYPEDEF_LIST
+#include "comet/Dialect/IndexTree/IR/IndexTreeTypes.cpp.inc"
+      >();
+
   addOperations<
 #define GET_OP_LIST
 #include "comet/Dialect/IndexTree/IR/IndexTreeOps.cpp.inc"

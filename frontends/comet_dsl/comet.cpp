@@ -338,6 +338,15 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   pm.addPass(mlir::comet::createFuncOpLoweringPass());
 
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
+  optPM.addPass(mlir::comet::createRemoveLabeledTensorOpsPass());
+
+  /// Check to see if we are dumping to TA dialect.
+  if (emitTA)
+  {
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+    return 0;
+  }
 
   ///  =============================================================================
   ///  High-level optimization at the TA dialect
@@ -375,17 +384,17 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Generate the index tree IR
     optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass(CodegenTarget));
 
-    if (OptKernelFusion)
-    {
-      /// Apply partial fusion on index tree dialect for some compound expressions.
-      optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
-    }
+    // if (OptKernelFusion)
+    // {
+    //   /// Apply partial fusion on index tree dialect for some compound expressions.
+    //   optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
+    // }
 
-    if (OptWorkspace)
-    {
-      /// Optimized workspace transformations, reduce iteration space for nonzero elements
-      optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
-    }
+    // if (OptWorkspace)
+    // {
+    //   /// Optimized workspace transformations, reduce iteration space for nonzero elements
+    //   optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
+    // }
 
     /// Dump index tree dialect.
     if (emitIT)
@@ -395,6 +404,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       return 0;
     }
   }
+
+  return 0;
 
   /// =============================================================================
 
@@ -410,27 +421,27 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createTensorFillLoweringPass());
 
-  /// =============================================================================
+  // /// =============================================================================
 
-  /// TTGT reformulation for dense tensor contraction operations
-  if (IsLoweringTCtoTTGT)
-  {
-    /// Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
-    optPM.addPass(mlir::comet::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
-  }
+  // /// TTGT reformulation for dense tensor contraction operations
+  // if (IsLoweringTCtoTTGT)
+  // {
+  //   /// Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
+  //   optPM.addPass(mlir::comet::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
+  // }
 
-  /// =============================================================================
-  /// Operation based optimizations
-  /// =============================================================================
-  if (OptMatmulTiling)
-  {
-    optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
-  }
+  // /// =============================================================================
+  // /// Operation based optimizations
+  // /// =============================================================================
+  // if (OptMatmulTiling)
+  // {
+  //   optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
+  // }
 
-  if (OptCallToMatMulMicroKernel)
-  {
-    optPM.addPass(mlir::comet::createLinAlgMatmulMicroKernelPass());
-  }
+  // if (OptCallToMatMulMicroKernel)
+  // {
+  //   optPM.addPass(mlir::comet::createLinAlgMatmulMicroKernelPass());
+  // }
 
   /// =============================================================================
   /// Lowering all the operations to loops
@@ -451,12 +462,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createTensorFillLoweringPass());
     optPM.addPass(mlir::comet::createPCToLoopsLoweringPass());
 
-    /// =============================================================================
-    /// Lowering of other operations such as transpose, sum, etc. to SCF dialect
-    /// =============================================================================
-    /// If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
-    /// If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
-    optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
+  //   /// =============================================================================
+  //   /// Lowering of other operations such as transpose, sum, etc. to SCF dialect
+  //   /// =============================================================================
+  //   /// If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
+  //   /// If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
+  //   optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
 
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
@@ -464,14 +475,14 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
     pm.addPass(mlir::createConvertLinalgToLoopsPass());
 
-    if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
-    {
-      /// If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.transpose, then
-      /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
-      /// HPTT: A High-Performance Tensor Transposition C++ Library
-      /// https://arxiv.org/abs/1704.04374
-      optPM.addPass(mlir::comet::createOptDenseTransposePass());
-    }
+  //   if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
+  //   {
+  //     /// If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.transpose, then
+  //     /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
+  //     /// HPTT: A High-Performance Tensor Transposition C++ Library
+  //     /// https://arxiv.org/abs/1704.04374
+  //     optPM.addPass(mlir::comet::createOptDenseTransposePass());
+  //   }
 
     /// Dump scf dialect.
     if (emitLoops)
@@ -487,9 +498,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
 
 
-  /// =============================================================================
-  /// Late lowering passes
-  /// =============================================================================
+  // /// =============================================================================
+  // /// Late lowering passes
+  // /// =============================================================================
 
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::comet::createLateLoweringPass());
@@ -558,14 +569,14 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Convert remaining unrealized_casts (always needed).
     pm.addPass(mlir::createReconcileUnrealizedCastsPass());
 
-    if (mlir::failed(pm.run(*module)))
-      return 4;
-    return 0;
-  }
+  //   if (mlir::failed(pm.run(*module)))
+  //     return 4;
+  //   return 0;
+  // }
 
-  if (mlir::failed(pm.run(*module)))
-    return 4;
-  return 0;
+  // if (mlir::failed(pm.run(*module)))
+  //   return 4;
+  // return 0;
 }
 
 int dumpAST()

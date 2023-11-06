@@ -1,9 +1,5 @@
 add_mlir_conversion_library(COMETTensorAlgebraToSCF
-  EarlyLowering.cpp
-  LateLowering.cpp
   LowerFunc.cpp
-  LowerPCToLoops.cpp 
-  TensorAlgebraToSCF.cpp
 
 
   ADDITIONAL_HEADER_DIRS
