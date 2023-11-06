@@ -1106,9 +1106,11 @@ namespace
 
       Value &tensor = tensors[i];
       std::string format = formats[i];
+      std::string block = blocks[i];
       unsigned int id = ids[i];
 
       comet_debug() << " current index format: " << format << "\n";
+      comet_debug() << " current index block: " << block << "\n";
       if (format.compare(0, 1, "D") == 0)
       {
         /// Symbolic Phase
@@ -1133,6 +1135,11 @@ namespace
                            iteratorType,
                            forLoop /* output */,
                            accessIndex /* output */);
+          
+          if (block != "UNK") {
+            comet_debug() << "block " << block << " for format: " << format << "\n";
+          }
+          
           opstree->symbolicForOps.push_back(forLoop);
           opstree->symbolicAccessIdx.push_back(accessIndex);
 
@@ -1191,6 +1198,11 @@ namespace
                             iteratorType,
                             forLoop /* output */,
                             accessIndex /* output */);
+          
+          if (block != "UNK") {
+            comet_debug() << "block " << block << " for format: " << format << "\n";
+          }
+          
           opstree->symbolicForOps.push_back(forLoop);
           opstree->symbolicAccessIdx.push_back(accessIndex);
 
@@ -1225,6 +1237,11 @@ namespace
                           iteratorType,
                           forLoop /* output */,
                           accessIndex /* output */);
+        
+        if (block != "UNK") {
+          comet_debug() << "block " << block << " for format: " << format << "\n";
+        }
+        
         opstree->forOps.push_back(forLoop);
         opstree->accessIdx.push_back(accessIndex);
       }
@@ -1242,6 +1259,11 @@ namespace
                           iteratorType,
                           forLoop /* output */,
                           accessIndex /* output */);
+        
+        if (block != "UNK") {
+          comet_debug() << "block " << block << " for format: " << format << "\n";
+        }
+        
         opstree->forOps.push_back(forLoop);
         opstree->accessIdx.push_back(accessIndex);
       }
@@ -1270,6 +1292,11 @@ namespace
                          iteratorType,
                          forLoop /* output */,
                          accessIndex /* output */);
+        
+        if (block != "UNK") {
+          comet_debug() << "block " << block << " for format: " << format << "\n";
+        }
+        
         opstree->forOps.push_back(forLoop);
         opstree->accessIdx.push_back(accessIndex);
       }
