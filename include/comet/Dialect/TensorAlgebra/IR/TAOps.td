@@ -36,6 +36,8 @@ include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
+include "comet/Dialect/TensorAlgebra/IR/TABase.td"
+include "comet/Dialect/TensorAlgebra/IR/TATypes.td"
 /// Provide a definition of the 'TA' dialect in the ODS framework so that we
 /// can define our operations.
 def TA_Dialect : Dialect {
