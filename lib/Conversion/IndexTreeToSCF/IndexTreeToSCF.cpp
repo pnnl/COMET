@@ -1059,6 +1059,7 @@ namespace
   void genForOps(std::vector<Value> &tensors,
                  std::vector<unsigned int> &ids,
                  std::vector<std::string> &formats,
+                 std::vector<std::string> &blocks,
                  indexTree::IndexTreeOp rootOp,
                  OpBuilder &builder,
                  OpsTree *opstree,
@@ -2408,6 +2409,7 @@ namespace
                          std::vector<std::vector<Value>> &tensors_lhs_Allocs /* output */,
                          std::vector<std::vector<Value>> &tensors_rhs_Allocs /* output */,
                          std::vector<std::vector<std::string>> &allFormats /*output*/,
+                         std::vector<std::vector<std::string>> &allBlocks /*output*/,
                          std::vector<std::vector<int>> &allPerms /* output */,
                          std::vector<std::vector<int>> &allPerms_rhs /* output */,
                          std::vector<Value> &main_tensors_all /* output */,
@@ -2477,6 +2479,18 @@ namespace
       }
       comet_debug() << "\n";
     }
+    
+    getBlocksOfComputeOp(cur_op.getOperation()->getResult(0), allBlocks);
+    comet_debug() << " allBlocks: \n";
+    for (auto m : allBlocks)
+    {
+      comet_debug() << " ";
+      for (auto n : m)
+      {
+        comet_debug() << n << " ";
+      }
+      comet_debug() << "\n";
+    }
 
     comet_debug() << " ";
     comet_vdump(cur_op);
@@ -2535,6 +2549,7 @@ namespace
                                  int main_tensor_nums,
                                  std::vector<std::vector<int>> &allPerms,
                                  std::vector<std::vector<std::string>> &allFormats,
+                                 std::vector<std::vector<std::string>> &allBlocks,
                                  std::vector<Value> &main_tensors_all,
                                  std::vector<AbstractLoopOp> &nested_forops,
                                  std::vector<Value> &nested_AccessIdx,
@@ -2554,6 +2569,7 @@ namespace
         comet_debug() << " index_loc " << index_loc << "\n";
         comet_debug() << " Perm: " << allPerms[i][j] << "\n";
         comet_debug() << " Format: " << allFormats[i][j] << "\n";
+        comet_debug() << " Block: " << allBlocks[i][j] << "\n";
         assert(index_loc < nested_forops.size() &&
                "index_loc < nested_forops.size(), i.e. the index not exist in nested for loop\n");
         allLoopsArg[i].push_back(nested_forops[index_loc].getInductionVar());
@@ -3730,6 +3746,7 @@ namespace
     std::vector<std::vector<Value>> tensors_lhs_Allocs;
     std::vector<std::vector<Value>> tensors_rhs_Allocs;
     std::vector<std::vector<std::string>> allFormats;
+    std::vector<std::vector<std::string>> allBlocks;
     std::vector<std::vector<int>> allPerms;
     std::vector<std::vector<int>> allPerms_rhs;
     std::vector<Value> main_tensors_all; /// main_tensors_all has first RHS tensors then LHS tensors
@@ -3739,6 +3756,7 @@ namespace
                       tensors_lhs_Allocs /* output */,
                       tensors_rhs_Allocs /* output */,
                       allFormats /* output */,
+                      allBlocks /* output */,
                       allPerms /* output */,
                       allPerms_rhs /* output */,
                       main_tensors_all /* output */,
@@ -3768,6 +3786,7 @@ namespace
                               main_tensor_nums,
                               allPerms,
                               allFormats,
+                              allBlocks,
                               main_tensors_all,
                               nested_forops,
                               nested_AccessIdx,
@@ -3801,6 +3820,7 @@ namespace
                                 main_tensor_nums,
                                 allPerms,
                                 allFormats,
+                                allBlocks,
                                 main_tensors_all,
                                 symbolic_nested_forops,
                                 symbolic_nested_AccessIdx,
@@ -4416,6 +4436,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       std::vector<Value> tensors;
       std::vector<unsigned int> ids;
       std::vector<std::string> formats;
+      std::vector<std::string> blocks;
 
       comet_vdump(cur_op);
 
@@ -4424,18 +4445,30 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
                      leafs,
                      tensors /* output */,
                      ids /* output */,
-                     formats /* output */);
+                     formats /* output */,
+                     blocks /* output */);
       llvm::StringRef iteratorType = cur_op.getIteratorType();
 
       comet_debug() << " indices.size(): " << indices.size() << " tensors.size(): " << tensors.size() << "\n";
       for ([[maybe_unused]] unsigned int m = 0; m < tensors.size(); m++)
       {
-        comet_debug() << " Formats:" << formats[m] << " " << ids[m] << " ";
+        comet_debug() << " Formats:" << formats[m] << " " << ids[m] << " \n";
+        comet_debug() << " Blocks:" << blocks[m] << " " << ids[m] << " \n";
         comet_vdump(tensors[m]);
+        comet_debug() << "\n";
       }
+      comet_debug() << "---------------\n";
+      
+      //debug
+      //for (auto fmt : formats) {
+      //  std::cout << "FMT: " << fmt << std::endl;
+      //}
+      //for (auto block : blocks) {
+      //  std::cout << "BLOCK: " << block << std::endl;
+      //}
 
       comet_debug() << " call genForOps, i = " << i << "\n";
-      genForOps(tensors, ids, formats, rootOp, builder, opstree_vec[i], symbolicInfo, iteratorType);
+      genForOps(tensors, ids, formats, blocks, rootOp, builder, opstree_vec[i], symbolicInfo, iteratorType);
       {
         comet_pdump(rootOp->getParentOfType<ModuleOp>());
       }

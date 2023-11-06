@@ -5,7 +5,7 @@ def main() {
 	IndexLabel [c] = [?];             
 
 	#Tensor Declarations
-	Tensor<double> B([b, c], {CSR});   #sparse tensor declarations should be before dense tensor declarations
+	Tensor<double> B([b, c], {BCSR});   #sparse tensor declarations should be before dense tensor declarations
 	Tensor<double> A([a, b], {Dense});	  
 	Tensor<double> C([a, c], {Dense});
 
