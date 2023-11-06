@@ -1657,15 +1657,17 @@ namespace
       auto rhs_lbls = transpose.getSrcDims();
       auto lhs_lbls = transpose.getDstDims();
 
-      StringSet all_lbls;
-      all_lbls.insert(rhs_lbls.begin(), rhs_lbls.end());
-      all_lbls.insert(lhs_lbls.begin(), lhs_lbls.end());
+      std::vector<std::string> all_lbls = rhs_lbls;
+      all_lbls.insert(all_lbls.end(), lhs_lbls.begin(), lhs_lbls.end());
 
       std::map<std::string, mlir::AffineExpr> expr_map;
       unsigned dim = 0;
       for (const auto &lbl : all_lbls)
       {
-        expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
+        if(expr_map.find(lbl) == expr_map.end())
+        {
+          expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
+        }
       }
       std::vector<mlir::AffineExpr> rhs_exprs;
       std::vector<mlir::AffineExpr> lhs_exprs;
@@ -1782,19 +1784,21 @@ namespace
       mlir::Value rhs_tensor = symbolTable.lookup(transpose.getName());
 
       comet_vdump(rhs_tensor);
-
+      
       auto rhs_lbls = transpose.getSrcDims();
       auto lhs_lbls = transpose.getDstDims();
 
-      StringSet all_lbls;
-      all_lbls.insert(rhs_lbls.begin(), rhs_lbls.end());
-      all_lbls.insert(lhs_lbls.begin(), lhs_lbls.end());
+      std::vector<std::string> all_lbls = rhs_lbls;
+      all_lbls.insert(all_lbls.end(), lhs_lbls.begin(), lhs_lbls.end());
 
       std::map<std::string, mlir::AffineExpr> expr_map;
       unsigned dim = 0;
       for (const auto &lbl : all_lbls)
       {
-        expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
+        if(expr_map.find(lbl) == expr_map.end())
+        {
+          expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
+        }
       }
       std::vector<mlir::AffineExpr> rhs_exprs;
       std::vector<mlir::AffineExpr> lhs_exprs;
