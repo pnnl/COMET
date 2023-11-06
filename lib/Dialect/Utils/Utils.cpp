@@ -1555,6 +1555,45 @@ namespace mlir
       std::vector<std::vector<std::string>> opFormats_lhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_lhs);
       opFormats = opFormats_lhs;
     }
+    
+    /// Get the formats of the itCompute op
+    void getBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opBlocks)
+    {
+      indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
+      ArrayAttr opBlocksArrayAttr_rhs = itComputeOp_rhs.getAllBlocks();
+      indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
+      ArrayAttr opBlocksArrayAttr_lhs = itComputeOp_lhs.getAllBlocks();
+
+      /// Get output block, vector of vector
+      /// Convert ArrayAttr into
+      std::vector<std::vector<std::string>> opBlocks_rhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_rhs);
+      std::vector<std::vector<std::string>> opBlocks_lhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_lhs);
+
+      opBlocks = opBlocks_rhs;
+      opBlocks.insert(opBlocks.end(), opBlocks_lhs.begin(), opBlocks_lhs.end());
+    }
+
+    /// Get the rhs formats of the itCompute op
+    void getRHSBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opBlocks)
+    {
+      indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
+      ArrayAttr opBlocksArrayAttr_rhs = itComputeOp_rhs.getAllBlocks();
+
+      /// Get output block, vector of vector
+      /// Convert ArrayAttr into
+      std::vector<std::vector<std::string>> opBlocks_rhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_rhs);
+
+      opBlocks = opBlocks_rhs;
+    }
+
+    /// Get the LHS formats of the itCompute op
+    void getLHSBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opBlocks)
+    {
+      indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
+      ArrayAttr opBlocksArrayAttr_lhs = itComputeOp_lhs.getAllBlocks();
+      std::vector<std::vector<std::string>> opBlocks_lhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_lhs);
+      opBlocks = opBlocks_lhs;
+    }
 
     /// Get the input tensors of the itCompute op
     void getInputTensorsOfComputeOp(Value computeOp, std::vector<Value> &inputTensors /* output */)
@@ -1587,7 +1626,8 @@ namespace mlir
                         std::vector<Value> &leafs,
                         std::vector<Value> &tensors /* output */,
                         std::vector<unsigned int> &ids /* output */,
-                        std::vector<std::string> &formats /* output */)
+                        std::vector<std::string> &formats /* output */,
+                        std::vector<std::string> &blocks /* output */)
     {
       /// For each indices, find in each leaf, which tensor, the corresponding format
       /// If in all tensors, the formats of the index are D, then D
@@ -1600,11 +1640,13 @@ namespace mlir
         comet_debug() << " getFormatsInfo:indices[" << i << "]: " << indices[i] << "\n";
         /// Info for each index
         std::string format;
+        std::string block;
         Value tensor;
         unsigned int id;
         bool isSet = false;
 
         std::vector<std::string> formats_leafs;
+        std::vector<std::string> blocks_leafs;
         std::vector<Value> tensors_leafs;
         std::vector<unsigned int> ids_leafs;
 
@@ -1614,6 +1656,7 @@ namespace mlir
           comet_debug() << " getFormatsInfo:LeafOp: ";
           comet_vdump(leafs[j]);
           std::string format_in_leaf;
+          std::string block_in_leaf;
           Value tensor_in_leaf;
           unsigned int id_in_leaf;
           bool isSetInLeaf = false;
@@ -1661,6 +1704,7 @@ namespace mlir
             /// Check if this index is in this leaf's perms
 
             std::vector<std::string> formats_local;
+            std::vector<std::string> blocks_local;
             std::vector<Value> tensors_local;
             std::vector<unsigned int> ids_local;
             std::vector<bool> rhs_vs_lhs;
@@ -1678,6 +1722,7 @@ namespace mlir
                 comet_debug() << " getFormatsInfo:AddingLocalFormat[" << k << "][" << idx << "]: " << allFormats[k][idx] << " ";
                 comet_vdump(leafop_tensors[k]);
                 formats_local.push_back(allFormats[k][idx]);
+                blocks_local.push_back(allBlocks[k][idx]);
                 tensors_local.push_back(leafop_tensors[k]);
                 ids_local.push_back(idx);
                 rhs_vs_lhs.push_back(inputOutputMapping[k][idx]);
@@ -1696,6 +1741,7 @@ namespace mlir
             {
               isSetInLeaf = true;
               format_in_leaf = formats_local[0];
+              block_in_leaf = blocks_local[0];
               tensor_in_leaf = tensors_local[0];
               id_in_leaf = ids_local[0];
 
@@ -1710,6 +1756,7 @@ namespace mlir
                 /// index format information stores in formats_local
                 {
                   format_in_leaf = formats_local[k];
+                  block_in_leaf = blocks_local[k];
                   tensor_in_leaf = tensors_local[k];
                   id_in_leaf = ids_local[k];
                   break; /// Get the first sparse case
@@ -1724,6 +1771,7 @@ namespace mlir
             comet_debug() << " getFormatsInfo:isSetInLeaf: " << isSetInLeaf << ", format_in_leaf: " << format_in_leaf << ", id_in_leaf: " << id_in_leaf << ", tensor: ";
             comet_vdump(tensor_in_leaf);
             formats_leafs.push_back(format_in_leaf);
+            blocks_leafs.push_back(block_in_leaf);
             tensors_leafs.push_back(tensor_in_leaf);
             ids_leafs.push_back(id_in_leaf);
           }
@@ -1742,6 +1790,7 @@ namespace mlir
           if (j == 0)
           {
             format = formats_leafs[j];
+            block = blocks_leafs[j];
             tensor = tensors_leafs[j];
             id = ids_leafs[j];
             isSet = true;
@@ -1751,6 +1800,7 @@ namespace mlir
             if (formats_leafs[j].compare(0, 1, "D") != 0)
             { /// not D
               format = formats_leafs[j];
+              block = blocks_leafs[j];
               tensor = tensors_leafs[j];
               id = ids_leafs[j];
               isSet = true;
@@ -1765,6 +1815,7 @@ namespace mlir
           comet_vdump(tensor);
 
           formats.push_back(format);
+          blocks.push_back(block);
           tensors.push_back(tensor);
           ids.push_back(id);
         }

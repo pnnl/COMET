@@ -208,6 +208,11 @@ namespace mlir
     void getFormatsOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
     void getRHSFormatsOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
     void getLHSFormatsOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
+    
+    /// TODO(patrick): Do we want to merge these with the getFormat functions above?
+    void getBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
+    void getRHSBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
+    void getLHSBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
 
     void getFormatsPermsOfComputeOp(Value computeOp,
                                     std::vector<std::vector<std::string>> &opFormats,
@@ -220,7 +225,8 @@ namespace mlir
                         std::vector<Value> &leafs,
                         std::vector<Value> &tensors,
                         std::vector<unsigned int> &ids,
-                        std::vector<std::string> &formats);
+                        std::vector<std::string> &formats,
+                        std::vector<std::string> &blocks);
 
     void replaceOperands(Operation *itComputeOp, std::vector<Value> newComputeOps);
 
