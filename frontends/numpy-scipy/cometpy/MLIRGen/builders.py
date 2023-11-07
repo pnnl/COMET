@@ -337,7 +337,7 @@ class ArithOp_Builder:
                 #             target_dims_lbls:list,tensor_types:list,tc_indices:list,opr_type:str,op:str, formats:list) -> None:
         
         self.dest = dest
-        self.operators = "{}".format(",".join("%t"+str(v) for v in input_tensors)+","+",".join("%i"+str(v) for v in tensors_shapes[-1]))
+        self.operators = "{}".format(",".join("%t"+str(v) for v in input_tensors)+","+",".join("%i"+str(vv) for v in tensors_shapes for vv in v))
         self.tc_indices = tc_indices
         # self.dimslbls_to_map = dimslbls_to_map
         # self.input_array_dims_lbls = input_array_dims_lbls
@@ -365,8 +365,9 @@ class ArithOp_Builder:
         input_type = []
         for t in self.tensors_shapes[:-1]:
             input_type.append("tensor<{}xf64>".format("x".join(str(v) for v in t)))
-        for v in self.tensors_shapes[-1]:
-            input_type.append("!ta.range")
+        for t in self.tensors_shapes:
+            for v in t:
+                input_type.append("!ta.range")
         input_type = ",".join(input_type) 
         if self.mask_shape != None:
             input_type += ",tensor<{}xf64>".format("x".join(str(v) for v in self.mask_shape))
@@ -444,7 +445,7 @@ class ArithOp_Builder:
                     outputtype = output_type,
                     # beta =  self.beta_val,
                     formats = '"{}", "{}", "{}"'.format(*[self.formats_str[x] for x in self.formats]),
-                    lhs_dims = len(self.tensors_shapes[-1]),
+                    lhs_dims = sum([len(t) for t in self.tensors_shapes ]),
                     semiring = semiring,
                     mask=self.mask,
                     mask_type = self.mask_type,
