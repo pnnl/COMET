@@ -33,12 +33,14 @@ namespace mlir
 /// Generate the code for registering conversion passes.
 #define GEN_PASS_DECL
 #include "comet/Dialect/IndexTree/Passes.h.inc"
-
-        /// Create a pass for applying compressed workspace transformation into IndexTreeIR
-        std::unique_ptr<Pass> createIndexTreeWorkspaceTransformationsPass();
-
         /// Create a pass for the redundancy-aware kernel fusion on index tree dialect for some compound expressions
         std::unique_ptr<Pass> createIndexTreeKernelFusionPass();
+
+        /// Create a pass for applying compressed workspace transformation into IndexTreeIR
+        // std::unique_ptr<Pass> createIndexTreeWorkspaceTransformationsPass();
+
+        /// Create a pass for the redundancy-aware kernel fusion on index tree dialect for some compound expressions
+        // std::unique_ptr<Pass> createIndexTreeKernelFusionPass();
     }
 
 }

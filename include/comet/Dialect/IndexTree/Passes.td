@@ -61,5 +61,14 @@ include "mlir/Pass/PassBase.td"
 //  ];
 //}
 
+def IndexTreeDomainInference : Pass<"indextree-domain-inference", "mlir::func::FuncOp"> {
+    let summary = "Infer domain of index variables";
+    let description = [{
+        Propogate domain values from tensors, through compute operations to index variables.
+        Necessary for eventual lowering of index variables to for loops
+    }];
+
+    let constructor = "comet::createIndexTreeDomainInferencePass()";
+}
 
 #endif /// COMET_DIALECT_INDEXTREE_PASSES

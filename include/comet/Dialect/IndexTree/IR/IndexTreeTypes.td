@@ -28,10 +28,11 @@ def IndexTree_OperandType : IndexTree_Type<"Operand", "operand"> {
   let description = [{}];
 }
 
-//TODO(alokvk2): Eventually get rid of this and just return a (sparse) tensor
-def IndexTree_ComputeType : IndexTree_Type<"Compute", "compute"> {
-  let summary = "Compute operation of index tree dialect";
-  let description =[{}];
+def IndexTree_DomainType : IndexTree_Type<"Domain", "domain"> {
+  let summary = "Type representing an iteration domain";
+  let description = [{
+    Type for storing iteration domain of an index variable.
+  }];
 }
 
 def IndexTree_ProvenanceGraphType : IndexTree_Type<"ProvenanceGraph", "prov_graph"> {

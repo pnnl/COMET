@@ -25,14 +25,13 @@
 //
 //===----------------------------------------------------------------------===//
 #include <iostream>
-#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
-#include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
-
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/DeviceMappingInterface.h"
 #include "llvm/ADT/TypeSwitch.h"
 
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
+#include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 
 using namespace mlir;
 using namespace mlir::indexTree;

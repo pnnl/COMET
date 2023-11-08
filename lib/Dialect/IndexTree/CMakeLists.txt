@@ -7,6 +7,7 @@ add_mlir_dialect_library(COMETIndexTreeDialect
   # Transforms/UnitExpression.cpp
   # Transforms/WorkspaceTransforms.cpp 
   # Transforms/Fusion.cpp
+  Transforms/IterationDomainInference.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${COMET_MAIN_INCLUDE_DIR}/comet/Dialect/IndexTree
