@@ -27,7 +27,7 @@ def main() {
 
     #Tensor Data Initialization
     L1[i, k] = comet_read(0, 2);   # LOWER_TRI_STRICT
-    L2[k, j] = comet_read(0, 2);   # Needed to set the value fo j ...
+    L2[k, j] = comet_read(0, 2);   # Needed to set the value of j ...
 
     # Sandia_LL method: ntri = sum (sum ((L * L) .* L))
     ## 

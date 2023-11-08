@@ -22,20 +22,18 @@ def main() {
     IndexLabel [k] = [?];
 
     #Tensor Declarations
-    Tensor<double> L0([i, j], {CSR});
     Tensor<double> L1([i, k], {CSR});
     Tensor<double> L2([k, j], {CSR});
     Tensor<double> C([i, j], {CSR});
 
     #Tensor Data Initialization
-    L0[i, j] = comet_read(0, 2);  # LOWER_TRI_STRICT
-    L1[i, k] = comet_read(0, 2);
-    L2[k, j] = comet_read(0, 2);
+    L1[i, j] = comet_read(0, 2);    # LOWER_TRI_STRICT
+    L2[k, j] = comet_read(0, 2);    # Needed to set the value of j ...
 
     # Sandia_LL method: ntri = sum (sum ((L * L) .* L))
-    # var ntri = SUM((L1[i,k] * L2[k,j]) .* L0[i,j]);
+    # var ntri = SUM((L[i,k] * L[k,j]) .* L[i,j]);
     ## 
-    C[i, j]<L0, push> = L1[i, k] * L2[k, j];  # L0 is the mask, using push-based method.
+    C[i, j]<L1, push> = L1[i, k] * L1[k, j];  # L0 is the mask, using push-based method.
                                               # valid options: {push, pull, auto}
     var ntri = SUM(C[i, j]);
     
