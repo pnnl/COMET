@@ -250,8 +250,12 @@ struct TensorMultOpLowering : public mlir::ConversionPattern {
     auto semiring = mult_op.getSemiringAttr().cast<mlir::StringAttr>().getValue();
     // auto MaskingTypeAttr = mult_op.getMaskTypeAttr();
 
+    auto tensor_type = op->getResultTypes()[0];
+    auto itree_op = rewriter.create<IndexTreeOp>(loc, tensor_type);
+    rewriter.createBlock(&itree_op.getRegion());
+
     indexTree::IndexTreeType tree_type = indexTree::IndexTreeType::get(context);
-    Value parent = rewriter.create<indexTree::IndexTreeOp>(loc, tree_type);
+    Value parent = rewriter.create<indexTree::IndexTreeRootOp>(loc, tree_type);
 
     //Construct each index variable
     auto lhsMap = indexing_maps[0].cast<AffineMapAttr>().getValue();
@@ -301,7 +305,6 @@ struct TensorMultOpLowering : public mlir::ConversionPattern {
     }
     rhs_operands.push_back(rewriter.create<indexTree::IndexTreeOperandOp>(loc, operand_type, rhs2_tensor, indices));
 
-    auto tensor_type = op->getResultTypes()[0];
     Value compute_op = rewriter.create<indexTree::IndexTreeComputeOp>(
         loc,
         tensor_type,
@@ -312,7 +315,8 @@ struct TensorMultOpLowering : public mlir::ConversionPattern {
         rewriter.getStringAttr(semiring)
     );
 
-    rewriter.replaceOp(op, compute_op);
+    rewriter.create<indexTree::YieldOp>(loc, TypeRange(), compute_op);
+    rewriter.replaceOp(op, itree_op.getResult(0));
     return success();
   }
 };

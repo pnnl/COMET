@@ -28,11 +28,12 @@
 #ifndef INDEXTREE_OPS
 #define INDEXTREE_OPS
 
-include "mlir/IR/OpBase.td" 
+include "mlir/IR/OpBase.td"
+include "mlir/Interfaces/ControlFlowInterfaces.td"
+include "mlir/IR/RegionKindInterface.td"
 include "mlir/Interfaces/FunctionInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
-include "mlir/Interfaces/CastInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Dialect/SCF/IR/DeviceMappingInterface.td"
 
@@ -51,8 +52,32 @@ class IndexTree_Op<string mnemonic, list<Trait> traits = []> :
 // Index Tree Operations
 //===----------------------------------------------------------------------===//
 
-def IndexTreeOp : IndexTree_Op<"itree", [Pure]>{
-  let summary = "Conceptually create an index tree";
+def IndexTreeOp : IndexTree_Op<"itree", 
+    [SingleBlockImplicitTerminator<"indexTree::YieldOp">,
+    RecursiveMemoryEffects]> {
+  let summary = "Create a scope for index tree iteration";
+  let description = [{}];
+
+  let results = (outs Variadic<AnyType>:$results);
+  let regions = (region SizedRegion<1>:$region);
+}
+
+def YieldOp : IndexTree_Op<"yield", [Pure, ReturnLike, Terminator,
+    HasParent<"IndexTreeOp">]> {
+  let summary = "index tree yield and termination operation";
+  let description = [{
+  }];
+
+  let arguments = (ins Variadic<AnyType>:$results);
+  let builders = [OpBuilder<(ins), [{ /* nothing to do */ }]>];
+
+  let assemblyFormat =
+      [{  attr-dict ($results^ `:` type($results))? }];
+}
+
+def IndexTreeRootOp : IndexTree_Op<"RootOp", [
+    HasParent<"IndexTreeOp">, Pure]> {
+  let summary = "Create the base of the iteration tree";
   let description = [{}];
 
   let results = (outs IndexTree_TreeType:$output);
@@ -63,9 +88,7 @@ def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
   let description = [{
   }];
 
-  let arguments = (
-    ins IndexTree_NodeType:$parent
-  );
+  let arguments = (ins IndexTree_NodeType:$parent, Optional<IndexTree_DomainType>:$domain);
 
   let results = (outs IndexTree_IndexNodeType:$output);
 }
@@ -102,55 +125,60 @@ def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
   
 }
 
-def IndexTreeDerivedIndicesOp : IndexTree_Op<"DerivedIndexOp", [Pure]>{
-  let summary = "Create an index variable derviced from a provenance graph.";
-  let description = [{
-  }];
-
-  let arguments = (ins
-    IndexTree_ProvenanceGraphType:$prov_graph,
-    DefaultValuedAttr<I32Attr, "0">:$graph_index
-  );
-
-  let results = (outs IndexTree_IndexNodeType:$output);
-}
-
-class IndexTree_TransformOp<string mnemonic> 
-    : IndexTree_Op<mnemonic, [Pure]> {
-  // Base class for Index transformations
-  let results = (outs IndexTree_ProvenanceGraphType:$output);
-}
-
-def IndexTree_TransformCollapseOp : IndexTree_TransformOp<"collapse"> {
+def IndexTreeTensorDomainOp : IndexTree_Op<"DomainOp", [Pure]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_IndexNodeType:$dest);
+  let arguments = (ins TA_AnyTensor:$tensor, Index:$dim, OptionalAttr<StrAttr>:$type);
+
+  let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTree_TransformSplitOp : IndexTree_TransformOp<"split"> {
+def IndexTreeMemRefDomainOp : IndexTree_Op<"MemRefDomainOp", [Pure]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_IndexNodeType:$dest1, IndexTree_IndexNodeType:$dest2);
+  let arguments = (ins 
+      StrAttr:$type, 
+      AnyMemRef:$pos,
+      AnyMemRef:$crd,
+      AnyMemRef:$value,
+      Optional<AnyTypeOf<[Index, IndexTree_NodeType]>>:$parent);
+
+  let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTree_TransformPosOp : IndexTree_TransformOp<"pos"> {
+def IndexTreeDenseDomainOp : IndexTree_Op<"DenseDomainOp", [Pure]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_IndexNodeType:$dest);
+  let arguments = (ins UI32:$min, UI32:$max, Optional<UI32>:$step);
+
+  let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTree_TransformCoordOp : IndexTree_TransformOp<"coord"> {
+def IndexTreeDomainUnionOp : IndexTree_Op<"DomainUnionOp", [Pure]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_IndexNodeType:$dest);
+  let arguments = (ins Variadic<IndexTree_DomainType>:$domains);
+
+  let results = (outs IndexTree_DomainType:$domain);
 }
+
+def IndexTreeDomainIntersectionOp : IndexTree_Op<"DomainIntersectionOp", [Pure]>{
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins Variadic<IndexTree_DomainType>:$domains);
+
+  let results = (outs IndexTree_DomainType:$domain);
+}
+
 
 #endif // INDEXTREE_OPS
