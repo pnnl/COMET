@@ -773,12 +773,14 @@ namespace
           comet_debug() << " child upperBound alloc\n";
           comet_vdump(alloc_child_bounds);
 
-          if (alloc_child_bounds == alloc_parent_bounds) /// m is the nearest loop induction variable
-          {
-            comet_debug() << " THESAME: Parent and Child has the same alloc\n";
-            index_lower = parent_forop.getInductionVar();
-          }
-          else
+          /// TODO (PT) Not sure why this (now commented out) code was needed but it breaks spgemm for cases like C = A * A
+
+          // if (alloc_child_bounds == alloc_parent_bounds) /// m is the nearest loop induction variable
+          // {
+          //   comet_debug() << " THESAME: Parent and Child has the same alloc\n";
+          //   index_lower = parent_forop.getInductionVar();
+          // }
+          // else
           { /// m comes from the load
             comet_debug() << " DIFFERENT:Parent and Child has the different alloc\n";
             comet_vdump(alloc_parent_bounds);
