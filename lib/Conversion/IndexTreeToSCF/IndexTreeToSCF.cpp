@@ -1165,7 +1165,7 @@ namespace
         opstree->accessIdx.push_back(accessIndex);
         
         if (block != "UNK") {
-          llvm::errs() << "block " << block << " for format: " << format << "\n";
+          //llvm::errs() << "block " << block << " for format: " << format << "\n";
         }
       }
       /// mix sparse dense tensor contraction, only one sparse tensor
@@ -1246,8 +1246,32 @@ namespace
         opstree->forOps.push_back(forLoop);
         opstree->accessIdx.push_back(accessIndex);
         
-        if (block != "UNK") {
+        comet_debug() << "block " << block << " for format: " << format << "\n";
+        if (block == "UNK") {
+          opstree->forOps.push_back(forLoop);
+          opstree->accessIdx.push_back(accessIndex);
+        } else {
           comet_debug() << "block " << block << " for format: " << format << "\n";
+          if (block == "D") {
+            comet_debug() << "    Generating block D\n";
+            
+            AbstractLoopOp forLoop2;
+            Value accessIndex2;
+            genForOpFormat_D(builder,
+                             loc,
+                             tensor,
+                             id,
+                             i,
+                             allAllocs,
+                             iteratorType,
+                             forLoop2,
+                             accessIndex2);
+                             
+            comet_vdump(forLoop2);
+            
+            opstree->forOps.push_back(forLoop2);
+            opstree->accessIdx.push_back(accessIndex2);
+          }
         }
         
       }
@@ -1266,35 +1290,25 @@ namespace
                           forLoop /* output */,
                           accessIndex /* output */);
         
-        if (block == "UNK") {
-          opstree->forOps.push_back(forLoop);
-          opstree->accessIdx.push_back(accessIndex);
-        } else {
-          comet_debug() << "block " << block << " for format: " << format << "\n";
-          if (block == "D") {
-            comet_debug() << "    Generating block D\n";
-            
-            /// Add the parent loop
-            opstree->symbolicForOps.push_back(forLoop);
-            opstree->symbolicAccessIdx.push_back(accessIndex);
-            
-            scf::ForOp forLoop2;
-            Value accessIndex2;
-            genForOpFormat_D(builder,
-                             loc,
-                             tensor,
-                             id,
-                             i,
-                             allAllocs,
-                             forLoop2,
-                             accessIndex2);
-                             
-            comet_vdump(forLoop2);
-            
-            opstree->forOps.push_back(forLoop2);
-            opstree->accessIdx.push_back(accessIndex2);
-          }
-        }
+
+        
+      }
+      else if (format.compare(0, 2, "CN") == 0)
+      {
+        /// Generate for(int m = pos[0]; m < pos[1]; m++){int i = crd[m];}
+        AbstractLoopOp forLoop;
+        Value accessIndex;
+        genForOpFormat_CN(builder,
+                          loc,
+                          tensor,
+                          id,
+                          i,
+                          allAllocs,
+                          iteratorType,
+                          forLoop /* output */,
+                          accessIndex /* output */);
+        
+        
       }
       else if (format.compare(0, 1, "S") == 0)
       {
