@@ -248,17 +248,19 @@ struct TensorMultOpLowering : public mlir::ConversionPattern {
     auto indexing_maps = mult_op.getIndexingMaps();
     // auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
     auto semiring = mult_op.getSemiringAttr().cast<mlir::StringAttr>().getValue();
-    // auto MaskingTypeAttr = mult_op.getMaskTypeAttr();
+    auto MaskingTypeAttr = mult_op.getMaskTypeAttr();
 
     auto tensor_type = op->getResultTypes()[0];
-    auto itree_op = rewriter.create<IndexTreeOp>(loc, tensor_type);
-    rewriter.createBlock(&itree_op.getRegion());
+    auto itree_op = rewriter.create<IndexTreeOp>(loc, tensor_type, SmallVector<Value, 3>{lhs_tensor, rhs1_tensor, rhs2_tensor});
+    Region* body = &itree_op.getRegion();
+    loc = body->getLoc();
+    Block* block = rewriter.createBlock(body, {}, {tensor_type, tensor_type, tensor_type},  SmallVector<Location, 3>(3, loc));
 
     indexTree::IndexTreeType tree_type = indexTree::IndexTreeType::get(context);
     Value parent = rewriter.create<indexTree::IndexTreeRootOp>(loc, tree_type);
 
     //Construct each index variable
-    auto lhsMap = indexing_maps[0].cast<AffineMapAttr>().getValue();
+    auto lhsMap = indexing_maps[2].cast<AffineMapAttr>().getValue();
     indexTree::IndexNodeType index_node_type = indexTree::IndexNodeType::get(context); 
     std::vector<Value> index_nodes;
     for (unsigned i = 0; i < lhsMap.getNumDims(); i++)
@@ -275,35 +277,36 @@ struct TensorMultOpLowering : public mlir::ConversionPattern {
       auto expr = lhsMap.getResult(i);
       indices.push_back(index_nodes[expr.cast<AffineDimExpr>().getPosition()]);
     }
+
+    Value lhs_val = block->getArgument(0);
+    if(mask_tensor != nullptr)
+    {
+      lhs_val = rewriter.create<indexTree::IndexTreeMaskOp>(loc, tensor_type, block->getArgument(0), mask_tensor, MaskingTypeAttr);
+    }
     Value lhs_operand;
-    if(mask_tensor == nullptr)
-    {
-      lhs_operand = rewriter.create<indexTree::IndexTreeOperandOp>(loc, operand_type, lhs_tensor, indices);
-    }
-    else
-    {
-      lhs_operand = rewriter.create<indexTree::IndexTreeMaskedOperandOp>(loc, operand_type, lhs_tensor, mask_tensor, indices);
-    }
+    lhs_operand = rewriter.create<indexTree::IndexTreeOperandOp>(loc, operand_type, lhs_val, indices);
 
     //Construct RHS operands
     std::vector<Value> rhs_operands;
     indices.clear();
-    auto affineMap = indexing_maps[1].cast<AffineMapAttr>().getValue();
+    auto affineMap = indexing_maps[0].cast<AffineMapAttr>().getValue();
     for (size_t i = 0; i < affineMap.getNumResults(); i++)
     {
       auto expr = affineMap.getResult(i);
       indices.push_back(index_nodes[expr.cast<AffineDimExpr>().getPosition()]);
     }
-    rhs_operands.push_back(rewriter.create<indexTree::IndexTreeOperandOp>(loc, operand_type, rhs1_tensor, indices));
+    rhs_operands.push_back(rewriter.create<indexTree::IndexTreeOperandOp>(
+                           loc, operand_type, block->getArgument(1), indices));
     
     indices.clear();
-    affineMap = indexing_maps[2].cast<AffineMapAttr>().getValue();
+    affineMap = indexing_maps[1].cast<AffineMapAttr>().getValue();
     for (size_t i = 0; i < affineMap.getNumResults(); i++)
     {
       auto expr = affineMap.getResult(i);
       indices.push_back(index_nodes[expr.cast<AffineDimExpr>().getPosition()]);
     }
-    rhs_operands.push_back(rewriter.create<indexTree::IndexTreeOperandOp>(loc, operand_type, rhs2_tensor, indices));
+    rhs_operands.push_back(rewriter.create<indexTree::IndexTreeOperandOp>(
+                           loc, operand_type, block->getArgument(2), indices));
 
     Value compute_op = rewriter.create<indexTree::IndexTreeComputeOp>(
         loc,
