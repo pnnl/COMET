@@ -1,20 +1,30 @@
+# Sparse matrix dense matrix multiplication (SpMM)
+# Sparse matrix is in CSR format
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_spmm_CSRxDense.llvm
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
+# RUN: mlir-cpu-runner mult_spmm_CSRxDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
 def main() {
 	#IndexLabel Declarations
-	IndexLabel [a] = [4];
+	IndexLabel [a] = [?];
 	IndexLabel [b] = [?];
-	IndexLabel [c] = [?];             
+	IndexLabel [c] = [4];             
 
 	#Tensor Declarations
-	Tensor<double> B([b, c], {BCSR});   #sparse tensor declarations should be before dense tensor declarations
-	Tensor<double> A([a, b], {Dense});	  
+	Tensor<double> A([a, b], {BCSR});	  
+	Tensor<double> B([b, c], {Dense});
 	Tensor<double> C([a, c], {Dense});
 
+    A[a, b] = comet_read(0);
+
 	#Tensor Fill Operation
-	A[a, b] = 1.0;
-	B[b, c] = comet_read(0);
+	B[b, c] = 1.0;
 	C[a, c] = 0.0;
 
 	C[a, c] = A[a, b] * B[b, c];
 	print(C);
-	print(B);
 }
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 4.08,4.08,4.08,4.08,7.65,7.65,7.65,7.65,5.1,5.1,5.1,5.1,13.77,13.77,13.77,13.77,17.34,17.34,17.34,17.34,
