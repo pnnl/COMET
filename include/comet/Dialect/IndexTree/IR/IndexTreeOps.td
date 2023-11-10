@@ -54,10 +54,12 @@ class IndexTree_Op<string mnemonic, list<Trait> traits = []> :
 
 def IndexTreeOp : IndexTree_Op<"itree", 
     [SingleBlockImplicitTerminator<"indexTree::YieldOp">,
+    IsolatedFromAbove,
     RecursiveMemoryEffects]> {
   let summary = "Create a scope for index tree iteration";
   let description = [{}];
 
+  let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$region);
 }
@@ -93,20 +95,20 @@ def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
   let results = (outs IndexTree_IndexNodeType:$output);
 }
 
+def IndexTreeMaskOp : IndexTree_Op<"MaskOp", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins TA_AnyTensor:$tensor, TA_AnyTensor:$mask, StrAttr:$mask_type);
+  let results = (outs TA_AnyTensor:$masked_tensor);
+}
+
 def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure]>{
   let summary = "";
   let description = [{}];
 
-  let arguments = (ins AnyType:$tensor, Variadic<IndexTree_IndexNodeType>:$indices);
-  let results = (outs IndexTree_OperandType:$output);
-}
-
-def IndexTreeMaskedOperandOp : IndexTree_Op<"MaskedOperandOp", [Pure]>{
-  let summary = "";
-  let description = [{}];
-
-  let arguments = (ins AnyType:$tensor, TA_AnyTensor:$mask, Variadic<IndexTree_IndexNodeType>:$indices);
-  let results = (outs IndexTree_OperandType:$output);
+  let arguments = (ins TA_AnyTensor:$tensor, Variadic<IndexTree_IndexNodeType>:$indices);
+  let results = (outs IndexTree_OperandType:$result);
 }
 
 def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
@@ -130,7 +132,7 @@ def IndexTreeTensorDomainOp : IndexTree_Op<"DomainOp", [Pure]>{
   let description = [{
   }];
 
-  let arguments = (ins TA_AnyTensor:$tensor, Index:$dim, OptionalAttr<StrAttr>:$type);
+  let arguments = (ins TA_AnyTensor:$tensor, UI32Attr:$dim, OptionalAttr<StrAttr>:$type);
 
   let results = (outs IndexTree_DomainType:$domain);
 }

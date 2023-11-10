@@ -287,6 +287,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Generate the index tree IR
     optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass());
 
+    // Create new pass manager to optimize the index tree dialect
+    mlir::OpPassManager &itOptPM = optPM.nest<IndexTreeOp>();
+    itOptPM.addPass(mlir::comet::createIndexTreeDomainInferencePass());
+
     // if (OptKernelFusion)
     // {
     //   /// Apply partial fusion on index tree dialect for some compound expressions.
