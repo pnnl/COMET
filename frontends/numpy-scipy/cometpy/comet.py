@@ -304,7 +304,6 @@ class NewVisitor(ast.NodeVisitor):
         self.need_opt_comp_workspace = op0_sems['format'] == CSR and op1_sems['format'] == CSR
         if isinstance(node.op, ast.Add):
             self.ops.append(("+", operands, indices +','+indices+'->'+indices, self.tcurr, [op_semantics['labels']]*3))
-
             self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'labels': op_semantics['labels'], 'format': format}
             # if not no_assign:
             self.declarations.append(('d', 'T', 'l', self.tcurr))
@@ -484,7 +483,7 @@ class NewVisitor(ast.NodeVisitor):
         res = list(llabels.split('->')[1])
         # ret_num = []
         all_real_lbls = []
-        all_dims = self.tsemantics[operands[0]]['shape']
+        all_dims = self.tsemantics[operands[0]]['shape'][:] # copy
         all_lbls = list(ops[0])
         if len(ops) > 1:
             for i,l in enumerate(list(ops[1])):
@@ -639,7 +638,6 @@ class NewVisitor(ast.NodeVisitor):
         if not no_assing:
             self.declarations.append(('d', 'T', 'l', self.tcurr))
             self.ops.append(("=", self.tcurr, self.tcurr, no_assing))
-        
         self.tsemantics[self.tcurr] = {'shape': shape, 'labels': labels, 'format': format}
         self.tcurr += 1
 
@@ -741,7 +739,7 @@ class NewVisitor(ast.NodeVisitor):
                 
                 rh1_lbls_num = [curr for x in list(lops) for  curr,v in enumerate(all_lbls) if x == v]
                 rh2_lbls_num = [curr for x in list(ops[i]) for  curr,v in enumerate(all_lbls) if x == v]
-                all_lbls_num = rh1_lbls_num[:]
+                all_lbls_num = rh1_lbls_num[:] # Copy
                 for n in rh2_lbls_num:
                     if n not in all_lbls_num:
                         all_lbls_num.append(n)
