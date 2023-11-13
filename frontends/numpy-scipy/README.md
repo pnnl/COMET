@@ -54,3 +54,10 @@ More information about the COMET compiler can be found at:
 
     -   For the actual "einsum" computation, follow the convention - "comet.einsum()"
     
+
+4. Currently the code included in a comet kernel (i.e. functions annotated with @comet.compile) should take as input only ndarrays and only operate on them with the following supported operations: 
+    - +, -, *, @ which work as intended for ndarrays
+    - A.transpose()  or comet.einsum('ij->ji', A) for transpose operations
+    - comet.einsum() for tensor contraction operations
+
+5. Control flow operations are not supported and should be handled outside of the kernel call
