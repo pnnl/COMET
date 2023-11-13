@@ -307,7 +307,7 @@ class NewVisitor(ast.NodeVisitor):
 
             self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'labels': op_semantics['labels'], 'format': format}
             # if not no_assign:
-            self.declarations.append(('d', 'T', 'l', self.tcurr, op_semantics['labels']*3))
+            self.declarations.append(('d', 'T', 'l', self.tcurr))
             self.ops.append(("=", self.tcurr, self.tcurr, no_assign))
         elif isinstance(node.op, ast.Sub):
             self.ops.append(("-", operands, indices+','+indices+'->'+indices, self.tcurr, [op_semantics['labels']]*3))
