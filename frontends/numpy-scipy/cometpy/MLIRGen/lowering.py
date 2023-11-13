@@ -53,8 +53,8 @@ files_to_cleanup = []
 def cleanup():
     for f in files_to_cleanup:
         if os.path.exists(f):
-            # os.remove(f)
-            pass
+            os.remove(f)
+            # pass
 atexit.register(cleanup)
 
 class memref_i64(Structure):
