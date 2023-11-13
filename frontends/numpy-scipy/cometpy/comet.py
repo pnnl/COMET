@@ -70,6 +70,8 @@ class NewVisitor(ast.NodeVisitor):
         self.ops = []
         self.iLabelsToVals = {}
         self.valsToILabels = {}
+        self.icurr2 = 0
+        self.valsToLabels = {}
         self.declarations = []
         self.uniqueLabels = []
         self.in_args = []
@@ -163,13 +165,20 @@ class NewVisitor(ast.NodeVisitor):
             labels = []
             format = get_format(self.inputs[i])
             self.declarations.append(('d', 'T', 'i', i, self.tcurr))
+            for s in self.inputs[i].shape :
+                if s not in self.valsToLabels:
+                    self.valsToLabels[s] = []
+                self.valsToLabels[s].append(self.icurr2)
+                self.iLabelsToVals[self.icurr2] = (s,format)
+                labels.append(self.icurr2)
+                self.icurr2 += 1
             self.tsemantics[self.tcurr] = {
                 'shape': list(self.inputs[i].shape),
-                'format': format
+                'format': format,
+                'labels': labels
                 }
             self.in_args.append(self.tcurr)
             self.tcurr += 1
-
         for stmt in node.body:
             NewVisitor.visit(self, stmt)
     
@@ -424,7 +433,7 @@ class NewVisitor(ast.NodeVisitor):
         if node.func.attr == "transpose":
             out_format = self.sp_mattr_conversions[op_semantics['format']]
             self.tsemantics[out_id] = {'shape': op_semantics['shape'][::-1], 'labels': op_semantics['labels'][::-1], 'format': out_format}
-            self.ops.append(("t", [obj], 'ij->ji', out_id))
+            self.ops.append(("t", [obj], 'ij->ji', out_id, [op_semantics['labels'], op_semantics['labels'][::-1]] ))
             # if not no_assign:
             self.declarations.append(('d', 'T', 'l', out_id))
             self.ops.append(("=", self.tcurr, self.tcurr, no_assign))
@@ -472,10 +481,37 @@ class NewVisitor(ast.NodeVisitor):
         res = list(llabels.split('->')[1])
         # ret_num = []
         all_real_lbls = []
+        all_dims = self.tsemantics[operands[0]]['shape']
         all_lbls = list(ops[0])
-        for l in list(ops[1]):
-            if l not in all_lbls:
-                all_lbls.append(l)
+        if len(ops) > 1:
+            for i,l in enumerate(list(ops[1])):
+                if l not in all_lbls:
+                    all_lbls.append(l)
+                    all_dims.append(self.tsemantics[operands[1]]['shape'][i])
+        
+        lbls_to_dims = {}
+        lbls_to_ilbls = {}
+        ilbls_seen = set()
+        for d,l in zip(all_dims, all_lbls):
+            lbls_to_dims[l] = d
+            assigned = False
+            for il in self.valsToLabels[d]:
+                if il not in ilbls_seen:
+                    lbls_to_ilbls[l] = il
+                    ilbls_seen.add(il)
+                    assigned = True
+                    break
+            if not assigned:
+                print("Creating ", self.icurr2)
+                lbls_to_ilbls[l] = self.icurr2
+                ilbls_seen.add(self.icurr2)
+                self.valsToLabels[d].append(self.icurr2)
+                self.iLabelsToVals[self.icurr2] = (d, DENSE)
+                self.icurr2 += 1
+        print(ops)
+        print(lbls_to_dims)
+        print(lbls_to_ilbls)
+        
         ret_num = [i for x in res for  i,v in enumerate(all_lbls) if x == v]
         # real_oplbls = []
         # for oplbls,op in zip(ops,operands):
@@ -509,95 +545,103 @@ class NewVisitor(ast.NodeVisitor):
         # retl = []
         # for n in ret_num:
         #     retl.append(all_real_lbls[n])
+        self.tsemantics[operands[0]]['labels'] = [lbls_to_ilbls[l] for l in list(ops[0])]
+        if len(ops) > 1:
+            self.tsemantics[operands[1]]['labels'] = [lbls_to_ilbls[l] for l in list(ops[1])]
+        # i = 0
+        # opl0, opl1 = list(ops[0]), list(ops[1])
+        # if 'labels' not in self.tsemantics[operands[0]]:
+        #     if 'labels' not in self.tsemantics[operands[1]]:
+        #         labels = []
+        #         for d in self.tsemantics[operands[1]]['shape']:
+        #             labels.append(self.icurr)
+        #             self.iLabelsToVals[self.icurr] = (d, self.tsemantics[operands[1]]['format'])
+        #             self.icurr += 1
+        #         self.tsemantics[operands[1]]['labels'] = labels
 
-        i = 0
-        opl0, opl1 = list(ops[0]), list(ops[1])
-        if 'labels' not in self.tsemantics[operands[0]]:
-            if 'labels' not in self.tsemantics[operands[1]]:
-                labels = []
-                for d in self.tsemantics[operands[1]]['shape']:
-                    labels.append(self.icurr)
-                    self.iLabelsToVals[self.icurr] = (d, self.tsemantics[operands[1]]['format'])
-                    self.icurr += 1
-                self.tsemantics[operands[1]]['labels'] = labels
+        #     labels = []
+        #     for i in range(len(opl0)):
+        #         j = 0
+        #         found = False
+        #         for j in range(len(opl1)):
+        #             if opl0[i] == opl1[j]:
+        #                 found = True
+        #                 if self.tsemantics[operands[0]]['format'] != DENSE:
+        #                     self.iLabelsToVals[self.tsemantics[operands[1]]['labels'][j]] = (self.tsemantics[operands[0]]['shape'][j], self.tsemantics[operands[0]]['format'])
+        #                 labels.append(self.tsemantics[operands[1]]['labels'][j])
+        #         if not found:
+        #             labels.append(self.icurr)
+        #             self.iLabelsToVals[self.icurr] = (self.tsemantics[operands[0]]['shape'][i], self.tsemantics[operands[0]]['format'])
+        #             self.icurr += 1
+        #     self.tsemantics[operands[0]]['labels'] = labels
+        # else:
+        #     if 'labels' not in self.tsemantics[operands[1]]:
+        #         labels = []
+        #         for j in range(len(opl1)):
+        #             i = 0
+        #             found = False
+        #             for i in range(len(opl0)):
+        #                 if opl0[i] == opl1[j]:
+        #                     found = True
+        #                     if self.tsemantics[operands[1]]['format'] != DENSE:
+        #                         self.iLabelsToVals[self.tsemantics[operands[0]]['labels'][i]] = (self.tsemantics[operands[1]]['shape'][j], self.tsemantics[operands[1]]['format'])
+        #                     labels.append(self.tsemantics[operands[0]]['labels'][i])
+        #             if not found:
+        #                 labels.append(self.icurr)
+        #                 self.iLabelsToVals[self.icurr] = (self.tsemantics[operands[1]]['shape'][j], self.tsemantics[operands[1]]['format'])
+        #                 self.icurr += 1
+        #         self.tsemantics[operands[1]]['labels'] = labels
 
-            labels = []
-            for i in range(len(opl0)):
-                j = 0
-                found = False
-                for j in range(len(opl1)):
-                    if opl0[i] == opl1[j]:
-                        found = True
-                        if self.tsemantics[operands[0]]['format'] != DENSE:
-                            self.iLabelsToVals[self.tsemantics[operands[1]]['labels'][j]] = (self.tsemantics[operands[0]]['shape'][j], self.tsemantics[operands[0]]['format'])
-                        labels.append(self.tsemantics[operands[1]]['labels'][j])
-                if not found:
-                    labels.append(self.icurr)
-                    self.iLabelsToVals[self.icurr] = (self.tsemantics[operands[0]]['shape'][i], self.tsemantics[operands[0]]['format'])
-                    self.icurr += 1
-            self.tsemantics[operands[0]]['labels'] = labels
-        else:
-            if 'labels' not in self.tsemantics[operands[1]]:
-                labels = []
-                for j in range(len(opl1)):
-                    i = 0
-                    found = False
-                    for i in range(len(opl0)):
-                        if opl0[i] == opl1[j]:
-                            found = True
-                            if self.tsemantics[operands[1]]['format'] != DENSE:
-                                self.iLabelsToVals[self.tsemantics[operands[0]]['labels'][i]] = (self.tsemantics[operands[1]]['shape'][j], self.tsemantics[operands[1]]['format'])
-                            labels.append(self.tsemantics[operands[0]]['labels'][i])
-                    if not found:
-                        labels.append(self.icurr)
-                        self.iLabelsToVals[self.icurr] = (self.tsemantics[operands[1]]['shape'][j], self.tsemantics[operands[1]]['format'])
-                        self.icurr += 1
-                self.tsemantics[operands[1]]['labels'] = labels
-
-        if self.tsemantics[operands[0]]['format'] != DENSE and  self.tsemantics[operands[1]]['format'] == DENSE:
-            while i < len(opl0):
-                j = 0
-                while j < len(opl1):
-                    if opl0[i] == opl1[j]:
-                        self.tsemantics[operands[1]]['labels'][j] = self.tsemantics[operands[0]]['labels'][i]
-                        break
-                    else:
-                        j +=1
-                i += 1
+        # if self.tsemantics[operands[0]]['format'] != DENSE and  self.tsemantics[operands[1]]['format'] == DENSE:
+        #     while i < len(opl0):
+        #         j = 0
+        #         while j < len(opl1):
+        #             if opl0[i] == opl1[j]:
+        #                 self.tsemantics[operands[1]]['labels'][j] = self.tsemantics[operands[0]]['labels'][i]
+        #                 break
+        #             else:
+        #                 j +=1
+        #         i += 1
                 
-        elif self.tsemantics[operands[0]]['format'] == DENSE and  self.tsemantics[operands[1]]['format'] != DENSE:
-            while i < len(opl0):
-                j = 0
-                while j < len(opl1):
-                    if opl0[i] == opl1[j]:
-                        self.tsemantics[operands[0]]['labels'][i] = self.tsemantics[operands[1]]['labels'][j]
-                        break
-                    else:
-                        j +=1
-                i += 1
+        # elif self.tsemantics[operands[0]]['format'] == DENSE and  self.tsemantics[operands[1]]['format'] != DENSE:
+        #     while i < len(opl0):
+        #         j = 0
+        #         while j < len(opl1):
+        #             if opl0[i] == opl1[j]:
+        #                 self.tsemantics[operands[0]]['labels'][i] = self.tsemantics[operands[1]]['labels'][j]
+        #                 break
+        #             else:
+        #                 j +=1
+        #         i += 1
         
         format = self.tsemantics[operands[0]]['format']
         if format != DENSE:
                 self.need_opt_comp_workspace = True
-        for op in operands[1:]:
-            format = self.sp_matmult_conversions[format][self.tsemantics[op]['format']]
-            if format != DENSE:
-                self.need_opt_comp_workspace = True
-        self.ops.append(("c", operands, llabels, self.tcurr, mask[0], mask[1], semiring, no_assing))
-        all_dims = self.tsemantics[operands[0]]['shape'][:]
 
+        all_dims = self.tsemantics[operands[0]]['shape'][:]
         all_lbls = self.tsemantics[operands[0]]['labels'][:]
-        for l,d in zip(self.tsemantics[operands[1]]['labels'],self.tsemantics[operands[1]]['shape']):
-            if l not in all_lbls:
-                all_lbls.append(l)
-                all_dims.append(d)
+        if len(ops) > 1:
+            for l,d in zip(self.tsemantics[operands[1]]['labels'],self.tsemantics[operands[1]]['shape']):
+                if l not in all_lbls:
+                    all_lbls.append(l)
+                    all_dims.append(d)
 
 
         shape = [all_dims[v] for v in ret_num]
         labels = [all_lbls[v] for v in ret_num]
+        if len(ops) > 1:
+            for op in operands[1:]:
+                format = self.sp_matmult_conversions[format][self.tsemantics[op]['format']]
+                if format != DENSE:
+                    self.need_opt_comp_workspace = True
+            self.ops.append(("c", operands, llabels, self.tcurr, mask[0], mask[1], semiring, no_assing, [self.tsemantics[operands[0]]['labels'], self.tsemantics[operands[1]]['labels'], labels]))
+        elif len(ops) == 1:
+            self.ops.append(("t", operands, llabels, self.tcurr, [self.tsemantics[operands[0]]['labels'], labels]))
+        print('->', res, labels)
         if not no_assing:
             self.declarations.append(('d', 'T', 'l', self.tcurr))
             self.ops.append(("=", self.tcurr, self.tcurr, no_assing))
+        
         self.tsemantics[self.tcurr] = {'shape': shape, 'labels': labels, 'format': format}
         self.tcurr += 1
 
@@ -691,14 +735,42 @@ class NewVisitor(ast.NodeVisitor):
             lops = ops[0]
 
             for i in range(1, len(operands)):
-                sum = set(lops) & set(ops[i]) 
-                all = set(lops) | set(ops[i]) 
+                all_lbls = list(lops)
+                for l in list(ops[i]):
+                    if l not in all_lbls:
+                        all_lbls.append(l)
+
+                
+                rh1_lbls_num = [curr for x in list(lops) for  curr,v in enumerate(all_lbls) if x == v]
+                rh2_lbls_num = [curr for x in list(ops[i]) for  curr,v in enumerate(all_lbls) if x == v]
+                all_lbls_num = rh1_lbls_num[:]
+                for n in rh2_lbls_num:
+                    if n not in all_lbls_num:
+                        all_lbls_num.append(n)
+
+                sum = set(rh1_lbls_num) & set(rh2_lbls_num) 
+                all = set(rh1_lbls_num) | set(rh2_lbls_num) 
                 ret = all - sum
+
+                ret_num = [i for x in ret for  i,v in enumerate(all_lbls_num) if x == v]
+                ret = [all_lbls[x] for x in ret_num]
+                    
+
+
+
                 if i == len(operands) -1 :
                     ret = res
                 tid = self.visit_Bin_Einsum_Call([loperand,operands[i]], lops+","+ops[i]+"->"+"".join(ret), mask, semiring, no_assing)
                 loperand = tid
                 lops = "".join(ret)
+            return tid
+        elif len(operands) == 1: # transpose
+
+            loperand = operands[0]
+            lops = ops[0]
+            ret = res
+            tid = self.visit_Bin_Einsum_Call([loperand], lops+"->"+"".join(ret), mask, semiring, no_assing)
+            lops = "".join(ret)
             return tid
 
         if not no_assing or len(operands) == 1: # Tranpose
@@ -824,9 +896,9 @@ def compile(flags, with_jit=True):
                 
                 if op[0] == 'c':
                     if op[4] != None:
-                        irb.add_statement(builders.ArithOp_Builder(op[3], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[3]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[3]]['labels']], op[0], label_map, op[4], op[5], v.tsemantics[op[4]]['labels'], op[6], op[7]  ).build_op())
+                        irb.add_statement(builders.ArithOp_Builder(op[3], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[3]]['format']], op[8], op[0], label_map, op[4], op[5], v.tsemantics[op[4]]['labels'], op[6], op[7]  ).build_op())
                     else:
-                        irb.add_statement(builders.ArithOp_Builder(op[3], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[3]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[3]]['labels']], op[0], label_map, op[4], op[5], None, op[6], op[7]  ).build_op())
+                        irb.add_statement(builders.ArithOp_Builder(op[3], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[3]]['format']],  op[8], op[0], label_map, op[4], op[5], None, op[6], op[7]  ).build_op())
                 elif op[0] == 's':
                     irb.add_statement(builders.TensorSumBuilder(op[-1], op[1], [v.tsemantics[t]['labels'] for t in op[1]], label_map).build_op())
                 elif op[0] == 'p':
@@ -836,7 +908,7 @@ def compile(flags, with_jit=True):
                 elif op[0] == '=':
                     irb.add_statement(builders.SetOp_Builder(op[1], op[2], [v.tsemantics[op[1]]['labels']], label_map, op[3] ).build_op())
                 else:
-                    irb.add_statement(builders.ArithOp_Builder(op[-1], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[-1]]['format']], [v.tsemantics[t]['labels'] for t in op[1]] +  [v.tsemantics[op[-1]]['labels']], op[0], label_map ).build_op())
+                    irb.add_statement(builders.ArithOp_Builder(op[3], op[1], op[2], [v.tsemantics[t]['format'] for t in op[1]] +  [v.tsemantics[op[3]]['format']], op[4], op[0], label_map ).build_op())
             irb.add_statement("return")
 
             outputs = []
