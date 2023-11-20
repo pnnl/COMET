@@ -172,6 +172,7 @@ class NewVisitor(ast.NodeVisitor):
                 self.iLabelsToVals[self.icurr2] = (s,format)
                 labels.append(self.icurr2)
                 self.icurr2 += 1
+
             self.tsemantics[self.tcurr] = {
                 'shape': list(self.inputs[i].shape),
                 'format': format,
@@ -181,6 +182,8 @@ class NewVisitor(ast.NodeVisitor):
             self.tcurr += 1
         for stmt in node.body:
             NewVisitor.visit(self, stmt)
+        for v in self.valsToLabels:
+            self.valsToLabels[s].sort(key=lambda l: self.iLabelsToVals[l][1], reverse=True)
     
     def visit_Assign(self, node): # We do not support multiple targets currently
 
@@ -336,8 +339,16 @@ class NewVisitor(ast.NodeVisitor):
                         self.icurr += 1
                     mask_sems['labels'] = labels
                 self.mask = None
-
-            return self.visit_Bin_Einsum_Call(operands, 'ij,jk->ik', mask, None, False)
+            op1 = self.tsemantics[operands[0]]
+            op2 = self.tsemantics[operands[1]]
+            if len(op1['shape']) == 2 and len(op2['shape']) == 2:
+                indices = 'ij,jk->ik'
+            elif len(op1['shape']) == 2 and len(op2['shape']) == 1:
+                indices = 'ij,j->i'
+            elif len(op1['shape']) == 1 and len(op2['shape']) == 2:
+                indices = 'j,jk->k'
+            
+            return self.visit_Bin_Einsum_Call(operands, indices, mask, None, False)
                 
             op1 = self.tsemantics[operands[0]]
             op2 = self.tsemantics[operands[1]]
