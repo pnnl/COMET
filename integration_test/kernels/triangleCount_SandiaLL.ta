@@ -22,12 +22,10 @@ def main() {
     IndexLabel [k] = [?];
 
     #Tensor Declarations
-    Tensor<double> L1([i, k], {CSR});
-    Tensor<double> L2([k, j], {CSR});
+    Tensor<double> L1([i, j], {CSR});
 
     #Tensor Data Initialization
-    L1[i, k] = comet_read(0, 2);   # LOWER_TRI_STRICT
-    L2[k, j] = comet_read(0, 2);   # Needed to set the value of j ...
+    L1[i, j] = comet_read(0, 2);   # LOWER_TRI_STRICT
 
     # Sandia_LL method: ntri = sum (sum ((L * L) .* L))
     ## 
