@@ -35,6 +35,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/IR/Dominance.h"
@@ -639,42 +640,16 @@ namespace
     int64_t maxSize = 0;
     comet_debug() << " ";
     comet_vdump(tensor);
+
+    Value lowerBound = builder.create<ConstantIndexOp>(loc, 0);
+    auto step = builder.create<ConstantIndexOp>(loc, 1);
+
     if (tensor.getType().isa<mlir::RankedTensorType>())
     { /// Dense tensor
       Value upperBound;
-      auto tensorTy = tensor.getType().cast<mlir::TensorType>();
-      maxSize = tensorTy.getDimSize(id);
+      auto dim = builder.create<tensor::DimOp>(loc,tensor, id);
+      upperBound = dim;
 
-      /// Check if dynamic size
-      /// Check upperBoundsize
-      if (maxSize == ShapedType::kDynamic)
-      {
-        /// Find defOp allocOp, check the parameter
-        comet_debug() << " Dynamic size ";
-        comet_pdump(tensor.getDefiningOp());                /// tensor_load
-        comet_vdump(tensor.getDefiningOp()->getOperand(0)); /// alloc <?x32xf64>
-        /// Check the order of the current dynamic size
-        auto rhs1_alloc = tensor.getDefiningOp()->getOperand(0);
-        std::vector<unsigned int> dyn_dims_vec;
-        for (unsigned i = 0; i < tensorTy.getRank(); i++)
-        {
-          if (tensorTy.isDynamicDim(i))
-          {
-            dyn_dims_vec.push_back(i);
-          }
-        } /// ? x ? x 20 x ?
-        auto rhs1_loc_dyn = findIndexInVector<unsigned int>(dyn_dims_vec, id);
-        comet_vdump(rhs1_alloc.getDefiningOp()->getOperand(rhs1_loc_dyn));
-
-        upperBound = rhs1_alloc.getDefiningOp()->getOperand(rhs1_loc_dyn);
-      }
-      else
-      {
-        upperBound = builder.create<ConstantIndexOp>(loc, maxSize);
-      }
-
-      Value lowerBound = builder.create<ConstantIndexOp>(loc, 0);
-      auto step = builder.create<ConstantIndexOp>(loc, 1);
       auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
       comet_debug() << " D Loop\n";
@@ -699,12 +674,10 @@ namespace
     {
       comet_debug() << "cur_idx is in tensor " << i << "\n";
 
-      Value lowerBound = builder.create<ConstantIndexOp>(loc, 0);
       auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
       std::vector<Value> upper_indices = {index_0};
       Value upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
       comet_vdump(allAllocs[i][4 * id]);
-      auto step = builder.create<ConstantIndexOp>(loc, 1);
       auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
 
       comet_debug() << " D Loop\n";
