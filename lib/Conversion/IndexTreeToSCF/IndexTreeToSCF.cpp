@@ -1204,10 +1204,6 @@ namespace
                             forLoop /* output */,
                             accessIndex /* output */);
           
-          if (block != "UNK") {
-            comet_debug() << "block " << block << " for format: " << format << "\n";
-          }
-          
           opstree->symbolicForOps.push_back(forLoop);
           opstree->symbolicAccessIdx.push_back(accessIndex);
 
