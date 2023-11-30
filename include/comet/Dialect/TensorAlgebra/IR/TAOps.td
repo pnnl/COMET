@@ -147,7 +147,7 @@ def DenseTensorDeclOp : TA_Op<"dense_tensor_decl", [Pure]> {
   }];
 
   /// The constant operation takes an attribute as the only input.
-  let arguments = (ins Variadic<Range>:$labels, StrAttr:$format);
+  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format);
 
   /// The constant operation returns a single value of TensorType.
   let results = (outs AnyTensor);
