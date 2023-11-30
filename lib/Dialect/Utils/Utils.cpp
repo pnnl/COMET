@@ -1867,18 +1867,19 @@ namespace mlir
 
     int64_t labelSize(Operation *op)
     {
-      auto range = cast<tensorAlgebra::IndexLabelStaticOp>(op);
-      auto min_idx = cast<ConstantIndexOp>(range.getMin().getDefiningOp());
-      auto max_idx = cast<ConstantIndexOp>(range.getMax().getDefiningOp());
-      auto step_idx = cast<ConstantIndexOp>(range.getStep().getDefiningOp());
+      return 0;
+      // auto range = cast<tensorAlgebra::IndexLabelStaticOp>(op);
+      // auto min_idx = cast<ConstantIndexOp>(range.getMin().getDefiningOp());
+      // auto max_idx = cast<ConstantIndexOp>(range.getMax().getDefiningOp());
+      // auto step_idx = cast<ConstantIndexOp>(range.getStep().getDefiningOp());
 
-      auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-      ;
-      auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-      ;
-      auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-      ;
-      return ((max - min) / step);
+      // auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+      // ;
+      // auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+      // ;
+      // auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+      // ;
+      // return ((max - min) / step);
     }
 
     bool hasSameOrder(const std::vector<unsigned> &initial, const std::vector<unsigned> &final)

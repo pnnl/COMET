@@ -366,10 +366,10 @@ void IndexTreeKernelFusionPass::createNewTensor(
                                                          builder.getIndexAttr(1));
 
     /// Create ta.index_label_static
-    mlir::Value index_label_op = builder.create<tensorAlgebra::IndexLabelStaticOp>(loc,
-                                                                                   constant_zero,
-                                                                                   load_op,
-                                                                                   constant_one);
+    mlir::Value index_label_op = builder.create<tensorAlgebra::IndexLabelStaticOp>(loc //,
+                                                                                  //  constant_zero,
+                                                                                  //  load_op,
+                                                                                  /* constant_one */);
 
     comet_debug() << "index_label_op\n";
     comet_vdump(index_label_op);

@@ -81,7 +81,8 @@ def TA_AnyTensor : AnyTypeOf<[TensorOf<[AnyType]>, SparseTensor]>;
 //===----------------------------------------------------------------------===//
 def IndexLabelStaticOp :
     TA_Op<"static_index_label", [Pure]>,
-    Arguments<(ins Index:$min, Index:$max, Index:$step)>,
+    // Arguments<(ins Index:$min, Index:$max, Index:$step)>,
+    // Arguments<(ins Index:$step)>,
     Results<(outs Range)> {
   let summary = "Create an index label type value, used to create views";
   let description = [{
@@ -93,10 +94,10 @@ def IndexLabelStaticOp :
       %3 = ta.static_index_label %0:%1:%2 : !ta.index_label
   }];
 
-  let builders = [OpBuilder<(ins "Value":$min, "Value":$max, "Value":$step), 
+  let builders = [OpBuilder<(ins ), 
     [{
       auto rangeType = RangeType::get($_builder.getContext());
-      build($_builder, $_state, rangeType, min, max, step);
+      build($_builder, $_state, rangeType);
     }]>];
   
 

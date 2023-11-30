@@ -1010,6 +1010,7 @@ namespace
       std::vector<Value> cur_indices;
       std::vector<int64_t> cur_memref;
       auto resultMemTy = convertTensorToMemRef(resultTensorType);
+      int j = 0;
       for (int i = 0; i < resultMemTy.getRank(); i++)
       {
         if (resultMemTy.isDynamicDim(i))
@@ -1017,13 +1018,13 @@ namespace
         else /// The constant dim size must NOT comes from the sparse matrix
           cur_memref.push_back(resultMemTy.getDimSize(i));
 
-        if (isa<tensorAlgebra::IndexLabelStaticOp>(op.getLabels()[i].getDefiningOp()))
-        {
-          auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(op.getLabels()[i].getDefiningOp());
-          auto hi = label_decl_value.getMax();
+        // if (isa<tensorAlgebra::IndexLabelStaticOp>(op.getLabels()[i].getDefiningOp()))
+        // {
+        //   auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(op.getLabels()[i].getDefiningOp());
+        //   auto hi = label_decl_value.getMax();
           if (resultMemTy.isDynamicDim(i))
-            cur_indices.push_back(hi); /// IndexCastOp
-        }
+            cur_indices.push_back(op.getLabels()[j++]); /// IndexCastOp
+        // }
       }
       llvm::ArrayRef<int64_t> cur_memref_arrayref = llvm::ArrayRef<int64_t>(cur_memref);
 
@@ -1617,7 +1618,7 @@ namespace
             auto step = label_decl_value.getStep();
             auto hi = array_sizes[4 * rank_size + 1 + i];
 
-            Value new_index = rewriter.create<IndexLabelStaticOp>(loc, lo, hi, step);
+            Value new_index = rewriter.create<IndexLabelStaticOp>(loc);
             comet_vdump(new_index);
             label_decl_value.replaceAllUsesWith(new_index);
           }
