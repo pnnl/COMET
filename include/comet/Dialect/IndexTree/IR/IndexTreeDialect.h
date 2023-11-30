@@ -31,6 +31,7 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
+#include "llvm/ADT/StringSet.h"
 
 /// Include the auto-generated header file containing the declaration of the index tree
 /// dialect.
@@ -49,6 +50,13 @@
 
 //===----------------------------------------------------------------------===//
 
+namespace mlir
+{
+    namespace indexTree
+    {
+        static const llvm::StringSet<> Semiring_intersectOps{"land", "times"};
+    }
+}
 
 // namespace mlir
 // {

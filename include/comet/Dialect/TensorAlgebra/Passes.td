@@ -42,48 +42,48 @@ def TensorAlgebraCheckImplicitTensorDecl : Pass<"check-implicit-tensor-decl"> {
   ];
 }
 
-//def TensorAlgebraDenseTensorDeclLowering : Pass<"lower-dense-tensor-decl"> {
-//  let summary = "";
-//  let description = [{
+def TensorAlgebraDenseTensorDeclLowering : Pass<"lower-dense-tensor-decl"> {
+  let summary = "";
+  let description = [{
 
-//      }];
-//  let constructor = "comet::createDenseTensorDeclLoweringPass()";
-//  let dependentDialects = [
-//    "comet::TensorAlgebraDialect"
-//  ];
-//}
+      }];
+  let constructor = "comet::createDenseTensorDeclLoweringPass()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect"
+  ];
+}
 
-//def TensorAlgebraSparseTensorDeclLowering : Pass<"lower-sparse-tensor-decl"> {
-//  let summary = "";
-//  let description = [{
+def TensorAlgebraSparseTensorDeclLowering : Pass<"lower-sparse-tensor-decl"> {
+  let summary = "";
+  let description = [{
 
-//      }];
-//  let constructor = "comet::createSparseTensorDeclLoweringPass()";
-//  let dependentDialects = [
-//    "comet::TensorAlgebraDialect"
-//  ];
-//}
+      }];
+  let constructor = "comet::createSparseTensorDeclLoweringPass()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect"
+  ];
+}
 
-//def TensorAlgebraSparseTempOutputTensorDeclLowering : Pass<"lower-sparse-temp-output-tensor-decl"> {
-//  let summary = "";
-//  let description = [{
+def TensorAlgebraSparseTempOutputTensorDeclLowering : Pass<"lower-sparse-temp-output-tensor-decl"> {
+  let summary = "";
+  let description = [{
 
-//      }];
-//  let constructor = "comet::createSparseTempOutputTensorDeclLoweringPass()";
-//  let dependentDialects = [
-//    "comet::TensorAlgebraDialect"
-//  ];
-//}
+      }];
+  let constructor = "comet::createSparseTempOutputTensorDeclLoweringPass()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect"
+  ];
+}
 
-//def TensorAlgebraSparseOutputTensorDeclLowering : Pass<"lower-sparse-output-tensor-decl"> {
-//  let summary = "";
-//  let description = [{
-//
-//      }];
-//  let constructor = "comet::createSparseOutputTensorDeclLoweringPass()";
-//  let dependentDialects = [
-//    "comet::TensorAlgebraDialect"
-//  ];
-//}
+def TensorAlgebraSparseOutputTensorDeclLowering : Pass<"lower-sparse-output-tensor-decl"> {
+  let summary = "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createSparseOutputTensorDeclLoweringPass()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect"
+  ];
+}
 
 #endif /// COMET_DIALECT_TENSORALGEBRA_PASSES

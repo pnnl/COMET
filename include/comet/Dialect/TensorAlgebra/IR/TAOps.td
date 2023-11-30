@@ -29,7 +29,7 @@
 #define TA_OPS
 
 
-include "mlir/IR/OpBase.td" 
+include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/FunctionInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
@@ -38,28 +38,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 
 include "comet/Dialect/TensorAlgebra/IR/TABase.td"
 include "comet/Dialect/TensorAlgebra/IR/TATypes.td"
-/// Provide a definition of the 'TA' dialect in the ODS framework so that we
-/// can define our operations.
-def TA_Dialect : Dialect {
-  let name = "ta";
-  let cppNamespace = "::mlir::tensorAlgebra"; 
-
-  /// We set this bit to generate the declarations for the dialect's type parsing
-  /// and printing hooks.
-  let useDefaultTypePrinterParser = 1;
-  
-}
-
-/// An implementation of IndexLabelType.
-def TA_IndexLabelType :
-    DialectType<TA_Dialect,
-                CPred<"$_self.isa<IndexLabelType>()">,
-                "IndexLabelType">;
-
-
-/// Whether a type is a IndexLabelType.
-def TAIsIndexLabelTypePred : CPred<"$_self.isa<IndexLabelType>()">;
-def IndexLabel : Type<TAIsIndexLabelTypePred, "indexlabel">;
+include "comet/Dialect/TensorAlgebra/IR/TAAttrs.td"
 
 /// Base class for ta dialect operations. This operation inherits from the base
 /// `Op` class in OpBase.td, and provides:
@@ -69,14 +48,33 @@ def IndexLabel : Type<TAIsIndexLabelTypePred, "indexlabel">;
 class TA_Op<string mnemonic, list<Trait> traits = []> :
     Op<TA_Dialect, mnemonic, traits>;
 
-/// Provide a definition for the TA SparseTensorType for use in ODS. 
-/// This allows for using SparseTensorType in a similar way to Tensor or MemRef.
-def SparseTensor :
-    Type<CPred<"$_self.isa<SparseTensorType>()">, "TA sparse tensor type">;
+//===----------------------------------------------------------------------===//
+/// Tensor Algebra Operations
+//===----------------------------------------------------------------------===//
+def IndexLabelStaticOp :
+    TA_Op<"static_index_label", [Pure]>,
+    Arguments<(ins Index:$min, Index:$max, Index:$step)>,
+    Results<(outs Range)> {
+  let summary = "Create an index label type value, used to create views";
+  let description = [{
+    The `ta.static_index_label` op creates a ta.static_index_label from 3 values of type `index`
+    that represent the min, max and step values of a range.
 
-/// Provide a definition of the types that are used within the TA dialect.
-def TA_AnyTensor : AnyTypeOf<[TensorOf<[AnyType]>, SparseTensor]>;
+    Example:
 
+      %3 = ta.static_index_label %0:%1:%2 : !ta.index_label
+  }];
+
+  let builders = [OpBuilder<(ins "Value":$min, "Value":$max, "Value":$step), 
+    [{
+      auto rangeType = RangeType::get($_builder.getContext());
+      build($_builder, $_state, rangeType, min, max, step);
+    }]>];
+  
+
+  //TODO(gkestor): add verifier
+  //let hasVerifier = 1;
+}
 
 //===----------------------------------------------------------------------===//
 /// Tensor Algebra Operations
@@ -293,7 +291,7 @@ def SparseTensorConstructOp : TA_Op<"spTensor_construct", [Pure]>{
   //Aval_size (size of value array) 
   //dim1_size, dim2_size (size of each dimension in sparse tensor) 
   //TODO(gkestor): might be better to have a struct with all the data elements
-  let arguments = (ins Variadic<AnyType>:$indices, I32Attr:$tensor_rank);
+  let arguments = (ins Variadic<AnyType>:$indices, I32Attr:$tensor_rank, TAFormatArrayAttr:$dimension_formats);
   let results = (outs TA_AnyTensor:$output);
 
   let assemblyFormat = [{

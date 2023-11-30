@@ -385,8 +385,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass(CodegenTarget));
 
     // Create new pass manager to optimize the index tree dialect
-    mlir::OpPassManager &itOptPM = optPM.nest<IndexTreeOp>();
-    itOptPM.addPass(mlir::comet::createIndexTreeDomainInferencePass());
+    // mlir::OpPassManager &itOptPM = optPM.nest<IndexTreeOp>();
+    optPM.addPass(mlir::comet::createIndexTreeDomainInferencePass());
 
     // if (OptKernelFusion)
     // {
@@ -409,8 +409,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     }
   }
 
-  return 0;
-
   /// =============================================================================
 
   /// =============================================================================
@@ -425,7 +423,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createTensorFillLoweringPass());
 
-  // /// =============================================================================
+  /// =============================================================================
 
   // /// TTGT reformulation for dense tensor contraction operations
   // if (IsLoweringTCtoTTGT)
@@ -466,12 +464,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createTensorFillLoweringPass());
     optPM.addPass(mlir::comet::createPCToLoopsLoweringPass());
 
-  //   /// =============================================================================
-  //   /// Lowering of other operations such as transpose, sum, etc. to SCF dialect
-  //   /// =============================================================================
-  //   /// If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
-  //   /// If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
-  //   optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
+    /// =============================================================================
+    /// Lowering of other operations such as transpose, sum, etc. to SCF dialect
+    /// =============================================================================
+    /// If it is a transpose of dense tensor, the rewrites rules replaces ta.transpose with linalg.copy.
+    /// If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
+    optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
 
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
@@ -580,7 +578,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   // if (mlir::failed(pm.run(*module)))
   //   return 4;
-  // return 0;
+  return 0;
 }
 
 int dumpAST()

@@ -53,13 +53,10 @@ class IndexTree_Op<string mnemonic, list<Trait> traits = []> :
 //===----------------------------------------------------------------------===//
 
 def IndexTreeOp : IndexTree_Op<"itree", 
-    [SingleBlockImplicitTerminator<"indexTree::YieldOp">,
-    IsolatedFromAbove,
-    RecursiveMemoryEffects]> {
+    [SingleBlockImplicitTerminator<"indexTree::YieldOp">]> {
   let summary = "Create a scope for index tree iteration";
   let description = [{}];
 
-  let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$region);
 }
@@ -103,11 +100,25 @@ def IndexTreeMaskOp : IndexTree_Op<"MaskOp", [Pure]>{
   let results = (outs TA_AnyTensor:$masked_tensor);
 }
 
-def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure]>{
+def IndexTreeLHSOperandOp : IndexTree_Op<"LHSOperandOp", [Pure, SameVariadicOperandSize]>{
   let summary = "";
   let description = [{}];
 
-  let arguments = (ins TA_AnyTensor:$tensor, Variadic<IndexTree_IndexNodeType>:$indices);
+  let arguments = (ins 
+    TA_AnyTensor:$tensor, 
+    Variadic<Index>:$pos,
+    Variadic<Index>:$crds);
+  let results = (outs IndexTree_OperandType:$result);
+}
+
+def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure, SameVariadicOperandSize]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins 
+    TA_AnyTensor:$tensor, 
+    Variadic<Index>:$pos,
+    Variadic<Index>:$crds);
   let results = (outs IndexTree_OperandType:$result);
 }
 
@@ -118,7 +129,7 @@ def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
 
   //TODO(gkestor): rethink the use of comp_worksp_opt, should we decouple that?
   /// MaskType attribute: {push, pull, auto, none}
-  let arguments = (ins IndexTree_IndexNodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring);
+  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring);
 
   let results = (outs TA_AnyTensor);
 
@@ -132,22 +143,23 @@ def IndexTreeTensorDomainOp : IndexTree_Op<"DomainOp", [Pure]>{
   let description = [{
   }];
 
-  let arguments = (ins TA_AnyTensor:$tensor, UI32Attr:$dim, OptionalAttr<StrAttr>:$type);
+  let arguments = (ins TA_AnyTensor:$tensor, UI32Attr:$dim, I32Attr:$format, Optional<AnyTypeOf<[Index, IndexTree_NodeType]>>:$parent);
 
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeMemRefDomainOp : IndexTree_Op<"MemRefDomainOp", [Pure]>{
+def IndexTreeSparseDomainOp : IndexTree_Op<"SparseDomainOp", [Pure]>{
   let summary = "";
   let description = [{
   }];
 
   let arguments = (ins 
-      StrAttr:$type, 
-      AnyMemRef:$pos,
-      AnyMemRef:$crd,
-      AnyMemRef:$value,
-      Optional<AnyTypeOf<[Index, IndexTree_NodeType]>>:$parent);
+      I32Attr:$format, 
+      AnyTensor:$pos,
+      AnyTensor:$crd,
+      Index:$pos_size,
+      Index:$cord_size,
+      Optional<AnyTypeOf<[Index, IndexTree_TensorAccessType]>>:$parent);
 
   let results = (outs IndexTree_DomainType:$domain);
 }
@@ -157,7 +169,7 @@ def IndexTreeDenseDomainOp : IndexTree_Op<"DenseDomainOp", [Pure]>{
   let description = [{
   }];
 
-  let arguments = (ins UI32:$min, UI32:$max, Optional<UI32>:$step);
+  let arguments = (ins AnyTypeOf<[UI32,Index]>:$max);
 
   let results = (outs IndexTree_DomainType:$domain);
 }
@@ -182,5 +194,29 @@ def IndexTreeDomainIntersectionOp : IndexTree_Op<"DomainIntersectionOp", [Pure]>
   let results = (outs IndexTree_DomainType:$domain);
 }
 
+def IndexTreeEmptyDomainOp : IndexTree_Op<"EmptyDomain", [Pure]>{
+  let summary = "";
+  let description = [{
+  }];
+
+  let results = (outs IndexTree_DomainType:$domain);
+}
+
+def IndexTreeIndexToTensorOp : IndexTree_Op<"IndexToTensorDim", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins 
+    TA_AnyTensor:$tensor, 
+    IndexTree_IndexNodeType:$index,
+    UI32Attr:$dim,
+    Optional<Index>:$prev_dim
+  );
+
+  let results = (outs
+    Index:$crd,
+    Index:$pos
+  );
+}
 
 #endif // INDEXTREE_OPS
