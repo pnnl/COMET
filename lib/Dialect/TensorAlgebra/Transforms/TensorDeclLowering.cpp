@@ -1067,19 +1067,21 @@ namespace
       std::vector<int64_t> cur_memref;
       auto resultMemTy = convertTensorToMemRef(resultTensorType.cast<TensorType>());
 
+      int j = 0;
       for (int i = 0; i < resultMemTy.getRank(); i++)
       {
-        if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
-        {
-          comet_vdump(tensor_decl_value.getLabels()[i]);
-          auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
-          auto hi = label_decl_value.getMax();
+      //   if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
+      //   {
+      //     comet_vdump(tensor_decl_value.getLabels()[i]);
+      //     auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
+      //     auto hi = label_decl_value.getMax();
           if (resultMemTy.isDynamicDim(i))
           {
-            cur_indices.push_back(hi); /// IndexCastOp
-            comet_vdump(hi);
+            cur_indices.push_back(tensor_decl_value.getLabels()[j++]);
+      //       cur_indices.push_back(hi); /// IndexCastOp
+      //       comet_vdump(hi);
           }
-        }
+      //   }
       }
 
       /// Check if this tensor is explicitly initialized with ta.fill operation
