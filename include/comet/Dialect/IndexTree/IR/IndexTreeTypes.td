@@ -23,6 +23,13 @@ def IndexTree_IndexNodeType : IndexTree_Type<"IndexNode", "index"> {
 
 def IndexTree_NodeType : AnyTypeOf<[IndexTree_TreeType, IndexTree_IndexNodeType]>;
 
+def IndexTree_TensorAccessType : IndexTree_Type<"TensorAccess", "tensor_access"> {
+  let summary = "Tensor access variabls";
+  let description = [{
+    Type for storing tensor access of index variables.
+  }];
+}
+
 def IndexTree_OperandType : IndexTree_Type<"Operand", "operand"> {
   let summary = "Operand for compute expression";
   let description = [{}];

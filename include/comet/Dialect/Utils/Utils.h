@@ -133,6 +133,7 @@ namespace mlir
                                        PatternRewriter &rewriter, Location loc, IndexType indexType);
     std::vector<Value> getFormatsValueInt(std::string formats_str, int rank_size,
                                           PatternRewriter &rewriter, Location loc, IntegerType intType);
+    std::vector<Attribute> getFormatsAttr(std::string formats_str, int rank_size, MLIRContext* ctx);
 
     double loopCostHeuristic(const std::vector<unsigned> &loopOrder, size_t dim_,
                              std::vector<unsigned> &sourceOrder, std::vector<unsigned> &destOrder);

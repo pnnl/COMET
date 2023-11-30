@@ -427,6 +427,11 @@ llvm::ArrayRef<mlir::Type> SparseTensorType::getElementTypes()
 }
 
 //===----------------------------------------------------------------------===//
+/// TableGen'd enum definitions
+//===----------------------------------------------------------------------===//
+#include "comet/Dialect/TensorAlgebra/IR/TAEnums.cpp.inc"
+
+//===----------------------------------------------------------------------===//
 /// TableGen'd op method definitions
 //===----------------------------------------------------------------------===//
 
@@ -441,6 +446,11 @@ llvm::ArrayRef<mlir::Type> SparseTensorType::getElementTypes()
 /// the point of registration of types and operations for the dialect.
 void TADialect::initialize()
 {
+  addAttributes<
+#define GET_ATTRDEF_LIST
+#include "comet/Dialect/TensorAlgebra/IR/TAAttrs.cpp.inc"
+  >();
+
   addOperations<
 #define GET_OP_LIST
 #include "comet/Dialect/TensorAlgebra/IR/TAOps.cpp.inc"

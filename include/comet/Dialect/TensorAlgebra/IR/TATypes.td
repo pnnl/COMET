@@ -14,14 +14,6 @@ def TA_RangeType :
 def TAIsRangeTypePred : CPred<"$_self.isa<RangeType>()">;
 def Range : Type<TAIsRangeTypePred, "range">;
 
-/// Base class for ta dialect operations. This operation inherits from the base
-/// `Op` class in OpBase.td, and provides:
-///   * The parent dialect of the operation.
-///   * The mnemonic for the operation, or the name without the dialect prefix.
-///   * A list of traits for the operation.
-class TA_Op<string mnemonic, list<Trait> traits = []> :
-    Op<TA_Dialect, mnemonic, traits>;
-
 /// Provide a definition for the TA SparseTensorType for use in ODS. 
 /// This allows for using SparseTensorType in a similar way to Tensor or MemRef.
 def SparseTensor :

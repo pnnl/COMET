@@ -1140,6 +1140,171 @@ namespace mlir
       return dim_format;
     }
 
+    // TODO (alokvk2): Not good to have this replicated 3 times. Ideally this is only used for "special" formats (i.e. CSR, COO etc.)
+    // And this converts it to a vector of TAFormatAttrs.
+    std::vector<Attribute> getFormatsAttr(std::string formats_str, int rank_size, MLIRContext* ctx)
+    {
+      auto format_unk = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::UNK);
+      auto format_dense = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::D);
+      auto format_compressed = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::CU);
+      auto format_compressednonunique = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::CN);
+      auto format_singleton = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::S);
+      /// read_input_sizes_2D_f64 or read_input_sizes_3D_f64
+      comet_debug() << "\n";
+      std::vector<Attribute> dim_format;
+
+      if (rank_size == 2)
+      { /// 2D
+        comet_debug() << " 2D\n";
+        /// Value dim0_format, dim1_format;
+        if (formats_str.compare(0, 3, "CSR") == 0)
+        {
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
+        }
+        else if (formats_str.compare(0, 4, "DCSR") == 0)
+        {
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
+        }
+        else if (formats_str.compare(0, 3, "COO") == 0)
+        { /// COO
+          dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
+        }
+        else if (formats_str.compare(0, 3, "ELL") == 0)
+        { /// ELL
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
+        }
+        else if (formats_str.compare(0, 4, "BCSR") == 0)
+        { /// BCSR
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+        }
+        else if (formats_str.compare(0, 3, "CSB") == 0)
+        { /// CSB
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_singleton);
+        }
+        else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
+        {
+          std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
+          for (auto n : format_vec)
+          {
+            if (n.compare(0, 1, "D") == 0)
+            {
+              dim_format.push_back(format_dense);
+            }
+            else if (n.compare(0, 2, "CU") == 0)
+            {
+              dim_format.push_back(format_compressed);
+            }
+            else if (n.compare(0, 2, "CN") == 0)
+            {
+              dim_format.push_back(format_compressednonunique);
+            }
+            else if (n.compare(0, 1, "S") == 0)
+            {
+              dim_format.push_back(format_singleton);
+            }
+          }
+        }
+        else
+        {
+          llvm::errs() << "Unsupported formats: " << formats_str << " (tensor dimes: " << rank_size << ") \n";
+        }
+      }
+      else if (rank_size == 3)
+      { /// 3D
+        comet_debug() << " 3D\n";
+        /// Value dim0_format, dim1_format, dim2_format;
+        if (formats_str.compare(0, 3, "CSF") == 0)
+        {
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_unk);
+        }
+        else if (formats_str.compare(0, 11, "ModeGeneric") == 0)
+        {
+          dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_unk);
+        }
+        else if (formats_str.compare(0, 3, "COO") == 0)
+        { /// COO
+          dim_format.push_back(format_compressednonunique);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_unk);
+        }
+        else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
+        {
+          std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
+          comet_debug() << " format_vec.size(): " << format_vec.size() << " \n";
+          /// print_vector<std::string>(format_vec);
+          for (auto n : format_vec)
+          {
+            comet_debug() << "Current format attribute: " << n << "---\n";
+            if (n.compare(0, 1, "D") == 0)
+            {
+              dim_format.push_back(format_dense);
+            }
+            else if (n.compare(0, 2, "CU") == 0)
+            {
+              dim_format.push_back(format_compressed);
+            }
+            else if (n.compare(0, 2, "CN") == 0)
+            {
+              dim_format.push_back(format_compressednonunique);
+            }
+            else if (n.compare(0, 1, "S") == 0)
+            {
+              dim_format.push_back(format_singleton);
+            }
+            else
+            {
+              llvm::errs() << "Uncorrect format attribute: " << n << "---\n";
+            }
+            comet_debug() << " dim_format.size(): " << dim_format.size() << " \n";
+          }
+          comet_debug() << " formats_str: " << formats_str << ", dim_format.size(): " << dim_format.size() << " \n";
+        }
+      }
+      else
+      {
+        llvm::errs() << "Unsupported formats: " << formats_str << " (tensor dimes: " << rank_size << ") \n";
+      }
+
+      comet_debug() << " print dim_format: ";
+      for (auto n : dim_format)
+      {
+        comet_debug() << n << " ";
+      }
+      comet_debug() << "\n";
+      return dim_format;
+    }
+
     unsigned int findIndexInVector_Value(std::vector<Value> vec, Value e)
     {
       /// Check if element e exists in vector

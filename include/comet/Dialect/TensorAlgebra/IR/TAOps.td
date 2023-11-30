@@ -29,7 +29,7 @@
 #define TA_OPS
 
 
-include "mlir/IR/OpBase.td" 
+include "mlir/IR/OpBase.td"
 include "mlir/IR/FunctionInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
@@ -38,6 +38,15 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 
 include "comet/Dialect/TensorAlgebra/IR/TABase.td"
 include "comet/Dialect/TensorAlgebra/IR/TATypes.td"
+include "comet/Dialect/TensorAlgebra/IR/TAAttrs.td"
+
+/// Base class for ta dialect operations. This operation inherits from the base
+/// `Op` class in OpBase.td, and provides:
+///   * The parent dialect of the operation.
+///   * The mnemonic for the operation, or the name without the dialect prefix.
+///   * A list of traits for the operation.
+class TA_Op<string mnemonic, list<Trait> traits = []> :
+    Op<TA_Dialect, mnemonic, traits>;
 
 //===----------------------------------------------------------------------===//
 /// Tensor Algebra Operations
@@ -278,7 +287,7 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
   //Aval_size (size of value array) 
   //dim1_size, dim2_size (size of each dimension in sparse tensor) 
   //TODO(gkestor): might be better to have a struct with all the data elements
-  let arguments = (ins Variadic<AnyType>:$indices, I32Attr:$tensor_rank);
+  let arguments = (ins Variadic<AnyType>:$indices, I32Attr:$tensor_rank, TAFormatArrayAttr:$dimension_formats);
   let results = (outs TA_AnyTensor:$output);
 
   let assemblyFormat = [{

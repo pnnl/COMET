@@ -42,6 +42,15 @@
 /// dialect.
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h.inc"
 
+/// Include the auto-generated enum declerations
+//===---------------------------------------------------------------------===//
+#include "comet/Dialect/TensorAlgebra/IR/TAEnums.h.inc"
+
+/// Include the auto-generated header file containing the declaration of the index tree
+/// types.
+#define GET_ATTRDEF_CLASSES
+#include "comet/Dialect/TensorAlgebra/IR/TAAttrs.h.inc"
+
 /// Include the auto-generated header file containing the declarations of the
 /// tensorAlgbra operations and also the operations of the Shape Inference Op Interface.
 //===----------------------------------------------------------------------===//

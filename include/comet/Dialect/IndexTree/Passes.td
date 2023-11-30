@@ -61,7 +61,7 @@ include "mlir/Pass/PassBase.td"
 //  ];
 //}
 
-def IndexTreeDomainInference : Pass<"indextree-domain-inference", "indexTree::IndexTreeOp"> {
+def IndexTreeDomainInference : Pass<"indextree-domain-inference", "func::FuncOp"> {
     let summary = "Infer domain of index variables";
     let description = [{
         Propogate domain values from tensors, through compute operations to index variables.
