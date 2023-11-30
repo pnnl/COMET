@@ -1539,7 +1539,7 @@ namespace
         mlir::Value hi = builder.create<ConstantIndexOp>(loc(labeldecl.loc()),
                                                          labeldecl.getEnd());
         value =
-            builder.create<IndexLabelStaticOp>(loc(labeldecl.loc()), lo, hi, step);
+            builder.create<IndexLabelStaticOp>(loc(labeldecl.loc()));
       }
 
       if (failed(declare(labeldecl.getName(), value)))
@@ -1579,24 +1579,24 @@ namespace
           {
             labels.push_back(var);
             auto range = cast<IndexLabelStaticOp>(var.getDefiningOp());
-            auto min_idx =
-                cast<ConstantIndexOp>(range.getMin().getDefiningOp());
-            auto max_idx =
-                cast<ConstantIndexOp>(range.getMax().getDefiningOp());
-            auto step_idx =
-                cast<ConstantIndexOp>(range.getStep().getDefiningOp());
+            // auto min_idx =
+            //     cast<ConstantIndexOp>(range.getMin().getDefiningOp());
+            // auto max_idx =
+            //     cast<ConstantIndexOp>(range.getMax().getDefiningOp());
+            // auto step_idx =
+            //     cast<ConstantIndexOp>(range.getStep().getDefiningOp());
 
-            auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-            auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-            auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-            if (max == mlir::ShapedType::kDynamic)
-            {
-              dims_sizes.push_back(mlir::ShapedType::kDynamic);
-            }
-            else
-            {
-              dims_sizes.push_back((max - min) / step);
-            }
+            // auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+            // auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+            // auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+            // if (max == mlir::ShapedType::kDynamic)
+            // {
+            //   dims_sizes.push_back(mlir::ShapedType::kDynamic);
+            // }
+            // else
+            // {
+            //   dims_sizes.push_back((max - min) / step);
+            // }
           }
           else if (isa<IndexLabelDynamicOp>(var.getDefiningOp()))
           {
@@ -2366,22 +2366,22 @@ namespace
         {
           comet_debug() << "\n";
           auto range = cast<IndexLabelStaticOp>(lbl.getDefiningOp());
-          auto min_idx = cast<ConstantIndexOp>(range.getMin().getDefiningOp());
-          auto max_idx = cast<ConstantIndexOp>(range.getMax().getDefiningOp());
-          auto step_idx = cast<ConstantIndexOp>(range.getStep().getDefiningOp());
+          // auto min_idx = cast<ConstantIndexOp>(range.getMin().getDefiningOp());
+          // auto max_idx = cast<ConstantIndexOp>(range.getMax().getDefiningOp());
+          // auto step_idx = cast<ConstantIndexOp>(range.getStep().getDefiningOp());
 
-          auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-          auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-          auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+          // auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+          // auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+          // auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
 
-          if (max == mlir::ShapedType::kDynamic)
-          {
-            dims_sizes.push_back(mlir::ShapedType::kDynamic);
-          }
-          else
-          {
-            dims_sizes.push_back((max - min) / step);
-          }
+          // if (max == mlir::ShapedType::kDynamic)
+          // {
+          //   dims_sizes.push_back(mlir::ShapedType::kDynamic);
+          // }
+          // else
+          // {
+          //   dims_sizes.push_back((max - min) / step);
+          // }
           comet_debug() << "\n";
         }
         else if (isa<IndexLabelDynamicOp>(lbl.getDefiningOp()))
@@ -2404,23 +2404,23 @@ namespace
       {
         if (isa<IndexLabelStaticOp>(lbl.getDefiningOp()))
         {
-          auto range = cast<IndexLabelStaticOp>(lbl.getDefiningOp());
-          auto min_idx = cast<ConstantIndexOp>(range.getMin().getDefiningOp());
-          auto max_idx = cast<ConstantIndexOp>(range.getMax().getDefiningOp());
-          auto step_idx = cast<ConstantIndexOp>(range.getStep().getDefiningOp());
+          // auto range = cast<IndexLabelStaticOp>(lbl.getDefiningOp());
+          // auto min_idx = cast<ConstantIndexOp>(range.getMin().getDefiningOp());
+          // auto max_idx = cast<ConstantIndexOp>(range.getMax().getDefiningOp());
+          // auto step_idx = cast<ConstantIndexOp>(range.getStep().getDefiningOp());
 
-          auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-          auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
-          auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+          // auto min = min_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+          // auto max = max_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
+          // auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
 
-          if (max == mlir::ShapedType::kDynamic)
-          {
-            dims_sizes.push_back(mlir::ShapedType::kDynamic);
-          }
-          else
-          {
-            dims_sizes.push_back((max - min) / step);
-          }
+          // if (max == mlir::ShapedType::kDynamic)
+          // {
+          //   dims_sizes.push_back(mlir::ShapedType::kDynamic);
+          // }
+          // else
+          // {
+          //   dims_sizes.push_back((max - min) / step);
+          // }
         }
         else if (isa<IndexLabelDynamicOp>(lbl.getDefiningOp()))
         {
