@@ -1532,7 +1532,7 @@ namespace
       if (labeldecl.getEnd() == mlir::ShapedType::kDynamic)
       {
         value =
-            builder.create<IndexLabelDynamicOp>(loc(labeldecl.loc()), lo, step);
+            builder.create<IndexLabelDynamicOp>(loc(labeldecl.loc()));
       }
       else
       {
@@ -1557,7 +1557,7 @@ namespace
           loc(labeldecl.loc()), labeldecl.getIncrement());
 
       mlir::Value value =
-          builder.create<IndexLabelDynamicOp>(loc(labeldecl.loc()), lo, step);
+          builder.create<IndexLabelDynamicOp>(loc(labeldecl.loc()));
       if (failed(declare(labeldecl.getName(), value)))
         return nullptr;
       return value;
