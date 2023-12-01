@@ -1156,7 +1156,19 @@ namespace
       comet_debug() << " --- " << formats_str << "\n";
 
       comet_debug() << " " << op.getNumOperands() << "\n";
-      auto rank_size = op.getNumOperands();
+      auto res = op.getResult();
+      mlir::TensorType type;
+      if(res.getType().isa<TensorType>())
+      {
+        type = res.getType().cast<TensorType>();
+      }
+      else if(res.getType().isa<SparseTensorType>())
+      {
+        type = res.getType().cast<SparseTensorType>().getElementTypes()[0].cast<TensorType>();
+      }
+      auto rank_size = type.getRank();
+      // auto rank_size = op.getResult().getType().cast<TensorType>().getRank();
+      // auto rank_size = op.getNumOperands();
 
       IndexType indexType = IndexType::get(op.getContext());
       FloatType f64Type = FloatType::getF64(op.getContext());
@@ -1613,14 +1625,14 @@ namespace
           comet_pdump(tensor_decl_value.getLabels()[i].getDefiningOp());
           if (isa<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
           {
-            auto label_decl_value = cast<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
-            auto lo = label_decl_value.getMin();
-            auto step = label_decl_value.getStep();
-            auto hi = array_sizes[4 * rank_size + 1 + i];
+            // auto label_decl_value = cast<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
+            // auto lo = label_decl_value.getMin();
+            // auto step = label_decl_value.getStep();
+            // auto hi = array_sizes[4 * rank_size + 1 + i];
 
-            Value new_index = rewriter.create<IndexLabelStaticOp>(loc);
-            comet_vdump(new_index);
-            label_decl_value.replaceAllUsesWith(new_index);
+            // Value new_index = rewriter.create<IndexLabelStaticOp>(loc);
+            // comet_vdump(new_index);
+            // label_decl_value.replaceAllUsesWith(new_index);
           }
           else if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
           {
