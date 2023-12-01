@@ -46,7 +46,6 @@
 /// tensorAlgbra operations and also the operations of the Shape Inference Op Interface.
 //===----------------------------------------------------------------------===//
 #define GET_OP_CLASSES
-#include "comet/Dialect/TensorAlgebra/IR/TAOps.h.inc"
 
 namespace mlir
 {
@@ -101,5 +100,6 @@ namespace mlir
 
   } /// end namespace tensorAlgebra
 } /// end namespace mlir
+#include "comet/Dialect/TensorAlgebra/IR/TAOps.h.inc"
 
 #endif /// TENSORALGEBRA_DIALECT_H_
