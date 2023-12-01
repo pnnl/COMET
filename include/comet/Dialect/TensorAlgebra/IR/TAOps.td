@@ -425,7 +425,18 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
     {
       std::vector<mlir::Value> labels;
       size_t start = 0;
-      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
+
+      mlir::TensorType type;
+      if(getRhs1().getType().isa<TensorType>())
+      {
+        type = getRhs1().getType().cast<TensorType>();
+      }
+      else if(getRhs1().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
+      {
+        type = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
+      }
+      size_t end = type.getRank();
+
       for(size_t i = start; i < end; i++ )
       {
         labels.push_back(getIndexLabels()[i]);
@@ -438,9 +449,31 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
     std::vector<mlir::Value> getRhs2IndexLabels()
     {
       std::vector<mlir::Value> labels;
-      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank());
-      size_t end = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
       
+      mlir::TensorType type1;
+      if(getRhs1().getType().isa<TensorType>())
+      {
+        type1 = getRhs1().getType().cast<TensorType>();
+      }
+      else if(getRhs1().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
+      {
+        type1 = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
+      }
+
+      mlir::TensorType type2;
+      if(getRhs2().getType().isa<TensorType>())
+      {
+        type2 = getRhs2().getType().cast<TensorType>();
+      }
+      else if(getRhs2().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
+      {
+        type2 = getRhs2().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
+      }
+
+      size_t start = type1.getRank();
+      
+      size_t end = static_cast<size_t>(type1.getRank() + type2.getRank());
+
       for(size_t i = start; i < end; i++ )
       {
         labels.push_back(getIndexLabels()[i]);
@@ -453,8 +486,29 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
     std::vector<mlir::Value> getResultIndexLabels()
     {
       std::vector<mlir::Value> labels;
-      size_t start = static_cast<size_t>(getRhs1().getType().cast<TensorType>().getRank() + getRhs2().getType().cast<TensorType>().getRank());
       size_t end = getIndexLabels().size();
+      
+      mlir::TensorType type1;
+      if(getRhs1().getType().isa<TensorType>())
+      {
+        type1 = getRhs1().getType().cast<TensorType>();
+      }
+      else if(getRhs1().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
+      {
+        type1 = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
+      }
+
+      mlir::TensorType type2;
+      if(getRhs2().getType().isa<TensorType>())
+      {
+        type2 = getRhs2().getType().cast<TensorType>();
+      }
+      else if(getRhs2().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
+      {
+        type2 = getRhs2().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
+      }
+
+      size_t start = type1.getRank() + type2.getRank();
 
       for(size_t i = start; i < end; i++ )
       {
@@ -492,7 +546,6 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
     {
       std::vector<mlir::Value> labels;
       size_t start = 0;
-      size_t end = 0;
       mlir::TensorType type;
       if(getRhs1().getType().isa<TensorType>())
       {
@@ -502,7 +555,7 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
       {
         type = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
       }
-      end = type.getRank();
+      size_t end = type.getRank();
 
       for(size_t i = start; i < end; i++ )
       {

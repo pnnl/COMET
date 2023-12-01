@@ -51,7 +51,7 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "tensor-decl-lowering"
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -185,7 +185,9 @@ namespace
     comet_vdump(cst_index_0);
     Value cst_index_1 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
     comet_vdump(cst_index_1);
-
+    comet_vdump(op);
+    comet_pdump(op.getOperation());
+    
     unsigned int tensor_rank = op.getOperation()->getNumOperands();
 
     std::vector<mlir::Value> array_sizes;
@@ -591,9 +593,22 @@ namespace
           ///                     pos_size is (2*rank+1) + 2*i, crd_size is (2*rank+1) + 2*i+1
           comet_debug() << " ";
           comet_vdump(dst_input);
+          dst_input.dump();
           comet_debug() << " ";
           comet_pdump(dst_input.getDefiningOp());
-          unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
+          mlir::TensorType type;
+          auto res = dst_input.getDefiningOp()->getResult(0);
+          if (res.getType().isa<TensorType>())
+          {
+            type = res.getType().cast<TensorType>();
+          }
+          else if (res.getType().isa<SparseTensorType>())
+          {
+            type = res.getType().cast<SparseTensorType>().getElementTypes()[0].cast<TensorType>();
+          }
+          dst_input.getDefiningOp()->dump();
+          // unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
+          unsigned int dst_rank = type.getRank();
           for (unsigned int i = 0; i < dst_rank; i++)
           {
             /// 4*rank+2 + i
