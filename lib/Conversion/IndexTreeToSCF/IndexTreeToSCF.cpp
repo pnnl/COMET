@@ -1177,10 +1177,18 @@ namespace
                            forLoop2 /* output */,
                            accessIndex2 /* output */);
           opstree->forOps.push_back(forLoop2);
-          opstree->accessIdx.push_back(accessIndex2);
+          //opstree->accessIdx.push_back(accessIndex2);
+          
+          builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
           
           // Insert the index calculations
           // i = n1 * A1_block_pos + bi
+          Value c0 = builder.create<ConstantIndexOp>(loc, 1);
+          std::vector<Value> indices = {c0};
+          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][2], indices);
+          Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
+          Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+          opstree->accessIdx.push_back(add1);
           
         } else if (block == "UNK") {
           opstree->forOps.push_back(forLoop);
@@ -1225,9 +1233,6 @@ namespace
           
           opstree->symbolicForOps.push_back(forLoop);
           opstree->symbolicAccessIdx.push_back(accessIndex);
-          
-          // Index calculations
-          // j = A2_crd[n2] * A2_block_pos + bj
 
           /// Restore the insertion point
           builder.restoreInsertionPoint(last_insertion_point);
@@ -1276,7 +1281,19 @@ namespace
                            forLoop2 /* output */,
                            accessIndex2 /* output */);
           opstree->forOps.push_back(forLoop2);
-          opstree->accessIdx.push_back(accessIndex2);
+          //opstree->accessIdx.push_back(accessIndex2);
+          
+          builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
+          
+          // Index calculations
+          // j = A2_crd[n2] * A2_block_pos + bj
+          Value c0 = builder.create<ConstantIndexOp>(loc, 1);
+          std::vector<Value> indices = {c0};
+          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][6], indices);
+          Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
+          Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+          opstree->accessIdx.push_back(add1);
+          
         } else if (block == "UNK") {
           opstree->forOps.push_back(forLoop);
           opstree->accessIdx.push_back(accessIndex);
