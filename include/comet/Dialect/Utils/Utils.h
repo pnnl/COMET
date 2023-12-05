@@ -118,6 +118,7 @@ namespace mlir
 
     // Tensor algebra dialect
     std::string getTensorFormat(std::vector<std::vector<std::string>> allFormats,
+                                std::vector<std::vector<std::string>> allBlocks,
                                 unsigned tensor_id);
     std::string getFormat(std::vector<unsigned> allLocs,
                           std::vector<std::vector<unsigned>> allPerms,

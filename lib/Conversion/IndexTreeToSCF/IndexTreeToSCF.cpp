@@ -1934,6 +1934,12 @@ namespace
     getRHSFormatsOfComputeOp(cur_op.getOperation()->getResult(0), rhsFormats);
     std::vector<std::vector<std::string>> lhsFormats;
     getLHSFormatsOfComputeOp(cur_op.getOperation()->getResult(0), lhsFormats);
+    
+    std::vector<std::vector<std::string>> rhsBlocks;
+    getRHSBlocksOfComputeOp(cur_op.getOperation()->getResult(0), rhsBlocks);
+    std::vector<std::vector<std::string>> lhsBlocks;
+    getLHSBlocksOfComputeOp(cur_op.getOperation()->getResult(0), lhsBlocks);
+    
     bool isMixedMode = checkIsMixedMode(rhsFormats);
     bool isElementwise = checkIsElementwise(rhsPerms);
     comet_debug() << " isElementwise:" << isElementwise << " isMixedMode: " << isMixedMode << "\n";
@@ -2040,8 +2046,60 @@ namespace
       std::vector<Value> allLoads(main_tensor_nums);
       for (auto m = 0; m < main_tensor_nums; m++)
       {
-        Value load_op = builder.create<memref::LoadOp>(loc,
-                                                       main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
+        Value load_op;
+        std::string sparse_format = getTensorFormat(rhsFormats, rhsBlocks, 0);
+        
+        /// TODO: This is very, very likely incorrect.
+        ///       We are just using this for testing
+        if (m == 0 && sparse_format == "BCSR") {
+          //llvm::errs() << "IN- BCSR\n";
+          /// Generate: index = n2*(A1_block_pos*A2_block_pos) + bi * A2_block_pos + bj
+          auto bj = allValueAccessIdx[0][0];
+          //llvm::errs() << "BJ: " << bj << "\n";
+          
+          auto bi = forLoops[2].getInductionVar();
+          //llvm::errs() << "bi: " << bi << "\n";
+          
+          Value c0 = builder.create<ConstantIndexOp>(loc, 0);
+          std::vector<Value> indices = {c0};
+          
+          // A1_block_pos * A2_block_pos
+          Value A1_block_pos = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[0][2], indices);
+          Value A2_block_pos = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[0][6], indices);
+          Value mul1 = builder.create<MulIOp>(loc, A1_block_pos, A2_block_pos);
+          
+          // mul2 = *n2
+          auto n2_loop = forLoops[1];
+          auto n2 = n2_loop.getInductionVar();
+          Value mul2 = builder.create<MulIOp>(loc, n2, mul1);
+          
+          // mul3 = bi * A2_block_pos
+          auto mul3 = builder.create<MulIOp>(loc, bi, A2_block_pos);
+          
+          // add1 = mul2 + mul3
+          auto add1 = builder.create<AddIOp>(loc, mul2, mul3);
+          auto add2 = builder.create<AddIOp>(loc, add1, bj);
+          
+          //for (auto v : forLoops) {
+          //  llvm::errs() << v << "\n";
+          //}
+          //for (auto v : allAccessIdx) {
+          //  for (auto a : v) llvm::errs() << a << "\n";
+          //  llvm::errs() << "---\n";
+          //}
+          
+          //Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
+          //Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+          
+          Value final_idx = add2;
+          
+          load_op = builder.create<memref::LoadOp>(loc,
+                                                 main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], final_idx);
+        } else {
+        load_op = builder.create<memref::LoadOp>(loc,
+                                                 main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
+        }
+        
         allLoads[m] = load_op;
         comet_debug() << " ";
         comet_vdump(load_op);
@@ -2063,7 +2121,7 @@ namespace
         }
 
         int sparse_inputtensor_id = dense_inputtensor_id ? 0 : 1;
-        std::string sparse_format = getTensorFormat(rhsFormats, sparse_inputtensor_id);
+        std::string sparse_format = getTensorFormat(rhsFormats, rhsBlocks, sparse_inputtensor_id);
 
         auto last_insertionPoint = builder.saveInsertionPoint();
 
@@ -2325,6 +2383,11 @@ namespace
       } /// end if (isMixedMode && isElementwise)
       else
       {
+      //llvm::errs() << "IN\n";
+      //llvm::errs() << "allLoads[0]: " << allLoads[0] << "\n";
+      //llvm::errs() << "allLoads[1]: " << allLoads[1] << "\n";
+      //llvm::errs() << "allLoads[2]: " << allLoads[2] << "\n";
+      
         /// calculate elementWise operation and reduction for general dense or mix mode computation (which has dense output)
         comet_debug()
             << "calculate elementWise operation and reduction for general dense or mix mode computation (which has dense output)\n";

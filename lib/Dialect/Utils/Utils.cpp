@@ -757,11 +757,14 @@ namespace mlir
     }
 
     /// Get the format of the tensor
-    std::string getTensorFormat(std::vector<std::vector<std::string>> allFormats, unsigned int tensor_id)
+    std::string getTensorFormat(std::vector<std::vector<std::string>> allFormats,
+                                std::vector<std::vector<std::string>> allBlocks,
+                                unsigned int tensor_id)
     {
       assert(tensor_id < allFormats.size() && "illegal tensor_id\n");
       std::string format_ret = "";
       std::vector<std::string> format = allFormats[tensor_id];
+      std::vector<std::string> block = allBlocks[tensor_id];
 
       if (format.size() == 1 && format[0].compare("Dense") == 0)
         format_ret = "Dense";
@@ -770,8 +773,10 @@ namespace mlir
 
       else if (format.size() == 1 && format[0].compare("CSR") == 0)
         format_ret = "CSR";
-      else if (format.size() == 2 && (format[0].compare("D") == 0 && format[1].compare("CU") == 0))
-        format_ret = "CSR";
+      else if (format.size() == 2 && (format[0].compare("D") == 0 && format[1].compare("CU") == 0)) {
+        if (block.size() == 2 && (block[0].compare("D") == 0 && block[1].compare("D") == 0)) format_ret = "BCSR";
+        else format_ret = "CSR";
+      }
 
       else if (format.size() == 1 && format[0].compare("COO") == 0)
         format_ret = "COO";
