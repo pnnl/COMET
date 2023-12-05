@@ -96,12 +96,19 @@ module {
             %21 = arith.muli %arg2, %20 : index
             %22 = arith.addi %21, %arg3 : index
             scf.for %arg4 = %c0 to %c4 step %c1 {
-              %23 = memref.load %alloc_17[%arg3] : memref<?xf64>
-              %24 = memref.load %alloc_19[%22, %arg4] : memref<?x4xf64>
-              %25 = memref.load %alloc_20[%15, %arg4] : memref<?x4xf64>
-              %26 = arith.mulf %23, %24 : f64
-              %27 = arith.addf %25, %26 : f64
-              memref.store %27, %alloc_20[%15, %arg4] : memref<?x4xf64>
+              %23 = memref.load %alloc_5[%c0] : memref<?xindex>
+              %24 = memref.load %alloc_13[%c0] : memref<?xindex>
+              %25 = arith.muli %23, %24 : index
+              %26 = arith.muli %arg3, %25 : index
+              %27 = arith.muli %arg1, %24 : index
+              %28 = arith.addi %26, %27 : index
+              %29 = arith.addi %28, %arg3 : index
+              %30 = memref.load %alloc_17[%29] : memref<?xf64>
+              %31 = memref.load %alloc_19[%22, %arg4] : memref<?x4xf64>
+              %32 = memref.load %alloc_20[%15, %arg4] : memref<?x4xf64>
+              %33 = arith.mulf %30, %31 : f64
+              %34 = arith.addf %32, %33 : f64
+              memref.store %34, %alloc_20[%15, %arg4] : memref<?x4xf64>
             }
           }
         }
