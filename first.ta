@@ -11,7 +11,7 @@ def main() {
 	IndexLabel [c] = [4];             
 
 	#Tensor Declarations
-	Tensor<double> A([a, b], {CSR});	  
+	Tensor<double> A([a, b], {BCSR});	  
 	Tensor<double> B([b, c], {Dense});
 	Tensor<double> C([a, c], {Dense});
 
