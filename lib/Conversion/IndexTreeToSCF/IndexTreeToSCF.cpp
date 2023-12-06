@@ -213,6 +213,7 @@ namespace
     // std::vector<scf::ForOp> forOps;         /// The (nested) for loops
     std::vector<AbstractLoopOp> forOps;         /// The (nested) for loops
     std::vector<Value> accessIdx;           /// The coordinate of accessing that dimension
+    std::vector<Value> inductionVars;
     // std::vector<scf::ForOp> symbolicForOps; /// For-loops in symbolic phase (if necessary)
     std::vector<AbstractLoopOp> symbolicForOps; /// For-loops in symbolic phase (if necessary)
     std::vector<Value> symbolicAccessIdx;   /// The accessing index for that for-loop in symbolic phase (if necessary)
@@ -464,35 +465,35 @@ namespace
     return ret;
   }
 
-  // Value findCorrespondingAlloc(Value &iOp)
-  // {
-  //   comet_debug() << "findCorrespondingAlloc for loop upper bound\n";
-  //   comet_vdump(iOp);
-  //   auto init_alloc = iOp.getDefiningOp()->getOperand(0);
-  //   comet_vdump(init_alloc);
+  Value findCorrespondingAlloc(Value &iOp)
+  {
+    comet_debug() << "findCorrespondingAlloc for loop upper bound\n";
+    comet_vdump(iOp);
+    auto init_alloc = iOp.getDefiningOp()->getOperand(0);
+    comet_vdump(init_alloc);
 
-  //   while (true)
-  //   {
-  //     if (isa<memref::AllocOp>(init_alloc.getDefiningOp()))
-  //     {
-  //       if (init_alloc.getType().dyn_cast<MemRefType>().getDimSize(0) != ShapedType::kDynamic)
-  //       {
-  //         return init_alloc;
-  //       }
-  //     }
-  //     if (init_alloc.getDefiningOp()->getNumOperands() > 0)
-  //     {
-  //       init_alloc = init_alloc.getDefiningOp()->getOperand(0);
-  //     }
-  //     else
-  //     {
-  //       /// Alloc related to another sparse tensor construct such as coming from sparse transpose
-  //       comet_debug() << "Return alloc op - comes from sptensor_construct\n";
-  //       comet_vdump(init_alloc);
-  //       return init_alloc;
-  //     }
-  //   }
-  // }
+    while (true)
+    {
+      if (isa<memref::AllocOp>(init_alloc.getDefiningOp()))
+      {
+        if (init_alloc.getType().dyn_cast<MemRefType>().getDimSize(0) != ShapedType::kDynamic)
+        {
+          return init_alloc;
+        }
+      }
+      if (init_alloc.getDefiningOp()->getNumOperands() > 0)
+      {
+        init_alloc = init_alloc.getDefiningOp()->getOperand(0);
+      }
+      else
+      {
+        /// Alloc related to another sparse tensor construct such as coming from sparse transpose
+        comet_debug() << "Return alloc op - comes from sptensor_construct\n";
+        comet_vdump(init_alloc);
+        return init_alloc;
+      }
+    }
+  }
 
   /// Get allocs for a tensor (sparse or dense)
   std::vector<Value> getAllocs(Value &tensor)
@@ -722,6 +723,7 @@ namespace
                         //  scf::ForOp &parent_forop,
                          AbstractLoopOp &parent_forop,
                          Value &parent_accessIdx,
+                         Value &parent_inductionVar,
                          llvm::StringRef &iteratorType,
                         //  scf::ForOp &forLoop /* output */,
                          AbstractLoopOp &forLoop /* output */,
@@ -757,25 +759,27 @@ namespace
 
           /// TODO (PT) Not sure why this (now commented out) code was needed but it breaks spgemm for cases like C = A * A
           ///  check if parent's and child's upper bounds come from the same sparse tensor
-          /// auto parent_UpperBound = parent_forop.getUpperBound();
-          /// comet_debug() << " parent upperBound:\n";
-          /// comet_vdump(parent_UpperBound);
-          /// auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
-          /// comet_debug() << " parent upperBound alloc\n";
-          /// comet_vdump(alloc_parent_bounds);
+          auto parent_UpperBound = parent_forop.getUpperBound();
+          comet_debug() << " parent upperBound:\n";
+          comet_vdump(parent_UpperBound);
+          auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
+          comet_debug() << " parent upperBound alloc\n";
+          comet_vdump(alloc_parent_bounds);          
+          comet_debug() << " child upperBound:\n";
+          comet_vdump(allAllocs[i][4 * id]);
+          auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
+          comet_debug() << " child upperBound alloc\n";
+          comet_vdump(alloc_child_bounds);
 
-          /// comet_debug() << " child upperBound:\n";
-          /// comet_vdump(allAllocs[i][4 * id]);
-          /// auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
-          /// comet_debug() << " child upperBound alloc\n";
-          /// comet_vdump(alloc_child_bounds);
-
-          // if (alloc_child_bounds == alloc_parent_bounds) /// m is the nearest loop induction variable
-          // {
-          //   comet_debug() << " THESAME: Parent and Child has the same alloc\n";
-          //   index_lower = parent_forop.getInductionVar();
-          // }
-          // else
+          if (alloc_child_bounds == alloc_parent_bounds) /// m is the nearest loop induction variable
+          {
+            comet_debug() << " THESAME: Parent and Child has the same alloc\n";
+            if (parent_inductionVar != nullptr)
+              index_lower = parent_inductionVar;
+            else
+              index_lower = parent_forop.getInductionVar();
+          }
+          else
           { /// m comes from the load
             comet_debug() << " DIFFERENT:Parent and Child has the different alloc\n";
             // comet_vdump(alloc_parent_bounds);
@@ -1177,6 +1181,7 @@ namespace
                            forLoop2 /* output */,
                            accessIndex2 /* output */);
           opstree->forOps.push_back(forLoop2);
+          opstree->inductionVars.push_back(forLoop.getInductionVar());
           builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
           
           // Insert the index calculations
@@ -1191,6 +1196,7 @@ namespace
         } else if (block == "UNK") {
           opstree->forOps.push_back(forLoop);
           opstree->accessIdx.push_back(accessIndex);
+          opstree->inductionVars.push_back(forLoop.getInductionVar());
         }
       }
       /// mix sparse dense tensor contraction, only one sparse tensor
@@ -1211,6 +1217,7 @@ namespace
           Value accessIndex;
           AbstractLoopOp parent_forop;
           Value parent_accessIdx;
+          Value parent_inductionVar;
           if (nullptr != opstree->parent)
           {
             parent_forop = opstree->parent->symbolicForOps.back();
@@ -1225,6 +1232,7 @@ namespace
                             allAllocs,
                             parent_forop,
                             parent_accessIdx,
+                            parent_inductionVar,
                             iteratorType,
                             forLoop /* output */,
                             accessIndex /* output */);
@@ -1246,10 +1254,12 @@ namespace
         Value accessIndex;
         AbstractLoopOp parent_forop;
         Value parent_accessIdx;
+        Value parent_inductionVar;
         if (nullptr != opstree->parent)
         {
           parent_forop = opstree->parent->forOps.back();
           parent_accessIdx = opstree->parent->accessIdx.back();
+          parent_inductionVar = opstree->parent->inductionVars.back();
         }
         genForOpFormat_CU(builder,
                           loc,
@@ -1260,6 +1270,7 @@ namespace
                           allAllocs,
                           parent_forop,
                           parent_accessIdx,
+                          parent_inductionVar,
                           iteratorType,
                           forLoop /* output */,
                           accessIndex /* output */);
@@ -1279,6 +1290,7 @@ namespace
                            forLoop2 /* output */,
                            accessIndex2 /* output */);
           opstree->forOps.push_back(forLoop2);
+          opstree->inductionVars.push_back(forLoop.getInductionVar());
           
           builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
           
@@ -1294,6 +1306,7 @@ namespace
         } else if (block == "UNK") {
           opstree->forOps.push_back(forLoop);
           opstree->accessIdx.push_back(accessIndex);
+          opstree->inductionVars.push_back(forLoop.getInductionVar());
         }
         
       }
@@ -1921,6 +1934,7 @@ namespace
                             std::vector<std::vector<Value>> &allAccessIdx,
                             std::vector<AbstractLoopOp> &forLoops /* numeric for-loop statements, from innermost to outermost*/,
                             std::vector<Value> &numeric_nested_forLoop_AccessIdx,
+                            std::vector<Value> &nested_InductionVars,
                             std::vector<AbstractLoopOp> &symbolic_nested_forops /* symbolic for-loops from innermost to outermost */,
                             std::vector<std::vector<int>> &rhsPerms,
                             SymbolicInfo &symbolicInfo,
@@ -2062,8 +2076,7 @@ namespace
           Value mul1 = builder.create<MulIOp>(loc, A1_block_pos, A2_block_pos);
           
           // mul2 = *n2
-          auto n2_loop = forLoops[1];
-          auto n2 = n2_loop.getInductionVar();
+          auto n2 = nested_InductionVars[1];
           Value mul2 = builder.create<MulIOp>(loc, n2, mul1);
           
           // mul3 = bi * A2_block_pos
@@ -2489,6 +2502,7 @@ namespace
                                           std::vector<OpsTree *> &ancestorsOps,
                                           std::vector<AbstractLoopOp> &nested_forops /* output */,
                                           std::vector<Value> &nested_AccessIdx /* output */,
+                                          std::vector<Value> &nested_InductionVars /* output */,
                                           std::vector<int64_t> &nested_forops_indices /* output */)
   {
 
@@ -2505,6 +2519,8 @@ namespace
           nested_forops.push_back(ancestorsOps[i]->forOps[j]);
           comet_debug() << "AccessIdx: " << ancestorsOps[i]->accessIdx[j] << "\n";
           nested_AccessIdx.push_back(ancestorsOps[i]->accessIdx[j]);
+          comet_debug() << "InductionVars: " << ancestorsOps[i]->inductionVars[j] << "\n";
+          nested_InductionVars.push_back(ancestorsOps[i]->inductionVars[j]);
         }
       }
     }
@@ -3847,11 +3863,13 @@ namespace
     /// 1. get the nested loops, from innermost to outermost order
     std::vector<AbstractLoopOp> nested_forops;
     std::vector<Value> nested_AccessIdx;
+    std::vector<Value> nested_InductionVars;
     std::vector<int64_t> nested_forops_indices; /// Each nested indexOp's index value (e.g., indices=[0])
     getNumericNestedForOpsAndAccessIdx(ancestorsWps,
                                        ancestorsOps,
                                        nested_forops /* output */,
                                        nested_AccessIdx /* output */,
+                                       nested_InductionVars /* output */,
                                        nested_forops_indices /* output */);
 
     comet_debug() << " nested_forops_indices.size(): " << nested_forops_indices.size() << "\n";
@@ -4219,6 +4237,7 @@ namespace
                            allAccessIdx,
                            nested_forops,
                            nested_AccessIdx,
+                           nested_InductionVars,
                            symbolic_nested_forops,
                            allPerms_rhs,
                            symbolicInfo,
@@ -4312,6 +4331,7 @@ namespace
                              allAccessIdx,
                              nested_forops,
                              nested_AccessIdx,
+                             nested_InductionVars,
                              symbolic_nested_forops,
                              allPerms_rhs,
                              symbolicInfo,

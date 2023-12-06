@@ -27,6 +27,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "comet/Conversion/IndexTreeToSCF/AbstractLoopOp.h"
+#include "mlir/IR/Value.h"
 
 std::unordered_set<std::string> AbstractLoopOp::supported_types = {"default",
                                                                    "serial",
@@ -68,6 +69,34 @@ void AbstractLoopOp::setLowerBound(mlir::Value &lowerBound)
   {
     auto handle = mlir::dyn_cast<scf::ForOp>(op);
     handle.setLowerBound(lowerBound);
+  }
+}
+
+mlir::Value AbstractLoopOp::getUpperBound(mlir::Value &upperBound)
+{
+  if (iteratorType == "parallel")
+  {
+    auto handle = mlir::dyn_cast<scf::ParallelOp>(op);
+    handle.getUpperBound();
+  }
+  else
+  {
+    auto handle = mlir::dyn_cast<scf::ForOp>(op);
+    handle.getUpperBound();
+  }
+}
+
+mlir::Value AbstractLoopOp::getLowerBound(mlir::Value &lowerBound)
+{
+  if (iteratorType == "parallel")
+  {
+    auto handle = mlir::dyn_cast<scf::ParallelOp>(op);
+    handle.getLowerBound();
+  }
+  else
+  {
+    auto handle = mlir::dyn_cast<scf::ForOp>(op);
+    handle.getLowerBound();
   }
 }
 

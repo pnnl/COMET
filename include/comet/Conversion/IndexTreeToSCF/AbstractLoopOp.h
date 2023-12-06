@@ -33,6 +33,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/Value.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/IR/Dominance.h"
@@ -108,6 +109,8 @@ public:
   }
 
   mlir::Block *getBody();
+  mlir::Value getLowerBound();
+  mlir::Value getUpperBound();
 
   mlir::Value getInductionVar();
 
