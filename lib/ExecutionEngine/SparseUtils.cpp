@@ -1825,6 +1825,34 @@ void read_input_sizes_2D(int32_t fileID,
               << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
     */
   }
+  /// BCSR
+  else if (A1format == Dense && A2format == Compressed_unique && A1_block_format == Dense && A2_block_format == Dense)
+  {
+    BCSRMatrix<T> bcsr_matrix(FileReader.coo_matrix);
+
+    desc_sizes->data[0] = 1;                            /// A1pos
+    desc_sizes->data[1] = 1;                            /// A1crd
+    desc_sizes->data[2] = 1;                            /// A1_block_pos
+    desc_sizes->data[3] = 1;                            /// A1_block_crd
+    desc_sizes->data[4] = bcsr_matrix.colptr_len;       /// A2pos
+    desc_sizes->data[5] = bcsr_matrix.colidx_len;       /// A2crd
+    desc_sizes->data[6] = 1;                            /// A2_block_pos
+    desc_sizes->data[7] = 1;                            /// A2_block_crd
+    desc_sizes->data[8] = bcsr_matrix.value_len;
+    desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
+    desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
+
+    /*****************DEBUG******************/
+    //std::cout << "BCSR detail: \n"
+    //           << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
+    //           << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
+    //           << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
+    //           << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
+    //           << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
+    //           << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
+    //           << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
+    /*****************DEBUG******************/
+  }
   /// CSR
   else if (A1format == Dense && A2format == Compressed_unique)
   {
@@ -1937,34 +1965,6 @@ void read_input_sizes_2D(int32_t fileID,
     //           << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
     /*****************DEBUG******************/
   }
-  /// BCSR
-  else if (A1format == Dense && A2format == Compressed_nonunique && A1_block_format == Dense && A2_block_format == Dense)
-  {
-    BCSRMatrix<T> bcsr_matrix(FileReader.coo_matrix);
-
-    desc_sizes->data[0] = 1;                            /// A1pos
-    desc_sizes->data[1] = 1;                            /// A1crd
-    desc_sizes->data[2] = 1;                            /// A1_block_pos
-    desc_sizes->data[3] = 1;                            /// A1_block_crd
-    desc_sizes->data[4] = bcsr_matrix.colptr_len;       /// A2pos
-    desc_sizes->data[5] = bcsr_matrix.colidx_len;       /// A2crd
-    desc_sizes->data[6] = 1;                            /// A2_block_pos
-    desc_sizes->data[7] = 1;                            /// A2_block_crd
-    desc_sizes->data[8] = bcsr_matrix.value_len;
-    desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
-    desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
-
-    /*****************DEBUG******************/
-    //std::cout << "BCSR detail: \n"
-    //           << "desc_sizes->data[0]: " << desc_sizes->data[0] << "\n"
-    //           << "desc_sizes->data[1]: " << desc_sizes->data[1] << "\n"
-    //           << "desc_sizes->data[2]: " << desc_sizes->data[2] << "\n"
-    //           << "desc_sizes->data[3]: " << desc_sizes->data[3] << "\n"
-    //           << "desc_sizes->data[4]: " << desc_sizes->data[4] << "\n"
-    //           << "desc_sizes->data[5]: " << desc_sizes->data[5] << "\n"
-    //           << "desc_sizes->data[6]: " << desc_sizes->data[6] << "\n";
-    /*****************DEBUG******************/
-  }
   /// CSB
   else if (A1format == Compressed_unique && A2format == singleton && A1_block_format == Dense && A2_block_format == Dense)
   {
@@ -2061,6 +2061,28 @@ void read_input_2D(int32_t fileID,
     desc_A1pos->data[1] = actual_num_nonzeros;
 
     FileReader.FileReaderWrapperFinalize(); /// clear coo_matrix
+  }
+  /// BCSR
+  else if (A1format == Dense && A1_block_format == Dense && A2format == Compressed_unique && A2_block_format == Dense)
+  {
+    BCSRMatrix<T> bcsr_matrix(FileReader.coo_matrix);
+    FileReader.FileReaderWrapperFinalize();
+    
+    desc_A1pos->data[0] = bcsr_matrix.num_blocks;
+    desc_A1block_pos->data[0] = bcsr_matrix.block_rows;
+    desc_A2block_pos->data[0] = bcsr_matrix.block_cols;
+    
+    for (uint64_t i = 0; i<bcsr_matrix.colptr_len; i++) {
+        desc_A2pos->data[i] = bcsr_matrix.colptr[i];
+    }
+    
+    for (uint64_t i = 0; i<bcsr_matrix.colidx_len; i++) {
+        desc_A2crd->data[i] = bcsr_matrix.colidx[i];
+    }
+    
+    for (uint64_t i = 0; i<bcsr_matrix.value_len; i++) {
+      desc_Aval->data[i] = bcsr_matrix.Aval[i];
+    }
   }
   /// CSR
   else if (A1format == Dense && A2format == Compressed_unique)
@@ -2225,28 +2247,6 @@ void read_input_2D(int32_t fileID,
     {
       desc_A2crd->data[i] = ellpack_matrix.col_crd[i];
       desc_Aval->data[i] = ellpack_matrix.Aval[i];
-    }
-  }
-  /// BCSR
-  else if (A1format == Dense && A1_block_format == Dense && A2format == Compressed_nonunique && A2_block_format == Dense)
-  {
-    BCSRMatrix<T> bcsr_matrix(FileReader.coo_matrix);
-    FileReader.FileReaderWrapperFinalize();
-    
-    desc_A1pos->data[0] = bcsr_matrix.num_blocks;
-    desc_A1block_pos->data[0] = bcsr_matrix.block_rows;
-    desc_A2block_pos->data[0] = bcsr_matrix.block_cols;
-    
-    for (uint64_t i = 0; i<bcsr_matrix.colptr_len; i++) {
-        desc_A2pos->data[i] = bcsr_matrix.colptr[i];
-    }
-    
-    for (uint64_t i = 0; i<bcsr_matrix.colidx_len; i++) {
-        desc_A2crd->data[i] = bcsr_matrix.colidx[i];
-    }
-    
-    for (uint64_t i = 0; i<bcsr_matrix.value_len; i++) {
-      desc_Aval->data[i] = bcsr_matrix.Aval[i];
     }
   }
   /// CSB

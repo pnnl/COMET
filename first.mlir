@@ -12,13 +12,12 @@ module {
     %c0_i32 = arith.constant 0 : i32
     %c3 = arith.constant 3 : index
     %c2 = arith.constant 2 : index
-    %c-1 = arith.constant -1 : index
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %c4 = arith.constant 4 : index
     %alloc = memref.alloc() : memref<13xindex>
     %cast = memref.cast %alloc : memref<13xindex> to memref<*xindex>
-    call @read_input_sizes_2D_f64(%c0_i32, %c0, %c0, %c3, %c-1, %cast, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, i32) -> ()
+    call @read_input_sizes_2D_f64(%c0_i32, %c0, %c0, %c1, %c0, %cast, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, i32) -> ()
     %0 = memref.load %alloc[%c0] : memref<13xindex>
     %1 = memref.load %alloc[%c1] : memref<13xindex>
     %2 = memref.load %alloc[%c2] : memref<13xindex>
@@ -75,9 +74,18 @@ module {
       memref.store %cst_0, %alloc_17[%arg0] : memref<?xf64>
     }
     %cast_18 = memref.cast %alloc_17 : memref<?xf64> to memref<*xf64>
-    call @read_input_2D_f64(%c0_i32, %c0, %c0, %c3, %c-1, %cast_2, %cast_4, %cast_6, %cast_8, %cast_10, %cast_12, %cast_14, %cast_16, %cast_18, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
+    call @read_input_2D_f64(%c0_i32, %c0, %c0, %c1, %c0, %cast_2, %cast_4, %cast_6, %cast_8, %cast_10, %cast_12, %cast_14, %cast_16, %cast_18, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
     %alloc_19 = memref.alloc(%10) {alignment = 32 : i64} : memref<?x4xf64>
     %alloc_20 = memref.alloc(%9) {alignment = 32 : i64} : memref<?x4xf64>
+    call @comet_print_memref_i64(%cast_2) : (memref<*xindex>) -> ()
+    call @comet_print_memref_i64(%cast_4) : (memref<*xindex>) -> ()
+    call @comet_print_memref_i64(%cast_6) : (memref<*xindex>) -> ()
+    call @comet_print_memref_i64(%cast_8) : (memref<*xindex>) -> ()
+    call @comet_print_memref_i64(%cast_10) : (memref<*xindex>) -> ()
+    call @comet_print_memref_i64(%cast_12) : (memref<*xindex>) -> ()
+    call @comet_print_memref_i64(%cast_14) : (memref<*xindex>) -> ()
+    call @comet_print_memref_i64(%cast_16) : (memref<*xindex>) -> ()
+    call @comet_print_memref_f64(%cast_18) : (memref<*xf64>) -> ()
     linalg.fill ins(%cst : f64) outs(%alloc_19 : memref<?x4xf64>)
     linalg.fill ins(%cst_0 : f64) outs(%alloc_20 : memref<?x4xf64>)
     %11 = memref.load %alloc_1[%c0] : memref<?xindex>
@@ -87,14 +95,32 @@ module {
         %13 = memref.load %alloc_5[%c0] : memref<?xindex>
         %14 = arith.muli %arg0, %13 : index
         %15 = arith.addi %14, %arg1 : index
-        %16 = memref.load %alloc_11[%arg1] : memref<?xindex>
-        scf.for %arg2 = %c0 to %c4 step %c1 {
-          %17 = memref.load %alloc_17[%c0] : memref<?xf64>
-          %18 = memref.load %alloc_19[%16, %arg2] : memref<?x4xf64>
-          %19 = memref.load %alloc_20[%15, %arg2] : memref<?x4xf64>
-          %20 = arith.mulf %17, %18 : f64
-          %21 = arith.addf %19, %20 : f64
-          memref.store %21, %alloc_20[%15, %arg2] : memref<?x4xf64>
+        %16 = arith.addi %arg1, %c1 : index
+        %17 = memref.load %alloc_9[%arg1] : memref<?xindex>
+        %18 = memref.load %alloc_9[%16] : memref<?xindex>
+        scf.for %arg2 = %17 to %18 step %c1 {
+          %19 = memref.load %alloc_11[%arg2] : memref<?xindex>
+          %20 = memref.load %alloc_13[%c0] : memref<?xindex>
+          scf.for %arg3 = %c0 to %20 step %c1 {
+            %21 = memref.load %alloc_13[%c1] : memref<?xindex>
+            %22 = arith.muli %19, %21 : index
+            %23 = arith.addi %22, %arg3 : index
+            scf.for %arg4 = %c0 to %c4 step %c1 {
+              %24 = memref.load %alloc_5[%c0] : memref<?xindex>
+              %25 = memref.load %alloc_13[%c0] : memref<?xindex>
+              %26 = arith.muli %24, %25 : index
+              %27 = arith.muli %arg3, %26 : index
+              %28 = arith.muli %arg1, %25 : index
+              %29 = arith.addi %27, %28 : index
+              %30 = arith.addi %29, %arg3 : index
+              %31 = memref.load %alloc_17[%30] : memref<?xf64>
+              %32 = memref.load %alloc_19[%23, %arg4] : memref<?x4xf64>
+              %33 = memref.load %alloc_20[%15, %arg4] : memref<?x4xf64>
+              %34 = arith.mulf %31, %32 : f64
+              %35 = arith.addf %33, %34 : f64
+              memref.store %35, %alloc_20[%15, %arg4] : memref<?x4xf64>
+            }
+          }
         }
       }
     }
@@ -106,4 +132,5 @@ module {
   func.func private @read_input_sizes_2D_f64(i32, index, index, index, index, memref<*xindex>, i32)
   func.func private @comet_sort_index(memref<*xindex>, index, index)
   func.func private @comet_print_memref_f64(memref<*xf64>)
+  func.func private @comet_print_memref_i64(memref<*xindex>)
 }

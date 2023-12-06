@@ -941,7 +941,14 @@ namespace mlir
       { /// 2D
         comet_debug() << " 2D\n";
         /// Value dim0_format, dim1_format;
-        if (formats_str.compare(0, 3, "CSR") == 0)
+        if (formats_str.compare(0, 4, "BCSR") == 0)
+        { /// BCSR
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_dense);
+        }
+        else if (formats_str.compare(0, 3, "CSR") == 0)
         {
           dim_format.push_back(format_dense);
           dim_format.push_back(format_unk);
@@ -968,13 +975,6 @@ namespace mlir
           dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
-        }
-        else if (formats_str.compare(0, 4, "BCSR") == 0)
-        { /// BCSR
-          dim_format.push_back(format_dense);
-          dim_format.push_back(format_dense);
-          dim_format.push_back(format_compressed);
-          dim_format.push_back(format_dense);
         }
         else if (formats_str.compare(0, 3, "CSB") == 0)
         { /// CSB

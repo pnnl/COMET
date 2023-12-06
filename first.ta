@@ -11,11 +11,12 @@ def main() {
 	IndexLabel [c] = [4];             
 
 	#Tensor Declarations
-	Tensor<double> A([a, b], {ELL});	  
+	Tensor<double> A([a, b], {BCSR});	
 	Tensor<double> B([b, c], {Dense});
 	Tensor<double> C([a, c], {Dense});
 
     A[a, b] = comet_read(0);
+    print(A);
 
 	#Tensor Fill Operation
 	B[b, c] = 1.0;
