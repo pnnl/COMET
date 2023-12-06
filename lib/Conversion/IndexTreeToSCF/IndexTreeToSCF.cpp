@@ -1177,8 +1177,6 @@ namespace
                            forLoop2 /* output */,
                            accessIndex2 /* output */);
           opstree->forOps.push_back(forLoop2);
-          //opstree->accessIdx.push_back(accessIndex2);
-          
           builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
           
           // Insert the index calculations
@@ -1281,7 +1279,6 @@ namespace
                            forLoop2 /* output */,
                            accessIndex2 /* output */);
           opstree->forOps.push_back(forLoop2);
-          //opstree->accessIdx.push_back(accessIndex2);
           
           builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
           
@@ -2052,13 +2049,9 @@ namespace
         /// TODO: This is very, very likely incorrect.
         ///       We are just using this for testing
         if (m == 0 && sparse_format == "BCSR") {
-          //llvm::errs() << "IN- BCSR\n";
           /// Generate: index = n2*(A1_block_pos*A2_block_pos) + bi * A2_block_pos + bj
           auto bj = allValueAccessIdx[0][0];
-          //llvm::errs() << "BJ: " << bj << "\n";
-          
           auto bi = forLoops[2].getInductionVar();
-          //llvm::errs() << "bi: " << bi << "\n";
           
           Value c0 = builder.create<ConstantIndexOp>(loc, 0);
           std::vector<Value> indices = {c0};
@@ -2079,18 +2072,6 @@ namespace
           // add1 = mul2 + mul3
           auto add1 = builder.create<AddIOp>(loc, mul2, mul3);
           auto add2 = builder.create<AddIOp>(loc, add1, bj);
-          
-          //for (auto v : forLoops) {
-          //  llvm::errs() << v << "\n";
-          //}
-          //for (auto v : allAccessIdx) {
-          //  for (auto a : v) llvm::errs() << a << "\n";
-          //  llvm::errs() << "---\n";
-          //}
-          
-          //Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
-          //Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
-          
           Value final_idx = add2;
           
           load_op = builder.create<memref::LoadOp>(loc,
@@ -2383,11 +2364,6 @@ namespace
       } /// end if (isMixedMode && isElementwise)
       else
       {
-      //llvm::errs() << "IN\n";
-      //llvm::errs() << "allLoads[0]: " << allLoads[0] << "\n";
-      //llvm::errs() << "allLoads[1]: " << allLoads[1] << "\n";
-      //llvm::errs() << "allLoads[2]: " << allLoads[2] << "\n";
-      
         /// calculate elementWise operation and reduction for general dense or mix mode computation (which has dense output)
         comet_debug()
             << "calculate elementWise operation and reduction for general dense or mix mode computation (which has dense output)\n";
