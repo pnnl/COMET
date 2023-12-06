@@ -1187,7 +1187,7 @@ namespace
           Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
           Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
           opstree->accessIdx.push_back(add1);
-          
+
         } else if (block == "UNK") {
           opstree->forOps.push_back(forLoop);
           opstree->accessIdx.push_back(accessIndex);
@@ -1287,7 +1287,7 @@ namespace
           Value c0 = builder.create<ConstantIndexOp>(loc, 1);
           std::vector<Value> indices = {c0};
           Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][6], indices);
-          Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
+          Value mul1 = builder.create<MulIOp>(loc, accessIndex, column);
           Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
           opstree->accessIdx.push_back(add1);
           
