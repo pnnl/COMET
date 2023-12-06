@@ -790,7 +790,8 @@ namespace mlir
 
       else if (format.size() == 1 && format[0].compare("ELL") == 0)
         format_ret = "ELL";
-      /// TODO(gkestor): Individual attributes
+      else if (format.size() == 2 && (format[0].compare("D") == 0 && format[1].compare("S") == 0 && block[0].compare("D") == 0))
+        format_ret = "ELL";
 
       else if (format.size() == 1 && format[0].compare("BCSR") == 0)
         format_ret = "BCSR";
