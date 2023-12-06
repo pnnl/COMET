@@ -12,12 +12,13 @@ module {
     %c0_i32 = arith.constant 0 : i32
     %c3 = arith.constant 3 : index
     %c2 = arith.constant 2 : index
+    %c-1 = arith.constant -1 : index
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %c4 = arith.constant 4 : index
     %alloc = memref.alloc() : memref<13xindex>
     %cast = memref.cast %alloc : memref<13xindex> to memref<*xindex>
-    call @read_input_sizes_2D_f64(%c0_i32, %c0, %c0, %c1, %c0, %cast, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, i32) -> ()
+    call @read_input_sizes_2D_f64(%c0_i32, %c0, %c0, %c3, %c-1, %cast, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, i32) -> ()
     %0 = memref.load %alloc[%c0] : memref<13xindex>
     %1 = memref.load %alloc[%c1] : memref<13xindex>
     %2 = memref.load %alloc[%c2] : memref<13xindex>
@@ -74,7 +75,7 @@ module {
       memref.store %cst_0, %alloc_17[%arg0] : memref<?xf64>
     }
     %cast_18 = memref.cast %alloc_17 : memref<?xf64> to memref<*xf64>
-    call @read_input_2D_f64(%c0_i32, %c0, %c0, %c1, %c0, %cast_2, %cast_4, %cast_6, %cast_8, %cast_10, %cast_12, %cast_14, %cast_16, %cast_18, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
+    call @read_input_2D_f64(%c0_i32, %c0, %c0, %c3, %c-1, %cast_2, %cast_4, %cast_6, %cast_8, %cast_10, %cast_12, %cast_14, %cast_16, %cast_18, %c1_i32) {filename = "SPARSE_FILE_NAME0"} : (i32, index, index, index, index, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xindex>, memref<*xf64>, i32) -> ()
     %alloc_19 = memref.alloc(%10) {alignment = 32 : i64} : memref<?x4xf64>
     %alloc_20 = memref.alloc(%9) {alignment = 32 : i64} : memref<?x4xf64>
     linalg.fill ins(%cst : f64) outs(%alloc_19 : memref<?x4xf64>)
@@ -83,34 +84,17 @@ module {
     scf.for %arg0 = %c0 to %11 step %c1 {
       %12 = memref.load %alloc_5[%c0] : memref<?xindex>
       scf.for %arg1 = %c0 to %12 step %c1 {
-        %13 = memref.load %alloc_5[%c1] : memref<?xindex>
+        %13 = memref.load %alloc_5[%c0] : memref<?xindex>
         %14 = arith.muli %arg0, %13 : index
         %15 = arith.addi %14, %arg1 : index
-        %16 = arith.addi %arg1, %c1 : index
-        %17 = memref.load %alloc_9[%arg1] : memref<?xindex>
-        %18 = memref.load %alloc_9[%16] : memref<?xindex>
-        scf.for %arg2 = %17 to %18 step %c1 {
-          %19 = memref.load %alloc_13[%c0] : memref<?xindex>
-          scf.for %arg3 = %c0 to %19 step %c1 {
-            %20 = memref.load %alloc_13[%c1] : memref<?xindex>
-            %21 = arith.muli %arg2, %20 : index
-            %22 = arith.addi %21, %arg3 : index
-            scf.for %arg4 = %c0 to %c4 step %c1 {
-              %23 = memref.load %alloc_5[%c0] : memref<?xindex>
-              %24 = memref.load %alloc_13[%c0] : memref<?xindex>
-              %25 = arith.muli %23, %24 : index
-              %26 = arith.muli %arg3, %25 : index
-              %27 = arith.muli %arg1, %24 : index
-              %28 = arith.addi %26, %27 : index
-              %29 = arith.addi %28, %arg3 : index
-              %30 = memref.load %alloc_17[%29] : memref<?xf64>
-              %31 = memref.load %alloc_19[%22, %arg4] : memref<?x4xf64>
-              %32 = memref.load %alloc_20[%15, %arg4] : memref<?x4xf64>
-              %33 = arith.mulf %30, %31 : f64
-              %34 = arith.addf %32, %33 : f64
-              memref.store %34, %alloc_20[%15, %arg4] : memref<?x4xf64>
-            }
-          }
+        %16 = memref.load %alloc_11[%arg1] : memref<?xindex>
+        scf.for %arg2 = %c0 to %c4 step %c1 {
+          %17 = memref.load %alloc_17[%c0] : memref<?xf64>
+          %18 = memref.load %alloc_19[%16, %arg2] : memref<?x4xf64>
+          %19 = memref.load %alloc_20[%15, %arg2] : memref<?x4xf64>
+          %20 = arith.mulf %17, %18 : f64
+          %21 = arith.addf %19, %20 : f64
+          memref.store %21, %alloc_20[%15, %arg2] : memref<?x4xf64>
         }
       }
     }
