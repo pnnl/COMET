@@ -823,12 +823,78 @@ struct EllpackMatrix
 
     /// Create the column coordinate list
     /// TODO: This terrible, but it works
+    uint64_t *col_crd1 = new uint64_t[num_rows * num_cols];
+    T* Aval1 = new T[num_rows * num_cols];
+    uint64_t index = 0;
+    
+    //puts("-------");
+    
+    // Iterate over each row, and add the non-zero elements
+    for (uint64_t i = 0; i<num_rows; i++) {
+        uint64_t cols = 0;
+        //printf("Row: %d\n", i);
+        for (uint64_t j = 0; j<num_nonzeros; j++) {
+            if (coo_matrix->coo_tuples[j].row == i) {
+                col_crd1[index] = coo_matrix->coo_tuples[j].col;
+                //printf("Add <- %d\n", col_crd[index]);
+                Aval1[index] = coo_matrix->coo_tuples[j].val;
+                ++index;
+                ++cols;
+            }
+        }
+        
+        if (cols < num_cols) {
+            // Loop while cols < num_cols
+            // - set col = 0
+            // - check if col is non-zero
+            // -- advance col
+            // -- repeat
+            int col = 0;
+            while (cols < num_cols) {
+                while (col < num_cols) {
+                    bool found = false;
+                    for (uint64_t j = 0; j<num_nonzeros; j++) {
+                        if (coo_matrix->coo_tuples[j].row == i) {
+                            if (coo_matrix->coo_tuples[j].col == col) {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!found) break;
+                    ++col;
+                }
+                
+                col_crd1[index] = col;
+                //printf("PAD Add <- %d\n", col_crd[index]);
+                Aval1[index] = 0;
+                ++index;
+                ++cols;
+                ++col;
+            }
+        }
+        
+        //puts("---");
+    }
+    
+    // Now arrange by column
     col_crd = new uint64_t[num_rows * num_cols];
     Aval = new T[num_rows * num_cols];
-    uint64_t index = 0;
+    index = 0;
+    
+    for (uint64_t i = 0; i<num_rows; i++) {
+        if (index >= num_rows*num_cols) break;
+        for (uint64_t j = i; j<num_rows*num_cols; j += num_cols) {
+            if (index >= num_rows*num_cols) break;
+            col_crd[index] = col_crd1[j];
+            Aval[index] = Aval1[j];
+            ++index;
+        }
+    }
 
     /// Build the column coordinates/value array
-    for (uint64_t i = 0; i < num_rows; i++)
+    /*for (uint64_t i = 0; i < num_rows; i++)
     {
       /// In this loop, get all non-zero column coordinates and track
       /// how many we have found
@@ -888,7 +954,28 @@ struct EllpackMatrix
           ++index;
         }
       }
-    }
+    }*/
+    
+    // Sort
+    /*int key, j;
+    T Aval_key;
+    for (int i = 1; i < num_rows*num_cols; i++) {
+        key = col_crd[i];
+        Aval_key = Aval[i];
+        j = i - 1;
+ 
+        // Move elements of arr[0..i-1],
+        // that are greater than key, 
+        // to one position ahead of their
+        // current position
+        while (j >= 0 && col_crd[j] > key) {
+            col_crd[j + 1] = col_crd[j];
+            Aval[j + 1] = Aval[j];
+            j = j - 1;
+        }
+        col_crd[j + 1] = key;
+        Aval[j + 1] = Aval_key;
+    }*/
   }
 
   /// Clear matrix
