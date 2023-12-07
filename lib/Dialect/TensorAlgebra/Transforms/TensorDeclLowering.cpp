@@ -32,6 +32,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
 #include <limits>
@@ -210,10 +211,10 @@ namespace
       /// std::vector<Value> dim_sizes;
       for (unsigned int i = 0; i < op.getOperation()->getNumOperands(); i++)
       {
-        if (isa<tensorAlgebra::IndexLabelStaticOp>(op.getOperation()->getOperand(i).getDefiningOp()))
+        // if (isa<tensorAlgebra::IndexLabelStaticOp>(op.getOperation()->getOperand(i).getDefiningOp()))
         {
-          Value indexlabelop = dyn_cast<tensorAlgebra::IndexLabelStaticOp>(op.getOperation()->getOperand(i).getDefiningOp());
-          dimSizes.push_back(indexlabelop.getDefiningOp()->getOperand(1));
+          // Value index = dyn_cast<IndexOp>(op.getOperation()->getOperand(i));
+          dimSizes.push_back(op.getOperation()->getOperand(i));
         }
       }
       /// The dim size is the second parameter of the
@@ -1854,7 +1855,7 @@ namespace
                              IndexTreeDialect,
                              bufferization::BufferizationDialect>();
 
-      target.addIllegalDialect<TADialect>();
+      // target.addIllegalDialect<TADialect>();
       target.addLegalOp<tensorAlgebra::PrintOp,
                         tensorAlgebra::GetTimeOp,
                         tensorAlgebra::PrintElapsedTimeOp,
@@ -1867,6 +1868,7 @@ namespace
                         tensorAlgebra::SparseOutputTensorDeclOp,
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::IndexLabelDynamicOp,
+                        tensorAlgebra::TensorDimOp,
                         func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
@@ -1915,6 +1917,7 @@ namespace
                         tensorAlgebra::DenseTensorDeclOp,
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::IndexLabelDynamicOp,
+                        tensorAlgebra::TensorDimOp,
                         func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
@@ -1926,6 +1929,85 @@ namespace
     }
   };
 
+  struct DimOpLowering : public OpRewritePattern<tensorAlgebra::TensorDimOp>
+  {
+    using OpRewritePattern<tensorAlgebra::TensorDimOp>::OpRewritePattern;
+    /**
+     * @brief :
+     * Step 1: Get format and dims
+     * Step 2: Emit alloc() instructions and ta.sptensor_construct operation.
+     * Step 3: Remove the TensorDimOp
+     */
+    LogicalResult matchAndRewrite(tensorAlgebra::TensorDimOp op,
+                                  PatternRewriter &rewriter) const final
+    {
+      /// Sparse output tensor declaration happens after lowering to index tree dialect
+      assert(isa<tensorAlgebra::TensorDimOp>(op));
+      comet_debug() << "TensorDimOpLowering in format begin\n";
+      comet_vdump(op);
+
+      auto tensor = op.getTensor();
+      if( tensor.getType().isa<SparseTensorType>() )
+      {
+        SparseTensorConstructOp spconstruct = cast<SparseTensorConstructOp>(tensor.getDefiningOp());
+        ::mlir::TypedValue< ::mlir::IndexType> idx = op.getIndex();
+        auto realIndex = getConstantIntValue(idx);
+        op.replaceAllUsesWith(spconstruct.getIndices()[18 + *realIndex]);
+        rewriter.eraseOp(op);
+      }
+      else if (tensor.getType().isa<TensorType>()) 
+      {
+        ::mlir::TypedValue< ::mlir::IndexType> idx = op.getIndex();
+        auto dim = rewriter.create<tensor::DimOp> (op.getLoc(), tensor.getType(), tensor,  idx);
+        op.replaceAllUsesWith(dim.getResult());
+        rewriter.eraseOp(op);
+      }
+
+      comet_debug() << "--------------TensorDimOpLowering in format end\n";
+      return success();
+    }
+  };
+
+  class DimOpLoweringPass
+      : public PassWrapper<DimOpLoweringPass, OperationPass<func::FuncOp>>
+  {
+  public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(DimOpLoweringPass)
+    void runOnOperation() override
+    {
+      MLIRContext *context = &getContext();
+      RewritePatternSet patterns(context);
+
+      patterns.insert<DimOpLowering>(patterns.getContext());
+
+      func::FuncOp function = getOperation();
+      ConversionTarget target(getContext());
+      target.addLegalDialect<ArithDialect,
+                             memref::MemRefDialect,
+                             scf::SCFDialect,
+                             bufferization::BufferizationDialect,
+                             IndexTreeDialect>();
+
+      target.addLegalOp<tensorAlgebra::PrintOp,
+                        tensorAlgebra::ReduceOp,
+                        tensorAlgebra::TransposeOp,
+                        tensorAlgebra::TensorFillOp,
+                        tensorAlgebra::GetTimeOp,
+                        tensorAlgebra::PrintElapsedTimeOp,
+                        tensorAlgebra::TensorSetOp,
+                        tensorAlgebra::SparseOutputTensorDeclOp,
+                        tensorAlgebra::TempSparseOutputTensorDeclOp,
+                        tensorAlgebra::IndexLabelDynamicOp,
+                        tensorAlgebra::IndexLabelStaticOp,
+                        tensorAlgebra::SparseTensorConstructOp>();
+
+      if (failed(applyPartialConversion(function, target, std::move(patterns))))
+      {
+        llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
+        signalPassFailure();
+      }
+    }
+  };
 }
 //===----------------------------------------------------------------------===//
 /// Early Lowering Passes end
@@ -1949,4 +2031,9 @@ std::unique_ptr<Pass> mlir::comet::createSparseTempOutputTensorDeclLoweringPass(
 std::unique_ptr<Pass> mlir::comet::createSparseOutputTensorDeclLoweringPass()
 {
   return std::make_unique<SparseOutputTensorDeclLoweringPass>();
+}
+
+std::unique_ptr<Pass> mlir::comet::createDimOpLoweringPass()
+{
+  return std::make_unique<DimOpLoweringPass>();
 }

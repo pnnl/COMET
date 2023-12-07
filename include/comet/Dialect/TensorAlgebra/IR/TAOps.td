@@ -258,7 +258,7 @@ def SparseOutputTensorDeclOp : TA_Op<"sparse_output_tensor_decl", [Pure]> {
   }];
 
   /// The constant operation takes an attribute as the only input.
-  let arguments = (ins Variadic<Range>:$labels, StrAttr:$format);
+  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format);
 
   /// The constant operation returns a single value of TensorType.
   let results = (outs AnyTensor);
@@ -644,6 +644,23 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
   //let hasVerifier = 1;
   
 }
+
+def TensorDimOp : TA_Op<"dim", [Pure]>{
+
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins  TA_AnyTensor:$tensor,
+                        Index:$index);
+  
+  let results = (outs Index);
+  //let hasCanonicalizer = 1; 
+
+  //TODO(gkestor): add verifier
+  //let hasVerifier = 1;
+}
+
 
 def TensorSetOp : TA_Op<"set_op", [Pure]>{
 
