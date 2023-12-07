@@ -886,6 +886,8 @@ namespace
                         std::vector<std::vector<Value>> &allAllocs,
                         std::vector<AbstractLoopOp> &opstree_forops,
                         AbstractLoopOp &parent_forop,
+                        Value &parent_accessIndex,
+                        //bool has_block,
                         llvm::StringRef &iteratorType,
                         AbstractLoopOp &forLoop /* output */,
                         Value &accessIndex /* output */)
@@ -909,12 +911,17 @@ namespace
           last_forop = parent_forop;
       }
 
-      std::vector<Value> crd_indices = {last_forop.getInductionVar()};
+      std::vector<Value> crd_indices;
+      if (parent_accessIndex == nullptr)
+        crd_indices = {last_forop.getInductionVar()};
+      else
+        crd_indices = {parent_accessIndex};
       auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
       /// Adding one iteration loop to provide consistency with the corresponding index tree.
       /// Index tree includes an index node for the dimension but "S" format for this dimension
       /// doesn't produce a loop.
+      //if (has_block == false) {
       Value lowerBound = builder.create<ConstantIndexOp>(loc, 0);
       Value upperBound = builder.create<ConstantIndexOp>(loc, 1);
       auto step = builder.create<ConstantIndexOp>(loc, 1);
@@ -1365,15 +1372,18 @@ namespace
         Value accessIndex;
         std::vector<AbstractLoopOp> &opstree_forops = opstree->forOps;
         AbstractLoopOp parent_forop;
+        Value parent_accessIndex = nullptr;
+        bool has_block = false;
         if (nullptr != opstree->parent)
         {
           parent_forop = opstree->parent->forOps.back();
         }
         
         /// If we have a block-dense loop, we need to generate that first
-        if (block == "DD") {
+        if (block == "D") {
+          has_block = true;
           //llvm::errs() << "S- Generate Block D\n";
-          scf::ForOp forLoop2;
+          AbstractLoopOp forLoop2;
           Value accessIndex2;
           genForOpFormat_D(builder,
                            loc,
@@ -1382,21 +1392,25 @@ namespace
                            i,
                            true,
                            allAllocs,
+                           iteratorType,
                            forLoop2 /* output */,
                            accessIndex2 /* output */);
           //opstree->forOps.push_back(forLoop2);
           //opstree->inductionVars.push_back(forLoop.getInductionVar());
-          //builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
-          //parent_forop = forLoop2;
+          builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
           
           // Insert the index calculations
-          // i = n1 * A1_block_pos + bi
-          //Value c0 = builder.create<ConstantIndexOp>(loc, 0);
-          //std::vector<Value> indices = {c0};
-          //Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][2], indices);
-          //Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
-          //Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+          // i = n * A1_pos + i
+          Value c0 = builder.create<ConstantIndexOp>(loc, 0);
+          std::vector<Value> indices = {c0};
+          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][0], indices);
+          Value mul1 = builder.create<MulIOp>(loc, forLoop2.getInductionVar(), column);
+          Value add1 = builder.create<AddIOp>(loc, mul1, parent_forop.getInductionVar());
+          parent_accessIndex = add1;
           //opstree->accessIdx.push_back(add1);
+          opstree->inductionVars.push_back(add1);
+          
+          parent_forop = forLoop2;
         }
         
         /// Generate: int j = A2crd[m];
@@ -1409,11 +1423,15 @@ namespace
                          allAllocs,
                          opstree_forops,
                          parent_forop,
+                         parent_accessIndex,
                          iteratorType,
+                         //has_block,
                          forLoop /* output */,
                          accessIndex /* output */);
         
+        //if (has_block == false) {
         opstree->forOps.push_back(forLoop);
+        //}
         opstree->accessIdx.push_back(accessIndex);
       }
       else
@@ -2131,9 +2149,14 @@ namespace
           
           load_op = builder.create<memref::LoadOp>(loc,
                                                  main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], final_idx);
+        } else if (m == 0 && sparse_format == "ELL") {
+        //for (auto v : nested_InductionVars) llvm::errs() << v << "\n";
+        //llvm::errs() << "---\n";
+          load_op = builder.create<memref::LoadOp>(loc,
+                                                   main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], nested_InductionVars[1]);
         } else {
-        load_op = builder.create<memref::LoadOp>(loc,
-                                                 main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
+          load_op = builder.create<memref::LoadOp>(loc,
+                                                   main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
         }
         
         allLoads[m] = load_op;
@@ -3918,7 +3941,7 @@ namespace
                                        nested_AccessIdx /* output */,
                                        nested_InductionVars /* output */,
                                        nested_forops_indices /* output */);
-
+    
     comet_debug() << " nested_forops_indices.size(): " << nested_forops_indices.size() << "\n";
     assert(
         nested_forops.size() == nested_forops_indices.size() && "nested_forops.size() != nested_forops_indices.size()");
