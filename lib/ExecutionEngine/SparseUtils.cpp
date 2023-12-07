@@ -1935,7 +1935,7 @@ void read_input_sizes_2D(int32_t fileID,
     desc_sizes->data[10] = dcsr_matrix.num_cols;
   }
   /// ELLPACK
-  else if (A1format == Dense && A2format == singleton && A1_block_format == Dense)
+  else if (A1format == Dense && A2format == singleton && A2_block_format == Dense)
   {
     /// Load the ellpack matrixs
 
@@ -1944,12 +1944,12 @@ void read_input_sizes_2D(int32_t fileID,
 
     desc_sizes->data[0] = 1;    /// A1pos
     desc_sizes->data[1] = 1;    /// A1crd
-    desc_sizes->data[2] = 1;    /// A1_block_pos
-    desc_sizes->data[3] = 1;    /// A1_block_crd
+    desc_sizes->data[2] = 0;    /// A1_block_pos
+    desc_sizes->data[3] = 0;    /// A1_block_crd
     desc_sizes->data[4] = 1;    /// A2pos
     desc_sizes->data[5] = cols; /// A2crd
-    desc_sizes->data[6] = 0;    /// A2_block_pos
-    desc_sizes->data[7] = 0;    /// A2_block_crd
+    desc_sizes->data[6] = 1;    /// A2_block_pos
+    desc_sizes->data[7] = 1;    /// A2_block_crd
     desc_sizes->data[8] = cols; /// Controls count of value dimension
     desc_sizes->data[9] = FileReader.coo_matrix->num_rows;
     desc_sizes->data[10] = FileReader.coo_matrix->num_cols;
@@ -2235,13 +2235,16 @@ void read_input_2D(int32_t fileID,
     }
   }
   /// ELLPACK
-  else if (A1format == Dense && A2format == singleton && A1_block_format == Dense)
+  else if (A1format == Dense && A2format == singleton && A2_block_format == Dense)
   {
     EllpackMatrix<T> ellpack_matrix(FileReader.coo_matrix);
     FileReader.FileReaderWrapperFinalize();
-
-    desc_A1pos->data[0] = ellpack_matrix.num_rows;
-    desc_A1block_pos->data[0] = ellpack_matrix.num_cols;
+    
+    // Originally: num_rows
+    desc_A1pos->data[0] = ellpack_matrix.num_cols;
+    
+    // Originally: num_cols
+    desc_A2block_pos->data[0] = ellpack_matrix.num_rows;
 
     for (uint64_t i = 0; i < ellpack_matrix.num_cols * ellpack_matrix.num_rows; i++)
     {
