@@ -321,6 +321,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createTensorFillLoweringPass());
+  optPM.addPass(mlir::comet::createDimOpLoweringPass());
 
   /// =============================================================================
 
