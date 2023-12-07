@@ -93,6 +93,8 @@ namespace mlir
         std::unique_ptr<Pass> createRemoveLabeledTensorOpsPass();
 
         std::unique_ptr<Pass> createFuncOpLoweringPass(); // Conversion
+
+        std::unique_ptr<Pass> createDimOpLoweringPass(); 
     }
 
 }
