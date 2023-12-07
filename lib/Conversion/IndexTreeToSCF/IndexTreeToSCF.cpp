@@ -1351,6 +1351,8 @@ namespace
                           iteratorType,
                           forLoop /* output */,
                           accessIndex /* output */);
+        opstree->forOps.push_back(forLoop);
+        opstree->accessIdx.push_back(accessIndex);
         
         
       }
@@ -1369,8 +1371,32 @@ namespace
         }
         
         /// If we have a block-dense loop, we need to generate that first
-        if (block == "D") {
+        if (block == "DD") {
           //llvm::errs() << "S- Generate Block D\n";
+          scf::ForOp forLoop2;
+          Value accessIndex2;
+          genForOpFormat_D(builder,
+                           loc,
+                           tensor,
+                           id,
+                           i,
+                           true,
+                           allAllocs,
+                           forLoop2 /* output */,
+                           accessIndex2 /* output */);
+          //opstree->forOps.push_back(forLoop2);
+          //opstree->inductionVars.push_back(forLoop.getInductionVar());
+          //builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
+          //parent_forop = forLoop2;
+          
+          // Insert the index calculations
+          // i = n1 * A1_block_pos + bi
+          //Value c0 = builder.create<ConstantIndexOp>(loc, 0);
+          //std::vector<Value> indices = {c0};
+          //Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][2], indices);
+          //Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
+          //Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+          //opstree->accessIdx.push_back(add1);
         }
         
         /// Generate: int j = A2crd[m];
