@@ -153,7 +153,9 @@ def IndexTreeSparseDomainOp : IndexTree_Op<"SparseDomainOp", [Pure]>{
   let description = [{
   }];
 
-  let arguments = (ins 
+  let arguments = (ins
+      TA_AnyTensor:$tensor,
+      UI32Attr:$dim, 
       I32Attr:$format, 
       AnyTensor:$pos,
       AnyTensor:$crd,

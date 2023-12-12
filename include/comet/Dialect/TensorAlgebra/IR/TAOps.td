@@ -379,7 +379,7 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
   
 }
 
-def TensorSetOp : TA_Op<"set_op", [Pure]>{
+def TensorSetOp : TA_Op<"set_op">{
 
   let summary = "";
   let description = [{

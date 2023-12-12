@@ -468,206 +468,14 @@ namespace
     void fillSubtree(Location loc, IRRewriter &rewriter, 
                      const SetVector<Operation*>& subtree,
                      const SmallVector<Value>& old_outputs,
-                     ValueRange new_outputs);
+                     ValueRange new_outputs,
+                     IRMapping& map);
     Value convertOperand(IndexTreeLHSOperandOp op, IRRewriter &rewriter);
     Value convertOperand(IndexTreeOperandOp op, IRRewriter &rewriter);
     mlir::LogicalResult convertCompute(Operation* op, IRRewriter& rewriter);
     mlir::LogicalResult convertIndexNode(Operation* op, IRRewriter& rewriter);
   };
 }
-
-struct IndexTreeTensorDomainOpLowering : public mlir::ConversionPattern {
-  IndexTreeTensorDomainOpLowering(mlir::MLIRContext *ctx)
-      : mlir::ConversionPattern(IndexTreeTensorDomainOp::getOperationName(), 1, ctx) {}
-
-  mlir::LogicalResult 
-  liftAccessOp(mlir::Operation *dependent_op, 
-               IndexTreeIndexToTensorOp access_op) const {
-    if(access_op->isBeforeInBlock(dependent_op))
-      return success();
-
-    Value prev_access_value;
-    if((prev_access_value = access_op.getPrevDim()))
-    {
-      if(mlir::failed(
-            liftAccessOp(
-              dependent_op,
-              llvm::cast<IndexTreeIndexToTensorOp>(prev_access_value.getDefiningOp())
-            )
-          ))
-        return failure();
-    }
-    access_op->moveBefore(dependent_op);
-    return success();
-  }
-
-  mlir::LogicalResult
-  matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
-                  mlir::ConversionPatternRewriter &rewriter) const final {
-    auto loc = op->getLoc();
-    auto context = rewriter.getContext();
-    indexTree::DomainType domain_type = indexTree::DomainType::get(context);
-    IndexTreeTensorDomainOp domain_op = llvm::cast<IndexTreeTensorDomainOp>(op);
-    uint32_t dim = domain_op.getDim();
-    Value new_domain;
-
-    Value tensor = domain_op.getTensor();
-    SparseTensorConstructOp construct_op = tensor.getDefiningOp<SparseTensorConstructOp>();
-    if(construct_op)
-    {
-      //Domain comes from a sparse tensor (may still be dense)
-      int32_t rank = construct_op.getTensorRank();
-      TensorFormatEnum format = construct_op.getDimensionFormats()[2 * dim].cast<TensorFormatEnumAttr>().getValue();
-
-      if(format == TensorFormatEnum::D)
-      {
-        Value max = construct_op.getOperand((8*rank) + 2 + dim); //TODO: Fix magic numbers
-        new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max);
-      } else
-      {
-        Value pos = construct_op.getOperand(4 * dim);
-        Value crd = construct_op.getOperand((4 * dim) + 1);
-        Value pos_size = construct_op.getOperand((4 * rank) + (4 * dim) + 1);
-        Value crd_size = construct_op.getOperand((4 * rank) + (4 * dim) + 2);
-        Value parent = domain_op.getParent();
-        if(!parent)
-        {
-          // Get associated index
-          IndexTreeIndicesOp index_op; 
-          Operation* use = *(op->user_begin());
-          // TODO: Fix danger of infinite loop!!!
-          while(!(index_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(use)))
-          {
-            use = *(use->user_begin());
-          }
-          assert(index_op);
-
-          if(dim == 0)
-          {
-            parent = nullptr;
-          } else
-          {
-            // Infer parent index variable
-            for(Operation* use : index_op->getUsers())
-            {
-              IndexTreeIndexToTensorOp access_op = llvm::dyn_cast<indexTree::IndexTreeIndexToTensorOp>(use);
-              if(!access_op || access_op.getTensor() != tensor || access_op.getDim() != dim)
-                continue;
-
-              parent = access_op.getPrevDim();
-              IndexTreeIndexToTensorOp prev_access_op = 
-                llvm::cast<indexTree::IndexTreeIndexToTensorOp>(parent.getDefiningOp());
-              if(mlir::failed(this->liftAccessOp(op, prev_access_op)))
-                return failure();
-
-              break;
-            }
-          }
-        }
-        new_domain = rewriter.create<IndexTreeSparseDomainOp>(
-          loc, domain_type, 
-          TensorFormatEnumAttr::get(context, format), 
-          pos, crd, pos_size, crd_size, parent);
-      }
-    }
-    else
-    {
-      //Domain is dense
-      //TODO (alokvk2): Figure out if we need to take the root index variable or the allocation
-      //Right now I don't know how to get back to the root index variable.
-      Operation* toTensor = tensor.getDefiningOp();
-      memref::AllocOp alloc = toTensor->getOperand(0).getDefiningOp<memref::AllocOp>();
-      Value max = alloc.getOperand(0);
-      new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max);
-    }
-    rewriter.replaceOp(op, new_domain);
-    return success();
-  }
-};
-
-struct SimplifyIntersectionOp : public OpRewritePattern<IndexTreeDomainIntersectionOp> {
-  SimplifyIntersectionOp(MLIRContext *context)
-      : OpRewritePattern<IndexTreeDomainIntersectionOp>(context, /*benefit=*/1) {}
-
-  mlir::LogicalResult
-  matchAndRewrite(IndexTreeDomainIntersectionOp op,
-                  mlir::PatternRewriter &rewriter) const override {
-    // Look through the input of the current transpose.
-    Value first_domain = op->getOperand(0);
-    SmallVector<Value, 2> domains;
-    SmallVector<Operation*> to_remove;
-    Operation* operand_op;
-    for(auto operand : op->getOperands())
-    {
-      if((operand_op = operand.getDefiningOp<IndexTreeDenseDomainOp>()))
-        to_remove.push_back(operand_op);
-      else
-        domains.push_back(operand);
-    }
-
-    if(domains.size() == 0) // All domains are dense
-      domains.push_back(first_domain); // Preserve first one
-
-    if(domains.size() == 1)
-    {
-      // Remove intersection op completely
-      rewriter.replaceOp(op, {domains[0]});
-    } else if (domains.size() < op->getNumOperands())
-    {
-      // Keep only non-dense operands
-      auto loc = op->getLoc();
-      auto context = rewriter.getContext();
-      indexTree::DomainType domain_type = indexTree::DomainType::get(context);
-      Value new_domain = rewriter.create<IndexTreeDomainIntersectionOp>(loc, domain_type, domains);
-      rewriter.replaceOp(op, {new_domain});
-    } else
-    {
-      // The intersection can't be simplified
-      return failure();
-    }
-
-    // Delete newly unused values
-    for(Operation* unused_op : to_remove)
-    {
-      if(unused_op->use_empty())
-        rewriter.eraseOp(unused_op);
-    }
-
-    return success();
-  }
-};
-
-struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
-  SimplifyUnionOp(mlir::MLIRContext *context)
-      : OpRewritePattern<IndexTreeDomainUnionOp>(context, /*benefit=*/1) {}
-
-  mlir::LogicalResult
-  matchAndRewrite(IndexTreeDomainUnionOp op,
-                  mlir::PatternRewriter &rewriter) const override {
-    bool success = false;
-    Operation* operand_op;
-    for(auto operand : op->getOperands())
-    {
-      if((operand_op = operand.getDefiningOp<IndexTreeDenseDomainOp>())){
-        rewriter.replaceOp(op, {operand});
-        success = true;
-        break;
-      }
-    }
-
-    if(!success)
-      return failure();
-
-    
-    for(auto operand : op->getOperands())
-    {
-      operand_op = operand.getDefiningOp();
-      if(operand_op->use_empty())
-        rewriter.eraseOp(operand_op);
-    }
-    return failure();
-  }
-};
 
 Value
 LowerIndexTreeToSCFPass::convertOperand(IndexTreeOperandOp op, IRRewriter &rewriter)
@@ -789,9 +597,9 @@ LowerIndexTreeToSCFPass::fillSubtree(Location loc,
                                      IRRewriter &rewriter, 
                                      const SetVector<Operation*>& subtree,
                                      const SmallVector<Value>& old_outputs,
-                                     ValueRange new_outputs)
+                                     ValueRange new_outputs,
+                                     IRMapping& map)
 {
-  IRMapping map;
   for(Operation* child : subtree)
   {
     rewriter.clone(*child, map);
@@ -860,8 +668,14 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
       for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, loop_init_args);
       crd = for_loop.getInductionVar();
 
+      IRMapping map;
+      unsigned init_arg_idx = 0;
+      for(Value init_arg : loop_init_args){
+        map.map(init_arg, for_loop.getRegionIterArg(init_arg_idx));
+        init_arg_idx += 1;
+      }
       rewriter.setInsertionPointToStart(for_loop.getBody());
-      fillSubtree(loc, rewriter, subtree, loop_outputs, for_loop.getResults());
+      fillSubtree(loc, rewriter, subtree, loop_outputs, for_loop.getResults(), map);
       rewriter.setInsertionPoint(for_loop.getBody()->getTerminator());
       loop_end = rewriter.saveInsertionPoint();
       rewriter.setInsertionPointAfter(for_loop);
@@ -893,8 +707,15 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
           rewriter.setInsertionPointToStart(loop_body);
           Value crd_idx = for_loop.getInductionVar();
           crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
+
+          IRMapping map;
+          unsigned init_arg_idx = 0;
+          for(Value init_arg : loop_init_args){
+            map.map(init_arg, for_loop.getRegionIterArg(init_arg_idx));
+            init_arg_idx += 1;
+          }
           
-          fillSubtree(loc, rewriter, subtree, loop_outputs, for_loop.getResults());
+          fillSubtree(loc, rewriter, subtree, loop_outputs, for_loop.getResults(), map);
           rewriter.setInsertionPoint(for_loop.getBody()->getTerminator());
           loop_end = rewriter.saveInsertionPoint();
           rewriter.setInsertionPointAfter(for_loop);
@@ -990,18 +811,6 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
 
 void LowerIndexTreeToSCFPass::runOnOperation()
 {
-  mlir::ConversionTarget target(getContext());
-  target.addLegalDialect<indexTree::IndexTreeDialect>();  
-  target.addIllegalOp<indexTree::IndexTreeTensorDomainOp>();
-  mlir::RewritePatternSet tensor_domain_patterns(&getContext());
-  tensor_domain_patterns.add<IndexTreeTensorDomainOpLowering>(&getContext());
-  if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(tensor_domain_patterns))))
-    signalPassFailure();
-
-  mlir::RewritePatternSet simplify_domain_patterns(&getContext());
-  simplify_domain_patterns.add<SimplifyIntersectionOp>(&getContext());
-  mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(simplify_domain_patterns));
-
   std::vector<IndexTreeRootOp> iTreeRoots;
   func::FuncOp funcOp = getOperation();
   funcOp.walk([&](IndexTreeRootOp op){ iTreeRoots.push_back(op); });
