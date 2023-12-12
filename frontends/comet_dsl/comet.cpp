@@ -471,6 +471,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
     optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
 
+    /// Concretize the domains of all the index variables
+    optPM.addPass(mlir::comet::createIndexTreeDomainConcretizationPass());
+
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
     optPM.addPass(mlir::tensor::createTensorBufferizePass());

@@ -71,4 +71,13 @@ def IndexTreeDomainInference : Pass<"indextree-domain-inference", "func::FuncOp"
     let constructor = "comet::createIndexTreeDomainInferencePass()";
 }
 
+def IndexTreeDomainConcretization : Pass<"indextree-domain-concretization", "func::FuncOp"> {
+    let summary = "Transform tensor domains into concrete descriptions of dense or sparse domains";
+    let description = [{
+        Transform tensor domains into concrete descriptions of dense or sparse domains
+    }];
+
+    let constructor = "comet::createIndexTreeDomainConcretizationPass()";
+}
+
 #endif /// COMET_DIALECT_INDEXTREE_PASSES

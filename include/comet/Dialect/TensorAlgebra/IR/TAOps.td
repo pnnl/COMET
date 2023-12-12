@@ -517,7 +517,7 @@ def TensorDimOp : TA_Op<"dim", [Pure]>{
 }
 
 
-def TensorSetOp : TA_Op<"set_op", [Pure]>{
+def TensorSetOp : TA_Op<"set_op">{
 
   let summary = "";
   let description = [{
