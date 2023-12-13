@@ -921,7 +921,6 @@ namespace
       /// Adding one iteration loop to provide consistency with the corresponding index tree.
       /// Index tree includes an index node for the dimension but "S" format for this dimension
       /// doesn't produce a loop.
-      //if (has_block == false) {
       Value lowerBound = builder.create<ConstantIndexOp>(loc, 0);
       Value upperBound = builder.create<ConstantIndexOp>(loc, 1);
       auto step = builder.create<ConstantIndexOp>(loc, 1);
@@ -1080,11 +1079,6 @@ namespace
                  SymbolicInfo &symbolicInfo,
                  llvm::StringRef &iteratorType)
   {
-  //for (unsigned int m = 0; m<tensors.size(); m++) {
-  //  llvm::errs() << "(gfo) Format: " << formats[m] << " | Block: "
-  //                << blocks[m] << " | IDs: " << ids[m] << "\n";
-  //}
-  //llvm::errs() << "---\n";
     comet_debug() << " genForOps indexTreeOp\n";
     comet_vdump(rootOp);
     Location loc = rootOp.getLoc();
@@ -1127,10 +1121,6 @@ namespace
       std::string format = formats[i];
       std::string block = blocks[i];
       unsigned int id = ids[i];
-      
-      //std::string next_format = "";
-      //if (i + 1 > tensors.size()) next_format = formats[i+1];
-      //llvm::errs() << "Current Format: " << format << " | Next_Format: " << next_format << "\n";
 
       comet_debug() << " current index format: " << format << "\n";
       comet_debug() << " current index block: " << block << "\n";
@@ -1373,7 +1363,6 @@ namespace
         std::vector<AbstractLoopOp> &opstree_forops = opstree->forOps;
         AbstractLoopOp parent_forop;
         Value parent_accessIndex = nullptr;
-        bool has_block = false;
         if (nullptr != opstree->parent)
         {
           parent_forop = opstree->parent->forOps.back();
@@ -1381,8 +1370,6 @@ namespace
         
         /// If we have a block-dense loop, we need to generate that first
         if (block == "D") {
-          has_block = true;
-          //llvm::errs() << "S- Generate Block D\n";
           AbstractLoopOp forLoop2;
           Value accessIndex2;
           genForOpFormat_D(builder,
@@ -1395,8 +1382,6 @@ namespace
                            iteratorType,
                            forLoop2 /* output */,
                            accessIndex2 /* output */);
-          //opstree->forOps.push_back(forLoop2);
-          //opstree->inductionVars.push_back(forLoop.getInductionVar());
           builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
           
           // Insert the index calculations
@@ -1407,7 +1392,6 @@ namespace
           Value mul1 = builder.create<MulIOp>(loc, forLoop2.getInductionVar(), column);
           Value add1 = builder.create<AddIOp>(loc, mul1, parent_forop.getInductionVar());
           parent_accessIndex = add1;
-          //opstree->accessIdx.push_back(add1);
           opstree->inductionVars.push_back(add1);
           
           parent_forop = forLoop2;
@@ -1425,13 +1409,9 @@ namespace
                          parent_forop,
                          parent_accessIndex,
                          iteratorType,
-                         //has_block,
                          forLoop /* output */,
                          accessIndex /* output */);
-        
-        //if (has_block == false) {
         opstree->forOps.push_back(forLoop);
-        //}
         opstree->accessIdx.push_back(accessIndex);
       }
       else
@@ -2150,8 +2130,6 @@ namespace
           load_op = builder.create<memref::LoadOp>(loc,
                                                  main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], final_idx);
         } else if (m == 0 && sparse_format == "ELL") {
-        //for (auto v : nested_InductionVars) llvm::errs() << v << "\n";
-        //llvm::errs() << "---\n";
           load_op = builder.create<memref::LoadOp>(loc,
                                                    main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], nested_InductionVars[1]);
         } else {
@@ -2571,14 +2549,14 @@ namespace
                                           std::vector<int64_t> &nested_forops_indices /* output */)
   {
 
-    for (unsigned int i = 0; i < ancestorsOps.size(); i++)
+    for (size_t i = 0; i < ancestorsOps.size(); i++)
     {
       comet_debug() << " ancestorsOps[" << i << "]->forOps.size(): " << ancestorsOps[i]->forOps.size()
                     << ", ancestorsOps->id: "
                     << ancestorsOps[i]->id << "\n";
       if (!ancestorsOps[i]->forOps.empty())
       { /// for loops OpsTree node
-        for (int j = ancestorsOps[i]->forOps.size() - 1; j >= 0; j--)
+        for (long int j = ancestorsOps[i]->forOps.size() - 1; j >= 0; j--)
         {
           comet_debug() << " j: " << j << "\n";
           nested_forops.push_back(ancestorsOps[i]->forOps[j]);
@@ -4679,12 +4657,6 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
         comet_debug() << "\n";
       }
       comet_debug() << "---------------\n";
-      
-      //debug
-      //for (unsigned int m = 0; m<tensors.size(); m++) {
-      //  llvm::errs() << "Format: " << formats[m] << " | Block: " << blocks[m] << " | IDs: " << ids[m] << "\n";
-      //}
-      //llvm::errs() << "---\n";
 
       comet_debug() << " call genForOps, i = " << i << "\n";
       genForOps(tensors, ids, formats, blocks, rootOp, builder, opstree_vec[i], symbolicInfo, iteratorType);

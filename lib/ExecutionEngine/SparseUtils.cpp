@@ -822,21 +822,16 @@ struct EllpackMatrix
     num_cols = max;
 
     /// Create the column coordinate list
-    /// TODO: This terrible, but it works
     uint64_t *col_crd1 = new uint64_t[num_rows * num_cols];
     T* Aval1 = new T[num_rows * num_cols];
     uint64_t index = 0;
     
-    //puts("-------");
-    
     // Iterate over each row, and add the non-zero elements
     for (uint64_t i = 0; i<num_rows; i++) {
         uint64_t cols = 0;
-        //printf("Row: %d\n", i);
         for (uint64_t j = 0; j<num_nonzeros; j++) {
             if (coo_matrix->coo_tuples[j].row == i) {
                 col_crd1[index] = coo_matrix->coo_tuples[j].col;
-                //printf("Add <- %d\n", col_crd[index]);
                 Aval1[index] = coo_matrix->coo_tuples[j].val;
                 ++index;
                 ++cols;
@@ -867,15 +862,12 @@ struct EllpackMatrix
                 }
                 
                 col_crd1[index] = col;
-                //printf("PAD Add <- %d\n", col_crd[index]);
                 Aval1[index] = 0;
                 ++index;
                 ++cols;
                 ++col;
             }
         }
-        
-        //puts("---");
     }
     
     // Now arrange by column
@@ -892,90 +884,6 @@ struct EllpackMatrix
             ++index;
         }
     }
-
-    /// Build the column coordinates/value array
-    /*for (uint64_t i = 0; i < num_rows; i++)
-    {
-      /// In this loop, get all non-zero column coordinates and track
-      /// how many we have found
-      uint64_t found_cols = 0;
-      for (uint64_t j = 0; j < num_nonzeros; j++)
-      {
-        if (coo_matrix->coo_tuples[j].row == i)
-        {
-          ++found_cols;
-        }
-      }
-
-      /// If the number of columns we have found in the row is less than
-      /// the block, we need to add some zeros to create the block
-      if (found_cols == num_cols)
-      {
-        for (uint64_t j = 0; j < num_nonzeros; j++)
-        {
-          if (coo_matrix->coo_tuples[j].row == i)
-          {
-            col_crd[index] = coo_matrix->coo_tuples[j].col;
-            Aval[index] = coo_matrix->coo_tuples[j].val;
-            ++index;
-          }
-        }
-        continue;
-      }
-
-      /// If there were no found columns, we'll just add zeros
-      if (found_cols == 0)
-      {
-        for (uint64_t j = 0; j < num_cols; j++)
-        {
-          col_crd[index] = j;
-          Aval[index] = 0;
-          ++index;
-        }
-        continue;
-      }
-
-      /// If we have an odd number, we need to add preceeding elements before
-      /// the actual non-zero indicies
-      for (uint64_t j = 0; j < num_nonzeros; j++)
-      {
-        if (coo_matrix->coo_tuples[j].row == i)
-        {
-          // TODO: This IS NOT portable
-          for (uint64_t k = 0; k < coo_matrix->coo_tuples[j].col && found_cols < num_cols; k++)
-          {
-            col_crd[index] = k;
-            Aval[index] = 0;
-            ++index;
-            ++found_cols;
-          }
-          col_crd[index] = coo_matrix->coo_tuples[j].col;
-          Aval[index] = coo_matrix->coo_tuples[j].val;
-          ++index;
-        }
-      }
-    }*/
-    
-    // Sort
-    /*int key, j;
-    T Aval_key;
-    for (int i = 1; i < num_rows*num_cols; i++) {
-        key = col_crd[i];
-        Aval_key = Aval[i];
-        j = i - 1;
- 
-        // Move elements of arr[0..i-1],
-        // that are greater than key, 
-        // to one position ahead of their
-        // current position
-        while (j >= 0 && col_crd[j] > key) {
-            col_crd[j + 1] = col_crd[j];
-            Aval[j + 1] = Aval[j];
-            j = j - 1;
-        }
-        col_crd[j + 1] = key;
-        Aval[j + 1] = Aval_key;
-    }*/
   }
 
   /// Clear matrix
