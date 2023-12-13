@@ -1,8 +1,8 @@
 # Sparse matrix dense matrix multiplication (SpMM)
-# Sparse matrix is in CSR format
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_spmm_CSRxDense.llvm
+# Sparse matrix is in ELL format
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_spmm_ELLxDense.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
-# RUN: mlir-cpu-runner mult_spmm_CSRxDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner mult_spmm_ELLxDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {
 	#IndexLabel Declarations
@@ -16,7 +16,6 @@ def main() {
 	Tensor<double> C([a, c], {Dense});
 
     A[a, b] = comet_read(0);
-    print(A);
 
 	#Tensor Fill Operation
 	B[b, c] = 1.7;
