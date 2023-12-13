@@ -1,0 +1,10 @@
+
+:4519 Cleaning up IndexTree Operations
+:4520 %37 = "it.itree"(%35) : (i64) -> i64
+:4532 %35 = "it.Indices"(%34) {indices = [0]} : (i64) -> i64
+:4532 %34 = "it.Indices"(%33) {indices = [1]} : (i64) -> i64
+:4532 %33 = "it.Indices"(%32) {indices = [2]} : (i64) -> i64
+:4527 %30 = "it.ComputeRHS"(%25, %28) {allBlocks = [["UNK", "UNK"], ["UNK", "UNK"]], allFormats = [["D", "CU"], ["D", "D"]], allPerms = [[0, 1], [1, 2]]} : (!ta.sptensor<tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xindex>, tensor<?xf64>, index, index, index, index, index, index, index, index, index, index, index>, tensor<?x4xf64>) -> tensor<*xf64>
+:4528 %31 = "it.ComputeLHS"(%29) {allBlocks = [["UNK", "UNK"]], allFormats = [["D", "D"]], allPerms = [[0, 2]]} : (tensor<?x4xf64>) -> tensor<*xf64>
+:4532 %32 = "it.Compute"(%30, %31) {MaskType = "none", comp_worksp_opt = false, semiring = "plusxy_times"} : (tensor<*xf64>, tensor<*xf64>) -> i64
+
