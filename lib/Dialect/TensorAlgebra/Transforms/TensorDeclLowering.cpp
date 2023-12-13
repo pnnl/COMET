@@ -748,11 +748,16 @@ namespace
             tensorload_sizes_vec.push_back(tensorload_sizes);
           }
         }
-        else if (isa<indexTree::IndexTreeOperandOp>(u) || isa<indexTree::IndexTreeLHSOperandOp>(u))
+        else if (isa<indexTree::IndexTreeLHSOperandOp>(u))
         {
           comet_debug() << " Sparse output is used in it.OperandOp\n";
           assert(false && "Error: Sparse tensor output not implemented yet");
+          rewriter.setInsertionPoint(u);
           // TODO (alokvk2): Take care of this, probably do nothing
+        }
+        else if (isa<indexTree::IndexTreeOperandOp>(u))
+        {
+          comet_debug() << " Sparse output is used in it.OperandOp\n";
         }
         else if (isa<indexTree::IndexTreeTensorDomainOp>(u))
         {
