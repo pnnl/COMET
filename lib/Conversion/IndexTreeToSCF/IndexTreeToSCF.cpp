@@ -2133,8 +2133,9 @@ namespace
           load_op = builder.create<memref::LoadOp>(loc,
                                                  main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], final_idx);
         } else if (m == 0 && sparse_format == "ELL") {
+          auto last = nested_InductionVars.size() - 2;  // was 1 below
           load_op = builder.create<memref::LoadOp>(loc,
-                                                   main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], nested_InductionVars[1]);
+                                                   main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], nested_InductionVars[last]);
         } else {
           load_op = builder.create<memref::LoadOp>(loc,
                                                    main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
