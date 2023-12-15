@@ -8,6 +8,7 @@ export SPARSE_FILE_NAME0=integration_test/data/test_rank2.mtx
 build/bin/comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm first.ta &> first.mlir
 #build/bin/comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm bcsr.mlir &> first.mlir
 #build/bin/comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm ell.mlir &> first.mlir
+#build/bin/comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm bcsr_mv.mlir &> first.mlir
 
 #export SPARSE_FILE_NAME0=integration_test/data/test_rank2.mtx
 #export SPARSE_FILE_NAME1=integration_test/data/test_rank2_transpose.mtx
