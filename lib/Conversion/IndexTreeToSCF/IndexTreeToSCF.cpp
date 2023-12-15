@@ -2105,7 +2105,9 @@ namespace
         if (m == 0 && sparse_format == "BCSR") {
           /// Generate: index = n2*(A1_block_pos*A2_block_pos) + bi * A2_block_pos + bj
           auto bj = allValueAccessIdx[0][0];
-          auto bi = forLoops[2].getInductionVar();
+          
+          auto last = forLoops.size() - 1;
+          auto bi = forLoops[last].getInductionVar();
           
           Value c0 = builder.create<ConstantIndexOp>(loc, 0);
           std::vector<Value> indices = {c0};
@@ -2116,7 +2118,8 @@ namespace
           Value mul1 = builder.create<MulIOp>(loc, A1_block_pos, A2_block_pos);
           
           // mul2 = *n2
-          auto n2 = nested_InductionVars[1];
+          last = nested_InductionVars.size() - 2;
+          auto n2 = nested_InductionVars[last]; // 1 for SpMM, 0 for SpMV
           Value mul2 = builder.create<MulIOp>(loc, n2, mul1);
           
           // mul3 = bi * A2_block_pos
