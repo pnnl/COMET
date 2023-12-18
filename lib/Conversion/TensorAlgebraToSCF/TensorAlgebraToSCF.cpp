@@ -92,12 +92,25 @@ namespace
 
       /// When lowering the constant operation, we allocate and assign the constant
       /// values to a corresponding memref allocation.
-      auto tensorType = op.getType().cast<TensorType>();
+      auto tensorType = cast<TensorType>(op.getType());
       auto memRefType = convertTensorToMemRef(tensorType);
 
       comet_debug() << "User_setop: " << user_setOp << "/n";
       Value alloc;
-      alloc = rewriter.create<memref::AllocOp>(loc, memRefType);
+      if(user_setOp)
+      {
+        if (isa<ToTensorOp>(setnewop.getOperand(1).getDefiningOp()))
+        {
+          Operation *tensorload = cast<ToTensorOp>(setnewop.getOperand(1).getDefiningOp());
+          auto alloc_op = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
+          comet_vdump(alloc_op);
+          alloc = alloc_op;
+        }
+      }
+      else
+      {
+        alloc = rewriter.create<memref::AllocOp>(loc, memRefType);
+      }
 
       /// We will be generating constant indices up-to the largest dimension.
       /// Create these constants up-front to avoid large amounts of redundant

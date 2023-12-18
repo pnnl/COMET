@@ -313,9 +313,24 @@ mlir::Value IndexTreeKernelFusionPass::createNewTensorDecl(
 
   /// Get operands
   std::vector<mlir::Value> operands;
-  operands.insert(operands.begin(),
-                  old_tensor_op->getOperands().begin() + rank_base,
-                  old_tensor_op->getOperands().end());
+  // operands.insert(operands.begin(),
+  //                 old_tensor_op->getOperands().begin() + rank_base,
+  //                 old_tensor_op->getOperands().end());
+
+  TensorType old_tensor = old_dense_tensor_decl.getType().cast<TensorType>();
+
+  for(int64_t i = rank_base; i < old_tensor.getRank(); i++)
+  {
+    if (old_tensor.isDynamicDim(i))
+    {
+      auto dimIndex = old_tensor.getDynamicDimIndex(i);
+      operands.push_back(old_tensor_op->getOperands()[i]);
+    }
+    else
+    {
+      operands.push_back(builder.create<arith::ConstantIndexOp>(loc, old_tensor.getDimSize(i)));
+    }
+  }
 
   /// Get format
   std::string format;
@@ -366,7 +381,7 @@ void IndexTreeKernelFusionPass::createNewTensor(
                                                          builder.getIndexAttr(1));
 
     /// Create ta.index_label_static
-    mlir::Value index_label_op = builder.create<tensorAlgebra::IndexLabelStaticOp>(loc //,
+    mlir::Value index_label_op = builder.create<tensorAlgebra::IndexLabelOp>(loc //,
                                                                                   //  constant_zero,
                                                                                   //  load_op,
                                                                                   /* constant_one */);
@@ -918,18 +933,18 @@ void IndexTreeKernelFusionPass::doKernelFusion(
     std::vector<bool> is_clustered(operands.size(), false);
     for (int host_i = operands.size() - 1; host_i >= 0; --host_i)
     {
+      if (is_clustered[host_i])
+      {
+        continue;
+      }
+
       /// Get the host
       /// Note: The host is the latest one, otherwise the fused nodes are not in correct usage order and got Error:
-
       mlir::Operation *host = operands[host_i];
       comet_debug() <<host << "host\n"; 
       comet_debug() << "host\n"; 
       comet_pdump(host);
 
-      if (is_clustered[host_i])
-      {
-        continue;
-      }
       is_clustered[host_i] = true;
       int host_index = getIndicesOpsIndex(host);
 

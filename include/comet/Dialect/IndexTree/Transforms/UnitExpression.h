@@ -83,6 +83,20 @@ public:
     operands.push_back(operand2);
   } /// constructor with mask operand
 
+  ~UnitExpression()
+  {
+    for(Tensor* op: operands)
+    {
+      delete op;
+    }
+    operands.clear();
+
+    delete output;
+    output = nullptr;
+    delete mask;
+    mask = nullptr;
+  }
+
   Tensor *getLHS()
   {
     return output;

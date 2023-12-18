@@ -52,7 +52,7 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "tensor-decl-lowering"
 
 // *********** For debug purpose *********//
-#define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -189,7 +189,8 @@ namespace
     comet_vdump(op);
     comet_pdump(op.getOperation());
     
-    unsigned int tensor_rank = op.getOperation()->getNumOperands();
+    // unsigned int tensor_rank = op.getOperation()->getNumOperands();
+    unsigned int tensor_rank = op.getResult().getType().getRank();
 
     std::vector<mlir::Value> array_sizes;
     std::vector<mlir::Value> array_sizes_alloc_vec;
@@ -207,16 +208,21 @@ namespace
       initial_array_sizes.push_back(cst_index_0);
 
       /// The other three size information size..
-      /// get the dimension size from operand
-      /// std::vector<Value> dim_sizes;
-      for (unsigned int i = 0; i < op.getOperation()->getNumOperands(); i++)
+      /// get the dimension size from operand or type
+
+      TensorType t = op.getResult().getType();
+      for(size_t i = 0; i < t.getRank(); i++)
       {
-        // if (isa<tensorAlgebra::IndexLabelStaticOp>(op.getOperation()->getOperand(i).getDefiningOp()))
+        if(t.isDynamicDim(i))
         {
-          // Value index = dyn_cast<IndexOp>(op.getOperation()->getOperand(i));
           dimSizes.push_back(op.getOperation()->getOperand(i));
         }
+        else
+        {
+          dimSizes.push_back(rewriter.create<ConstantIndexOp>(loc, t.getShape()[i] ));
+        }
       }
+
       /// The dim size is the second parameter of the
       Value dim2_posSize = rewriter.create<AddIOp>(loc, dimSizes[0], cst_index_1);
       comet_debug() << "AddIOp generated for dim2_posSize:\n";
@@ -483,7 +489,8 @@ namespace
     comet_debug() << " --- " << formats_str << "\n";
 
     comet_debug() << " " << op.getNumOperands() << "\n";
-    auto rank_size = op.getNumOperands();
+    // auto rank_size = op.getNumOperands();
+    auto rank_size = op.getResult().getType().getRank();
 
     IndexType indexType = IndexType::get(op.getContext());
     FloatType f64Type = FloatType::getF64(op.getContext());
@@ -594,7 +601,6 @@ namespace
           ///                     pos_size is (2*rank+1) + 2*i, crd_size is (2*rank+1) + 2*i+1
           comet_debug() << " ";
           comet_vdump(dst_input);
-          dst_input.dump();
           comet_debug() << " ";
           comet_pdump(dst_input.getDefiningOp());
           mlir::TensorType type;
@@ -607,7 +613,6 @@ namespace
           {
             type = res.getType().cast<SparseTensorType>().getElementTypes()[0].cast<TensorType>();
           }
-          dst_input.getDefiningOp()->dump();
           // unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
           unsigned int dst_rank = type.getRank();
           for (unsigned int i = 0; i < dst_rank; i++)
@@ -902,6 +907,11 @@ namespace
           /// Look at the generated code. We should not generate LabeledTensorOp
           continue;
         }
+        else if (isa<tensorAlgebra::TensorDimOp>(u))
+        {
+          comet_debug() << "The tensor is in dim op,  no action taken\n";
+          continue;
+        }
         else
         {
           comet_pdump(u);
@@ -1034,13 +1044,8 @@ namespace
         else /// The constant dim size must NOT comes from the sparse matrix
           cur_memref.push_back(resultMemTy.getDimSize(i));
 
-        // if (isa<tensorAlgebra::IndexLabelStaticOp>(op.getLabels()[i].getDefiningOp()))
-        // {
-        //   auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(op.getLabels()[i].getDefiningOp());
-        //   auto hi = label_decl_value.getMax();
-          if (resultMemTy.isDynamicDim(i))
-            cur_indices.push_back(op.getLabels()[j++]); /// IndexCastOp
-        // }
+        if (resultMemTy.isDynamicDim(i))
+          cur_indices.push_back(op.getLabels()[j++]); /// IndexCastOp
       }
       llvm::ArrayRef<int64_t> cur_memref_arrayref = llvm::ArrayRef<int64_t>(cur_memref);
 
@@ -1087,18 +1092,10 @@ namespace
       int j = 0;
       for (int i = 0; i < resultMemTy.getRank(); i++)
       {
-      //   if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
-      //   {
-      //     comet_vdump(tensor_decl_value.getLabels()[i]);
-      //     auto label_decl_value = cast<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
-      //     auto hi = label_decl_value.getMax();
-          if (resultMemTy.isDynamicDim(i))
-          {
-            cur_indices.push_back(tensor_decl_value.getLabels()[j++]);
-      //       cur_indices.push_back(hi); /// IndexCastOp
-      //       comet_vdump(hi);
-          }
-      //   }
+        if (resultMemTy.isDynamicDim(i))
+        {
+          cur_indices.push_back(tensor_decl_value.getLabels()[j++]);
+        }
       }
 
       /// Check if this tensor is explicitly initialized with ta.fill operation
@@ -1304,6 +1301,10 @@ namespace
         {
           /// do nothing!
           comet_debug() << " the tensor has use in LabeledTensorOp and this use will be ignored!\n";
+        }
+        else if (isa<tensorAlgebra::TensorDimOp>(u1))
+        {
+          comet_debug() << " the tensor has use in TensorDimOp and this use will be ignored!\n";
         }
         else
         {
@@ -1639,20 +1640,9 @@ namespace
         {
           comet_vdump(tensor_decl_value.getLabels()[i]);
           comet_pdump(tensor_decl_value.getLabels()[i].getDefiningOp());
-          if (isa<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
+          if (isa<tensorAlgebra::IndexLabelOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
           {
-            // auto label_decl_value = cast<tensorAlgebra::IndexLabelDynamicOp>(tensor_decl_value.getLabels()[i].getDefiningOp());
-            // auto lo = label_decl_value.getMin();
-            // auto step = label_decl_value.getStep();
-            // auto hi = array_sizes[4 * rank_size + 1 + i];
-
-            // Value new_index = rewriter.create<IndexLabelStaticOp>(loc);
-            // comet_vdump(new_index);
-            // label_decl_value.replaceAllUsesWith(new_index);
-          }
-          else if (isa<tensorAlgebra::IndexLabelStaticOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
-          {
-            comet_debug() << " isa<tensorAlgebra::IndexLabelStaticOp\n";
+            comet_debug() << " isa<tensorAlgebra::IndexLabelOp\n";
           }
         }
 
@@ -1774,8 +1764,7 @@ namespace
                         tensorAlgebra::TensorSetOp,
                         tensorAlgebra::SparseOutputTensorDeclOp,
                         tensorAlgebra::TempSparseOutputTensorDeclOp,
-                        tensorAlgebra::IndexLabelDynamicOp,
-                        tensorAlgebra::IndexLabelStaticOp,
+                        tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::SparseTensorConstructOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
@@ -1819,8 +1808,8 @@ namespace
                         tensorAlgebra::TempSparseOutputTensorDeclOp,
                         tensorAlgebra::TensorSetOp,
                         tensorAlgebra::DenseTensorDeclOp,
-                        tensorAlgebra::IndexLabelStaticOp,
-                        tensorAlgebra::IndexLabelDynamicOp,
+                        tensorAlgebra::IndexLabelOp,
+                        // tensorAlgebra::IndexLabelDynamicOp,
                         func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
@@ -1855,7 +1844,7 @@ namespace
                              IndexTreeDialect,
                              bufferization::BufferizationDialect>();
 
-      // target.addIllegalDialect<TADialect>();
+      target.addIllegalDialect<TADialect>();
       target.addLegalOp<tensorAlgebra::PrintOp,
                         tensorAlgebra::GetTimeOp,
                         tensorAlgebra::PrintElapsedTimeOp,
@@ -1866,8 +1855,8 @@ namespace
                         tensorAlgebra::TensorSetOp,
                         tensorAlgebra::DenseTensorDeclOp,
                         tensorAlgebra::SparseOutputTensorDeclOp,
-                        tensorAlgebra::IndexLabelStaticOp,
-                        tensorAlgebra::IndexLabelDynamicOp,
+                        tensorAlgebra::IndexLabelOp,
+                        tensorAlgebra::DenseConstantOp,
                         tensorAlgebra::TensorDimOp,
                         func::CallOp>();
 
@@ -1915,8 +1904,8 @@ namespace
                         tensorAlgebra::SparseTensorConstructOp,
                         tensorAlgebra::TensorSetOp,
                         tensorAlgebra::DenseTensorDeclOp,
-                        tensorAlgebra::IndexLabelStaticOp,
-                        tensorAlgebra::IndexLabelDynamicOp,
+                        tensorAlgebra::IndexLabelOp,
+                        tensorAlgebra::DenseConstantOp,
                         tensorAlgebra::TensorDimOp,
                         func::CallOp>();
 
@@ -1958,9 +1947,13 @@ namespace
       else if (tensor.getType().isa<TensorType>()) 
       {
         ::mlir::TypedValue< ::mlir::IndexType> idx = op.getIndex();
-        auto dim = rewriter.create<tensor::DimOp> (op.getLoc(), tensor.getType(), tensor,  idx);
-        op.replaceAllUsesWith(dim.getResult());
+        auto dim = rewriter.create<tensor::DimOp> (op.getLoc(), tensor,  idx);
+        rewriter.replaceAllUsesWith(op, dim);
         rewriter.eraseOp(op);
+      }
+      else
+      {
+        return failure();
       }
 
       comet_debug() << "--------------TensorDimOpLowering in format end\n";
@@ -1984,9 +1977,11 @@ namespace
       ConversionTarget target(getContext());
       target.addLegalDialect<ArithDialect,
                              memref::MemRefDialect,
+                             tensor::TensorDialect,
                              scf::SCFDialect,
                              bufferization::BufferizationDialect,
                              IndexTreeDialect>();
+      target.addIllegalDialect<TADialect>();
 
       target.addLegalOp<tensorAlgebra::PrintOp,
                         tensorAlgebra::ReduceOp,
@@ -1995,10 +1990,8 @@ namespace
                         tensorAlgebra::GetTimeOp,
                         tensorAlgebra::PrintElapsedTimeOp,
                         tensorAlgebra::TensorSetOp,
-                        tensorAlgebra::SparseOutputTensorDeclOp,
-                        tensorAlgebra::TempSparseOutputTensorDeclOp,
-                        tensorAlgebra::IndexLabelDynamicOp,
-                        tensorAlgebra::IndexLabelStaticOp,
+                        tensorAlgebra::IndexLabelOp,
+                        tensorAlgebra::DenseConstantOp,
                         tensorAlgebra::SparseTensorConstructOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))

@@ -53,6 +53,8 @@ namespace mlir
 
     MemRefType convertTensorToMemRef(TensorType type);
     Value insertAllocAndDealloc(MemRefType memtype, Location loc, PatternRewriter &rewriter);
+    Value insertAllocAndDeallocDynamic(MemRefType memtype, std::vector<Value>& dynamic_sizes, Location loc,
+                                PatternRewriter &rewriter);
     Value insertAllocAndInitialize(Location loc, MemRefType memtype, ValueRange allocValueRange, PatternRewriter &rewriter);
     void insertInitialize(Location loc,
                           Value cst_init,

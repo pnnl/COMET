@@ -28,6 +28,8 @@
 #include <iostream>
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TATypes.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+
 
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/FunctionImplementation.h"
@@ -47,16 +49,16 @@ Type mlir::tensorAlgebra::TADialect::parseType(DialectAsmParser &parser) const
 {
   /// Parse the main keyword for the type.
   StringRef keyword;
-  /// for "range" and "sptensor" type
+  /// for "indexlabel" and "sptensor" type
   if (parser.parseKeyword(&keyword))
     return Type();
 
   MLIRContext *context = getContext();
 
   /// Handle 'range' types.
-  if (keyword == "range")
+  if (keyword == "indexlabel")
   {
-    return RangeType::get(context);
+    return IndexLabelType::get(context);
   }
 
   /// Parse the element types of the sptensor.
@@ -102,18 +104,18 @@ Type mlir::tensorAlgebra::TADialect::parseType(DialectAsmParser &parser) const
   return Type();
 }
 
-/// RangeType prints as just "range".
-static void print(RangeType type, DialectAsmPrinter &printer)
+/// IndexLabelType prints as just "indexlabel".
+static void print(IndexLabelType type, DialectAsmPrinter &printer)
 {
-  printer << "range";
+  printer << "indexlabel";
 }
 
 void mlir::tensorAlgebra::TADialect::printType(
     Type type, DialectAsmPrinter &printer) const
 {
-  if (type.isa<RangeType>())
+  if (type.isa<IndexLabelType>())
   {
-    print(type.cast<RangeType>(), printer);
+    print(type.cast<IndexLabelType>(), printer);
   }
   else if (type.isa<SparseTensorType>())
   {
@@ -144,6 +146,7 @@ void DenseConstantOp::build(mlir::OpBuilder &builder, mlir::OperationState &stat
   auto dataAttribute = DenseElementsAttr::get(dataType, value);
   DenseConstantOp::build(builder, state, dataType, dataAttribute);
 }
+
 
 /// The 'OpAsmParser' class provides a collection of methods for parsing
 /// various punctuation, as well as attributes, operands, types, etc. Each of
@@ -336,6 +339,20 @@ mlir::LogicalResult TAReturnOp::verify()
 }
 
 //===----------------------------------------------------------------------===//
+/// TensorDimOp
+//===----------------------------------------------------------------------===//
+
+// Helper builder to simplify building fron integer index
+void TensorDimOp::build(mlir::OpBuilder &builder, mlir::OperationState &result,
+                          Value source, int64_t index) 
+{
+  auto loc = result.location;
+  Value indexValue = builder.create<mlir::arith::ConstantIndexOp>(loc, index);
+  build(builder, result, builder.getIndexType(), source, indexValue);
+}
+
+
+//===----------------------------------------------------------------------===//
 /// TA Types
 //===----------------------------------------------------------------------===//
 
@@ -445,5 +462,5 @@ void TADialect::initialize()
 #define GET_OP_LIST
 #include "comet/Dialect/TensorAlgebra/IR/TAOps.cpp.inc"
       >();
-  addTypes<RangeType, SparseTensorType>();
+  addTypes<IndexLabelType, SparseTensorType>();
 }
