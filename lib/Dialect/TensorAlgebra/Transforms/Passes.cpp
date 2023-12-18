@@ -240,11 +240,15 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   std::map<Operation *, Value> inLTValues;
 
   comet_debug() << "Chain Multiplication Factorization begin...\n";
+  std::map<Operation *, int64_t> lblSizes;
+  std::map<Operation *, Value> labelValues;
+  std::map<Operation *, std::vector<Operation *>> lblMaps;
 
   ///  collect all operands from series of ta.tc ops
   if (isa<tensorAlgebra::TensorMultOp>(lhsOp))
   {
     std::stack<Operation *> stack;
+
     Value currValue = operands[0];
     comet_vdump(currValue);
     Operation *curr = currValue.getDefiningOp();
@@ -252,8 +256,72 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
     {
       while (isa<tensorAlgebra::TensorMultOp>(curr))
       {
+        auto multop = cast<tensorAlgebra::TensorMultOp>(curr);
         stack.push(curr);
-        MultOpsToRemove.push_back(cast<tensorAlgebra::TensorMultOp>(curr).getOperation());
+        MultOpsToRemove.push_back(multop.getOperation());
+        std::vector<mlir::Value> labels = multop.getRhs2IndexLabels();
+        std::vector<Operation *> labelVec;
+        
+        for(size_t i = 0; i < labels.size(); i++)
+        {
+          auto lblOp = labels[i].getDefiningOp();
+          if (lblSizes.count(lblOp) == 0)
+          {
+            /// If dynamic dimension, we need to retrieve the value of the constantIndexOp that was used to create it
+            /// If static, just get it from the tensor type
+            if(isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs2().getDefiningOp()) )
+            {
+              if (multop.getRhs2().getType().cast<TensorType>().isDynamicDim(i))
+              {
+                ConstantIndexOp val = cast<ConstantIndexOp>(multop.getRhs2().getDefiningOp()->getOperand(multop.getRhs2().getType().cast<TensorType>().getDynamicDimIndex(i)).getDefiningOp());
+                lblSizes[lblOp] = val.value();
+              }
+              else
+              {
+                lblSizes[lblOp] = multop.getRhs2().getType().cast<TensorType>().getDimSize(i);
+              }
+            }
+            labelValues[lblOp] = labels[i];
+          }
+          labelVec.push_back(lblOp);
+        }
+        if(isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs2().getDefiningOp()) )
+        {
+          lblMaps[multop.getRhs2().getDefiningOp()] = labelVec;
+        }
+
+        labelVec.clear();
+        labels = multop.getRhs1IndexLabels();
+        for(size_t i = 0; i < labels.size(); i++)
+        {
+          auto lblOp = labels[i].getDefiningOp();
+          if (lblSizes.count(lblOp) == 0)
+          {
+            /// If dynamic dimension, we need to retrieve the value of the constantIndexOp that was used to create it
+            /// If static, just get it from the tensor type
+            if(isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs1().getDefiningOp()) )
+            {
+              if (multop.getRhs1().getType().cast<TensorType>().isDynamicDim(i))
+              {
+                ConstantIndexOp val = cast<ConstantIndexOp>(multop.getRhs1().getDefiningOp()->getOperand(multop.getRhs1().getType().cast<TensorType>().getDynamicDimIndex(i)).getDefiningOp());
+                lblSizes[lblOp] = val.value();
+              }
+              else
+              {
+                lblSizes[lblOp] = multop.getRhs1().getType().cast<TensorType>().getDimSize(i);
+              }
+            }
+
+            labelValues[lblOp] = labels[i];
+          }
+          labelVec.push_back(lblOp);
+        }
+
+        if(isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs1().getDefiningOp()) )
+        {
+          lblMaps[multop.getRhs1().getDefiningOp()] = labelVec;
+        }
+        
         currValue = cast<tensorAlgebra::TensorMultOp>(curr).getOperation()->getOperand(1);
         curr = currValue.getDefiningOp();
       }
@@ -270,30 +338,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
     inLTValues[curr] = currValue;
   }
 
-  std::map<Operation *, Value> labelValues;
-  ///  IndexLabelStaticOp to size map
-  std::map<Operation *, int64_t> lblSizes;
-  ///  LabeledTensorOp to label set map
-  std::map<Operation *, std::vector<Operation *>> lblMaps;
-
-  for (auto op : inLTOps)
-  {
-    auto labels = cast<tensorAlgebra::DenseTensorDeclOp>(op).getLabels();
-    std::vector<Operation *> labelVec;
-    for (auto lbl : labels)
-    {
-      auto lblOp = lbl.getDefiningOp();
-      if (lblSizes.count(lblOp) == 0)
-      {
-        lblSizes[lblOp] = mlir::tensorAlgebra::labelSize(lblOp);
-        labelValues[lblOp] = lbl;
-      }
-      labelVec.push_back(lblOp);
-    }
-    lblMaps[op] = labelVec;
-  }
-
-  auto outLabels = cast<tensorAlgebra::DenseTensorDeclOp>(rhsOp).getLabels();
+  auto outLabels = cast<tensorAlgebra::TensorMultOp>(lhsOp).getResultIndexLabels();
   std::vector<Operation *> outLabelVec;
   for (auto lbl : outLabels)
   {
@@ -581,8 +626,7 @@ void LowerTAMulChainPass::runOnOperation()
                     tensorAlgebra::TensorSetOp,
                     tensorAlgebra::ChainMulOp,
                     tensorAlgebra::TensorCopyOp,
-                    tensorAlgebra::IndexLabelDynamicOp,
-                    tensorAlgebra::IndexLabelStaticOp,
+                    tensorAlgebra::IndexLabelOp,
                     tensorAlgebra::SparseTensorDeclOp,
                     tensorAlgebra::DenseTensorDeclOp,
                     tensorAlgebra::SparseTensorConstructOp>();

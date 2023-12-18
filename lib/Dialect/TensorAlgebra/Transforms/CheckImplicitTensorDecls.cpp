@@ -99,110 +99,39 @@ bool isNeedTensorDecl(t op)
 template <typename t>
 void addTensorDecl(t op)
 {
+  OpBuilder builder(op);
+  auto location = op.getLoc();
+  op->getOperands();
   std::vector<mlir::Value> lbls_value;
   mlir::Value ret_value;
   std::string ret_format;
-  if (isa<tensorAlgebra::TransposeOp>(op))
-  {
-    lbls_value = op.getResultIndexLabels(); 
-    // for (unsigned int i = 1; i < op.getOperation()->getNumOperands(); i++)
-    // {
-    //   comet_debug() << " ";
-    //   comet_vdump(op.getOperation()->getOperand(i));
-    //   lbls_value.push_back(op.getOperation()->getOperand(i));
-    // }
-    ret_value = op.getOperation()->getResult(0);
+  ArrayAttr imaps = op.getIndexingMaps();
 
-    mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<tensorAlgebra::TransposeOp>(op.getOperation()).getFormats();
-    unsigned int i = opFormatsArrayAttr.size() - 1;
-    std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-    ret_format = ret_format_local;
-  }
-  else if (isa<TensorMultOp>(op)) 
+  /// Retrieve the size of the tensor based on the affinity maps
+  /// 1. Check the affinity map results of the LHS e.g. 
+  /// 2. Find which dimensions match on the RHS(1,2) e.g. (d0,d1,d2) -> (d0, d1), (d0,d1,d2) -> (d1, d2)
+  /// 3. The result will be the dimension of the matching indices
+  /// e.g For matmulop RHS1: (d0,d1,d2) -> (d0, d1), RHS2: (d0,d1,d2) -> (d1, d2), LHS : (d0,d1,d2) -> (d0,d2)
+  ///     So we get (dim(RHS1, 0), dim(RHS2, 1)) because of d0, d2 respectively 
+  auto res_map = imaps[imaps.size()-1].cast<AffineMapAttr>().getValue();
+  for(auto v : res_map.getResults())
   {
-    auto multop = cast<TensorMultOp>(op);
-    for(auto lbl: multop.getResultIndexLabels())
+    for(size_t i = 0; i < imaps.size() - 1; i++)
     {
-      lbls_value.push_back(lbl);
+      auto map = imaps[i].cast<AffineMapAttr>().getValue();
+      if(auto pos = map.getResultPosition(v)) 
+      {
+        lbls_value.push_back(builder.create<TensorDimOp>(location, op->getOperand(i), *pos));
+      } 
     }
-    ret_value = op.getOperation()->getResult(0);
-    mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorMultOp>(op.getOperation()).getFormats();
-    unsigned int i = opFormatsArrayAttr.size() - 1;
-    std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-    ret_format = ret_format_local;
   }
-  else if (isa<TensorElewsMultOp>(op)) 
-  {
-    auto multop = cast<TensorElewsMultOp>(op);
-    for(auto lbl: multop.getResultIndexLabels())
-    {
-      lbls_value.push_back(lbl);
-    }
-    ret_value = op.getOperation()->getResult(0);
-    mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(op.getOperation()).getFormats();
-    unsigned int i = opFormatsArrayAttr.size() - 1;
-    std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-    ret_format = ret_format_local;
-  }
-  else if (isa<TensorAddOp>(op)) 
-  {
-    auto multop = cast<TensorElewsMultOp>(op);
-    for(auto lbl: multop.getResultIndexLabels())
-    {
-      lbls_value.push_back(lbl);
-    }
-    ret_value = op.getOperation()->getResult(0);
-    mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(op.getOperation()).getFormats();
-    unsigned int i = opFormatsArrayAttr.size() - 1;
-    std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-    ret_format = ret_format_local;
-  }
-  else if (isa<TensorSubtractOp>(op))
-  {
-    auto multop = cast<TensorElewsMultOp>(op);
-    for(auto lbl: multop.getResultIndexLabels())
-    {
-      lbls_value.push_back(lbl);
-    }
-    ret_value = op.getOperation()->getResult(0);
-    mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(op.getOperation()).getFormats();
-    unsigned int i = opFormatsArrayAttr.size() - 1;
-    std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-    ret_format = ret_format_local;
-  }
-  // {
-  //   for (unsigned int i = 2; i < op.getOperation()->getNumOperands(); i++)
-  //   {
-  //     comet_debug() << " ";
-  //     comet_vdump(op.getOperation()->getOperand(i));
-  //     lbls_value.push_back(op.getOperation()->getOperand(i));
-  //   }
-  //   ret_value = op.getOperation()->getResult(0);
+  ret_value = op.getOperation()->getResult(0);
 
-  //   mlir::ArrayAttr opFormatsArrayAttr;
-  //   if (isa<tensorAlgebra::TensorMultOp>(op))
-  //     opFormatsArrayAttr = dyn_cast<TensorMultOp>(op.getOperation()).getFormats();
+  mlir::ArrayAttr opFormatsArrayAttr = op.getFormats();
+  unsigned int i = opFormatsArrayAttr.size() - 1;
+  std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+  ret_format = ret_format_local;
 
-  //   if (isa<tensorAlgebra::TensorElewsMultOp>(op))
-  //     opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(op.getOperation()).getFormats();
-
-  //   if (isa<tensorAlgebra::TensorAddOp>(op))
-  //     opFormatsArrayAttr = dyn_cast<TensorAddOp>(op.getOperation()).getFormats();
-
-  //   if (isa<tensorAlgebra::TensorSubtractOp>(op))
-  //     opFormatsArrayAttr = dyn_cast<TensorSubtractOp>(op.getOperation()).getFormats();
-
-  //   unsigned int i = opFormatsArrayAttr.size() - 1;
-  //   std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
-  //   ret_format = ret_format_local;
-  // }
-  else
-  {
-    llvm::errs() << __FILE__ << " " << __LINE__ <<  "ERROR: Unexpected operation\n";
-  }
-
-  OpBuilder builder(op);
-  auto location = op.getLoc();
 
   mlir::Value itensor;
   if (ret_format.compare("Dense") == 0)
@@ -215,7 +144,7 @@ void addTensorDecl(t op)
     /// It is a temporal tensor declaration generated by compound expressions, BoolAttr is true
     /// to identify SparseTensorDeclOp is for temporaries
     // auto is_temporal_tensor = builder.getBoolAttr(true);
-    itensor = builder.create<SparseTensorDeclOp>(location, ret_value.getType(), lbls_value, ret_format, true);
+    itensor = builder.create<SparseTensorDeclOp>(location, ret_value.getType(),  lbls_value, ret_format, true);
   }
   comet_debug() << "PreLowering SparseTensorDeclaration creation\n";
   comet_vdump(itensor);

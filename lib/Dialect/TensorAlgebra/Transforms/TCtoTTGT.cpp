@@ -268,15 +268,20 @@ namespace
       /// Do transpose if needed
       if (!rhs1OutMapAttr.getValue().isIdentity())
       {
+        std::vector<Value> operands;
         std::vector<int64_t> rhs1Dims;
         for (auto idx : rhs1OutPerm)
         {
           auto shape = rhs1MemrefType.getShape();
           rhs1Dims.push_back(shape[idx]);
+          if(rhs1MemrefType.isDynamicDim(idx))
+          {
+            operands.push_back(rhs1Memref.getDefiningOp()->getOperand(rhs1MemrefType.getDynamicDimIndex(idx)));
+          }
         }
 
-        rhs1Alloc = insertAllocAndDealloc(
-            MemRefType::get(rhs1Dims, rhs1MemrefType.getElementType()), loc,
+        rhs1Alloc = insertAllocAndDeallocDynamic(
+            MemRefType::get(rhs1Dims, rhs1MemrefType.getElementType()), operands, loc,
             rewriter);
 
 #ifdef DEBUG_MODE_TTGT
@@ -290,15 +295,20 @@ namespace
 
       if (!rhs2OutMapAttr.getValue().isIdentity())
       {
+        std::vector<Value> operands;
         std::vector<int64_t> rhs2Dims;
         for (auto idx : rhs2OutPerm)
         {
           auto shape = rhs2MemrefType.getShape();
           rhs2Dims.push_back(shape[idx]);
+          if(rhs2MemrefType.isDynamicDim(idx))
+          {
+            operands.push_back(rhs2Memref.getDefiningOp()->getOperand(rhs2MemrefType.getDynamicDimIndex(idx)));
+          }
         }
 
-        rhs2Alloc = insertAllocAndDealloc(
-            MemRefType::get(rhs2Dims, rhs2MemrefType.getElementType()), loc,
+        rhs2Alloc = insertAllocAndDeallocDynamic(
+            MemRefType::get(rhs2Dims, rhs2MemrefType.getElementType()), operands, loc,
             rewriter);
 #ifdef DEBUG_MODE_TTGT
         auto rhs2LinalgCopy = rewriter.create<linalg::TransposeOp>(loc, rhs2Memref, rhs2Alloc, llvm::ArrayRef<int64_t>(rhs2OutPerm_int64));
@@ -313,15 +323,20 @@ namespace
       bool useLHSTranspose = false;
       if (!lhsOutMapAttr.getValue().isIdentity())
       {
+        std::vector<Value> operands;
         std::vector<int64_t> lhsDims;
         for (auto idx : lhsOutPerm)
         {
           auto shape = lhsMemrefType.getShape();
           lhsDims.push_back(shape[idx]);
+          if(lhsMemrefType.isDynamicDim(idx))
+          {
+            operands.push_back(lhsMemref.getDefiningOp()->getOperand(lhsMemrefType.getDynamicDimIndex(idx)));
+          }
         }
 
-        lhsAlloc = insertAllocAndDealloc(
-            MemRefType::get(lhsDims, lhsMemrefType.getElementType()), loc,
+        lhsAlloc = insertAllocAndDeallocDynamic(
+            MemRefType::get(lhsDims, lhsMemrefType.getElementType()), operands, loc,
             rewriter);
         useLHSTranspose = true;
         double beta_val = betaAttr.cast<FloatAttr>().getValueAsDouble();

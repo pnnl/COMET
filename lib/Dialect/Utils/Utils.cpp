@@ -110,6 +110,22 @@ namespace mlir
       return alloc;
     }
 
+    Value insertAllocAndDeallocDynamic(MemRefType memtype, std::vector<Value>& dynamic_sizes, Location loc,
+                                PatternRewriter &rewriter)
+    {
+      /// AllocOp is defined in memref Dialect
+      auto alloc = rewriter.create<memref::AllocOp>(loc, memtype, dynamic_sizes, rewriter.getI64IntegerAttr(32));
+
+      /// Make sure to allocate at the beginning of the block.
+      auto *parentBlock = alloc.getOperation()->getBlock();
+
+      /// Make sure to deallocate this alloc at the end of the block. This is fine
+      /// as functions have no control flow.
+      auto dealloc = rewriter.create<memref::DeallocOp>(loc, alloc);
+      dealloc.getOperation()->moveBefore(&parentBlock->back());
+      return alloc;
+    }
+
     Value insertAllocAndInitialize(Location loc, MemRefType memtype, ValueRange allocValueRange, PatternRewriter &rewriter)
     {
       /// Memory allocation and initialization
@@ -1865,10 +1881,9 @@ namespace mlir
       }
     }
 
-    int64_t labelSize(Operation *op)
-    {
-      return 0;
-      // auto range = cast<tensorAlgebra::IndexLabelStaticOp>(op);
+    // int64_t labelSize(Operation *op)
+    // {
+      // auto range = cast<tensorAlgebra::IndexLabelOp>(op);
       // auto min_idx = cast<ConstantIndexOp>(range.getMin().getDefiningOp());
       // auto max_idx = cast<ConstantIndexOp>(range.getMax().getDefiningOp());
       // auto step_idx = cast<ConstantIndexOp>(range.getStep().getDefiningOp());
@@ -1880,7 +1895,7 @@ namespace mlir
       // auto step = step_idx.getValue().cast<mlir::IntegerAttr>().getValue().getSExtValue();
       // ;
       // return ((max - min) / step);
-    }
+    // }
 
     bool hasSameOrder(const std::vector<unsigned> &initial, const std::vector<unsigned> &final)
     {
