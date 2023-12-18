@@ -165,10 +165,11 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
 
   Tensor *M;
   std::unique_ptr<UnitExpression> e;
+  std::vector<mlir::Value> empty;
   if (mask_tensor != nullptr) /// mask is an optional input
   {
     comet_debug() << "mask input provided by user\n";
-    M = tree->getOrCreateTensor(mask_tensor, allFormats[2]); /// format same as lhs_tensor
+    M = tree->getOrCreateTensor3(mask_tensor, empty, allFormats[2]); /// We don't need indexlabel info for the mask 
     e = make_unique<UnitExpression>(A, B, C, M, "*");
   }
   else

@@ -38,13 +38,13 @@ namespace mlir
   namespace tensorAlgebra
   {
 
-    class RangeType : public Type::TypeBase<RangeType, Type, TypeStorage>
+    class IndexLabelType : public Type::TypeBase<IndexLabelType, Type, TypeStorage>
     {
     public:
       /// Used for generic hooks in TypeBase.
       using Base::Base;
 
-      static RangeType get(MLIRContext *context)
+      static IndexLabelType get(MLIRContext *context)
       {
         /// Custom, uniq'ed construction in the MLIRContext.
         return Base::get(context);

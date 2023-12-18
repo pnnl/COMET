@@ -33,6 +33,7 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 
 #include "llvm/Support/Debug.h"
 #include <iostream>
@@ -495,14 +496,22 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   Value outputItComputeOp = tensors[tensors.size() - 1];
   comet_vdump(outputItComputeOp);
 
-  std::vector<mlir::Value> w_lbls_value = {outputItComputeOp.getDefiningOp()->getOperand(sparseDimOrderInOutput)};
-
   comet_vdump(outputItComputeOp.getDefiningOp()->getOperand(sparseDimOrderInOutput));
   std::string w_format = "Dense"; /// tensor<?xf64>
   auto w_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getF64Type());
 
   Operation *itComputeOpFirstUsers = *(itComputeOp.getOperation()->getUsers().begin());
   builder.setInsertionPoint(itComputeOpFirstUsers); /// Insert before itree Op
+  std::vector<mlir::Value> w_lbls_value;
+  if(outputItComputeOp.getType().cast<TensorType>().isDynamicDim(sparseDimOrderInOutput))
+  {
+    auto opIdx = outputItComputeOp.getType().cast<TensorType>().getDynamicDimIndex(sparseDimOrderInOutput);
+    w_lbls_value.push_back(outputItComputeOp.getDefiningOp()->getOperand(opIdx));
+  }
+  else
+  {
+    w_lbls_value.push_back(builder.create<ConstantIndexOp>(loc, outputItComputeOp.getType().cast<TensorType>().getDimSize(sparseDimOrderInOutput)));
+  }
 
   mlir::Value w = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_type, w_lbls_value, w_format);
   comet_vdump(w);
@@ -779,15 +788,16 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       Value sparseInput = tensors_rhs[sparseDimsInput[0].tensorId];
       comet_vdump(sparseInput);
 
-      std::vector<mlir::Value> v_lbls_value = {sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder)};
+      // std::vector<mlir::Value> v_lbls_value = {sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder)};
       comet_debug() << "Dumping v_lbls_value\n";
-      comet_vdump(v_lbls_value[0]);
+      // comet_vdump(v_lbls_value[0]);
       comet_debug() << "Done\n";
       comet_vdump(sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder));
       std::string v_format = "Dense"; /// tensor<?xf64>
       auto v_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getF64Type());
 
       builder.setInsertionPoint(computeOp.getDefiningOp());
+      std::vector<mlir::Value> v_lbls_value = {builder.create<TensorDimOp>(loc, sparseInput, sparseDimsInput[0].dimOrder)};
       mlir::Value v = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, v_type, v_lbls_value, v_format);
       comet_vdump(v);
 

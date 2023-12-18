@@ -2085,12 +2085,15 @@ namespace
           }
           else
           {
+            builder.setInsertionPoint(forLoops[1]); /// [PT] This is needed to make sure we can access the values created outside of the loop
             comet_debug() << " This dimension is a static size\n";
             upperBound = builder.create<ConstantIndexOp>(loc, dimSize);
             comet_vdump(upperBound);
           }
+          
           denseDimsSize.push_back(upperBound);
         }
+        builder.setInsertionPointAfter(forLoops[0]);
 
         /// To update Cpos
         if (sparse_format.compare("CSR") == 0)
