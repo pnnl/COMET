@@ -53,8 +53,8 @@ files_to_cleanup = []
 def cleanup():
     for f in files_to_cleanup:
         if os.path.exists(f):
-            os.remove(f)
-            # pass
+            # os.remove(f)
+            pass
 atexit.register(cleanup)
 
 class memref_i64(Structure):
@@ -139,7 +139,10 @@ def comment_unneeded_dense(input_, arg_vals):
             for j in range(len(input[:i])):
                 if cast + " = memref.cast" in input[j]:
                     out = input[j][input[j].find("%alloc")  : input[j].find(":")].lstrip().strip()
-                    replace['%arg'+str(len(arg_vals))] = out
+                    
+                    start = input[j].find(":")
+                    end = input[j][start:].find("to")
+                    replace['%arg'+str(len(arg_vals))] = out +" " + input[j][start:start+end].lstrip().strip()
                     for k in range(len(input[:j])):
                         if out+" = memref.alloc(" in  input[k]:
                             # input[k] = "//from dense" + input[k]
@@ -147,7 +150,8 @@ def comment_unneeded_dense(input_, arg_vals):
         elif allocs_needed > 0 and "memref.alloc" in input[i]:
             allocs_needed = allocs_needed - 1
             a = input[i][input[i].find("%") : input[i].find("=")].lstrip().strip()
-            replace['%arg'+str(indexes[0])] = a
+            start = input[i].rfind(":")
+            replace['%arg'+str(indexes[0])] = a +" " + input[i][start:].lstrip().strip()
             indexes = indexes[1:]
             # input[i] = "//from dense" + input[i]
             input[i] = ""
@@ -161,7 +165,12 @@ def comment_unneeded_dense(input_, arg_vals):
                     break
 
     for v in replace:
-        input[1] = input[1].replace(v, replace[v])
+        start = input[1].find(v)
+        end = input[1][start:].find(",")
+        if end == -1 :
+            end = input[1][start:].find(")")
+        repl = input[1][start:start+end]
+        input[1] = input[1].replace(repl, replace[v])
             
     output = ""
 
