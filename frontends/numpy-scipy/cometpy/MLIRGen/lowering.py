@@ -53,8 +53,8 @@ files_to_cleanup = []
 def cleanup():
     for f in files_to_cleanup:
         if os.path.exists(f):
-            # os.remove(f)
-            pass
+            os.remove(f)
+            # pass
 atexit.register(cleanup)
 
 class memref_i64(Structure):
@@ -181,7 +181,6 @@ def comment_unneeded_dense(input_, arg_vals):
     return output            
 
 def comment_unneeded_sparse(input_, arg_vals):
-    # print(input_)
     output = ""
     input = input_.splitlines()
     indexes = []
@@ -640,7 +639,7 @@ def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
     uuid_s = str(uuid.uuid4())
     ta_dialect_file = uuid_s+'.mlir'
     # print("uuid_s: ", uuid_s)
-    if(os.path.exists(ta_dialect_file) == False):
+    if(os.path.exists(ta_dialect_file) is False):
         f = open(os.path.join( os.getcwd(), ta_dialect_file), 'w')
         files_to_cleanup.append(os.path.join( os.getcwd(), ta_dialect_file))
     else:

@@ -29,11 +29,9 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 
-from _ast import Assign, Attribute, AugAssign, BinOp, Call, Constant, Expr
+from _ast import  Attribute, BinOp, Call, Constant
 import ast
 import inspect
-from typing import Any, Self
-from urllib.request import build_opener
 # import comet
 import numpy as np
 import scipy as sp
@@ -202,7 +200,6 @@ class NewVisitor(ast.NodeVisitor):
                 'format': format,
                 'dimsSSA': [self.get_index_constant(d) for d in self.inputs[i].shape]
                 }
-            print("Declaring Tensor ", arg.arg, self.tcurr)
             self.declarations.append(
                 {
                     "type": "T",
@@ -267,7 +264,7 @@ class NewVisitor(ast.NodeVisitor):
                         "op_type": "=",
                         "beta": beta,
                         "lhs": self.tsymbols[id],
-                        "shapes": [self.tsemantics[v]['shape'], self.tsemantics[self.tsymbols[id]]],
+                        "shapes": [self.tsemantics[v]['shape'], self.tsemantics[self.tsymbols[id]]['shape']],
                         "rhs": v,
                     })
             else:
@@ -281,7 +278,7 @@ class NewVisitor(ast.NodeVisitor):
                         "op_type": "=",
                         "beta": beta,
                         "lhs": self.tsymbols[id],
-                        "shapes": [self.tsemantics[v]['shape'], self.tsemantics[self.tsymbols[id]]],
+                        "shapes": [self.tsemantics[v]['shape'], self.tsemantics[self.tsymbols[id]]['shape']],
                         "rhs": v,
                     })
             else:
@@ -294,7 +291,7 @@ class NewVisitor(ast.NodeVisitor):
                         "op_type": "=",
                         "beta": beta,
                         "lhs": self.tsymbols[id],
-                        "shapes": [self.tsemantics[v]['shape'], self.tsemantics[self.tsymbols[id]]],
+                        "shapes": [self.tsemantics[v]['shape'], self.tsemantics[self.tsymbols[id]]['shape']],
                         "rhs": v,
                     })
             else:
@@ -309,7 +306,7 @@ class NewVisitor(ast.NodeVisitor):
     def visit_Call(self, node: Call) -> Any:
         obj = None
         obj = NewVisitor.visit(self,node.func)
-        if obj != None:
+        if obj is not None:
             return self.visit_Method_Call(node, obj) 
         else:
             if node.func.attr == "einsum": # Handle comet.einsum
@@ -334,7 +331,6 @@ class NewVisitor(ast.NodeVisitor):
         return out_id
     
     def create_binOp(self, node, operands, no_assign):
-        out_id = self.tcurr
         op0_sems = self.tsemantics[operands[0]]
         op1_sems = self.tsemantics[operands[1]]
 
@@ -361,6 +357,7 @@ class NewVisitor(ast.NodeVisitor):
 
             self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']]}
             # if not no_assign:
+            self.tcurr += 1
             self.declarations.append({
                 "type": "T",
                 "is_input": False,
@@ -375,9 +372,10 @@ class NewVisitor(ast.NodeVisitor):
                     "op_type": "=",
                     "shapes": [op_semantics['shape']]*2,
                     "lhs": self.tcurr,
-                    "rhs": self.tcurr,
+                    "rhs": self.tcurr-1,
                     "beta": no_assign,
                 })
+            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
         elif isinstance(node.op, ast.Sub):
             self.ops.append(
                 {
@@ -393,6 +391,7 @@ class NewVisitor(ast.NodeVisitor):
                 self.reset_indexlabel_with_val(d)
             self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']]}
             # if not no_assign:
+            self.tcurr += 1
             self.declarations.append({
                 "type": "T",
                 "is_input": False,
@@ -407,9 +406,10 @@ class NewVisitor(ast.NodeVisitor):
                     "op_type": "=",
                     "shapes": [op_semantics['shape']]*2,
                     "lhs": self.tcurr,
-                    "rhs": self.tcurr,
+                    "rhs": self.tcurr-1,
                     "beta": no_assign,
                 })
+            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
         elif isinstance(node.op, ast.Mult):
             in_ilabels = [self.get_next_indexlabel_with_val(d) for d in op_semantics['shape']]
             for d in op_semantics['shape']:
@@ -430,6 +430,8 @@ class NewVisitor(ast.NodeVisitor):
                 self.reset_indexlabel_with_val(d)
             self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']]}
             # if not no_assign:
+            self.tcurr += 1
+            
             self.declarations.append({
                 "type": "T",
                 "is_input": False,
@@ -444,9 +446,10 @@ class NewVisitor(ast.NodeVisitor):
                     "op_type": "=",
                     "shapes": [op_semantics['shape']]*2,
                     "lhs": self.tcurr,
-                    "rhs": self.tcurr,
+                    "rhs": self.tcurr-1,
                     "beta": no_assign,
                 })
+            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
         elif isinstance(node.op, ast.MatMult):
     # def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, no_assing):
 
@@ -463,10 +466,10 @@ class NewVisitor(ast.NodeVisitor):
             elif len(op1['shape']) == 1 and len(op2['shape']) == 2:
                 indices = 'j,jk->k'
             
-            return self.visit_Bin_Einsum_Call(operands, indices, mask, None, False)
+            return self.visit_Bin_Einsum_Call(operands, indices, mask, None, 0, False)
 
         self.tcurr +=1
-        return out_id
+        return self.tcurr-1
 
     def visit_BinOp(self, node: BinOp) -> Any:
         no_assign = self.no_assign
@@ -484,7 +487,7 @@ class NewVisitor(ast.NodeVisitor):
 
         if node.func.attr == "transpose":
             out_format = self.sp_mattr_conversions[op_semantics['format']]
-            self.tsemantics[out_id] = {'shape': op_semantics['shape'][::-1], 'format': out_format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape'][::-1]]}
+            self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'][::-1], 'format': out_format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape'][::-1]]}
             
             in_ilabels = [self.get_next_indexlabel_with_val(d) for d in op_semantics['shape']]
             for d in op_semantics['shape']:
@@ -500,10 +503,10 @@ class NewVisitor(ast.NodeVisitor):
                     "shapes": [op_semantics['shape'], op_semantics['shape'][::-1]],
                     "operands": [obj],
                     "op_ilabels": [in_ilabels, out_ilabels],
-                    "out_id": out_id,
+                    "out_id": self.tcurr,
                     "beta": 0,
                 })
-            
+            self.tcurr += 1
             # if not no_assign:
             self.declarations.append(
                 {
@@ -513,24 +516,26 @@ class NewVisitor(ast.NodeVisitor):
                     "format": out_format,
                     "shape": op_semantics['shape'][::-1],
                     "dimsSSA": [self.get_index_constant(d) for d in op_semantics['shape'][::-1]],
-                    "id": out_id,
+                    "id": self.tcurr,
                 })
             self.ops.append(                
                 {
                     "op_type": "=",
                     "shapes": [op_semantics['shape'][::-1]]*2,
                     "lhs": self.tcurr,
-                    "rhs": self.tcurr,
+                    "rhs": self.tcurr-1,
                     "beta": no_assign,
                 })
+            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
+            
         elif node.func.attr == "sum":
-            self.tsemantics[out_id] = {'shape': [1,], 'format': DENSE}
+            self.tsemantics[self.tcurr] = {'shape': [1,], 'format': DENSE}
             self.ops.append(
                 {
                     "op_type": "s",
                     "shapes": [op_semantics["shape"], [1,]],
                     "operands": [obj],
-                    "out_id": out_id,
+                    "out_id": self.tcurr,
                 })
             # if not no_assign:
             self.declarations.append(
@@ -538,7 +543,7 @@ class NewVisitor(ast.NodeVisitor):
                     "type": "V",
                     "todo": "l",
                     "format": DENSE,
-                    "id": out_id,
+                    "id": self.tcurr,
                 })
         elif node.func.attr == "multiply":
             op1 = NewVisitor.visit(self, node.args[0])
@@ -563,6 +568,7 @@ class NewVisitor(ast.NodeVisitor):
             format = self.sp_elw_mult_conversions[op_semantics['format']][op1_sems['format']]
             self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape'][::-1]]}
             # if not no_assign:
+            self.tcurr += 1
             self.declarations.append(
                 {
                     "type": "T",
@@ -577,13 +583,15 @@ class NewVisitor(ast.NodeVisitor):
                 {
                     "op_type": "=",
                     "shapes": [op_semantics['shape'][::-1]] * 2,
-                    "rhs": self.tcurr,
+                    "rhs": self.tcurr-1,
                     "lhs": self.tcurr,
                     "beta": no_assign,
                 })
+            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
+
         self.tcurr +=1
 
-        return out_id
+        return self.tcurr-1
 
     def visit_Return(self, node):
         obj = NewVisitor.visit(self, node.value)
@@ -598,7 +606,7 @@ class NewVisitor(ast.NodeVisitor):
                 "operands": [obj]
             })
 
-    def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, no_assign):
+    def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, beta, no_assign):
 
         ops = llabels.split('->')[0].split(',')
         res = list(llabels.split('->')[1])
@@ -625,7 +633,6 @@ class NewVisitor(ast.NodeVisitor):
 
 
         ret_num = [i for x in res for  i,v in enumerate(all_lbls) if x == v]
-
         in0_ilabels = [lbls_to_ilbls[l] for l in list(ops[0])]
         in1_ilabels = []
         if len(ops) > 1:
@@ -661,7 +668,7 @@ class NewVisitor(ast.NodeVisitor):
                     "out_id": self.tcurr,
                     "mask": mask,
                     "semiring": semiring,
-                    "beta": no_assign
+                    "beta": beta
                 })
                 
         elif len(ops) == 1:
@@ -679,11 +686,13 @@ class NewVisitor(ast.NodeVisitor):
                     "shapes": [self.tsemantics[operands[0]]['shape'], shape],
                     "operands": operands,
                     "out_id": self.tcurr,
-                    "beta": 0,
+                    "beta": beta,
                     "op_ilabels": [in_ilabels, out_ilabels]
                 })
                 
+        self.tsemantics[self.tcurr] = {'shape': shape, 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in shape]}
         if not no_assign:
+            self.tcurr += 1
             self.declarations.append(
                 {
                     "type": "T",
@@ -699,10 +708,11 @@ class NewVisitor(ast.NodeVisitor):
                     "op_type": "=",
                     "shapes": [shape] * 2,
                     "lhs": self.tcurr,
-                    "rhs": self.tcurr,
-                    "beta": no_assign,
+                    "rhs": self.tcurr-1,
+                    "beta": beta,
                 })
-        self.tsemantics[self.tcurr] = {'shape': shape, 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in shape]}
+            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
+        
         self.tcurr += 1
 
         return  self.tcurr - 1
@@ -766,6 +776,7 @@ class NewVisitor(ast.NodeVisitor):
                 # ("*", operands, indices+','+indices+'->'+indices, self.tcurr, semiring))
             format = self.sp_elw_mult_conversions[op0_sems['format']][op1_sems['format']]
             self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']] }
+            self.tcurr += 1
             self.declarations.append(
                 {
                     "type": "T",
@@ -780,26 +791,25 @@ class NewVisitor(ast.NodeVisitor):
                 {
                     "op_type": "=",
                     "shapes": [op_semantics['shape']] * 2,
-                    "rhs": self.tcurr,
+                    "rhs": self.tcurr-1,
                     "lhs": self.tcurr,
                     "beta": no_assign,
                 })
-
+            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
             self.tcurr += 1
 
-            return out_id
+            return self.tcurr-1
         if len(operands) > 1: # Contraction
-
             loperand = operands[0]
             lops = ops[0]
-
+            saved_no_assign = no_assign
+            no_assign = True
             for i in range(1, len(operands)):
                 all_lbls = list(lops)
                 for l in list(ops[i]):
                     if l not in all_lbls:
                         all_lbls.append(l)
 
-                
                 rh1_lbls_num = [curr for x in list(lops) for  curr,v in enumerate(all_lbls) if x == v]
                 rh2_lbls_num = [curr for x in list(ops[i]) for  curr,v in enumerate(all_lbls) if x == v]
                 all_lbls_num = rh1_lbls_num[:] # Copy
@@ -819,7 +829,8 @@ class NewVisitor(ast.NodeVisitor):
 
                 if i == len(operands) -1 :
                     ret = res
-                tid = self.visit_Bin_Einsum_Call([loperand,operands[i]], lops+","+ops[i]+"->"+"".join(ret), mask, semiring, no_assign)
+                    no_assign = saved_no_assign
+                tid = self.visit_Bin_Einsum_Call([loperand,operands[i]], lops+","+ops[i]+"->"+"".join(ret), mask, semiring, saved_no_assign, no_assign)
                 loperand = tid
                 lops = "".join(ret)
             return tid
@@ -828,97 +839,9 @@ class NewVisitor(ast.NodeVisitor):
             loperand = operands[0]
             lops = ops[0]
             ret = res
-            tid = self.visit_Bin_Einsum_Call([loperand], lops+"->"+"".join(ret), mask, semiring, no_assign)
+            tid = self.visit_Bin_Einsum_Call([loperand], lops+"->"+"".join(ret), mask, semiring, no_assign, no_assign)
             lops = "".join(ret)
             return tid
-
-
-        labels = []
-
-        temp = []
-        for _ in range(len(ops)):
-            temp.append([])
-        order = []
-        for l in res:
-            found = False
-            for i,op in enumerate(ops):
-                if found:
-                    break
-                for j,lop in enumerate(op):
-                    if lop == l:
-                        order.append((i,j))
-                        temp[i].append(j)
-                        found = True
-                        break
-        shape = []
-        for (t, pos) in order:
-            oshape = self.tsemantics[operands[t]]['shape']
-            shape.append(oshape[pos])
-        if len(operands) == 1:
-            format = self.sp_mattr_conversions[self.tsemantics[operands[0]]['format']]
-            self.ops.append(
-                {
-                    "op_type": "t",
-                    "shapes": [self.tsemantics[operands[0]]['shape'], self.tsemantics[operands[1]]['shape'][::-1]],
-                    "operands": operands,
-                    "beta": 0,
-                    "out_id": self.tcurr,
-                })
-                
-                # ("t", operands, iLabels, self.tcurr))
-            self.ops.append(
-                {
-                    "op_type": "=",
-                    "rhs": self.tcurr,
-                    "lhs": self.tcurr,
-                    "shapes": shape,
-                    "beta": no_assign,
-                })
-
-        else:
-            
-            format = self.tsemantics[operands[0]]['format']
-            if format != DENSE:
-                 self.need_opt_comp_workspace = True
-            for op in operands[1:]:
-                format = self.sp_matmult_conversions[format][self.tsemantics[op]['format']]
-                if format != DENSE:
-                    self.need_opt_comp_workspace = True
-            self.ops.append(
-                {
-                    "op_type": "c",
-                    "operands": operands,
-                    "mask": mask,
-                    "out_id": self.tcurr,
-                    "semiring": semiring,
-                    "beta": no_assign
-                })
-                # ("c", operands, iLabels, self.tcurr, mask[0], mask[1], semiring, no_assign))
-            if not no_assign:
-                self.ops.append(
-                {
-                    "op_type": "=",
-                    "rhs": self.tcurr,
-                    "lhs": self.tcurr,
-                    "beta": no_assign,
-                })
-        
-        if not no_assign or len(operands) == 1: # Tranpose
-            self.declarations.append(
-                {
-                    "type": "T",
-                    "is_input": False,
-                    "todo": "l",
-                    "format": format,
-                    "shape": shape,
-                    "dimsSSA": [self.get_index_constant(d) for d in shape],
-                    "id": self.tcurr,
-                })
-        self.tsemantics[self.tcurr] = {'shape': shape, 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in shape]}
-        self.tcurr += 1
-
-        return out_id
-
 
 #Wrapper function. The input function (in the form of an object) is passed an arguement to this function.
 def compile(flags, with_jit=True):
@@ -961,11 +884,9 @@ def compile(flags, with_jit=True):
                 irb.add_statement(t.build_tensor())
 
             for op in v.ops:
-                print(op)
                 if op["op_type"] == 'c':
                     op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
                     if op["mask"][0] is not None :
-                        print(op["mask"])
                         op["mask"] = (op["mask"][0], op["mask"][1], v.tsemantics[op["mask"][0]]['shape'])
                         irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
                     else:
