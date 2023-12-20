@@ -213,7 +213,7 @@ class SetOp_Builder:
 
     set_op_wrapper_text = jinja2.Template(
         ("" * indentation_size)
-        + '"ta.set_op"(%temp_{{input}},%t{{dest}}) {__beta__ = {{beta}} : f64} : ({{outputtype}}, {{outputtype}}) -> ()\n',
+        + '"ta.set_op"(%t{{input}},%t{{dest}}) {__beta__ = {{beta}} : f64} : ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
@@ -247,7 +247,7 @@ class ArithOp_Builder:
 
     tc_decl_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        + '%temp_{{dest}} = "ta.mul"({{operators}})'
+        + '%t{{dest}} = "ta.mul"({{operators}})'
         + '{MaskType = "{{mask_type}}", ' 
         + '__alpha__ = 1.000000e+00 : f64, '  
         +"__beta__ = {{beta}} : f64,"
@@ -258,7 +258,7 @@ class ArithOp_Builder:
         +"({{inputtype}})"
         +"-> {{outputtype}}"
         + "\n" ,
-        # + '"ta.set_op"(%temp_{{dest}},%t{{dest}}) {__beta__ = {{beta}} : f64} : ({{outputtype}}, {{outputtype}}) -> ()\n',
+        # + '"ta.set_op"(%t{{dest}},%t{{dest}}) {__beta__ = {{beta}} : f64} : ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
@@ -266,7 +266,7 @@ class ArithOp_Builder:
 
     tensor_add_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        +'%temp_{{dest}} = "ta.add"({{operators}})'
+        +'%t{{dest}} = "ta.add"({{operators}})'
         +' {'
         +' Masktype = "none",'
         +' formats = [{{formats}}],'
@@ -276,13 +276,13 @@ class ArithOp_Builder:
         +' : ({{inputtype}})'
         +"-> {{outputtype}}"
         + "\n", 
-        # + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
+        # + '"ta.set_op"(%t{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
     tensor_sub_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        +'%temp_{{dest}} = "ta.subtract"({{operators}})'
+        +'%t{{dest}} = "ta.subtract"({{operators}})'
         +' {'
         +' Masktype = "none",'
         +' formats = [{{formats}}],'
@@ -292,13 +292,13 @@ class ArithOp_Builder:
         +' : ({{inputtype}})'
         +"-> {{outputtype}}"
         + "\n",
-        # + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
+        # + '"ta.set_op"(%t{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
     elewisemult_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        +'%temp_{{dest}} = "ta.elews_mul"({{operators}})'
+        +'%t{{dest}} = "ta.elews_mul"({{operators}})'
         +' {__alpha__ = 1.000000e+00 : f64, '
         +"__beta__ = {{beta}}: f64,"
         + 'formats = [{{formats}}],'
@@ -306,13 +306,13 @@ class ArithOp_Builder:
         +"({{inputtype}})"
         +"-> {{outputtype}}"
         + "\n" ,
-        # + '"ta.set_op"(%temp_{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
+        # + '"ta.set_op"(%t{{dest}},%t{{dest}}): ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
     tranpose_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        + '%temp_{{dest}} = "ta.transpose"({{operators}})'
+        + '%t{{dest}} = "ta.transpose"({{operators}})'
         + '{__alpha__ = 1.000000e+00 : f64, '
         +"__beta__ = 0.000000e+00 : f64,"
         + 'formats = [{{formats}}],'
