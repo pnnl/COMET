@@ -38,7 +38,7 @@ module attributes {llvm.data_layout = ""} {
     %33 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
     %34 = llvm.insertvalue %2, %33[0] : !llvm.struct<(i64, ptr<i8>)> 
     %35 = llvm.insertvalue %32, %34[1] : !llvm.struct<(i64, ptr<i8>)> 
-    llvm.call @read_input_sizes_2D_f64(%7, %19, %4, %6, %19, %2, %32, %8) {filename = "SPARSE_FILE_NAME0"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i32) -> ()
+    llvm.call @read_input_sizes_2D_f64(%7, %19, %4, %18, %4, %2, %32, %8) {filename = "SPARSE_FILE_NAME0"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i32) -> ()
     %36 = llvm.load %24 : !llvm.ptr<i64>
     %37 = llvm.getelementptr %24[1] : (!llvm.ptr<i64>) -> !llvm.ptr<i64>
     %38 = llvm.load %37 : !llvm.ptr<i64>
@@ -303,7 +303,7 @@ module attributes {llvm.data_layout = ""} {
     %234 = llvm.mlir.undef : !llvm.struct<(i64, ptr<i8>)>
     %235 = llvm.insertvalue %2, %234[0] : !llvm.struct<(i64, ptr<i8>)> 
     %236 = llvm.insertvalue %233, %235[1] : !llvm.struct<(i64, ptr<i8>)> 
-    llvm.call @read_input_2D_f64(%7, %19, %4, %6, %19, %2, %73, %2, %93, %2, %113, %2, %133, %2, %153, %2, %173, %2, %193, %2, %213, %2, %233, %8) {filename = "SPARSE_FILE_NAME0"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i32) -> ()
+    llvm.call @read_input_2D_f64(%7, %19, %4, %18, %4, %2, %73, %2, %93, %2, %113, %2, %133, %2, %153, %2, %173, %2, %193, %2, %213, %2, %233, %8) {filename = "SPARSE_FILE_NAME0"} : (i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i64, !llvm.ptr<i8>, i32) -> ()
     %237 = llvm.mlir.null : !llvm.ptr<f64>
     %238 = llvm.getelementptr %237[%56] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
     %239 = llvm.ptrtoint %238 : !llvm.ptr<f64> to i64
@@ -358,33 +358,42 @@ module attributes {llvm.data_layout = ""} {
     %277 = llvm.icmp "slt" %276, %275 : i64
     llvm.cond_br %277, ^bb34, ^bb38
   ^bb34:  // pred: ^bb33
-    %278 = llvm.load %181 : !llvm.ptr<i64>
-    llvm.br ^bb35(%19 : i64)
-  ^bb35(%279: i64):  // 2 preds: ^bb34, ^bb36
-    %280 = llvm.icmp "slt" %279, %278 : i64
-    llvm.cond_br %280, ^bb36, ^bb37
+    %278 = llvm.add %276, %18  : i64
+    %279 = llvm.getelementptr %141[%276] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
+    %280 = llvm.load %279 : !llvm.ptr<i64>
+    %281 = llvm.getelementptr %141[%278] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
+    %282 = llvm.load %281 : !llvm.ptr<i64>
+    llvm.br ^bb35(%280 : i64)
+  ^bb35(%283: i64):  // 2 preds: ^bb34, ^bb36
+    %284 = llvm.icmp "slt" %283, %282 : i64
+    llvm.cond_br %284, ^bb36, ^bb37
   ^bb36:  // pred: ^bb35
-    %281 = llvm.load %61 : !llvm.ptr<i64>
-    %282 = llvm.mul %279, %281  : i64
-    %283 = llvm.add %282, %276  : i64
-    %284 = llvm.getelementptr %161[%283] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
-    %285 = llvm.load %284 : !llvm.ptr<i64>
-    %286 = llvm.getelementptr %221[%283] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
-    %287 = llvm.load %286 : !llvm.ptr<f64>
-    %288 = llvm.getelementptr %248[%285] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
-    %289 = llvm.load %288 : !llvm.ptr<f64>
-    %290 = llvm.getelementptr %260[%276] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
-    %291 = llvm.load %290 : !llvm.ptr<f64>
-    %292 = llvm.fmul %287, %289  : f64
-    %293 = llvm.fadd %291, %292  : f64
-    %294 = llvm.getelementptr %260[%276] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
-    llvm.store %293, %294 : !llvm.ptr<f64>
-    %295 = llvm.add %279, %18  : i64
-    llvm.br ^bb35(%295 : i64)
+    %285 = llvm.getelementptr %161[%283] : (!llvm.ptr<i64>, i64) -> !llvm.ptr<i64>
+    %286 = llvm.load %285 : !llvm.ptr<i64>
+    %287 = llvm.getelementptr %221[%283] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
+    %288 = llvm.load %287 : !llvm.ptr<f64>
+    %289 = llvm.getelementptr %248[%286] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
+    %290 = llvm.load %289 : !llvm.ptr<f64>
+    %291 = llvm.getelementptr %260[%276] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
+    %292 = llvm.load %291 : !llvm.ptr<f64>
+    %293 = llvm.fmul %288, %290  : f64
+    %294 = llvm.fadd %292, %293  : f64
+    %295 = llvm.getelementptr %260[%276] : (!llvm.ptr<f64>, i64) -> !llvm.ptr<f64>
+    llvm.store %294, %295 : !llvm.ptr<f64>
+    %296 = llvm.add %283, %18  : i64
+    llvm.br ^bb35(%296 : i64)
   ^bb37:  // pred: ^bb35
-    %296 = llvm.add %276, %18  : i64
-    llvm.br ^bb33(%296 : i64)
+    llvm.br ^bb33(%278 : i64)
   ^bb38:  // pred: ^bb33
+    llvm.call @comet_print_memref_i64(%2, %73) : (i64, !llvm.ptr<i8>) -> ()
+    llvm.call @comet_print_memref_i64(%2, %93) : (i64, !llvm.ptr<i8>) -> ()
+    llvm.call @comet_print_memref_i64(%2, %113) : (i64, !llvm.ptr<i8>) -> ()
+    llvm.call @comet_print_memref_i64(%2, %133) : (i64, !llvm.ptr<i8>) -> ()
+    llvm.call @comet_print_memref_i64(%2, %153) : (i64, !llvm.ptr<i8>) -> ()
+    llvm.call @comet_print_memref_i64(%2, %173) : (i64, !llvm.ptr<i8>) -> ()
+    llvm.call @comet_print_memref_i64(%2, %193) : (i64, !llvm.ptr<i8>) -> ()
+    llvm.call @comet_print_memref_i64(%2, %213) : (i64, !llvm.ptr<i8>) -> ()
+    llvm.call @comet_print_memref_f64(%2, %233) : (i64, !llvm.ptr<i8>) -> ()
     %297 = llvm.alloca %2 x !llvm.struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)> : (i64) -> !llvm.ptr<struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)>>
     llvm.store %266, %297 : !llvm.ptr<struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)>>
     %298 = llvm.bitcast %297 : !llvm.ptr<struct<(ptr<f64>, ptr<f64>, i64, array<1 x i64>, array<1 x i64>)>> to !llvm.ptr<i8>
@@ -398,4 +407,5 @@ module attributes {llvm.data_layout = ""} {
   llvm.func @read_input_sizes_2D_f64(i32, i64, i64, i64, i64, i64, !llvm.ptr<i8>, i32) attributes {sym_visibility = "private"}
   llvm.func @comet_sort_index(i64, !llvm.ptr<i8>, i64, i64) attributes {sym_visibility = "private"}
   llvm.func @comet_print_memref_f64(i64, !llvm.ptr<i8>) attributes {sym_visibility = "private"}
+  llvm.func @comet_print_memref_i64(i64, !llvm.ptr<i8>) attributes {sym_visibility = "private"}
 }
