@@ -965,9 +965,14 @@ struct BCSRMatrix
     std::vector<double> Aval_nc;
     
     // Step 1: Determine block size
-    // TODO: Let us think about this. For now, quick solution
     block_rows = rows/2;
     block_cols = cols/2;
+    if (std::getenv("BLOCK_ROWS")) {
+        block_rows = std::stoi(std::getenv("BLOCK_ROWS"));
+    }
+    if (std::getenv("BLOCK_COLS")) {
+        block_cols = std::stoi(std::getenv("BLOCK_COLS"));
+    }
     //printf("Block_rows: %d | Block_cols: %d\n", block_rows, block_cols);
     
     // Step 2: Examine the blocks

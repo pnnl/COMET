@@ -1,8 +1,8 @@
 # Sparse matrix dense vector multiplication (SpMV)
-# Sparse matrix is in CSR format
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_spmv_CSRxDense.llvm
+# Sparse matrix is in BCSR format
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_spmv_BCSRxDense.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
-# RUN: mlir-cpu-runner mult_spmv_CSRxDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner mult_spmv_BCSRxDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%mlir_utility_library_dir/libmlir_runner_utils%shlibext,%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 
 def main() {
@@ -11,7 +11,7 @@ def main() {
 	IndexLabel [b] = [?];           
 
 	#Tensor Declarations
-	Tensor<double> A([a, b], {ELL});	  
+	Tensor<double> A([a, b], {CSR});	  
 	Tensor<double> B([b], {Dense});
 	Tensor<double> C([a], {Dense});
 
@@ -22,6 +22,8 @@ def main() {
 	C[a] = 0.0;
 
 	C[a] = A[a, b] * B[b];
+	
+	print(A);
 	print(C);
 }
 
