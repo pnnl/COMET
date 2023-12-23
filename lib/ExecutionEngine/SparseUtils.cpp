@@ -772,7 +772,8 @@ struct DcsrMatrix
 ///===----------------------------------------------------------------------===//
 /// ELLPACK matrix type
 ///===----------------------------------------------------------------------===//
-
+#include <map>
+#include <algorithm>
 template <typename T>
 struct EllpackMatrix
 {
@@ -820,6 +821,33 @@ struct EllpackMatrix
     if (buffer > max)
       max = buffer;
     num_cols = max;
+    
+    // Create a map to make padding more efficient
+    current = coo_matrix->coo_tuples[0].row;
+    std::map<uint64_t, std::vector<uint64_t>> rows;
+    std::map<uint64_t, std::vector<double>> vals;
+    rows[current] = std::vector<uint64_t>();
+    vals[current] = std::vector<double>();
+    
+    for (uint64_t i = 0; i < num_nonzeros; i++) {
+      uint64_t cur_row = coo_matrix->coo_tuples[i].row;
+      if (cur_row != current)
+      {
+        current = cur_row;
+        rows[current] = std::vector<uint64_t>();
+        vals[current] = std::vector<double>();
+      }
+      rows[cur_row].push_back(coo_matrix->coo_tuples[i].col);
+      vals[cur_row].push_back(coo_matrix->coo_tuples[i].val);
+    }
+    
+    /*for (auto it = rows.begin(); it != rows.end(); it++)
+    {
+        std::cout << it->first    // string (key)
+                  << ": [";
+        for (auto v : it->second) std::cout << v << " ";
+        std::cout << "]" << std::endl;
+    }*/
 
     /// Create the column coordinate list
     uint64_t *col_crd1 = new uint64_t[num_rows * num_cols];
@@ -827,15 +855,25 @@ struct EllpackMatrix
     uint64_t index = 0;
     
     // Iterate over each row, and add the non-zero elements
+    //printf("[Debug] Begin looping...\n");
     for (uint64_t i = 0; i<num_rows; i++) {
         uint64_t cols = 0;
-        for (uint64_t j = 0; j<num_nonzeros; j++) {
+        //printf("[Debug] Count columns\n");
+        /*for (uint64_t j = 0; j<num_nonzeros; j++) {
             if (coo_matrix->coo_tuples[j].row == i) {
                 col_crd1[index] = coo_matrix->coo_tuples[j].col;
                 Aval1[index] = coo_matrix->coo_tuples[j].val;
                 ++index;
                 ++cols;
             }
+        }*/
+        auto current_cols = rows[i];
+        auto current_vals = vals[i];
+        for (uint64_t j = 0; j<current_cols.size(); j++) {
+          col_crd1[index] = current_cols[j];
+          Aval1[index] = current_vals[j];
+          ++index;
+          ++cols;
         }
         
         if (cols < num_cols) {
@@ -845,9 +883,11 @@ struct EllpackMatrix
             // -- advance col
             // -- repeat
             int col = 0;
+            //printf("[Debug] Filling. Need: %d out of %d [%d]\n", cols, num_cols, i);
             while (cols < num_cols) {
+                //printf("[Debug] Begin filling- inner loop.\n");
                 while (col < num_cols) {
-                    bool found = false;
+                    /*bool found = false;
                     for (uint64_t j = 0; j<num_nonzeros; j++) {
                         if (coo_matrix->coo_tuples[j].row == i) {
                             if (coo_matrix->coo_tuples[j].col == col) {
@@ -858,6 +898,11 @@ struct EllpackMatrix
                     }
                     
                     if (!found) break;
+                    ++col;*/
+                    if (std::find(current_cols.begin(), current_cols.end(), col) == current_cols.end()) {
+                      //Not Found
+                      break;
+                    }
                     ++col;
                 }
                 
@@ -867,6 +912,7 @@ struct EllpackMatrix
                 ++cols;
                 ++col;
             }
+
         }
     }
     
