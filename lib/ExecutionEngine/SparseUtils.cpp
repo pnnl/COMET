@@ -999,6 +999,36 @@ struct BCSRMatrix
     }
     //printf("Block_rows: %d | Block_cols: %d\n", block_rows, block_cols);
     
+    ///////////////////////////////////////////////
+    // Create a map to make padding more efficient
+    uint64_t current = coo_matrix->coo_tuples[0].row;
+    std::map<uint64_t, std::vector<uint64_t>> row_map;
+    std::map<uint64_t, std::vector<double>> val_map;
+    row_map[current] = std::vector<uint64_t>();
+    val_map[current] = std::vector<double>();
+    
+    for (uint64_t i = 0; i < num_nonzeros; i++) {
+      uint64_t cur_row = coo_matrix->coo_tuples[i].row;
+      if (cur_row != current)
+      {
+        current = cur_row;
+        row_map[current] = std::vector<uint64_t>();
+        val_map[current] = std::vector<double>();
+      }
+      row_map[cur_row].push_back(coo_matrix->coo_tuples[i].col);
+      val_map[cur_row].push_back(coo_matrix->coo_tuples[i].val);
+    }
+    
+    /*for (auto it = row_map.begin(); it != row_map.end(); it++)
+    {
+        std::cout << it->first    // string (key)
+                  << ": [";
+        for (auto v : it->second) std::cout << v << " ";
+        std::cout << "]" << std::endl;
+    }*/
+    
+    ///////////////////////////////////////////////
+    
     // Step 2: Examine the blocks
     // We only want the blocks with values
     //
@@ -1009,9 +1039,29 @@ struct BCSRMatrix
         // Note: for A2_crd, corresponds to j, divide by "block_cols"
         // to get the block position
         
+        //printf("[Search] i, j: %d, %d\n", i, j);
+        bool has_values = false;
+        for (uint64_t bi = i; bi<(i+block_rows); bi++) {
+          for (uint64_t bj = j; bj<(j+block_cols); bj++) {
+            //printf("--bi, bj: %d, %d\n", bi, bj);
+            
+            auto current_cols = row_map[bi];
+            if (!current_cols.empty()) {
+              if (std::find(current_cols.begin(), current_cols.end(), bj) != current_cols.end()) {
+                //printf("-- -- Found\n");
+                has_values = true;
+                goto s_done;
+              }
+            }
+            
+          }
+        }
+        s_done:
+        
         // Check the block and see if it has values
         // If so, we use it
-        if (has_values(i, i+block_rows, j, j+block_cols, coo_matrix)) {
+        //if (has_values(i, i+block_rows, j, j+block_cols, coo_matrix)) {
+        if (has_values) {
           A2pos_nc.push_back(i/block_rows);
           A2crd.push_back(j/block_cols);
           
@@ -1024,12 +1074,18 @@ struct BCSRMatrix
           for (uint64_t bi = i; bi<(i+block_rows); bi++) {
             for (uint64_t bj = j; bj<(j+block_cols); bj++) {
               bool found = false;
-              for (uint64_t p = 0; p<coo_matrix->num_nonzeros; p++) {
-                auto coord = coo_matrix->coo_tuples[p];
-                if (coord.row == bi && coord.col == bj) {
-                  Aval_nc.push_back(coord.val);
+              //printf("[Val] Bi: %d | Bj: %d\n", bi, bj);
+              
+              auto current_cols = row_map[bi];
+              if (!current_cols.empty()) {
+                auto pos = std::find(current_cols.begin(), current_cols.end(), bj);
+                if (pos != current_cols.end()) {
+                  uint64_t pos2 = pos - current_cols.begin();
+                  double val = val_map[bi][pos2];
+                  //printf("--Found\n");
+                  
+                  Aval_nc.push_back(val);
                   found = true;
-                  break;
                 }
               }
               
@@ -1038,9 +1094,12 @@ struct BCSRMatrix
               }
             }
           }
-        }
+        } // end if
+        
       }
     }
+    
+    //printf("------------\n");
     
     // Compress the row coordinates
     std::vector<int> A2pos;
@@ -1072,6 +1131,8 @@ struct BCSRMatrix
     for (uint64_t i = 0; i<A2pos.size(); i++) colptr[i] = A2pos[i];
     for (uint64_t i = 0; i<A2crd.size(); i++) colidx[i] = A2crd[i];
     for (uint64_t i = 0; i<Aval_nc.size(); i++) Aval[i] = Aval_nc[i];
+    
+    //printf("----DONE\n");
   }
 
   /// Clear matrix
