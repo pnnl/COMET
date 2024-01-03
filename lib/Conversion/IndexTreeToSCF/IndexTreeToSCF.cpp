@@ -547,7 +547,7 @@ LowerIndexTreeToSCFPass::convertCompute(Operation *op,
   IndexTreeLHSOperandOp lhs = llvm::cast<IndexTreeLHSOperandOp>(compute_op.getLhs().getDefiningOp());
   Value reduce_result = convertOperand(lhs, rewriter);
   reduce_result = getSemiringFirstVal(rewriter, loc, semiringParts.first, 
-                                      elementwise_result, reduce_result,
+                                      reduce_result, elementwise_result,
                                       compute_op.getCompWorkspOpt());
 
   // TODO: Deal with sparse output
