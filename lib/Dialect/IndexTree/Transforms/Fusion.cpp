@@ -323,7 +323,6 @@ mlir::Value IndexTreeKernelFusionPass::createNewTensorDecl(
   {
     if (old_tensor.isDynamicDim(i))
     {
-      auto dimIndex = old_tensor.getDynamicDimIndex(i);
       operands.push_back(old_tensor_op->getOperands()[i]);
     }
     else
@@ -370,15 +369,15 @@ void IndexTreeKernelFusionPass::createNewTensor(
     /// Get the previous memref.load operand
     auto loc = old_tensor_alloc.getLoc();
     OpBuilder builder(old_tensor_alloc.getDefiningOp());
-    mlir::Value load_op = old_tensor_alloc.getDefiningOp()->getOperand(rank_base);
+    // mlir::Value load_op = old_tensor_alloc.getDefiningOp()->getOperand(rank_base);
 
     /// Get constant zero and constant one
-    ConstantOp constant_zero = builder.create<ConstantOp>(loc,
-                                                          builder.getIndexType(),
-                                                          builder.getIndexAttr(0));
-    ConstantOp constant_one = builder.create<ConstantOp>(loc,
-                                                         builder.getIndexType(),
-                                                         builder.getIndexAttr(1));
+    // ConstantOp constant_zero = builder.create<ConstantOp>(loc,
+    //                                                       builder.getIndexType(),
+    //                                                       builder.getIndexAttr(0));
+    // ConstantOp constant_one = builder.create<ConstantOp>(loc,
+    //                                                      builder.getIndexType(),
+    //                                                      builder.getIndexAttr(1));
 
     /// Create ta.index_label_static
     mlir::Value index_label_op = builder.create<tensorAlgebra::IndexLabelOp>(loc //,

@@ -231,7 +231,6 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   auto operands = op->getOperands();
   auto loc = op->getLoc();
   auto lhsOp = operands[0].getDefiningOp(); ///  TensorMultOp
-  auto rhsOp = operands[1].getDefiningOp();
 
   std::vector<Operation *> MultOpsToRemove;
   std::vector<Operation *> LTOpsToRemove;

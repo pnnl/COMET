@@ -75,86 +75,50 @@ namespace
     matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                     ConversionPatternRewriter &rewriter) const final
     {
-      assert(isa<tensorAlgebra::ChainSetOp>(op));
+      // assert(isa<tensorAlgebra::ChainSetOp>(op));
 
-      comet_debug() << "ChainSetOpLowering begin\n";
-      comet_pdump(op);
-      auto ctx = rewriter.getContext();
-      auto loc = op->getLoc();
+      // comet_debug() << "ChainSetOpLowering begin\n";
+      // comet_pdump(op);
+      // auto ctx = rewriter.getContext();
+      // auto loc = op->getLoc();
 
-      auto lhs = operands[0].getDefiningOp();
-      auto rhs = operands[1].getDefiningOp();
+      // auto lhs = operands[0].getDefiningOp();
+      // auto rhs = operands[1].getDefiningOp();
 
-      assert(isa<tensorAlgebra::LabeledTensorOp>(lhs));
-      auto lhsLT = cast<tensorAlgebra::LabeledTensorOp>(lhs);
+      // assert(isa<tensorAlgebra::LabeledTensorOp>(lhs));
+      // auto lhsLT = cast<tensorAlgebra::LabeledTensorOp>(lhs);
 
-      Operation *rhsOp;
-      if (isa<tensorAlgebra::ChainMulOp>(rhs))
-      {
-        comet_debug() << "\n";
-        rhsOp = cast<tensorAlgebra::ChainMulOp>(rhs);
-      }
-      else if (isa<tensorAlgebra::TensorAddOp>(rhs))
-      {
-        comet_debug() << "\n";
-        rhsOp = cast<tensorAlgebra::TensorAddOp>(rhs);
-      }
-      else if (isa<tensorAlgebra::LabeledTensorOp>(rhs))
-      {
-        comet_debug() << "\n";
-        auto rhsLT = cast<tensorAlgebra::LabeledTensorOp>(rhs);
+      // Operation *rhsOp;
+      // if (isa<tensorAlgebra::ChainMulOp>(rhs))
+      // {
+      //   comet_debug() << "\n";
+      //   rhsOp = cast<tensorAlgebra::ChainMulOp>(rhs);
+      // }
+      // else if (isa<tensorAlgebra::TensorAddOp>(rhs))
+      // {
+      //   comet_debug() << "\n";
+      //   rhsOp = cast<tensorAlgebra::TensorAddOp>(rhs);
+      // }
+      // else
+      // {
+      //   comet_debug() << "Neither MulOp, AddOp, it is: ";
+      //   comet_pdump(rhs);
+      //   comet_debug() << "ChainSetOpLowering end\n";
+      //   return success();
+      // }
 
-        auto lhsLabels = lhsLT.getLabels();
-        auto rhsLabels = rhsLT.getLabels();
-        std::vector<Operation *> lhsLabelOps, rhsLabelOps;
-        for (const auto lbl : lhsLabels)
-        {
-          lhsLabelOps.push_back(lbl.getDefiningOp());
-        }
-        for (const auto lbl : rhsLabels)
-        {
-          rhsLabelOps.push_back(lbl.getDefiningOp());
-        }
-        auto outPerm = constructPermutationMapAttr(rhsLabelOps, lhsLabelOps);
-        auto inPerm = constructPermutationMapAttr(rhsLabelOps, rhsLabelOps);
+      // comet_debug() << "\n";
+      // auto lhsTensor = lhsLT.getTensor();
+      // comet_debug() << "\n";
+      // auto labels = lhsLT.getLabels();
+      // comet_debug() << "\n";
+      // std::vector<Value> lhsLabels(labels.begin(), labels.end());
 
-        auto inPermAttr = AffineMapAttr::get(AffineMap::getPermutationMap(inPerm, ctx));
-        auto outPermAttr = AffineMapAttr::get(AffineMap::getPermutationMap(outPerm, ctx));
-
-        auto new_op = rewriter.create<tensorAlgebra::TensorCopyOp>(loc, lhsLT.getTensor(), rhsLT.getTensor(), inPermAttr, outPermAttr);
-        comet_debug() << "\n";
-        comet_vdump(new_op);
-
-        double alpha = 1.0;
-        auto betaAttr = op->getAttr("__beta__");
-        double beta = betaAttr.cast<FloatAttr>().getValueAsDouble();
-
-        new_op.getOperation()->setAttr("__alpha__", rewriter.getF64FloatAttr(alpha));
-        new_op.getOperation()->setAttr("__beta__", rewriter.getF64FloatAttr(beta));
-
-        rewriter.eraseOp(op);
-        return success();
-      }
-      else
-      {
-        comet_debug() << "Neither MulOp, AddOp, nor LabeledTensorOp, it is: ";
-        comet_pdump(rhs);
-        comet_debug() << "ChainSetOpLowering end\n";
-        return success();
-      }
-
-      comet_debug() << "\n";
-      auto lhsTensor = lhsLT.getTensor();
-      comet_debug() << "\n";
-      auto labels = lhsLT.getLabels();
-      comet_debug() << "\n";
-      std::vector<Value> lhsLabels(labels.begin(), labels.end());
-
-      comet_pdump(rhsOp);
-      comet_debug() << "\n";
-      replaceSetOp(rhsOp, lhsTensor, lhsLabels, loc, rewriter);
-      rewriter.eraseOp(op);
-      comet_debug() << "ChainSetOpLowering end\n";
+      // comet_pdump(rhsOp);
+      // comet_debug() << "\n";
+      // replaceSetOp(rhsOp, lhsTensor, lhsLabels, loc, rewriter);
+      // rewriter.eraseOp(op);
+      // comet_debug() << "ChainSetOpLowering end\n";
       return success();
     }
   };
