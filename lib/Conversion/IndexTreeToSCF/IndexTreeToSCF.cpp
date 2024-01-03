@@ -33,6 +33,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Index/IR/IndexOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
@@ -602,7 +603,7 @@ LowerIndexTreeToSCFPass::convertCompute(Operation *op,
     if(rhs == compute_op.getRhs().begin()){
       elementwise_result = rhs_value;
     } else {
-      elementwise_result = getSemiringSecondVal(rewriter, loc, semiringParts.first, 
+      elementwise_result = getSemiringSecondVal(rewriter, loc, semiringParts.second, 
                                                 elementwise_result, rhs_value,
                                                 compute_op.getCompWorkspOpt());
     }
@@ -610,7 +611,7 @@ LowerIndexTreeToSCFPass::convertCompute(Operation *op,
 
   IndexTreeLHSOperandOp lhs = llvm::cast<IndexTreeLHSOperandOp>(compute_op.getLhs().getDefiningOp());
   Value reduce_result = convertOperand(lhs, rewriter);
-  reduce_result = getSemiringFirstVal(rewriter, loc, semiringParts.second, 
+  reduce_result = getSemiringFirstVal(rewriter, loc, semiringParts.first, 
                                       elementwise_result, reduce_result,
                                       compute_op.getCompWorkspOpt());
 
@@ -637,7 +638,15 @@ LowerIndexTreeToSCFPass::collectChildren(IndexTreeIndicesOp root)
     if(llvm::isa<IndexTreeIndicesOp>(user))
     {
       Value domain = llvm::cast<IndexTreeIndicesOp>(user).getDomain();
-      result.insert(domain.getDefiningOp());
+      Operation* domain_op = domain.getDefiningOp();
+      if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op) || llvm::isa<IndexTreeDomainUnionOp>(domain_op))
+      {
+        for(auto child_domain : domain_op->getOperands())
+        {
+          result.insert(child_domain.getDefiningOp());
+        }
+      }
+      result.insert(domain_op);
     }
     if(llvm::isa<IndexTreeComputeOp>(user))
     {
@@ -696,12 +705,13 @@ LowerIndexTreeToSCFPass::fillSubtree(Location loc,
 
 void
 LowerIndexTreeToSCFPass::deleteDomain(Operation* op, IRRewriter &rewriter) {
+  auto subdomains = op->getOperands();
+  rewriter.eraseOp(op);
   if(llvm::isa<IndexTreeDomainIntersectionOp>(op)){
-    for(Value subdomain : op->getOperands()) {
+    for(Value subdomain : subdomains) {
       deleteDomain(subdomain.getDefiningOp(), rewriter);
     }
   }
-  rewriter.eraseOp(op);
 }
 
 mlir::LogicalResult
@@ -830,14 +840,14 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
       SmallVector<Value> loop_conditions;
       SmallVector<Value> array_crds;
 
-      Block temp_cond_block = Block();
-      Block temp_body_block = Block();
+      Block* cond_block = new Block();
+      Block* body_block = new Block();
       IRMapping map;
 
       // Create loop carried arguments for output tensors
       for(Value init_arg : loop_init_args){
-        temp_cond_block.addArgument(init_arg.getType(), loc);
-        BlockArgument body_arg = temp_body_block.addArgument(init_arg.getType(), loc);
+        cond_block->addArgument(init_arg.getType(), loc);
+        BlockArgument body_arg = body_block->addArgument(init_arg.getType(), loc);
         map.map(init_arg, body_arg);
       }
 
@@ -865,9 +875,10 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
             Value start = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), start_idx);
             Value end = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), end_idx);
             loop_init_args.push_back(start);
+            before = rewriter.saveInsertionPoint();
 
-            Value crd_idx = temp_cond_block.addArgument(start.getType(), loc);
-            rewriter.setInsertionPointToStart(&temp_cond_block);
+            Value crd_idx = cond_block->addArgument(start.getType(), loc);
+            rewriter.setInsertionPointToStart(cond_block);
             Value cnd = rewriter.create<arith::CmpIOp>(
               loc, rewriter.getI1Type(),
               arith::CmpIPredicateAttr::get(context, arith::CmpIPredicate::ult), 
@@ -875,8 +886,8 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
             );
             loop_conditions.push_back(cnd);
 
-            crd_idx = temp_body_block.addArgument(start.getType(), loc);
-            rewriter.setInsertionPointToStart(&temp_body_block);
+            crd_idx = body_block->addArgument(start.getType(), loc);
+            rewriter.setInsertionPointToStart(body_block);
             Value array_crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
             array_crds.push_back(array_crd);
 
@@ -887,11 +898,13 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
           }
         }
       }
+      rewriter.restoreInsertionPoint(before);
 
       // Create while loop
-      scf::WhileOp while_loop = rewriter.create<scf::WhileOp>(loc, temp_cond_block.getArgumentTypes(), loop_init_args);
-      Block& cond_block =  while_loop.getBefore().front();
-      rewriter.mergeBlocks(&temp_cond_block, &cond_block);
+      scf::WhileOp while_loop = rewriter.create<scf::WhileOp>(loc, cond_block->getArgumentTypes(), loop_init_args);
+      while_loop.getBefore().push_front(cond_block);
+
+      rewriter.setInsertionPointToEnd(cond_block);
       Value loop_condition = nullptr;
       for(Value cnd : loop_conditions)
       {
@@ -902,14 +915,11 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
           loop_condition = rewriter.create<arith::AndIOp>(loc, rewriter.getI1Type(), loop_condition, cnd);
         }
       }
-      rewriter.setInsertionPointToEnd(&cond_block);
-      rewriter.create<scf::ConditionOp>(loc, loop_condition, cond_block.getArguments());
+      rewriter.create<scf::ConditionOp>(loc, loop_condition, cond_block->getArguments());
 
-      Block& body_block = while_loop.getAfter().front();
-      rewriter.mergeBlocks(&temp_body_block, &body_block);
-
+      while_loop.getAfter().push_front(body_block);
       // Create intersection
-      rewriter.setInsertionPointToEnd(&body_block);
+      rewriter.setInsertionPointToEnd(body_block);
       crd = nullptr;
       for(Value array_crd : array_crds){
         if(crd == nullptr)
@@ -933,7 +943,7 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
         {
           intersection_cnd = is_intersect;
         } else {
-          intersection_cnd = rewriter.create<arith::AndIOp>(loc, rewriter.getI1Type(), loop_condition, is_intersect);
+          intersection_cnd = rewriter.create<arith::AndIOp>(loc, rewriter.getI1Type(), intersection_cnd, is_intersect);
         }
         intersections.push_back(is_intersect);
       }
@@ -945,7 +955,12 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
       }
       scf::IfOp if_op = rewriter.create<scf::IfOp>(loc, if_types, intersection_cnd, true);
       rewriter.setInsertionPointToStart(if_op.elseBlock());
-      rewriter.create<scf::YieldOp>(loc, loop_outputs);
+      rewriter.create<scf::YieldOp>(
+        loc, 
+        std::vector<Value>(
+          body_block->args_begin(),
+          body_block->args_begin() + if_op->getNumResults())
+      );
       rewriter.setInsertionPointToStart(if_op.thenBlock());
       fillSubtree(loc, rewriter, subtree, loop_outputs, while_loop.getResults(), map);
       rewriter.setInsertionPoint(if_op.thenBlock()->getTerminator());
@@ -958,11 +973,11 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
       for(auto result : if_op.getResults()) {
         yield_args.push_back(result);
       }
-      auto cntrl_arg = body_block.args_begin() + loop_outputs.size();
+      auto cntrl_arg = body_block->args_begin() + loop_outputs.size();
       for(Value cnd : intersections)
       {
-        Value inc = rewriter.create<arith::ExtUIOp>(loc, index_type, cnd);
-        yield_args.push_back(rewriter.create<arith::AddIOp>(loc, index_type, *cntrl_arg));
+        Value inc = rewriter.create<index::CastUOp>(loc, index_type, cnd);
+        yield_args.push_back(rewriter.create<index::AddOp>(loc, index_type, *cntrl_arg, inc));
         cntrl_arg += 1;
       }
 
