@@ -1114,20 +1114,6 @@ def TensorFillFromFileOp : TA_Op<"fill_from_file", [Pure]>{
   
 }
 
-//TODO(gkestor): need to evaluate its use cases
-def LabeledTensorOp : TA_Op<"labeled_tensor", [Pure]>{
-
-  let summary = "Produce a sliced `subview` of a base `tensor`.";
-  let description = [{
-  }];
-
-  let arguments = (ins TA_AnyTensor:$tensor, Variadic<IndexLabel>:$labels);
-  let results = (outs TA_AnyTensor);
-
-  //TODO(gkestor): add verifier
-  //let hasVerifier = 1;
-}
-
 def TensorCopyOp : TA_Op<"copy", [Pure]>{
   
   let summary = "";

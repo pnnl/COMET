@@ -457,35 +457,35 @@ namespace
     return ret;
   }
 
-  Value findCorrespondingAlloc(Value &iOp)
-  {
-    comet_debug() << "findCorrespondingAlloc for loop upper bound\n";
-    comet_vdump(iOp);
-    auto init_alloc = iOp.getDefiningOp()->getOperand(0);
-    comet_vdump(init_alloc);
+  // Value findCorrespondingAlloc(Value &iOp)
+  // {
+  //   comet_debug() << "findCorrespondingAlloc for loop upper bound\n";
+  //   comet_vdump(iOp);
+  //   auto init_alloc = iOp.getDefiningOp()->getOperand(0);
+  //   comet_vdump(init_alloc);
 
-    while (true)
-    {
-      if (isa<memref::AllocOp>(init_alloc.getDefiningOp()))
-      {
-        if (init_alloc.getType().dyn_cast<MemRefType>().getDimSize(0) != ShapedType::kDynamic)
-        {
-          return init_alloc;
-        }
-      }
-      if (init_alloc.getDefiningOp()->getNumOperands() > 0)
-      {
-        init_alloc = init_alloc.getDefiningOp()->getOperand(0);
-      }
-      else
-      {
-        /// Alloc related to another sparse tensor construct such as coming from sparse transpose
-        comet_debug() << "Return alloc op - comes from sptensor_construct\n";
-        comet_vdump(init_alloc);
-        return init_alloc;
-      }
-    }
-  }
+  //   while (true)
+  //   {
+  //     if (isa<memref::AllocOp>(init_alloc.getDefiningOp()))
+  //     {
+  //       if (init_alloc.getType().dyn_cast<MemRefType>().getDimSize(0) != ShapedType::kDynamic)
+  //       {
+  //         return init_alloc;
+  //       }
+  //     }
+  //     if (init_alloc.getDefiningOp()->getNumOperands() > 0)
+  //     {
+  //       init_alloc = init_alloc.getDefiningOp()->getOperand(0);
+  //     }
+  //     else
+  //     {
+  //       /// Alloc related to another sparse tensor construct such as coming from sparse transpose
+  //       comet_debug() << "Return alloc op - comes from sptensor_construct\n";
+  //       comet_vdump(init_alloc);
+  //       return init_alloc;
+  //     }
+  //   }
+  // }
 
   /// Get allocs for a tensor (sparse or dense)
   std::vector<Value> getAllocs(Value &tensor)
@@ -637,7 +637,6 @@ namespace
     /// Check which tensor is sparse, which is dense;
     /// Since this function only handles mixed sparse/dense, then "D" only occurs in one tensor
     /// Both the dense and sparse tensor contain the dim size; But they are different. Use one.
-    int64_t maxSize = 0;
     comet_debug() << " ";
     comet_vdump(tensor);
 
@@ -731,22 +730,22 @@ namespace
           comet_debug() << " opstree->parent is not NULL\n";
           comet_debug() << " parent forop\n";
           comet_vdump(parent_forop);
-          auto parent_UpperBound = parent_forop.getUpperBound();
-          comet_debug() << " parent upperBound:\n";
-          comet_vdump(parent_UpperBound);
 
-          ///  check if parent's and child's upper bounds come from the same sparse tensor
-          auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
-          comet_debug() << " parent upperBound alloc\n";
-          comet_vdump(alloc_parent_bounds);
-
-          comet_debug() << " child upperBound:\n";
-          comet_vdump(allAllocs[i][4 * id]);
-          auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
-          comet_debug() << " child upperBound alloc\n";
-          comet_vdump(alloc_child_bounds);
 
           /// TODO (PT) Not sure why this (now commented out) code was needed but it breaks spgemm for cases like C = A * A
+          ///  check if parent's and child's upper bounds come from the same sparse tensor
+          /// auto parent_UpperBound = parent_forop.getUpperBound();
+          /// comet_debug() << " parent upperBound:\n";
+          /// comet_vdump(parent_UpperBound);
+          /// auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
+          /// comet_debug() << " parent upperBound alloc\n";
+          /// comet_vdump(alloc_parent_bounds);
+
+          /// comet_debug() << " child upperBound:\n";
+          /// comet_vdump(allAllocs[i][4 * id]);
+          /// auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
+          /// comet_debug() << " child upperBound alloc\n";
+          /// comet_vdump(alloc_child_bounds);
 
           // if (alloc_child_bounds == alloc_parent_bounds) /// m is the nearest loop induction variable
           // {
@@ -4221,7 +4220,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
   dfsRootOpTree(rootOp.getChildren(), wp_ops);
 // #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   comet_debug() << " wp_ops.size(): " << wp_ops.size() << "\n";
-  for (auto n : wp_ops)
+  for ([[maybe_unused]]auto n : wp_ops)
   {
     comet_debug() << " ";
     comet_vdump(n);

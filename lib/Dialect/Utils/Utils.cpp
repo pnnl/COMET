@@ -2090,21 +2090,7 @@ namespace mlir
       Value rhs1Tensor, rhs2Tensor, lhsTensor;
       std::vector<Value> rhs1Labels, rhs2Labels, lhsLabels;
 
-      if (isa<tensorAlgebra::LabeledTensorOp>(lhsOp))
-      {
-        comet_debug() << "\n";
-        auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(lhsOp);
-        rhs1Tensor = ltOp.getTensor();
-        rhs1Tensor.getDefiningOp()->setAttr("__alpha__",
-                                            rewriter.getF64FloatAttr(1.0));
-        auto labels = ltOp.getLabels();
-        for (auto lbl : labels)
-        {
-          rhs1Labels.push_back(lbl);
-        }
-        comet_debug() << "\n";
-      }
-      else if (isa<tensorAlgebra::ChainMulOp>(lhsOp))
+      if (isa<tensorAlgebra::ChainMulOp>(lhsOp))
       {
         comet_debug() << "\n";
         rhs1Tensor = replaceBinop(lhsOp, loc, rewriter);
@@ -2134,23 +2120,6 @@ namespace mlir
           rhs1Tensor.getDefiningOp()->setAttr("__alpha__",
                                               rewriter.getF64FloatAttr(1.0));
         }
-        else if (isa<tensorAlgebra::LabeledTensorOp>(
-                     rhs1Tensor.getDefiningOp()))
-        {
-          comet_debug() << "\n";
-          auto ltOp =
-              cast<tensorAlgebra::LabeledTensorOp>(rhs1Tensor.getDefiningOp());
-          auto labels = ltOp.getLabels();
-          for (auto lbl : labels)
-          {
-            rhs1Labels.push_back(lbl);
-          }
-          rhs1Tensor = ltOp.getTensor();
-
-          auto rhs1AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
-          rhs1Tensor.getDefiningOp()->setAttr("__alpha__", rhs1AlphaAttr);
-          comet_debug() << "\n";
-        }
       }
       else if (isa<tensorAlgebra::DenseConstantOp>(lhsOp))
       {
@@ -2168,21 +2137,7 @@ namespace mlir
         llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not supported AddOp\n";
       }
 
-      if (isa<tensorAlgebra::LabeledTensorOp>(rhsOp))
-      {
-        comet_debug() << "\n";
-        auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(rhsOp);
-        rhs2Tensor = ltOp.getTensor();
-        rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
-                                            rewriter.getF64FloatAttr(1.0));
-        auto labels = ltOp.getLabels();
-        for (auto lbl : labels)
-        {
-          rhs2Labels.push_back(lbl);
-        }
-        comet_debug() << "\n";
-      }
-      else if (isa<tensorAlgebra::ChainMulOp>(rhsOp))
+      if (isa<tensorAlgebra::ChainMulOp>(rhsOp))
       {
         comet_debug() << "\n";
         rhs2Tensor = replaceBinop(rhsOp, loc, rewriter);
@@ -2212,22 +2167,6 @@ namespace mlir
           }
           rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
                                               rewriter.getF64FloatAttr(1.0));
-          comet_debug() << "\n";
-        }
-        else if (isa<tensorAlgebra::LabeledTensorOp>(
-                     rhs2Tensor.getDefiningOp()))
-        {
-          comet_debug() << "\n";
-          auto ltOp =
-              cast<tensorAlgebra::LabeledTensorOp>(rhs2Tensor.getDefiningOp());
-          auto labels = ltOp.getLabels();
-          for (auto lbl : labels)
-          {
-            rhs2Labels.push_back(lbl);
-          }
-          rhs2Tensor = ltOp.getTensor();
-          auto rhs2AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
-          rhs2Tensor.getDefiningOp()->setAttr("__alpha__", rhs2AlphaAttr);
           comet_debug() << "\n";
         }
       }
@@ -2335,22 +2274,7 @@ namespace mlir
         Value rhs1Tensor, rhs2Tensor;
         std::vector<Value> rhs1Labels, rhs2Labels;
 
-        if (isa<tensorAlgebra::LabeledTensorOp>(lhsOp))
-        {
-          comet_debug() << "\n";
-          auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(lhsOp);
-          rhs1Tensor = ltOp.getTensor();
-          rhs1Tensor.getDefiningOp()->setAttr("__alpha__",
-                                              rewriter.getF64FloatAttr(1.0));
-
-          auto labels = ltOp.getLabels();
-          for (auto lbl : labels)
-          {
-            rhs1Labels.push_back(lbl);
-          }
-          comet_debug() << "\n";
-        }
-        else if (isa<tensorAlgebra::ChainMulOp>(lhsOp))
+        if (isa<tensorAlgebra::ChainMulOp>(lhsOp))
         {
           comet_debug() << "\n";
           rhs1Tensor = replaceBinop(lhsOp, loc, rewriter);
@@ -2380,23 +2304,6 @@ namespace mlir
                                                 rewriter.getF64FloatAttr(1.0));
             comet_debug() << "\n";
           }
-          else if (isa<tensorAlgebra::LabeledTensorOp>(
-                       rhs1Tensor.getDefiningOp()))
-          {
-            comet_debug() << "\n";
-            auto ltOp =
-                cast<tensorAlgebra::LabeledTensorOp>(rhs1Tensor.getDefiningOp());
-            auto labels = ltOp.getLabels();
-            for (auto lbl : labels)
-            {
-              rhs1Labels.push_back(lbl);
-            }
-            rhs1Tensor = ltOp.getTensor();
-
-            auto rhs1AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
-            rhs1Tensor.getDefiningOp()->setAttr("__alpha__", rhs1AlphaAttr);
-            comet_debug() << "\n";
-          }
         }
         else if (isa<tensorAlgebra::DenseConstantOp>(lhsOp))
         {
@@ -2412,23 +2319,8 @@ namespace mlir
           //// TODO(gkestor): further support needed
           llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not supported AddOp\n";
         }
-
-        if (isa<tensorAlgebra::LabeledTensorOp>(rhsOp))
-        {
-          comet_debug() << "\n";
-          auto ltOp = cast<tensorAlgebra::LabeledTensorOp>(rhsOp);
-          rhs2Tensor = ltOp.getTensor();
-          rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
-                                              rewriter.getF64FloatAttr(1.0));
-
-          auto labels = ltOp.getLabels();
-          for (auto lbl : labels)
-          {
-            rhs2Labels.push_back(lbl);
-          }
-          comet_debug() << "\n";
-        }
-        else if (isa<tensorAlgebra::ChainMulOp>(rhsOp))
+        
+        if (isa<tensorAlgebra::ChainMulOp>(rhsOp))
         {
           comet_debug() << "\n";
           rhs2Tensor = replaceBinop(rhsOp, loc, rewriter);
@@ -2459,22 +2351,6 @@ namespace mlir
             }
             rhs2Tensor.getDefiningOp()->setAttr("__alpha__",
                                                 rewriter.getF64FloatAttr(1.0));
-            comet_debug() << "\n";
-          }
-          else if (isa<tensorAlgebra::LabeledTensorOp>(
-                       rhs2Tensor.getDefiningOp()))
-          {
-            comet_debug() << "\n";
-            auto ltOp =
-                cast<tensorAlgebra::LabeledTensorOp>(rhs2Tensor.getDefiningOp());
-            auto labels = ltOp.getLabels();
-            for (auto lbl : labels)
-            {
-              rhs2Labels.push_back(lbl);
-            }
-            rhs2Tensor = ltOp.getTensor();
-            auto rhs2AlphaAttr = ltOp.getOperation()->getAttr("__alpha__");
-            rhs2Tensor.getDefiningOp()->setAttr("__alpha__", rhs2AlphaAttr);
             comet_debug() << "\n";
           }
         }

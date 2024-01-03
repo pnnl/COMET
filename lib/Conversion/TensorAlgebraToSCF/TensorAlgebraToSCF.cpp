@@ -218,16 +218,7 @@ namespace
           {
             setOp = cast<tensorAlgebra::TensorSetOp>(u);
             Value dstTensor = u->getOperand(1);
-            /// TODO(gkestor): this following code block might be needed if we reintroduce label_tensor
-            if (isa<tensorAlgebra::LabeledTensorOp>(dstTensor.getDefiningOp()))
-            {
-              Value dstTensor_labeledTensor = cast<tensorAlgebra::LabeledTensorOp>(dstTensor.getDefiningOp());
-              lhs = dstTensor_labeledTensor.getDefiningOp()->getOperand(0);
-            }
-            else
-            {
-              lhs = dstTensor;
-            }
+            lhs = dstTensor;
           }
         }
 

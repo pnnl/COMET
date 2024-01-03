@@ -245,7 +245,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   pm.addPass(mlir::comet::createFuncOpLoweringPass());
 
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
-  optPM.addPass(mlir::comet::createRemoveLabeledTensorOpsPass());
 
   ///  =============================================================================
   ///  High-level optimization at the TA dialect
@@ -260,7 +259,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createFindOptimalTCFactorizationPass());
   }
 
-  optPM.addPass(mlir::comet::createLowerTAMulChainPass()); /// Lowering for chain operations
+  // optPM.addPass(mlir::comet::createLowerTAMulChainPass()); /// Lowering for chain operations
   ///  =============================================================================
 
   ///  =============================================================================

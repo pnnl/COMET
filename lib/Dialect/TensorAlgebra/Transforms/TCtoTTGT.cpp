@@ -190,15 +190,8 @@ namespace
         {
           setnewop = cast<tensorAlgebra::TensorSetOp>(u);
           Value dstTensor = u->getOperand(1);
-          if (isa<tensorAlgebra::LabeledTensorOp>(dstTensor.getDefiningOp()))
-          {
-            Value dstTensor_labeledTensor = cast<tensorAlgebra::LabeledTensorOp>(dstTensor.getDefiningOp());
-            lhsDef = dstTensor_labeledTensor.getDefiningOp()->getOperand(0);
-          }
-          else
-          { /// if(isa<ToTensorOp>(dstTensor.getOperation())){
-            lhsDef = dstTensor;
-          }
+
+          lhsDef = dstTensor;
           comet_vdump(lhsDef);
         }
       }

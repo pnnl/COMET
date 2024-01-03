@@ -640,25 +640,15 @@ namespace
         comet_vdump(result_type);
 
         comet_debug() << __LINE__ << " binop.getOp(): " << binop.getOp() << "\n";
+        std::vector<mlir::Value> lhs_lbls_value;
 
         // TODO(gkestor): urgent refactor the following code
-        std::vector<mlir::Value> lhs_lbls_value;
         if (isa<SparseTensorDeclOp, DenseTensorDeclOp>(lhs_labeledtensor.getDefiningOp()))
         {
-          for (unsigned int i = 0; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          auto lblsVec = cast<LabeledTensorExprAST>(lhsAST)->getLabelNames();
+          for (const auto &lbl : lblsVec)
           {
-
-            comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
-            lhs_lbls_value.push_back(lhs_labeledtensor.getDefiningOp()->getOperand(i));
-          }
-        }
-        else if (isa<LabeledTensorOp>(lhs_labeledtensor.getDefiningOp()))
-        {
-          for (unsigned int i = 1; i < lhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
-          {
-
-            comet_vdump(lhs_labeledtensor.getDefiningOp()->getOperand(i));
-            lhs_lbls_value.push_back(lhs_labeledtensor.getDefiningOp()->getOperand(i));
+            lhs_lbls_value.push_back(symbolTable.lookup(lbl));
           }
         }
         else if (isa<TensorMultOp>(lhs_labeledtensor.getDefiningOp()))
@@ -690,20 +680,10 @@ namespace
 
         if (isa<SparseTensorDeclOp, DenseTensorDeclOp>(rhs_labeledtensor.getDefiningOp()))
         {
-          for (unsigned int i = 0; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
+          auto lblsVec = cast<LabeledTensorExprAST>(rhsAST)->getLabelNames();
+          for (const auto &lbl : lblsVec)
           {
-
-            comet_vdump(rhs_labeledtensor.getDefiningOp()->getOperand(i));
-            rhs_lbls_value.push_back(rhs_labeledtensor.getDefiningOp()->getOperand(i));
-          }
-        }
-        else if (isa<LabeledTensorOp>(rhs_labeledtensor.getDefiningOp()))
-        {
-          for (unsigned int i = 1; i < rhs_labeledtensor.getDefiningOp()->getNumOperands(); i++)
-          {
-
-            comet_vdump(rhs_labeledtensor.getDefiningOp()->getOperand(i));
-            rhs_lbls_value.push_back(rhs_labeledtensor.getDefiningOp()->getOperand(i));
+            rhs_lbls_value.push_back(symbolTable.lookup(lbl));
           }
         }
         else if (isa<TensorMultOp>(rhs_labeledtensor.getDefiningOp()))
@@ -892,63 +872,6 @@ namespace
 
             tensors.push_back(dyn_cast<SparseTensorDeclOp>(e.getDefiningOp()));
           }
-          else if (isa<LabeledTensorOp>(e.getDefiningOp()))
-          {
-            comet_debug() << " is LabeledTensorOp\n";
-            mlir::Value tensordecl = e.getDefiningOp()->getOperand(0);
-            if (isa<DenseTensorDeclOp>(tensordecl.getDefiningOp()))
-            {
-              comet_debug() << " is TensorDeclOp\n";
-              /// infer the format
-              auto lhs_format = dyn_cast<DenseTensorDeclOp>(tensordecl.getDefiningOp()).getFormat();
-              comet_debug() << " lhs_format: " << lhs_format << "\n";
-              formats.push_back(lhs_format);
-
-              tensors.push_back(dyn_cast<DenseTensorDeclOp>(tensordecl.getDefiningOp()));
-            }
-            else if (isa<SparseTensorDeclOp>(tensordecl.getDefiningOp()))
-            {
-              comet_debug() << " is TensorDeclOp\n";
-              /// infer the format
-              auto lhs_format = dyn_cast<SparseTensorDeclOp>(tensordecl.getDefiningOp()).getFormat();
-              comet_debug() << " lhs_format: " << lhs_format << "\n";
-              formats.push_back(lhs_format);
-
-              tensors.push_back(dyn_cast<SparseTensorDeclOp>(tensordecl.getDefiningOp()));
-            }
-            else if (isa<TensorMultOp>(tensordecl.getDefiningOp()))
-            {
-              comet_debug() << " is TensorMultOp\n";
-              /// infer the format
-              mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorMultOp>(tensordecl.getDefiningOp()).getFormats();
-              unsigned int i = opFormatsArrayAttr.size() - 1;
-              mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
-              comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
-
-              comet_debug() << " lhs_format: " << lhs_format << "\n";
-              formats.push_back(lhs_format);
-
-              tensors.push_back(dyn_cast<TensorMultOp>(tensordecl.getDefiningOp()).getOperation()->getResult(0));
-            }
-            else if (isa<TensorElewsMultOp>(e.getDefiningOp()))
-            {
-              comet_debug() << " is TensorMultOp\n";
-
-              /// infer the format
-              mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getFormats();
-              unsigned int i = opFormatsArrayAttr.size() - 1;
-              mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
-              comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
-
-              comet_debug() << " lhs_format: " << lhs_format << "\n";
-              formats.push_back(lhs_format);
-              tensors.push_back(dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getOperation()->getResult(0));
-            }
-            else
-            {
-              comet_debug() << " not DenseTensorDecl op, not SparseTensorDecl op, not TensorMultOp, not TensorElewsMultOp\n";
-            }
-          }
           else if (isa<TensorMultOp>(e.getDefiningOp()))
           {
             comet_debug() << " is TensorMultOp\n";
@@ -1040,7 +963,7 @@ namespace
           }
           else
           {
-            comet_debug() << " not DenseTensorDecl op, not SparseTensorDecl op, not LabeledTensorOp, not TensorMultOp, not TensorElewsMultOp\n";
+            comet_debug() << " not DenseTensorDecl op, not SparseTensorDecl op, not TensorMultOp, not TensorElewsMultOp\n";
           }
         }
         comet_debug() << __LINE__ << " formats.size(): " << formats.size() << "\n";
@@ -1343,24 +1266,16 @@ namespace
         return nullptr;
       comet_debug() << " get lhs\n";
 
-      if (!isa<LabeledTensorOp>(lhs.getDefiningOp()))
-      {
-        emitError(loc(tensor_op.loc()),
-                  "error: labeled tensor expression required '");
-      }
-      comet_debug() << " lhs is LabeledTensorOp \n";
-
-      /// skip the use of labeledTensorOp in TensorSetOp
       mlir::Value lhs_decl;
       std::string out_format;
-      if (isa<DenseTensorDeclOp>(lhs.getDefiningOp()->getOperand(0).getDefiningOp()))
+      if (isa<DenseTensorDeclOp>(lhs.getDefiningOp()))
       {
-        lhs_decl = lhs.getDefiningOp()->getOperand(0);
+        lhs_decl = lhs;
         out_format = "Dense";
       }
-      else if (isa<SparseTensorDeclOp>(lhs.getDefiningOp()->getOperand(0).getDefiningOp()))
+      else if (isa<SparseTensorDeclOp>(lhs.getDefiningOp()))
       {
-        lhs_decl = lhs.getDefiningOp()->getOperand(0);
+        lhs_decl = lhs;
         auto lhs_decl_op = cast<SparseTensorDeclOp>(lhs_decl.getDefiningOp());
         std::string formatStr(lhs_decl_op.getFormatAttr().getValue());
         out_format = formatStr;
@@ -1420,48 +1335,7 @@ namespace
                   "Unknown variable LabeledTensorExprAST'");
       }
 
-      for (const auto &lbl_str : label_names)
-      {
-        if (auto var = symbolTable.lookup(lbl_str))
-        {
-          if (isa<IndexLabelOp>(var.getDefiningOp()))
-          {
-            comet_vdump(var);
-            labels.push_back(var);
-          }
-          else
-          {
-            emitError(loc(lbl_tensor.loc()), "Index label variable required '")
-                << lbl_str << "'";
-          }
-        }
-        else
-        {
-          emitError(loc(lbl_tensor.loc()),
-                    " Unknown variable LabeledTensorExprAST' ")
-              << lbl_str << "'";
-        }
-      }
-
-      mlir::Value value;
-      if (isa<DenseTensorDeclOp>(tensor_op.getDefiningOp()))
-      {
-        auto return_type =
-            cast<DenseTensorDeclOp>(tensor_op.getDefiningOp()).getResult().getType();
-        value = builder.create<LabeledTensorOp>(
-            loc(lbl_tensor.loc()), return_type, tensor_op, labels);
-            comet_vdump(value);
-      }
-      else if (isa<SparseTensorDeclOp>(tensor_op.getDefiningOp()))
-      {
-        auto return_type =
-            cast<SparseTensorDeclOp>(tensor_op.getDefiningOp()).getResult().getType();
-        value = builder.create<LabeledTensorOp>(
-            loc(lbl_tensor.loc()), return_type, tensor_op, labels);
-            comet_vdump(value);
-      }
-
-      return value;
+      return tensor_op;
     }
 
     /// Dispatch codegen for the right expression subclass using RTTI.
