@@ -99,23 +99,6 @@ namespace
     }
   };
 
-  struct RemoveLabeledTensorOp : public ConversionPattern
-  {
-    RemoveLabeledTensorOp(MLIRContext *ctx)
-        : ConversionPattern(tensorAlgebra::LabeledTensorOp::getOperationName(), 1,
-                            ctx) {}
-
-    LogicalResult
-    matchAndRewrite(Operation *op, ArrayRef<Value> operands,
-                    ConversionPatternRewriter &rewriter) const final
-    {
-      assert(isa<tensorAlgebra::LabeledTensorOp>(op));
-      rewriter.eraseOp(op);
-
-      return success();
-    }
-  };
-
   struct FuncOpLowering : public OpConversionPattern<tensorAlgebra::FuncOp>
   {
     using OpConversionPattern<tensorAlgebra::FuncOp>::OpConversionPattern;
@@ -160,13 +143,6 @@ namespace
     void runOnOperation() override;
   };
 
-  struct RemoveLabeledTensorOpPass
-      : public PassWrapper<RemoveLabeledTensorOpPass, OperationPass<func::FuncOp>>
-  {
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RemoveLabeledTensorOpPass)
-    void runOnOperation() override;
-  };
-
 } /// end anonymous namespace.
 
 void TensorFillLoweringPass::runOnOperation()
@@ -193,33 +169,8 @@ void TensorFillLoweringPass::runOnOperation()
   comet_debug() << "---------------TensorFillLoweringPass end\n";
 }
 
-void RemoveLabeledTensorOpPass::runOnOperation()
-{
-  func::FuncOp func = getOperation();
-  ConversionTarget target(getContext());
-  target.addLegalDialect<LinalgDialect,
-                         ArithDialect,
-                         scf::SCFDialect,
-                         AffineDialect,
-                         memref::MemRefDialect>();
-
-  RewritePatternSet patterns(&getContext());
-  patterns.insert<RemoveLabeledTensorOp, FuncOpLowering>(&getContext());
-
-  if (failed(applyPartialConversion(func, target, std::move(patterns))))
-  {
-    signalPassFailure();
-  }
-}
-
 /// Create a pass for lowering tensor fill operation
 std::unique_ptr<Pass> mlir::comet::createTensorFillLoweringPass()
 {
   return std::make_unique<TensorFillLoweringPass>();
-}
-
-/// Create a pass for lowering tensor fill operation
-std::unique_ptr<Pass> mlir::comet::createRemoveLabeledTensorOpsPass()
-{
-  return std::make_unique<RemoveLabeledTensorOpPass>();
 }

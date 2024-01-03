@@ -211,7 +211,7 @@ namespace
       /// get the dimension size from operand or type
 
       TensorType t = op.getResult().getType();
-      for(size_t i = 0; i < t.getRank(); i++)
+      for(int i = 0; i < t.getRank(); i++)
       {
         if(t.isDynamicDim(i))
         {
@@ -901,12 +901,6 @@ namespace
           comet_debug() << "The tensor is in sum op,  no action taken\n";
           continue;
         }
-        else if (isa<tensorAlgebra::LabeledTensorOp>(u))
-        {
-          /// TODO(gkestor): LabeledTensorOp is not used in the current design, needs cleaning up.
-          /// Look at the generated code. We should not generate LabeledTensorOp
-          continue;
-        }
         else if (isa<tensorAlgebra::TensorDimOp>(u))
         {
           comet_debug() << "The tensor is in dim op,  no action taken\n";
@@ -1297,11 +1291,6 @@ namespace
           /// TODO(gkestor): should we add this warning for user?
           llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: the sparse input tensor is using fill-op. Please use read_from_file() for sparse tensor inputs.\n";
         }
-        else if (isa<tensorAlgebra::LabeledTensorOp>(u1))
-        {
-          /// do nothing!
-          comet_debug() << " the tensor has use in LabeledTensorOp and this use will be ignored!\n";
-        }
         else if (isa<tensorAlgebra::TensorDimOp>(u1))
         {
           comet_debug() << " the tensor has use in TensorDimOp and this use will be ignored!\n";
@@ -1335,46 +1324,9 @@ namespace
         int readModeVal = -1;
         for (auto u : op.getOperation()->getUsers())
         {
-          /// Used in LabeledTensorOp and then the LabeledTensorOp is used in ChainSetOp
-          if (isa<tensorAlgebra::LabeledTensorOp>(u))
-          {
-            comet_debug() << "\n";
-            /// comet_pdump(u);
-            auto labeledtensorop = cast<tensorAlgebra::LabeledTensorOp>(u);
-            LLVM_DEBUG(comet_debug() << " labeled_tensor op\n");
-            for (auto u1 : u->getUsers())
-            {
-              if (isa<tensorAlgebra::ChainSetOp>(u1))
-              {
-                LLVM_DEBUG(comet_debug() << " tensor set_op\n");
 
-                auto setop = cast<tensorAlgebra::ChainSetOp>(u1);
-
-                auto read_from_file_operand = setop.getOperand(1).getDefiningOp(); /// funccall
-
-                if (isa<tensorAlgebra::GenericCallOp>(read_from_file_operand))
-                {
-                  auto genericcallop = cast<tensorAlgebra::GenericCallOp>(read_from_file_operand);
-                  LLVM_DEBUG(comet_debug() << " read_from_file op\n");
-                  std::string read_ref(genericcallop.getCalleeAttr().getLeafReference().getValue());
-                  LLVM_DEBUG(comet_debug() << " read_ref: " << read_ref << "\n");
-                  if (read_ref.compare(0, 14, "read_from_file") == 0)
-                  {
-                    LLVM_DEBUG(comet_debug() << " yes, read_from_file op\n");
-                    /// get filename through operand
-                    comet_debug() << " genericcallop.getNumOperands(): " << genericcallop.getOperation()->getNumOperands() << "\n";
-
-                    /// Erase the useless ops
-                    rewriter.eraseOp(setop);
-                    rewriter.eraseOp(genericcallop);
-                    rewriter.eraseOp(labeledtensorop);
-                  }
-                }
-              }
-            }
-          }
           /// Used in TensorFillFromFileOp
-          else if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
+          if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
           {
             auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
             /// Can get filename, from "filename" attribute of fillfromfileop
