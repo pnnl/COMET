@@ -122,7 +122,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
 
   Value mask_tensor = nullptr;
   if(llvm::isa<TensorMultOp>(op)){
-    mask_tensor = op->getOperand(op->getNumOperands() - 1);
+    mask_tensor = llvm::cast<TensorMultOp>(op).getMask();
   }
 
   auto indexing_maps = mult_op.getIndexingMaps();

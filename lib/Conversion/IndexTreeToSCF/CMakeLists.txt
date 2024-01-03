@@ -12,6 +12,7 @@ add_mlir_conversion_library(COMETIndexTreeToSCF
 
   LINK_LIBS PUBLIC
   MLIRArithDialect
+  MLIRIndexDialect
   MLIRIR
   MLIRMemRefDialect
   MLIRSCFDialect

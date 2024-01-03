@@ -490,6 +490,7 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::linalg::LinalgDialect>();
   context.loadDialect<mlir::scf::SCFDialect>();
   context.loadDialect<mlir::bufferization::BufferizationDialect>();
+  context.loadDialect<mlir::index::IndexDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
 

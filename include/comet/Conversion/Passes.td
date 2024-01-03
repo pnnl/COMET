@@ -73,7 +73,8 @@ def ConvertTensorAlgebraToSCF : Pass<"convert-ta-to-scf"> {
   let constructor = "comet::createLowerTensorAlgebraToSCFPass()";
   let dependentDialects = [
     "memref::MemRefDialect",
-    "scf::SCFDialect"
+    "scf::SCFDialect",
+    "index::IndexDialect"
   ];
 }
 
