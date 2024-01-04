@@ -609,9 +609,9 @@ namespace
           {
             type = res.getType().cast<TensorType>();
           }
-          else if (res.getType().isa<SparseTensorType>())
+          else
           {
-            type = res.getType().cast<SparseTensorType>().getElementTypes()[0].cast<TensorType>();
+            assert(false && "Expected TensorType");
           }
           // unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
           unsigned int dst_rank = type.getRank();
@@ -1169,9 +1169,9 @@ namespace
       {
         type = res.getType().cast<TensorType>();
       }
-      else if(res.getType().isa<SparseTensorType>())
+      else
       {
-        type = res.getType().cast<SparseTensorType>().getElementTypes()[0].cast<TensorType>();
+        assert(false && "Expected TensorType");
       }
       auto rank_size = type.getRank();
       // auto rank_size = op.getResult().getType().cast<TensorType>().getRank();
