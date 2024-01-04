@@ -207,7 +207,7 @@ Tensor *Index_Tree::getOrCreateTensor2(mlir::Value v, std::vector<int64_t>& perm
 {
   IndicesType indices = getIndices2(perms);
   comet_debug() << "Num Indices: " << indices.size() << ", Num formats " << formats.size() << "\n";
-  void *vp = v.getAsOpaquePointer();
+  // void *vp = v.getAsOpaquePointer();
   // if (valueToTensor.count(vp) == 0)
   {
     // valueToTensor[vp] = std::make_unique<Tensor>(v, indices, formats);
@@ -233,11 +233,11 @@ Tensor *Index_Tree::getOrCreateTensor3(mlir::Value v, std::vector<mlir::Value>& 
 {
   IndicesType indices = getIndices3(allIndexLabels);
   comet_debug() << "Num Indices: " << indices.size() << ", Num formats " << formats.size() << "\n";
-  void *vp = v.getAsOpaquePointer();
+  // void *vp = v.getAsOpaquePointer();
   // if (valueToTensor.count(vp) == 0)
-  {
+  // {
     // valueToTensor[vp] = std::make_unique<Tensor>(v, indices, formats);
-  }
+  // }
   // else
   // {
   //   auto t = valueToTensor[vp].get();

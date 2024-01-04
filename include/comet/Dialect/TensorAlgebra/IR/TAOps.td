@@ -159,56 +159,23 @@ def SparseTensorDeclOp : TA_Op<"sparse_tensor_decl", [Pure]> {
 
   let extraClassDeclaration = [{
     unsigned int getParameterCount() {
-        mlir::TensorType type;
-        if(getResult().getType().isa<TensorType>())
-        {
-          type = getResult().getType().cast<TensorType>();
-        }
-        else if (getResult().getType().isa<SparseTensorType>())
-        {
-          type = getResult().getType().cast<SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-        }
+        mlir::TensorType type = getResult().getType().cast<TensorType>();
         return (type.getRank() * 6) + 1;
     }
 
     unsigned int getDimArrayCount() {
-        mlir::TensorType type;
-        if(getResult().getType().isa<TensorType>())
-        {
-          type = getResult().getType().cast<TensorType>();
-        }
-        else if (getResult().getType().isa<SparseTensorType>())
-        {
-          type = getResult().getType().cast<SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-        }
+        mlir::TensorType type = getResult().getType().cast<TensorType>();
         return type.getRank() * 4;
     }
 
     unsigned int getValueArrayPos() {
-        mlir::TensorType type;
-        if(getResult().getType().isa<TensorType>())
-        {
-          type = getResult().getType().cast<TensorType>();
-        }
-        else if (getResult().getType().isa<SparseTensorType>())
-        {
-          type = getResult().getType().cast<SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-        }
+        mlir::TensorType type = getResult().getType().cast<TensorType>();
 
         return (type.getRank() * 4) + 1;
     }
 
     unsigned int getTotalArrayCount() {
-        mlir::TensorType type;
-        if(getResult().getType().isa<TensorType>())
-        {
-          type = getResult().getType().cast<TensorType>();
-        }
-        else if (getResult().getType().isa<SparseTensorType>())
-        {
-          type = getResult().getType().cast<SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-        }
-
+        mlir::TensorType type = getResult().getType().cast<TensorType>();
         return (type.getRank() * 4) + 1;
     }
   }];
@@ -403,15 +370,7 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
       std::vector<mlir::Value> labels;
       size_t start = 0;
 
-      mlir::TensorType type;
-      if(getRhs1().getType().isa<TensorType>())
-      {
-        type = getRhs1().getType().cast<TensorType>();
-      }
-      else if(getRhs1().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
+      mlir::TensorType type = getRhs1().getType().cast<TensorType>();
       size_t end = type.getRank();
 
       for(size_t i = start; i < end; i++ )
@@ -427,25 +386,8 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
     {
       std::vector<mlir::Value> labels;
       
-      mlir::TensorType type1;
-      if(getRhs1().getType().isa<TensorType>())
-      {
-        type1 = getRhs1().getType().cast<TensorType>();
-      }
-      else if(getRhs1().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type1 = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
-
-      mlir::TensorType type2;
-      if(getRhs2().getType().isa<TensorType>())
-      {
-        type2 = getRhs2().getType().cast<TensorType>();
-      }
-      else if(getRhs2().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type2 = getRhs2().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
+      mlir::TensorType type1 = getRhs1().getType().cast<TensorType>();
+      mlir::TensorType type2 = getRhs2().getType().cast<TensorType>();
 
       size_t start = type1.getRank();
       
@@ -465,25 +407,8 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
       std::vector<mlir::Value> labels;
       size_t end = getIndexLabels().size();
       
-      mlir::TensorType type1;
-      if(getRhs1().getType().isa<TensorType>())
-      {
-        type1 = getRhs1().getType().cast<TensorType>();
-      }
-      else if(getRhs1().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type1 = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
-
-      mlir::TensorType type2;
-      if(getRhs2().getType().isa<TensorType>())
-      {
-        type2 = getRhs2().getType().cast<TensorType>();
-      }
-      else if(getRhs2().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type2 = getRhs2().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
+      mlir::TensorType type1 = getRhs1().getType().cast<TensorType>();
+      mlir::TensorType type2 = getRhs2().getType().cast<TensorType>();
 
       size_t start = type1.getRank() + type2.getRank();
 
@@ -523,15 +448,7 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
     {
       std::vector<mlir::Value> labels;
       size_t start = 0;
-      mlir::TensorType type;
-      if(getRhs1().getType().isa<TensorType>())
-      {
-        type = getRhs1().getType().cast<TensorType>();
-      }
-      else if(getRhs1().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
+      mlir::TensorType type = getRhs1().getType().cast<TensorType>();
       size_t end = type.getRank();
 
       for(size_t i = start; i < end; i++ )
@@ -546,26 +463,8 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
     std::vector<mlir::Value> getRhs2IndexLabels()
     {
       std::vector<mlir::Value> labels;
-      mlir::TensorType type1;
-      if(getRhs1().getType().isa<TensorType>())
-      {
-        type1 = getRhs1().getType().cast<TensorType>();
-      }
-      else if(getRhs1().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type1 = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
-
-      mlir::TensorType type2;
-      if(getRhs2().getType().isa<TensorType>())
-      {
-        type2 = getRhs2().getType().cast<TensorType>();
-      }
-      else if(getRhs2().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type2 = getRhs2().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
-
+      mlir::TensorType type1 = getRhs1().getType().cast<TensorType>();
+      mlir::TensorType type2 = getRhs2().getType().cast<TensorType>();
       size_t start = type1.getRank();
       
       size_t end = static_cast<size_t>(type1.getRank() + type2.getRank());
@@ -584,26 +483,8 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
       std::vector<mlir::Value> labels;
       size_t end = getIndexLabels().size();
       
-      mlir::TensorType type1;
-      if(getRhs1().getType().isa<TensorType>())
-      {
-        type1 = getRhs1().getType().cast<TensorType>();
-      }
-      else if(getRhs1().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type1 = getRhs1().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
-
-      mlir::TensorType type2;
-      if(getRhs2().getType().isa<TensorType>())
-      {
-        type2 = getRhs2().getType().cast<TensorType>();
-      }
-      else if(getRhs2().getType().isa<::mlir::tensorAlgebra::SparseTensorType>())
-      {
-        type2 = getRhs2().getType().cast<::mlir::tensorAlgebra::SparseTensorType>().getElementTypes()[0].cast<TensorType>();
-      }
-
+      mlir::TensorType type1 = getRhs1().getType().cast<TensorType>();
+      mlir::TensorType type2 = getRhs2().getType().cast<TensorType>();
       size_t start = type1.getRank() + type2.getRank();
       
       
