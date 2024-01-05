@@ -81,17 +81,14 @@ def TA_AnyTensor : AnyTypeOf<[TensorOf<[AnyType]>, SparseTensor]>;
 //===----------------------------------------------------------------------===//
 def IndexLabelOp :
     TA_Op<"index_label", [Pure]>,
-    // Arguments<(ins Index:$min, Index:$max, Index:$step)>,
-    // Arguments<(ins Index:$step)>,
     Results<(outs IndexLabel)> {
   let summary = "Create an index label type value, used to create views";
   let description = [{
-    The `ta.index_label` op creates a ta.index_label from 3 values of type `index`
-    that represent the min, max and step values of a range.
+    The `ta.index_label` op creates a ta.index_label.
 
     Example:
 
-      %3 = ta.index_label %0:%1:%2 : !ta.index_label
+      %3 = ta.index_label : !ta.index_label
   }];
 
   let builders = [OpBuilder<(ins ), 
