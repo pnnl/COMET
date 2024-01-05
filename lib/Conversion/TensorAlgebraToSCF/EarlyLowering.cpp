@@ -36,6 +36,7 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 
 #include <limits>
 #include <map>
@@ -173,4 +174,97 @@ void TensorFillLoweringPass::runOnOperation()
 std::unique_ptr<Pass> mlir::comet::createTensorFillLoweringPass()
 {
   return std::make_unique<TensorFillLoweringPass>();
+}
+
+namespace 
+{
+
+  struct DimOpLowering : public OpRewritePattern<tensorAlgebra::TensorDimOp>
+  {
+    using OpRewritePattern<tensorAlgebra::TensorDimOp>::OpRewritePattern;
+    /**
+     * @brief :
+     * Step 1: Get format and dims
+     * Step 2: Emit alloc() instructions and ta.sptensor_construct operation.
+     * Step 3: Remove the TensorDimOp
+     */
+    LogicalResult matchAndRewrite(tensorAlgebra::TensorDimOp op,
+                                  PatternRewriter &rewriter) const final
+    {
+      /// Sparse output tensor declaration happens after lowering to index tree dialect
+      assert(isa<tensorAlgebra::TensorDimOp>(op));
+      comet_debug() << "TensorDimOpLowering in format begin\n";
+      comet_vdump(op);
+
+      auto tensor = op.getTensor();
+      if( tensor.getType().isa<SparseTensorType>() )
+      {
+        SparseTensorConstructOp spconstruct = cast<SparseTensorConstructOp>(tensor.getDefiningOp());
+        ::mlir::TypedValue< ::mlir::IndexType> idx = op.getIndex();
+        auto realIndex = getConstantIntValue(idx);
+        op.replaceAllUsesWith(spconstruct.getIndices()[18 + *realIndex]);
+        rewriter.eraseOp(op);
+      }
+      else if (tensor.getType().isa<TensorType>()) 
+      {
+        ::mlir::TypedValue< ::mlir::IndexType> idx = op.getIndex();
+        auto dim = rewriter.create<tensor::DimOp> (op.getLoc(), tensor,  idx);
+        rewriter.replaceAllUsesWith(op, dim);
+        rewriter.eraseOp(op);
+      }
+      else
+      {
+        return failure();
+      }
+
+      comet_debug() << "--------------TensorDimOpLowering in format end\n";
+      return success();
+    }
+  };
+
+  class DimOpLoweringPass
+      : public PassWrapper<DimOpLoweringPass, OperationPass<func::FuncOp>>
+  {
+  public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(DimOpLoweringPass)
+    void runOnOperation() override
+    {
+      MLIRContext *context = &getContext();
+      RewritePatternSet patterns(context);
+
+      patterns.insert<DimOpLowering>(patterns.getContext());
+
+      func::FuncOp function = getOperation();
+      ConversionTarget target(getContext());
+      target.addLegalDialect<ArithDialect,
+                             memref::MemRefDialect,
+                             tensor::TensorDialect,
+                             scf::SCFDialect,
+                             bufferization::BufferizationDialect,
+                             IndexTreeDialect>();
+      target.addIllegalDialect<TADialect>();
+
+      target.addLegalOp<tensorAlgebra::PrintOp,
+                        tensorAlgebra::ReduceOp,
+                        tensorAlgebra::TransposeOp,
+                        tensorAlgebra::TensorFillOp,
+                        tensorAlgebra::GetTimeOp,
+                        tensorAlgebra::PrintElapsedTimeOp,
+                        tensorAlgebra::TensorSetOp,
+                        tensorAlgebra::IndexLabelOp,
+                        tensorAlgebra::DenseConstantOp,
+                        tensorAlgebra::SparseTensorConstructOp>();
+
+      if (failed(applyPartialConversion(function, target, std::move(patterns))))
+      {
+        llvm::errs() << "Failed to applyPartialConversion in DenseTensorDeclLoweringPass\n";
+        signalPassFailure();
+      }
+    }
+  };
+}
+
+std::unique_ptr<Pass> mlir::comet::createDimOpLoweringPass()
+{
+  return std::make_unique<DimOpLoweringPass>();
 }
