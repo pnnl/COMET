@@ -188,7 +188,6 @@ namespace
     comet_vdump(op);
     comet_pdump(op.getOperation());
     
-    // unsigned int tensor_rank = op.getOperation()->getNumOperands();
     unsigned int tensor_rank = op.getResult().getType().getRank();
 
     std::vector<mlir::Value> array_sizes;
@@ -488,7 +487,6 @@ namespace
     comet_debug() << " --- " << formats_str << "\n";
 
     comet_debug() << " " << op.getNumOperands() << "\n";
-    // auto rank_size = op.getNumOperands();
     auto rank_size = op.getResult().getType().getRank();
 
     IndexType indexType = IndexType::get(op.getContext());
@@ -1582,20 +1580,6 @@ namespace
 
         comet_debug() << "SparseTensorConstructOp generated for input sparse tensor:\n";
         comet_vdump(sptensor);
-
-        /// Dynamic indexlabel is propogated to the dense tensor declaration.
-        /// For example in the spmv example, dense vector index label comes from sparse input matrix.
-        auto tensor_decl_value = cast<tensorAlgebra::SparseTensorDeclOp>(op);
-        LLVM_DEBUG(comet_debug() << " " << tensor_decl_value.getLabels().size() << "\n");
-        for (unsigned int i = 0; i < tensor_decl_value.getLabels().size(); i++)
-        {
-          comet_vdump(tensor_decl_value.getLabels()[i]);
-          comet_pdump(tensor_decl_value.getLabels()[i].getDefiningOp());
-          if (isa<tensorAlgebra::IndexLabelOp>(tensor_decl_value.getLabels()[i].getDefiningOp()))
-          {
-            comet_debug() << " isa<tensorAlgebra::IndexLabelOp\n";
-          }
-        }
 
         op.replaceAllUsesWith(sptensor);
         rewriter.replaceOp(op, sptensor);

@@ -313,9 +313,6 @@ mlir::Value IndexTreeKernelFusionPass::createNewTensorDecl(
 
   /// Get operands
   std::vector<mlir::Value> operands;
-  // operands.insert(operands.begin(),
-  //                 old_tensor_op->getOperands().begin() + rank_base,
-  //                 old_tensor_op->getOperands().end());
 
   TensorType old_tensor = old_dense_tensor_decl.getType().cast<TensorType>();
 
@@ -369,21 +366,10 @@ void IndexTreeKernelFusionPass::createNewTensor(
     /// Get the previous memref.load operand
     auto loc = old_tensor_alloc.getLoc();
     OpBuilder builder(old_tensor_alloc.getDefiningOp());
-    // mlir::Value load_op = old_tensor_alloc.getDefiningOp()->getOperand(rank_base);
 
-    /// Get constant zero and constant one
-    // ConstantOp constant_zero = builder.create<ConstantOp>(loc,
-    //                                                       builder.getIndexType(),
-    //                                                       builder.getIndexAttr(0));
-    // ConstantOp constant_one = builder.create<ConstantOp>(loc,
-    //                                                      builder.getIndexType(),
-    //                                                      builder.getIndexAttr(1));
 
-    /// Create ta.index_label_static
-    mlir::Value index_label_op = builder.create<tensorAlgebra::IndexLabelOp>(loc //,
-                                                                                  //  constant_zero,
-                                                                                  //  load_op,
-                                                                                  /* constant_one */);
+    /// Create ta.index_label
+    mlir::Value index_label_op = builder.create<tensorAlgebra::IndexLabelOp>(loc);
 
     comet_debug() << "index_label_op\n";
     comet_vdump(index_label_op);
