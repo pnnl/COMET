@@ -303,7 +303,7 @@ class NewVisitor(ast.NodeVisitor):
             self.tsymbols[id] = res
 
 
-    def visit_Call(self, node: Call) -> Any:
+    def visit_Call(self, node: Call) :
         obj = None
         obj = NewVisitor.visit(self,node.func)
         if obj is not None:
@@ -313,13 +313,13 @@ class NewVisitor(ast.NodeVisitor):
                 return self.visit_Einsum_Call(node)
 
 
-    def visit_Attribute(self, node: Attribute) -> Any:
+    def visit_Attribute(self, node: Attribute) :
         return NewVisitor.visit(self, node.value)
 
     def visit_Name(self, node: ast.Name):
         return self.tsymbols[node.id]
 
-    def visit_Constant(self, node: Constant) -> Any:
+    def visit_Constant(self, node: Constant) :
         out_id = self.tcurr
         self.declarations.append(
             {
@@ -471,7 +471,7 @@ class NewVisitor(ast.NodeVisitor):
         self.tcurr +=1
         return self.tcurr-1
 
-    def visit_BinOp(self, node: BinOp) -> Any:
+    def visit_BinOp(self, node: BinOp) :
         no_assign = self.no_assign
         self.no_assign = False
         operands = [NewVisitor.visit(self, node.left), NewVisitor.visit(self, node.right)]
