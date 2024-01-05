@@ -381,7 +381,6 @@ class ArithOp_Builder:
             for k, l in enumerate(self.op_ilabels[1]):
                 if l not in iMap:
                     iMap[l] = i
-                    print( self.tensors_shapes[1][k])
                     vMap[l] = self.tensors_shapes[1][k]
                     temp.append(i)
                     i+=1
@@ -396,7 +395,6 @@ class ArithOp_Builder:
         indexing_maps = []
 
         output_type = "tensor<{}xf64>".format("x".join(str(vMap[v]) for v in self.op_ilabels[-1]))
-        print(output_type)
 
         for imap in indexing_map:
             indexing_maps.append("affine_map<({})->({})>".format(",".join(["d"+str(l) for l in range(i)]) , ",".join(["d"+str(l) for l in imap])))
