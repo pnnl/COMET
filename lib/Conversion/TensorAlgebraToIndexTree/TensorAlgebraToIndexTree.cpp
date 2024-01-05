@@ -159,9 +159,9 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   auto SemiringOp = op.getSemiringAttr();
   auto MaskingTypeAttr = op.getMaskTypeAttr();
 
-  auto B = tree->getOrCreateTensor3(rhs1_tensor, rhs1_labels, allFormats[0]);
-  auto C = tree->getOrCreateTensor3(rhs2_tensor, rhs2_labels, allFormats[1]);
-  auto A = tree->getOrCreateTensor3(lhs_tensor,  lhs_labels, allFormats[2]);
+  auto B = tree->getOrCreateTensor(rhs1_tensor, rhs1_labels, allFormats[0]);
+  auto C = tree->getOrCreateTensor(rhs2_tensor, rhs2_labels, allFormats[1]);
+  auto A = tree->getOrCreateTensor(lhs_tensor,  lhs_labels, allFormats[2]);
 
   Tensor *M;
   std::unique_ptr<UnitExpression> e;
@@ -169,7 +169,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   if (mask_tensor != nullptr) /// mask is an optional input
   {
     comet_debug() << "mask input provided by user\n";
-    M = tree->getOrCreateTensor3(mask_tensor, empty, allFormats[2]); /// We don't need indexlabel info for the mask 
+    M = tree->getOrCreateTensor(mask_tensor, empty, allFormats[2]); /// We don't need indexlabel info for the mask 
     e = make_unique<UnitExpression>(A, B, C, M, "*");
   }
   else
@@ -187,8 +187,8 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   auto inputDomains = e->computeInputIterDomains();
   auto outputDomains = e->computeOutputIterDomains();
 
-  IndicesType rhs1_indices = tree->getIndices3(rhs1_labels);
-  IndicesType rhs2_indices = tree->getIndices3(rhs2_labels);
+  IndicesType rhs1_indices = tree->getIndices(rhs1_labels);
+  IndicesType rhs2_indices = tree->getIndices(rhs2_labels);
 
   IndicesType allIndices = getUnion(rhs1_indices, rhs2_indices);
 
@@ -242,9 +242,9 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
 
   assert(allPerms.size() == 3);
 
-  auto B = tree->getOrCreateTensor3(rhs1_tensor, rhs1_labels, allFormats[0]);
-  auto C = tree->getOrCreateTensor3(rhs2_tensor, rhs2_labels, allFormats[1]);
-  auto A = tree->getOrCreateTensor3(lhs_tensor,  lhs_labels, allFormats[2]);
+  auto B = tree->getOrCreateTensor(rhs1_tensor, rhs1_labels, allFormats[0]);
+  auto C = tree->getOrCreateTensor(rhs2_tensor, rhs2_labels, allFormats[1]);
+  auto A = tree->getOrCreateTensor(lhs_tensor,  lhs_labels, allFormats[2]);
 
   auto e = make_unique<UnitExpression>(A, B, C, "*");
 
@@ -257,7 +257,7 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
   auto outputDomains = e->computeOutputIterDomains();
 
   /// RHS and LHS indices must be the same for elementwise multiplication
-  IndicesType allIndices = tree->getIndices3(rhs1_labels);
+  IndicesType allIndices = tree->getIndices(rhs1_labels);
 
   auto lhsIndices = A->getIndices();
   TreeNode *parent = tree->getRoot();

@@ -788,10 +788,6 @@ void CompressedWorkspaceInput(std::vector<Value> computeOps, OpBuilder &builder,
       Value sparseInput = tensors_rhs[sparseDimsInput[0].tensorId];
       comet_vdump(sparseInput);
 
-      // std::vector<mlir::Value> v_lbls_value = {sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder)};
-      comet_debug() << "Dumping v_lbls_value\n";
-      // comet_vdump(v_lbls_value[0]);
-      comet_debug() << "Done\n";
       comet_vdump(sparseInput.getDefiningOp()->getOperand(sparseDimsInput[0].dimOrder));
       std::string v_format = "Dense"; /// tensor<?xf64>
       auto v_type = RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getF64Type());

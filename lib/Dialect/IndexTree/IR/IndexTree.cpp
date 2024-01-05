@@ -98,7 +98,7 @@ void Index_Tree::print(string msg)
   getRoot()->print(0);
 }
 
-IndicesType Index_Tree::getIndices3(std::vector<mlir::Value>& lbls)
+IndicesType Index_Tree::getIndices(std::vector<mlir::Value>& lbls)
 {
   IndicesType indices;
 
@@ -118,140 +118,11 @@ IndicesType Index_Tree::getIndices3(std::vector<mlir::Value>& lbls)
   return indices;
 }
 
-IndicesType Index_Tree::getIndices(mlir::Value v)
+Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, std::vector<mlir::Value>& allIndexLabels, FormatsType &formats)
 {
-  IndicesType indices;
-  comet_vdump(v);
-  void *ilabel;
-  for (unsigned int i = 0; i < v.getDefiningOp()->getNumOperands(); i++)
-  {
-    comet_debug() << v.getDefiningOp() << "\n";
-    comet_vdump(v.getDefiningOp()->getOperand(i));
-    ilabel = v.getDefiningOp()->getOperand(i).getAsOpaquePointer();
-    if (indexLabelToId.count(ilabel) == 0)
-    {
-      comet_debug() << "Index Label just created:" << indexID << "\n";
-      indexLabelToId[ilabel] = indexID;
-      indexID++;
-    }
-
-    comet_debug() << "Index Label just added to the list:" << indexLabelToId[ilabel] << "\n";
-    indices.push_back(indexLabelToId[ilabel]);
-  }
-
-  return indices;
-}
-
-IndicesType Index_Tree::getIndices2(std::vector<int64_t>& perms)
-{
-  IndicesType indices;
-
-  void *ilabel;
-  for(auto p: perms) 
-  {
-    ilabel = (void*)p; 
-    if (indexLabelToId.count(ilabel) == 0)
-    {
-      comet_debug() << "Index Label just created:" << indexID << "\n";
-      indexLabelToId[ilabel] = indexID;
-      indexID++;
-    }
-    comet_debug() << "Index Label just added to the list:" << indexLabelToId[ilabel] << "\n";
-    indices.push_back(indexLabelToId[ilabel]);
-  }
-
-  // for (unsigned int i = 0; i < v.getDefiningOp()->getNumOperands(); i++)
-  // {
-  //   comet_debug() << v.getDefiningOp() << "\n";
-  //   comet_vdump(v.getDefiningOp()->getOperand(i));
-  //   ilabel = v.getDefiningOp()->getOperand(i).getAsOpaquePointer();
-  //   if (indexLabelToId.count(ilabel) == 0)
-  //   {
-  //     comet_debug() << "Index Label just created:" << indexID << "\n";
-  //     indexLabelToId[ilabel] = indexID;
-  //     indexID++;
-  //   }
-
-  //   comet_debug() << "Index Label just added to the list:" << indexLabelToId[ilabel] << "\n";
-  //   indices.push_back(indexLabelToId[ilabel]);
-  // }
-
-  return indices;
-}
-
-Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, FormatsType &formats)
-{
-  IndicesType indices = getIndices(v);
-  void *vp = v.getAsOpaquePointer();
-  if (valueToTensor.count(vp) == 0)
-  {
-    valueToTensor[vp] = std::make_unique<Tensor>(v, indices, formats);
-  }
-  else
-  {
-    auto t = valueToTensor[vp].get();
-    auto tIndices = t->getIndices();
-    assert(tIndices.size() == indices.size());
-    for (unsigned long i = 0; i < indices.size(); i++)
-    {
-      assert(tIndices[i] == indices[i]);
-    }
-  }
-
-  assert(valueToTensor.count(vp) > 0);
-  assert(valueToTensor[vp] != nullptr);
-  return valueToTensor[vp].get();
-}
-
-Tensor *Index_Tree::getOrCreateTensor2(mlir::Value v, std::vector<int64_t>& perms, FormatsType &formats)
-{
-  IndicesType indices = getIndices2(perms);
+  IndicesType indices = getIndices(allIndexLabels);
   comet_debug() << "Num Indices: " << indices.size() << ", Num formats " << formats.size() << "\n";
-  // void *vp = v.getAsOpaquePointer();
-  // if (valueToTensor.count(vp) == 0)
-  {
-    // valueToTensor[vp] = std::make_unique<Tensor>(v, indices, formats);
-  }
-  // else
-  // {
-  //   auto t = valueToTensor[vp].get();
-  //   auto tIndices = t->getIndices();
-  //   assert(tIndices.size() == indices.size());
-  //   for (unsigned long i = 0; i < indices.size(); i++)
-  //   {
-  //     assert(tIndices[i] == indices[i]);
-  //   }
-  // }
 
-  // assert(valueToTensor.count(vp) > 0);
-  // assert(valueToTensor[vp] != nullptr);
-  // return valueToTensor[vp].get();
-  return new Tensor(v, indices, formats);
-}
-
-Tensor *Index_Tree::getOrCreateTensor3(mlir::Value v, std::vector<mlir::Value>& allIndexLabels, FormatsType &formats)
-{
-  IndicesType indices = getIndices3(allIndexLabels);
-  comet_debug() << "Num Indices: " << indices.size() << ", Num formats " << formats.size() << "\n";
-  // void *vp = v.getAsOpaquePointer();
-  // if (valueToTensor.count(vp) == 0)
-  // {
-    // valueToTensor[vp] = std::make_unique<Tensor>(v, indices, formats);
-  // }
-  // else
-  // {
-  //   auto t = valueToTensor[vp].get();
-  //   auto tIndices = t->getIndices();
-  //   assert(tIndices.size() == indices.size());
-  //   for (unsigned long i = 0; i < indices.size(); i++)
-  //   {
-  //     assert(tIndices[i] == indices[i]);
-  //   }
-  // }
-
-  // assert(valueToTensor.count(vp) > 0);
-  // assert(valueToTensor[vp] != nullptr);
-  // return valueToTensor[vp].get();
   return new Tensor(v, indices, formats);
 }
 
