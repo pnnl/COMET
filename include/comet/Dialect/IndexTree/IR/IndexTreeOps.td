@@ -135,7 +135,6 @@ def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
 
    //TODO(gkestor): add verifier
   //let hasVerifier = 1;
-  
 }
 
 def IndexTreeTensorDomainOp : IndexTree_Op<"DomainOp", [Pure]>{
@@ -219,6 +218,47 @@ def IndexTreeIndexToTensorOp : IndexTree_Op<"IndexToTensorDim", [Pure]>{
     Index:$crd,
     Index:$pos
   );
+}
+
+def IndexTreeSymbolicComputeOp : IndexTree_Op<"IndexTreeSymbolicComputeOp", [Pure]>{
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring);
+
+  let results = (outs IndexTree_DomainType);
+
+  //let hasVerifier = 1;
+}
+
+def IndexTreeSparseTensorOp : IndexTree_Op<"IndexTreeSparseTensorOp", [Pure]>{
+  let summary = "Declare a sparse tensor from an index tree domain"
+  let description = [{}];
+
+  let arguments = (ins Variadic<IndexTree_DomainType>:$domains);
+  let results = (outs TA_AnyTensor);
+}
+
+def IndexTreeDynamicallyAllocatedTensorOp : IndexTree_Op<"IndexTreeDynamicallyAllocatedTensor" [Pure]>{
+  let summary = "Declare a tensor that allocates memory on insert"
+  let description = [{}];
+
+  let arguments = (ins Variadic<I32Attr> formats);
+  let results = (outs TA_AnyTensor);
+}
+
+def IndexTreeSparseInsertOp : IndexTree_Op<"IndexTreeSparseInsertOp", [Pure, SameVariadicOperandSize]>{
+  let summary = "Insert element into a sparse tensor"
+  let description = [{}];
+
+  let arguments = (
+    ins TA_AnyTensor:$tensor, 
+    Variadic<Index>:$pos,
+    Variadic<Index>:$crds>
+  )
+
+  let results = (outs TA_AnyTensor);
 }
 
 #endif // INDEXTREE_OPS
