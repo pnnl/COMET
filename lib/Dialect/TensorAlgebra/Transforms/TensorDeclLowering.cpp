@@ -61,238 +61,6 @@ using namespace mlir::indexTree;
 //===----------------------------------------------------------------------===//
 namespace
 {
-  void mixModeEltWiseMultSparseTensorOutputLowering(Value computeOp, Location loc,
-                                                    std::vector<std::vector<int>> rshPerms,
-                                                    std::vector<Value> &dimSizes,
-                                                    std::vector<Value> &tensorload_sizes_vec,
-                                                    std::vector<Value> &array_sizes_vec,
-                                                    PatternRewriter &rewriter)
-  {
-
-    IndexType indexType = IndexType::get(computeOp.getContext());
-    FloatType f64Type = FloatType::getF64(computeOp.getContext());
-    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); /// memref<?xindex>
-    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, f64Type);     /// memref<?xf64>
-
-    comet_debug() << "mixModeEltWiseMultSparseTensorOutputLowering computeOp\n";
-    comet_vdump(computeOp);
-
-    ///  elementwise mul op in mix sparse dense case
-    ///  If elementwise, copy sparse input arrays for elementwise mul
-    int sparse_inputtensor_id = -1;
-    auto rhsComputeOp = computeOp.getDefiningOp()->getOperand(0).getDefiningOp();
-
-    auto first_operand = rhsComputeOp->getOperand(0).getDefiningOp();
-    auto second_operand = rhsComputeOp->getOperand(1).getDefiningOp();
-    comet_debug() << "EltWiseMult Operands:\n";
-    comet_pdump(first_operand);
-    comet_pdump(second_operand);
-
-    if (isa<tensorAlgebra::SparseTensorConstructOp>(first_operand))
-    {
-      sparse_inputtensor_id = 0;
-    }
-    else if (isa<tensorAlgebra::SparseTensorConstructOp>(second_operand))
-    {
-      sparse_inputtensor_id = 1;
-    }
-    else
-    {
-      llvm::errs() << "ERROR: SparseTensorConstructOp was not found as one of the operands for itCompute\n";
-    }
-
-    comet_debug() << " SparseTensorConstructOp for computeOp: \n";
-    comet_pdump(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
-    auto sptensor_construct_op = cast<tensorAlgebra::SparseTensorConstructOp>(rhsComputeOp->getOperand(sparse_inputtensor_id).getDefiningOp());
-
-    for (unsigned int i = 0; i < 4 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
-    {
-      comet_debug() << " in for loop\n";
-      Value intput_tensorload_op = cast<ToTensorOp>(sptensor_construct_op.getOperand(i).getDefiningOp());
-      Value input_alloc_op = cast<memref::AllocOp>(intput_tensorload_op.getDefiningOp()->getOperand(0).getDefiningOp());
-      comet_debug() << " AllocOp: ";
-      comet_vdump(input_alloc_op);
-
-      comet_debug() << " ";
-      Value input_alloc_op_param = input_alloc_op.getDefiningOp()->getOperand(0);
-      comet_debug() << " ";
-
-      Value output_alloc_op;
-      if (i < 4 * (rshPerms[sparse_inputtensor_id].size()))
-      {
-        /// Memory allocation for position and coordinate arrays in sparse tensor contractions
-        output_alloc_op = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{input_alloc_op_param}, rewriter);
-      }
-      else
-      {
-        /// Memory allocation for value array in sparse tensor contractions
-        output_alloc_op = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{input_alloc_op_param}, rewriter); /// Cval array
-        comet_debug() << " AllocOp: ";
-        comet_vdump(output_alloc_op);
-      }
-
-      Value output_tensorload_op = rewriter.create<ToTensorOp>(loc, output_alloc_op);
-      tensorload_sizes_vec.push_back(output_tensorload_op);
-    }
-    comet_debug() << " ";
-
-    /// [0...2d, 2d+1...4d+1, 4d+2...5d+1]
-    for (unsigned int i = 0; i < 4 * (rshPerms[sparse_inputtensor_id].size()) + 1; i++)
-    {
-      int sizes_i = i + 4 * (rshPerms[sparse_inputtensor_id].size()) + 1;
-      comet_debug() << " ";
-      comet_pdump(sptensor_construct_op.getOperand(sizes_i).getDefiningOp());
-
-      Value input_load_op = sptensor_construct_op.getOperand(sizes_i);
-      comet_debug() << "Ops push_back for Sparse Tensor Construct Op for MixedMode elementwise multiplication (array_sizes_vec):\n";
-      comet_vdump(input_load_op);
-      array_sizes_vec.push_back(input_load_op);
-    }
-
-    for (unsigned int i = 0; i < rshPerms[sparse_inputtensor_id].size(); i++)
-    {
-      int sizes_i = i + 2 * (2 * (rshPerms[sparse_inputtensor_id].size()) + 1);
-      comet_debug() << " ";
-      comet_pdump(sptensor_construct_op.getOperand(sizes_i).getDefiningOp());
-
-      Value input_load_op = sptensor_construct_op.getOperand(sizes_i);
-      comet_debug() << "Ops push_back for Sparse Tensor Construct Op for MixedMode elementwise multiplication (dimSizes):\n";
-      comet_vdump(input_load_op);
-      dimSizes.push_back(input_load_op);
-    }
-  }
-
-  template <typename T>
-  void pureSparseMultSparseTensorOutputLowering(T op,
-                                                Location loc,
-                                                std::string sparseOutputFormat,
-                                                std::vector<Value> &dimSizes,
-                                                std::vector<Value> &tensorload_sizes_vec,
-                                                std::vector<Value> &array_sizes_vec,
-                                                PatternRewriter &rewriter)
-  {
-    comet_debug() << " sparse output is used in itComputeOp op\n";
-    comet_debug() << " sparseOutputFormat: " << sparseOutputFormat << "\n";
-
-    comet_vdump(op);
-
-    IndexType indexType = IndexType::get(op.getContext());
-    FloatType f64Type = FloatType::getF64(op.getContext());
-    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); /// memref<?xindex>
-    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, f64Type);     /// memref<?xf64>
-
-    Value cst_index_0 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(0));
-    comet_vdump(cst_index_0);
-    Value cst_index_1 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(1));
-    comet_vdump(cst_index_1);
-    comet_vdump(op);
-    comet_pdump(op.getOperation());
-    
-    unsigned int tensor_rank = op.getResult().getType().getRank();
-
-    std::vector<mlir::Value> array_sizes;
-    std::vector<mlir::Value> array_sizes_alloc_vec;
-    std::vector<mlir::Value> initial_array_sizes;
-
-    if (sparseOutputFormat.compare("CSR") == 0)
-    { /// CSR format
-      comet_debug() << " 2D CSR format in sparse output decl op\n";
-      /// AllocOp, storeOp, LoadOp
-      initial_array_sizes.push_back(cst_index_1);
-      initial_array_sizes.push_back(cst_index_1);
-
-      /// A1tile
-      initial_array_sizes.push_back(cst_index_0);
-      initial_array_sizes.push_back(cst_index_0);
-
-      /// The other three size information size..
-      /// get the dimension size from operand or type
-
-      TensorType t = op.getResult().getType();
-      for(int i = 0; i < t.getRank(); i++)
-      {
-        if(t.isDynamicDim(i))
-        {
-          dimSizes.push_back(op.getOperation()->getOperand(i));
-        }
-        else
-        {
-          dimSizes.push_back(rewriter.create<ConstantIndexOp>(loc, t.getShape()[i] ));
-        }
-      }
-
-      /// The dim size is the second parameter of the
-      Value dim2_posSize = rewriter.create<AddIOp>(loc, dimSizes[0], cst_index_1);
-      comet_debug() << "AddIOp generated for dim2_posSize:\n";
-      comet_vdump(dim2_posSize);
-      initial_array_sizes.push_back(dim2_posSize);
-
-      Value dim2_crdSize = rewriter.create<MulIOp>(loc, dimSizes[0], dimSizes[1]);
-      initial_array_sizes.push_back(dim2_crdSize);
-
-      /// A2tile
-      initial_array_sizes.push_back(cst_index_0);
-      initial_array_sizes.push_back(cst_index_0);
-
-      /// Aval
-      initial_array_sizes.push_back(dim2_crdSize);
-      comet_debug() << " ";
-      comet_vdump(dim2_crdSize);
-    }
-    else
-    {
-      llvm::errs() << __FILE__ << ":" << __LINE__ << "Not supported format\n";
-    }
-
-    /// same with transpose case
-    comet_debug() << " initial_array_sizes.size(): " << initial_array_sizes.size() << "\n";
-    comet_debug() << " tensor_rank: " << tensor_rank << "\n";
-    std::vector<Value> array_alloc_vec;
-    for (unsigned int i = 0; i < 4 * tensor_rank + 1; i++)
-    {
-      Value alloc_sizes;
-      if (i < 4 * tensor_rank)
-      {
-        comet_debug() << " Inserting AllocOp: ";
-        alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{initial_array_sizes[i]}, rewriter);
-        comet_debug() << " AllocOp: ";
-        comet_vdump(alloc_sizes);
-      }
-      else
-      {
-        alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{initial_array_sizes[i]}, rewriter);
-        comet_debug() << " AllocOp: ";
-        comet_vdump(alloc_sizes);
-      }
-      Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes);
-      tensorload_sizes_vec.push_back(tensorload_sizes);
-      array_alloc_vec.push_back(alloc_sizes);
-    }
-
-    /// Initialize the sizes of pos/crd/val arrays
-    array_sizes.push_back(cst_index_1); /// A1pos_size
-    array_sizes.push_back(cst_index_1); /// A1crd_size
-    array_sizes.push_back(cst_index_1); /// A1tile_pos_size
-    array_sizes.push_back(cst_index_0); /// A1tile_crd_size
-    array_sizes.push_back(cst_index_1); /// A2pos_size
-    array_sizes.push_back(cst_index_0); /// A2crd_size
-    array_sizes.push_back(cst_index_0); /// A2tile_pos_size
-    array_sizes.push_back(cst_index_1); /// A2tile_crd_size
-    array_sizes.push_back(cst_index_0); /// Aval_size
-    /// put the array sizes into alloc/store/loadOp
-    for (auto size : array_sizes)
-    {
-      MemRefType memTy_alloc_sizes = MemRefType::get({1}, IndexType::get(op.getContext()));
-      Value allocop = rewriter.create<memref::AllocOp>(loc, memTy_alloc_sizes);
-      rewriter.create<memref::StoreOp>(loc, size, allocop, ValueRange{cst_index_0});
-      Value loadop = rewriter.create<memref::LoadOp>(loc, allocop, ValueRange{cst_index_0});
-      array_sizes_vec.push_back(loadop);
-      array_sizes_alloc_vec.push_back(allocop);
-    }
-
-    rewriter.create<memref::StoreOp>(loc, dimSizes[0], array_alloc_vec[0], ValueRange{cst_index_0});
-  }
-
   void insertReadFileLibCall(int rank_size, MLIRContext *ctx, ModuleOp &module, func::FuncOp function)
   {
     comet_debug() << "Inserting insertReadFileLibCall\n";
@@ -464,6 +232,123 @@ namespace
     }
   }
 
+ Operation* insertSparseTensorDeclOp(PatternRewriter & rewriter,
+                               unsigned rank_size, 
+                               std::vector<Value>& tensorload_sizes_vec,
+                               std::vector<Value>& array_sizes_vec,
+                               std::vector<std::vector<int64_t>>& allPerms,
+                               std::vector<Value>& dimSizes)
+  {
+    comet_debug() << " Get users after ";
+    /// create sparse tensor construct after lowering each sparse tensor output users
+    comet_debug() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
+    /// create sptensor_construct
+    SmallVector<mlir::Type, 1> elementTypes;
+    for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
+    {
+      assert(tensorload_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
+      comet_debug() << " " << i << " ";
+      comet_vdump(tensorload_sizes_vec[i]);
+      elementTypes.push_back(tensorload_sizes_vec[i].getType());
+    }
+    comet_debug() << "\n ";
+    /// [0 ... 2*rank_size, 2*rank_size+1 ... 4*rank_size+1, 4*rank_size+2 ... 5*rank_size + 1]
+    /// 2d+1 + 2d+1 + d => 5d+2
+    for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
+    {
+      assert(array_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
+      comet_debug() << " " << i << " ";
+      comet_vdump(array_sizes_vec[i]);
+      elementTypes.push_back(array_sizes_vec[i].getType());
+    }
+    comet_debug() << "\n ";
+    for (unsigned int i = 0; i < rank_size; i++)
+    {
+      assert(dimSizes.size() > 0 && "ERROR: Please report this error to the developers!");
+      elementTypes.push_back(dimSizes[i].getType());
+    }
+    comet_debug() << "\n ";
+
+    auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
+
+    Value sptensor;
+    if (rank_size == 2)
+    {
+      sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
+                                                                          ValueRange{
+                                                                              tensorload_sizes_vec[0], /// A1pos (each dimension consists of pos and crd arrays)
+                                                                              tensorload_sizes_vec[1], /// A1crd
+                                                                              tensorload_sizes_vec[2], /// A1tile_pos
+                                                                              tensorload_sizes_vec[3], /// A1tile_crd
+                                                                              tensorload_sizes_vec[4], /// A2pos
+                                                                              tensorload_sizes_vec[5], /// A2crd
+                                                                              tensorload_sizes_vec[6], /// A2tile_pos
+                                                                              tensorload_sizes_vec[7], /// A2tile_crd
+                                                                              tensorload_sizes_vec[8], /// Aval
+                                                                              array_sizes_vec[0],      /// A1pos_size (size of each pos and crd arrays)
+                                                                              array_sizes_vec[1],      /// A1crd_size
+                                                                              array_sizes_vec[2],      /// A1tile_pos_size
+                                                                              array_sizes_vec[3],      /// A1tile_crd_size
+                                                                              array_sizes_vec[4],      /// A2pos_size
+                                                                              array_sizes_vec[5],      /// A2crd_size
+                                                                              array_sizes_vec[6],      /// A2tile_pos_size
+                                                                              array_sizes_vec[7],      /// A2tile_crd_size
+                                                                              array_sizes_vec[8],      /// Aval_size (size of value array)
+                                                                              dimSizes[0],             /// dim1_size(size of each dimension in sparse tensor)
+                                                                              dimSizes[1]              /// dim2_size (size of each dimension in sparse tensor)
+                                                                          },
+                                                                          2);
+    }
+    else if (rank_size == 3)
+    {
+      sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
+                                                                          ValueRange{
+                                                                              tensorload_sizes_vec[0],  /// A1pos (each dimension consists of pos and crd arrays)
+                                                                              tensorload_sizes_vec[1],  /// A1crd
+                                                                              tensorload_sizes_vec[2],  /// A1tile_pos
+                                                                              tensorload_sizes_vec[3],  /// A1tile_crd
+                                                                              tensorload_sizes_vec[4],  /// A2pos
+                                                                              tensorload_sizes_vec[5],  /// A2crd
+                                                                              tensorload_sizes_vec[6],  /// A2tile_pos
+                                                                              tensorload_sizes_vec[7],  /// A2tile_crd
+                                                                              tensorload_sizes_vec[8],  /// A3pos
+                                                                              tensorload_sizes_vec[9],  /// A3crd
+                                                                              tensorload_sizes_vec[10], /// A3tile_pos
+                                                                              tensorload_sizes_vec[11], /// A3tile_crd
+                                                                              tensorload_sizes_vec[12], /// Aval
+                                                                              array_sizes_vec[0],       /// A1pos_size (size of each pos and crd arrays)
+                                                                              array_sizes_vec[1],       /// A1crd_size
+                                                                              array_sizes_vec[2],       /// A1tile_pos_size
+                                                                              array_sizes_vec[3],       /// A1tile_crd_size
+                                                                              array_sizes_vec[4],       /// A2pos_size
+                                                                              array_sizes_vec[5],       /// A2crd_size
+                                                                              array_sizes_vec[6],       /// A2tile_pos_size
+                                                                              array_sizes_vec[7],       /// A2tile_crd_size
+                                                                              array_sizes_vec[8],       /// A3pos_size
+                                                                              array_sizes_vec[9],       /// A3crd_size
+                                                                              array_sizes_vec[10],      /// A3tile_pos_size
+                                                                              array_sizes_vec[11],      /// A3tile_crd_size
+                                                                              array_sizes_vec[12],      /// Aval_size (size of value array)
+                                                                              dimSizes[0],              /// dim1_size (size of each dimension in sparse tensor)
+                                                                              dimSizes[1],              /// dim2_size (size of each dimension in sparse tensor)
+                                                                              dimSizes[2]               /// dim3_size
+                                                                          },
+                                                                          3);
+    }
+    else
+    {
+      llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not supported format (Tensors of dimensions greater than 3 are currently not supported).\n";
+    }
+
+    comet_debug() << "SparseTensorConstructOp generated for sparse output tensor:\n";
+    comet_vdump(sptensor);
+
+    /// create ta.index_label operation.
+    comet_vdump(op);
+
+    return sptensor;
+  }
+
   /// This a common lowering function used to lower SparseOutputTensorDeclOp and TempSparseOutputTensorDeclOp
   template <typename T>
   void lowerSparseOutputTensorDec(T op, PatternRewriter &rewriter)
@@ -499,6 +384,8 @@ namespace
     auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, f64Type);     /// memref<?xf64>
 
     comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
+
+    Operation* new_tensor;
 
     /// sparse output
     if (isDense(formats_str, ", ") == false)
@@ -765,162 +652,41 @@ namespace
             Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes);
             tensorload_sizes_vec.push_back(tensorload_sizes);
           }
+          new_tensor = insertSparseTensorDeclOp(rewriter, rank_size, tensorload_sizes_vec, array_sizes_vec, allPerms, dim_sizes);
+          break;
         }
         else if (isa<indexTree::IndexTreeLHSOperandOp>(u))
         {
-          comet_debug() << " Sparse output is used in it.OperandOp\n";
-          assert(false && "Error: Sparse tensor output not implemented yet");
-          rewriter.setInsertionPoint(u);
-          // TODO (alokvk2): Take care of this, probably do nothing
-        }
-        else if (isa<indexTree::IndexTreeOperandOp>(u))
-        {
-          comet_debug() << " Sparse output is used in it.OperandOp\n";
-        }
-        else if (isa<indexTree::IndexTreeTensorDomainOp>(u))
-        {
-          comet_debug() << " Sparse output is used in it.DomainOp\n";
-          // TODO (alokvk2): Take care of this
-        }
-        else if (isa<tensorAlgebra::TensorFillFromFileOp>(u))
-        {
-          comet_debug() << " Sparse output is used in TensorFillFromFileOp\n";
-          auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
-          /// Can get filename, from "filename" attribute of fillfromfileop
-          rewriter.eraseOp(fillfromfileop);
-        }
-        else if (isa<tensorAlgebra::PrintOp>(u))
-        {
-          comet_debug() << "The tensor is in print op,  no action taken\n";
-          continue;
-        }
-        else if (isa<tensorAlgebra::ReduceOp>(u))
-        {
-          comet_debug() << "The tensor is in sum op,  no action taken\n";
-          continue;
-        }
-        else if (isa<tensorAlgebra::TensorDimOp>(u))
-        {
-          comet_debug() << "The tensor is in dim op,  no action taken\n";
-          continue;
-        }
-        else
-        {
-          llvm::errs() << __FILE__ << __LINE__ << " tensor is used in the following unsupported op\n";
-          comet_pdump(u);
+          comet_debug() << " Sparse output is used in it.LHSOperandOp\n";
+          // Tensor is created as the output of a sparse tensor operation
+          // For now we defer to the index tree dialect by inserting a tensor decl
+          // that just contains empty domains.
+          auto lhs_op = llvm::cast<indexTree::IndexTreeLHSOperandOp>(u);
+          rank_size = lhs_op.getCrds().size();
+          indexTree::DomainType domain_type = indexTree::DomainType::get(op.getContext()); 
+          rewriter.setInsertionPoint(op);
+          Value empty_domain = rewriter.create<indexTree::IndexTreeEmptyDomainOp>(loc, domain_type);
+          llvm::SmallVector<Value> args = llvm::SmallVector<Value>(rank_size, empty_domain)
+          new_tensor = rewriter.create<indexTree::IndexTreeSparseTensorOp>(loc, op->getResult(0).getType(), args);
+
+
+          // Eventually, there are 2 cases:
+          // Case 1: We can determine apriori the dimension of the sparse tensor
+          //         This is the case if none of the index variables in the output
+          //         tensor are used in a union or a insersect op. In this case we use
+          //         the sparse tensor decleration of the input in order to determine
+          //          the output tensor. We allocate arrays of the same size and then
+          //         insert a ta.SpTensorDeclOp.
+          // Case 2: We can't determine the dimension of the sparse tensor.
+          //         This happens in all other cases. Here we insert a tensor
+          //         that is defined with an (at least one) empty domain. In 
+          //         the lowering process we can either use the symbolic phase
+          //         to determine the allocations needed, or we can perform the
+          //         allocations during the computational phase
+          break;
         }
       }
-      assert(false && "Error: Sparse tensor output not implemented yet");
-
-      // comet_debug() << " Get users after ";
-      // /// create sparse tensor construct after lowering each sparse tensor output users
-      // comet_debug() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
-      // /// create sptensor_construct
-      // SmallVector<mlir::Type, 1> elementTypes;
-      // for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
-      // {
-      //   assert(tensorload_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
-      //   comet_debug() << " " << i << " ";
-      //   comet_vdump(tensorload_sizes_vec[i]);
-      //   elementTypes.push_back(tensorload_sizes_vec[i].getType());
-      // }
-      // comet_debug() << "\n ";
-      // /// [0 ... 2*rank_size, 2*rank_size+1 ... 4*rank_size+1, 4*rank_size+2 ... 5*rank_size + 1]
-      // /// 2d+1 + 2d+1 + d => 5d+2
-      // for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
-      // {
-      //   assert(array_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
-      //   comet_debug() << " " << i << " ";
-      //   comet_vdump(array_sizes_vec[i]);
-      //   elementTypes.push_back(array_sizes_vec[i].getType());
-      // }
-      // comet_debug() << "\n ";
-      // for (unsigned int i = 0; i < rank_size; i++)
-      // {
-      //   assert(dimSizes.size() > 0 && "ERROR: Please report this error to the developers!");
-      //   elementTypes.push_back(dimSizes[i].getType());
-      // }
-      // comet_debug() << "\n ";
-
-      // auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
-
-      // Value sptensor;
-      // if (rank_size == 2)
-      // {
-      //   sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
-      //                                                                       ValueRange{
-      //                                                                           tensorload_sizes_vec[0], /// A1pos (each dimension consists of pos and crd arrays)
-      //                                                                           tensorload_sizes_vec[1], /// A1crd
-      //                                                                           tensorload_sizes_vec[2], /// A1tile_pos
-      //                                                                           tensorload_sizes_vec[3], /// A1tile_crd
-      //                                                                           tensorload_sizes_vec[4], /// A2pos
-      //                                                                           tensorload_sizes_vec[5], /// A2crd
-      //                                                                           tensorload_sizes_vec[6], /// A2tile_pos
-      //                                                                           tensorload_sizes_vec[7], /// A2tile_crd
-      //                                                                           tensorload_sizes_vec[8], /// Aval
-      //                                                                           array_sizes_vec[0],      /// A1pos_size (size of each pos and crd arrays)
-      //                                                                           array_sizes_vec[1],      /// A1crd_size
-      //                                                                           array_sizes_vec[2],      /// A1tile_pos_size
-      //                                                                           array_sizes_vec[3],      /// A1tile_crd_size
-      //                                                                           array_sizes_vec[4],      /// A2pos_size
-      //                                                                           array_sizes_vec[5],      /// A2crd_size
-      //                                                                           array_sizes_vec[6],      /// A2tile_pos_size
-      //                                                                           array_sizes_vec[7],      /// A2tile_crd_size
-      //                                                                           array_sizes_vec[8],      /// Aval_size (size of value array)
-      //                                                                           dimSizes[0],             /// dim1_size(size of each dimension in sparse tensor)
-      //                                                                           dimSizes[1]              /// dim2_size (size of each dimension in sparse tensor)
-      //                                                                       },
-      //                                                                       2);
-      // }
-      // else if (rank_size == 3)
-      // {
-      //   sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
-      //                                                                       ValueRange{
-      //                                                                           tensorload_sizes_vec[0],  /// A1pos (each dimension consists of pos and crd arrays)
-      //                                                                           tensorload_sizes_vec[1],  /// A1crd
-      //                                                                           tensorload_sizes_vec[2],  /// A1tile_pos
-      //                                                                           tensorload_sizes_vec[3],  /// A1tile_crd
-      //                                                                           tensorload_sizes_vec[4],  /// A2pos
-      //                                                                           tensorload_sizes_vec[5],  /// A2crd
-      //                                                                           tensorload_sizes_vec[6],  /// A2tile_pos
-      //                                                                           tensorload_sizes_vec[7],  /// A2tile_crd
-      //                                                                           tensorload_sizes_vec[8],  /// A3pos
-      //                                                                           tensorload_sizes_vec[9],  /// A3crd
-      //                                                                           tensorload_sizes_vec[10], /// A3tile_pos
-      //                                                                           tensorload_sizes_vec[11], /// A3tile_crd
-      //                                                                           tensorload_sizes_vec[12], /// Aval
-      //                                                                           array_sizes_vec[0],       /// A1pos_size (size of each pos and crd arrays)
-      //                                                                           array_sizes_vec[1],       /// A1crd_size
-      //                                                                           array_sizes_vec[2],       /// A1tile_pos_size
-      //                                                                           array_sizes_vec[3],       /// A1tile_crd_size
-      //                                                                           array_sizes_vec[4],       /// A2pos_size
-      //                                                                           array_sizes_vec[5],       /// A2crd_size
-      //                                                                           array_sizes_vec[6],       /// A2tile_pos_size
-      //                                                                           array_sizes_vec[7],       /// A2tile_crd_size
-      //                                                                           array_sizes_vec[8],       /// A3pos_size
-      //                                                                           array_sizes_vec[9],       /// A3crd_size
-      //                                                                           array_sizes_vec[10],      /// A3tile_pos_size
-      //                                                                           array_sizes_vec[11],      /// A3tile_crd_size
-      //                                                                           array_sizes_vec[12],      /// Aval_size (size of value array)
-      //                                                                           dimSizes[0],              /// dim1_size (size of each dimension in sparse tensor)
-      //                                                                           dimSizes[1],              /// dim2_size (size of each dimension in sparse tensor)
-      //                                                                           dimSizes[2]               /// dim3_size
-      //                                                                       },
-      //                                                                       3);
-      // }
-      // else
-      // {
-      //   llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not supported format (Tensors of dimensions greater than 3 are currently not supported).\n";
-      // }
-
-      // comet_debug() << "SparseTensorConstructOp generated for sparse output tensor:\n";
-      // comet_vdump(sptensor);
-
-      // /// create ta.index_label operation.
-      // comet_vdump(op);
-
-      // op.replaceAllUsesWith(sptensor);
-      // rewriter.replaceOp(op, sptensor);
+      rewriter.replaceOp(op, sptensor);
     }
     else
     { /// format == "Dense"

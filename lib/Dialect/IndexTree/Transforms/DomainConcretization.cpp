@@ -6,6 +6,8 @@
 #include "mlir/Pass/Pass.h"
 
 #include "llvm/ADT/StringSet.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/IndexMap.h"
 
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -215,6 +217,95 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
   }
 };
 
+struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
+  InferOutputDomains(MLIRContext *context)
+      : OpRewritePattern<IndexTreeSparseTensorOp>(context, /*benefit=*/1) {}
+
+  Value copyDomain(Value domain, mlir::PatternRewriter &rewriter, IRMapping& map, Location* loc)
+  {
+    Value new_domain;
+    Operation* domain_op = domain.getDefiningOp();
+    if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op) || llvm::isa<IndexTreeDomainUnionOp>(domain_op))
+    {
+      for(Value subdomain : domain_op->getOperands()){
+        copyDomain(subdomain, rewriter, map);
+      }
+    }
+    
+    if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
+    {
+      // Clone without parent
+      auto sparse_domain_op = llvm::cast<IndexTreeSparseDomainOp>(domain_op)
+      new_domain = rewriter.create<IndexTreeSparseDomainOp>(loc, 
+                                                                 domain_op->getResultTypes(),
+                                                                 sparse_domain_op.getTensor(),
+                                                                 sparse_domain_op.getDimAttr(),
+                                                                 sparse_domain_op.getFormatAttr(),
+                                                                 sparse_domain_op.getPos(),
+                                                                 sparse_domain_op.getCrd(),
+                                                                 sparse_domain_op.getPosSize(),
+                                                                 sparse_domain_op.getCordSize(),
+                                                                 nullptr);
+      map.map(domain_op, new_domain);
+    } else {
+      // Clone
+      new_domain = rewriter.clone(domain_op, map);
+    }
+    return new_domain;
+  }
+
+  mlir::LogicalResult
+  matchAndRewrite(IndexTreeSparseTensorOp op,
+                  mlir::PatternRewriter &rewriter) const override {
+
+    // Get the LHSOperandOp which creates thise tensor
+    Value tensor = op->getResult(0);
+    IndexTreeLHSOperandOp lhs_op = nullptr;
+    for(Operation* op : tensor.getUsers())
+    {
+      if(llvm::isa<IndexTreeLHSOperandOp>(op))
+      {
+        lhs_op = llvm::cast<IndexTreeLHSOperandOp>(op);
+      }
+    }
+
+    if(lhs_op == nullptr)
+      return failure();
+
+    
+    auto crds = lhs_op.getCrds();
+    unsigned dims = lhs_op.getNumOperands();
+    Value empty_domain = lhs_op.getOperand(0);
+    IndexMap<uint32_t, Value> domains(empty_domain);
+    domains.reserve(dims);
+    for(Value crd : crds){
+      auto access_op = llvm::dyn_cast<IndexTreeIndexToTensorOp>(crd.getDefiningOp());
+      if(access_op == nullptr){
+        return failure();
+      }
+      auto index_op = llvm::dyn_cast<IndexTreeIndicesOp>(access_op.getIndex().getDefiningOp());
+      if(index_op == nullptr){
+        return failure();
+      }
+
+      Value domain = index_op.getDomain();
+      domains[access_op.getDim()] = domain;
+    }
+
+    // Successfully matched! Cannot fail after this point.
+    auto loc = op->getLoc();
+    auto context = rewriter.getContext();
+    SmallVector<Value> new_args;
+    for(unsigned dim = 0; dim < dims; dim++){
+      Value domain_copy = copyDomain(domains[dim]);
+      new_args.push_back(domain_copy);
+    }
+    auto new_tensor = rewriter.create<IndexTreeSparseTensorOp>(loc, op->getResult(0).getType(), new_args);
+    rewriter.replaceOp(op, {new_tensor});
+    return success();
+  }
+};
+
 struct IndexTreeDomainConcretization : comet::impl::IndexTreeDomainConcretizationBase<IndexTreeDomainConcretization> {
   using IndexTreeDomainConcretizationBase::IndexTreeDomainConcretizationBase;
 
@@ -226,6 +317,10 @@ struct IndexTreeDomainConcretization : comet::impl::IndexTreeDomainConcretizatio
     mlir::RewritePatternSet simplify_domain_patterns(&getContext());
     simplify_domain_patterns.add<SimplifyIntersectionOp>(&getContext());
     mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(simplify_domain_patterns));
+
+    mlir::RewritePatternSet infer_output_domain_patterns(&getContext());
+    infer_output_domain_patterns.add<InferOutputDomains>(&getContext());
+    mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(infer_output_domain_patterns));
   }
 };
 
