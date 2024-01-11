@@ -234,7 +234,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
   );
 
   rewriter.create<indexTree::YieldOp>(loc, TypeRange(), compute_op);
-  rewriter.replaceOp(op, itree_op.getResult(0));
+  rewriter.replaceOp(op, itree_op->getResults());
   return success();
 }
 

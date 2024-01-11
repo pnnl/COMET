@@ -652,349 +652,400 @@ LowerIndexTreeToSCFPass::deleteDomain(Operation* op, IRRewriter &rewriter) {
 mlir::LogicalResult
 LowerIndexTreeToSCFPass::convertIndexNode(Operation *op, 
                                           IRRewriter &rewriter) {
+  // Generate loop
+  auto loc = op->getLoc();
+  auto context = rewriter.getContext();
+  IndexTreeIndicesOp index_node_op = llvm::cast<IndexTreeIndicesOp>(op);
+  Operation* domain_op = index_node_op.getDomain().getDefiningOp();
+  auto index_type = rewriter.getIndexType();
 
-    // Generate loop
-    auto loc = op->getLoc();
-    auto context = rewriter.getContext();
-    IndexTreeIndicesOp index_node_op = llvm::cast<IndexTreeIndicesOp>(op);
-    Operation* domain_op = index_node_op.getDomain().getDefiningOp();
-    auto index_type = rewriter.getIndexType();
+  Value crd;
+  Value induction_var;
+  OpBuilder::InsertPoint before = rewriter.saveInsertionPoint();
+  OpBuilder::InsertPoint loop_end;
 
-    Value crd;
-    Value induction_var;
-    OpBuilder::InsertPoint before = rewriter.saveInsertionPoint();
-    OpBuilder::InsertPoint loop_end;
+  SetVector<Operation*> subtree = collectChildren(index_node_op);
+  subtree = topologicalSort(subtree);
+  SmallVector<Value> loop_outputs;
+  SmallVector<Value> loop_init_args;
+  SmallDenseMap<std::pair<Value, unsigned>, std::pair<Value, Value>> tensor_access_map;
 
-    SetVector<Operation*> subtree = collectChildren(index_node_op);
-    subtree = topologicalSort(subtree);
-    SmallVector<Value> loop_outputs;
-    SmallVector<Value> loop_init_args;
-    SmallDenseMap<std::pair<Value, unsigned>, std::pair<Value, Value>> tensor_access_map;
+  for(Operation* child : subtree){
+    IndexTreeComputeOp compute_op = llvm::dyn_cast<IndexTreeComputeOp>(child);
+    if(!compute_op)
+      continue;
 
-    for(Operation* child : subtree){
-      IndexTreeComputeOp compute_op = llvm::dyn_cast<IndexTreeComputeOp>(child);
-      if(!compute_op)
-        continue;
+    Value loop_output = compute_op->getResult(0);
+    Value lhs_tensor = compute_op.getLhs().getDefiningOp()->getOperand(0);
+    loop_outputs.push_back(loop_output);
+    loop_init_args.push_back(lhs_tensor);
+  }
 
-      Value loop_output = compute_op->getResult(0);
-      Value lhs_tensor = compute_op.getLhs().getDefiningOp()->getOperand(0);
-      loop_outputs.push_back(loop_output);
-      loop_init_args.push_back(lhs_tensor);
+  if(llvm::isa<IndexTreeDenseDomainOp>(domain_op))
+  {
+    // Dense domain
+    Value lb = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
+                                                  rewriter.getIndexAttr(0));
+    Value ub = domain_op->getOperand(0);
+    Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
+                                                  rewriter.getIndexAttr(1));
+    scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, loop_init_args);
+    crd = for_loop.getInductionVar();
+    induction_var = crd;
+
+    IRMapping map;
+    unsigned init_arg_idx = 0;
+    for(Value init_arg : loop_init_args){
+      map.map(init_arg, for_loop.getRegionIterArg(init_arg_idx));
+      init_arg_idx += 1;
+    }
+    rewriter.setInsertionPointToStart(for_loop.getBody());
+    fillSubtree(loc, rewriter, subtree, loop_outputs, for_loop.getResults(), map);
+    rewriter.setInsertionPoint(for_loop.getBody()->getTerminator());
+    loop_end = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointAfter(for_loop);
+
+
+  } else if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
+  {
+    // Sparse domain
+    IndexTreeSparseDomainOp sparse_domain = llvm::cast<IndexTreeSparseDomainOp>(domain_op);
+    TensorFormatEnum format = (TensorFormatEnum)sparse_domain.getFormat();
+    switch(format)
+    {
+      case TensorFormatEnum::CU:
+      case TensorFormatEnum::CN: //TODO: Figure out difference
+      {
+        Value start_idx = sparse_domain.getParent();
+        if(!start_idx){
+          start_idx = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
+        }
+        Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
+        Value end_idx = rewriter.create<arith::AddIOp>(loc, index_type, start_idx, inc);
+        Value lb = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), start_idx);
+        Value ub = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), end_idx);
+        Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
+                                                        rewriter.getIndexAttr(1));
+        scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, loop_init_args);
+        Block* loop_body = for_loop.getBody();
+
+        rewriter.setInsertionPointToStart(loop_body);
+        Value crd_idx = for_loop.getInductionVar();
+        induction_var = crd_idx;
+        crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
+
+        IRMapping map;
+        unsigned init_arg_idx = 0;
+        for(Value init_arg : loop_init_args){
+          map.map(init_arg, for_loop.getRegionIterArg(init_arg_idx));
+          init_arg_idx += 1;
+        }
+        
+        fillSubtree(loc, rewriter, subtree, loop_outputs, for_loop.getResults(), map);
+        rewriter.setInsertionPoint(for_loop.getBody()->getTerminator());
+        loop_end = rewriter.saveInsertionPoint();
+        rewriter.setInsertionPointAfter(for_loop);
+
+        tensor_access_map.insert(std::make_pair(
+          std::make_pair(sparse_domain.getTensor(), sparse_domain.getDim()), 
+          std::make_pair(crd_idx, crd)
+        ));
+        break;
+      }
+      case TensorFormatEnum::S:
+      {
+        Value crd_idx = sparse_domain.getParent();
+        induction_var = crd_idx;
+        crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
+        loop_end = rewriter.saveInsertionPoint();
+        tensor_access_map.insert(std::make_pair(
+          std::make_pair(sparse_domain.getTensor(), sparse_domain.getDim()), 
+          std::make_pair(crd_idx, crd)
+        ));
+        break;
+      }
+    }
+  } else if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op))
+  {
+    // Intersection between sparse domains
+    auto domains = domain_op->getOperands();
+    Value step = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
+    Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
+    SmallVector<Value> loop_conditions;
+    SmallVector<Value> array_crds;
+
+    Block* cond_block = new Block();
+    Block* body_block = new Block();
+    IRMapping map;
+
+    // Create loop carried arguments for output tensors
+    for(Value init_arg : loop_init_args){
+      cond_block->addArgument(init_arg.getType(), loc);
+      BlockArgument body_arg = body_block->addArgument(init_arg.getType(), loc);
+      map.map(init_arg, body_arg);
     }
 
-    if(llvm::isa<IndexTreeDenseDomainOp>(domain_op))
+    // Create control iterators for each of the tensors
+    for(Value domain : domains)
     {
-      // Dense domain
-      Value lb = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
-                                                    rewriter.getIndexAttr(0));
-      Value ub = domain_op->getOperand(0);
-      Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
-                                                    rewriter.getIndexAttr(1));
-      scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, loop_init_args);
-      crd = for_loop.getInductionVar();
-      induction_var = crd;
-
-      IRMapping map;
-      unsigned init_arg_idx = 0;
-      for(Value init_arg : loop_init_args){
-        map.map(init_arg, for_loop.getRegionIterArg(init_arg_idx));
-        init_arg_idx += 1;
-      }
-      rewriter.setInsertionPointToStart(for_loop.getBody());
-      fillSubtree(loc, rewriter, subtree, loop_outputs, for_loop.getResults(), map);
-      rewriter.setInsertionPoint(for_loop.getBody()->getTerminator());
-      loop_end = rewriter.saveInsertionPoint();
-      rewriter.setInsertionPointAfter(for_loop);
-
-
-    } else if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
-    {
-      // Sparse domain
-      IndexTreeSparseDomainOp sparse_domain = llvm::cast<IndexTreeSparseDomainOp>(domain_op);
+      IndexTreeSparseDomainOp sparse_domain = llvm::cast<IndexTreeSparseDomainOp>(domain.getDefiningOp());
       TensorFormatEnum format = (TensorFormatEnum)sparse_domain.getFormat();
       switch(format)
       {
-        case TensorFormatEnum::CU:
-        case TensorFormatEnum::CN: //TODO: Figure out difference
+        case TensorFormatEnum::CN:
+        case TensorFormatEnum::S:
         {
+          // Not yet supported!!!
+          break;
+        }
+        case TensorFormatEnum::CU: //TODO: Figure out difference
+        {
+          rewriter.restoreInsertionPoint(before);
           Value start_idx = sparse_domain.getParent();
           if(!start_idx){
             start_idx = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
           }
-          Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
           Value end_idx = rewriter.create<arith::AddIOp>(loc, index_type, start_idx, inc);
-          Value lb = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), start_idx);
-          Value ub = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), end_idx);
-          Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
-                                                          rewriter.getIndexAttr(1));
-          scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, loop_init_args);
-          Block* loop_body = for_loop.getBody();
+          Value start = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), start_idx);
+          Value end = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), end_idx);
+          loop_init_args.push_back(start);
+          before = rewriter.saveInsertionPoint();
 
-          rewriter.setInsertionPointToStart(loop_body);
-          Value crd_idx = for_loop.getInductionVar();
-          induction_var = crd_idx;
-          crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
+          Value crd_idx = cond_block->addArgument(start.getType(), loc);
+          rewriter.setInsertionPointToStart(cond_block);
+          Value cnd = rewriter.create<arith::CmpIOp>(
+            loc, rewriter.getI1Type(),
+            arith::CmpIPredicateAttr::get(context, arith::CmpIPredicate::ult), 
+            crd_idx, end
+          );
+          loop_conditions.push_back(cnd);
 
-          IRMapping map;
-          unsigned init_arg_idx = 0;
-          for(Value init_arg : loop_init_args){
-            map.map(init_arg, for_loop.getRegionIterArg(init_arg_idx));
-            init_arg_idx += 1;
-          }
-          
-          fillSubtree(loc, rewriter, subtree, loop_outputs, for_loop.getResults(), map);
-          rewriter.setInsertionPoint(for_loop.getBody()->getTerminator());
-          loop_end = rewriter.saveInsertionPoint();
-          rewriter.setInsertionPointAfter(for_loop);
+          crd_idx = body_block->addArgument(start.getType(), loc);
+          rewriter.setInsertionPointToStart(body_block);
+          Value array_crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
+          array_crds.push_back(array_crd);
 
           tensor_access_map.insert(std::make_pair(
             std::make_pair(sparse_domain.getTensor(), sparse_domain.getDim()), 
-            std::make_pair(crd_idx, crd)
+            std::make_pair(crd_idx, array_crd)
           ));
-          break;
-        }
-        case TensorFormatEnum::S:
-        {
-          Value crd_idx = sparse_domain.getParent();
-          induction_var = crd_idx;
-          crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
-          loop_end = rewriter.saveInsertionPoint();
-          tensor_access_map.insert(std::make_pair(
-            std::make_pair(sparse_domain.getTensor(), sparse_domain.getDim()), 
-            std::make_pair(crd_idx, crd)
-          ));
-          break;
         }
       }
-    } else if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op))
+    }
+    rewriter.restoreInsertionPoint(before);
+
+    // Create while loop
+    scf::WhileOp while_loop = rewriter.create<scf::WhileOp>(loc, cond_block->getArgumentTypes(), loop_init_args);
+    while_loop.getBefore().push_front(cond_block);
+
+    rewriter.setInsertionPointToEnd(cond_block);
+    Value loop_condition = nullptr;
+    for(Value cnd : loop_conditions)
     {
-      // Intersection between sparse domains
-      auto domains = domain_op->getOperands();
-      Value step = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
-      Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
-      SmallVector<Value> loop_conditions;
-      SmallVector<Value> array_crds;
-
-      Block* cond_block = new Block();
-      Block* body_block = new Block();
-      IRMapping map;
-
-      // Create loop carried arguments for output tensors
-      for(Value init_arg : loop_init_args){
-        cond_block->addArgument(init_arg.getType(), loc);
-        BlockArgument body_arg = body_block->addArgument(init_arg.getType(), loc);
-        map.map(init_arg, body_arg);
-      }
-
-      // Create control iterators for each of the tensors
-      for(Value domain : domains)
+      if(loop_condition == nullptr)
       {
-        IndexTreeSparseDomainOp sparse_domain = llvm::cast<IndexTreeSparseDomainOp>(domain.getDefiningOp());
-        TensorFormatEnum format = (TensorFormatEnum)sparse_domain.getFormat();
+        loop_condition = cnd;
+      } else {
+        loop_condition = rewriter.create<arith::AndIOp>(loc, rewriter.getI1Type(), loop_condition, cnd);
+      }
+    }
+    rewriter.create<scf::ConditionOp>(loc, loop_condition, cond_block->getArguments());
+
+    while_loop.getAfter().push_front(body_block);
+    // Create intersection
+    rewriter.setInsertionPointToEnd(body_block);
+    crd = nullptr;
+    for(Value array_crd : array_crds){
+      if(crd == nullptr)
+      {
+        crd = array_crd;
+      } else {
+        crd = rewriter.create<arith::MinUIOp>(loc, index_type, crd, array_crd);
+      }
+    }
+
+    Value intersection_cnd = nullptr;
+    SmallVector<Value> intersections;
+    for(Value array_crd : array_crds)
+    {
+      Value is_intersect = rewriter.create<arith::CmpIOp>(
+        loc, rewriter.getI1Type(),
+        arith::CmpIPredicateAttr::get(context, arith::CmpIPredicate::eq),
+        crd, array_crd
+      );
+      if(intersection_cnd == nullptr)
+      {
+        intersection_cnd = is_intersect;
+      } else {
+        intersection_cnd = rewriter.create<arith::AndIOp>(loc, rewriter.getI1Type(), intersection_cnd, is_intersect);
+      }
+      intersections.push_back(is_intersect);
+    }
+
+    SmallVector<Type> if_types;
+    for(Value result : loop_outputs)
+    {
+      if_types.push_back(result.getType());
+    }
+    scf::IfOp if_op = rewriter.create<scf::IfOp>(loc, if_types, intersection_cnd, true);
+    rewriter.setInsertionPointToStart(if_op.elseBlock());
+    rewriter.create<scf::YieldOp>(
+      loc, 
+      std::vector<Value>(
+        body_block->args_begin(),
+        body_block->args_begin() + if_op->getNumResults())
+    );
+    rewriter.setInsertionPointToStart(if_op.thenBlock());
+    fillSubtree(loc, rewriter, subtree, loop_outputs, while_loop.getResults(), map);
+    rewriter.setInsertionPoint(if_op.thenBlock()->getTerminator());
+    loop_end = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointAfter(if_op);
+
+    
+    // Increment each argument
+    SmallVector<Value> yield_args;
+    for(auto result : if_op.getResults()) {
+      yield_args.push_back(result);
+    }
+    auto cntrl_arg = body_block->args_begin() + loop_outputs.size();
+    for(Value cnd : intersections)
+    {
+      Value inc = rewriter.create<index::CastUOp>(loc, index_type, cnd);
+      yield_args.push_back(rewriter.create<index::AddOp>(loc, index_type, *cntrl_arg, inc));
+      cntrl_arg += 1;
+    }
+
+    // Create YieldOp
+    rewriter.create<scf::YieldOp>(loc, yield_args);
+  }
+
+  for(Operation* user : op->getUsers())
+  {
+    if(llvm::isa<IndexTreeIndexToTensorOp>(user))
+    {
+      IndexTreeIndexToTensorOp access_op = llvm::cast<IndexTreeIndexToTensorOp>(user);
+      Value tensor = access_op.getTensor();
+      SparseTensorConstructOp construct_op = tensor.getDefiningOp<SparseTensorConstructOp>();
+      if(construct_op)
+      {
+        // Tensor is Sparse
+        auto dim = access_op.getDim();
+        TensorFormatEnum format = construct_op.getDimensionFormats()[2 * dim].cast<TensorFormatEnumAttr>().getValue();
+        Value access_pos;
+        Value access_crd;
         switch(format)
         {
-          case TensorFormatEnum::CN:
+          case TensorFormatEnum::CU:
+          case TensorFormatEnum::CN: //TODO: Figure out difference
           case TensorFormatEnum::S:
           {
-            // Not yet supported!!!
+            auto access_pair = tensor_access_map[std::make_pair(tensor, dim)];
+            access_pos = access_pair.first;
+            access_crd = access_pair.second;
             break;
           }
-          case TensorFormatEnum::CU: //TODO: Figure out difference
+          case TensorFormatEnum::D:
           {
-            rewriter.restoreInsertionPoint(before);
-            Value start_idx = sparse_domain.getParent();
-            if(!start_idx){
-              start_idx = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
+            // TODO: This is incorrect, deal with reordering!!!!
+            if(!access_op.getPrevDim()){
+              access_pos = induction_var;
+            } else {
+              rewriter.restoreInsertionPoint(before);
+              Value dim_idx = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
+              Value pos_tensor = construct_op.getOperand(4 * dim);
+              Value  dim_size = rewriter.create<tensor::ExtractOp>(loc, index_type, pos_tensor, dim_idx);
+              Value pos_start = rewriter.create<arith::MulIOp>(loc, index_type, dim_size, access_op.getPrevDim()); 
+              rewriter.restoreInsertionPoint(loop_end);
+              access_pos = rewriter.create<arith::AddIOp>(loc, index_type, pos_start, induction_var);
             }
-            Value end_idx = rewriter.create<arith::AddIOp>(loc, index_type, start_idx, inc);
-            Value start = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), start_idx);
-            Value end = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), end_idx);
-            loop_init_args.push_back(start);
-            before = rewriter.saveInsertionPoint();
-
-            Value crd_idx = cond_block->addArgument(start.getType(), loc);
-            rewriter.setInsertionPointToStart(cond_block);
-            Value cnd = rewriter.create<arith::CmpIOp>(
-              loc, rewriter.getI1Type(),
-              arith::CmpIPredicateAttr::get(context, arith::CmpIPredicate::ult), 
-              crd_idx, end
-            );
-            loop_conditions.push_back(cnd);
-
-            crd_idx = body_block->addArgument(start.getType(), loc);
-            rewriter.setInsertionPointToStart(body_block);
-            Value array_crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
-            array_crds.push_back(array_crd);
-
-            tensor_access_map.insert(std::make_pair(
-              std::make_pair(sparse_domain.getTensor(), sparse_domain.getDim()), 
-              std::make_pair(crd_idx, array_crd)
-            ));
+            access_crd = crd;
           }
         }
+        rewriter.replaceAllUsesWith(access_op.getPos(), access_pos);
+        rewriter.replaceAllUsesWith(access_op.getCrd(), access_crd);
+      } else {
+        rewriter.replaceAllUsesWith(access_op.getPos(), crd);
+        rewriter.replaceAllUsesWith(access_op.getCrd(), crd);
       }
-      rewriter.restoreInsertionPoint(before);
+      rewriter.eraseOp(access_op);
+    } 
+  }
 
-      // Create while loop
-      scf::WhileOp while_loop = rewriter.create<scf::WhileOp>(loc, cond_block->getArgumentTypes(), loop_init_args);
-      while_loop.getBefore().push_front(cond_block);
-
-      rewriter.setInsertionPointToEnd(cond_block);
-      Value loop_condition = nullptr;
-      for(Value cnd : loop_conditions)
-      {
-        if(loop_condition == nullptr)
-        {
-          loop_condition = cnd;
-        } else {
-          loop_condition = rewriter.create<arith::AndIOp>(loc, rewriter.getI1Type(), loop_condition, cnd);
-        }
-      }
-      rewriter.create<scf::ConditionOp>(loc, loop_condition, cond_block->getArguments());
-
-      while_loop.getAfter().push_front(body_block);
-      // Create intersection
-      rewriter.setInsertionPointToEnd(body_block);
-      crd = nullptr;
-      for(Value array_crd : array_crds){
-        if(crd == nullptr)
-        {
-          crd = array_crd;
-        } else {
-          crd = rewriter.create<arith::MinUIOp>(loc, index_type, crd, array_crd);
-        }
-      }
-
-      Value intersection_cnd = nullptr;
-      SmallVector<Value> intersections;
-      for(Value array_crd : array_crds)
-      {
-        Value is_intersect = rewriter.create<arith::CmpIOp>(
-          loc, rewriter.getI1Type(),
-          arith::CmpIPredicateAttr::get(context, arith::CmpIPredicate::eq),
-          crd, array_crd
-        );
-        if(intersection_cnd == nullptr)
-        {
-          intersection_cnd = is_intersect;
-        } else {
-          intersection_cnd = rewriter.create<arith::AndIOp>(loc, rewriter.getI1Type(), intersection_cnd, is_intersect);
-        }
-        intersections.push_back(is_intersect);
-      }
-
-      SmallVector<Type> if_types;
-      for(Value result : loop_outputs)
-      {
-        if_types.push_back(result.getType());
-      }
-      scf::IfOp if_op = rewriter.create<scf::IfOp>(loc, if_types, intersection_cnd, true);
-      rewriter.setInsertionPointToStart(if_op.elseBlock());
-      rewriter.create<scf::YieldOp>(
-        loc, 
-        std::vector<Value>(
-          body_block->args_begin(),
-          body_block->args_begin() + if_op->getNumResults())
-      );
-      rewriter.setInsertionPointToStart(if_op.thenBlock());
-      fillSubtree(loc, rewriter, subtree, loop_outputs, while_loop.getResults(), map);
-      rewriter.setInsertionPoint(if_op.thenBlock()->getTerminator());
-      loop_end = rewriter.saveInsertionPoint();
-      rewriter.setInsertionPointAfter(if_op);
-
-      
-      // Increment each argument
-      SmallVector<Value> yield_args;
-      for(auto result : if_op.getResults()) {
-        yield_args.push_back(result);
-      }
-      auto cntrl_arg = body_block->args_begin() + loop_outputs.size();
-      for(Value cnd : intersections)
-      {
-        Value inc = rewriter.create<index::CastUOp>(loc, index_type, cnd);
-        yield_args.push_back(rewriter.create<index::AddOp>(loc, index_type, *cntrl_arg, inc));
-        cntrl_arg += 1;
-      }
-
-      // Create YieldOp
-      rewriter.create<scf::YieldOp>(loc, yield_args);
-    }
-
-    for(Operation* user : op->getUsers())
+  for(Operation* user : op->getUsers())
+  {
+      if(llvm::isa<IndexTreeIndicesOp>(user))
     {
-      if(llvm::isa<IndexTreeIndexToTensorOp>(user))
-      {
-        IndexTreeIndexToTensorOp access_op = llvm::cast<IndexTreeIndexToTensorOp>(user);
-        Value tensor = access_op.getTensor();
-        SparseTensorConstructOp construct_op = tensor.getDefiningOp<SparseTensorConstructOp>();
-        if(construct_op)
-        {
-          // Tensor is Sparse
-          auto dim = access_op.getDim();
-          TensorFormatEnum format = construct_op.getDimensionFormats()[2 * dim].cast<TensorFormatEnumAttr>().getValue();
-          Value access_pos;
-          Value access_crd;
-          switch(format)
-          {
-            case TensorFormatEnum::CU:
-            case TensorFormatEnum::CN: //TODO: Figure out difference
-            case TensorFormatEnum::S:
-            {
-              auto access_pair = tensor_access_map[std::make_pair(tensor, dim)];
-              access_pos = access_pair.first;
-              access_crd = access_pair.second;
-              break;
-            }
-            case TensorFormatEnum::D:
-            {
-              // TODO: This is incorrect, deal with reordering!!!!
-              if(!access_op.getPrevDim()){
-                access_pos = induction_var;
-              } else {
-                rewriter.restoreInsertionPoint(before);
-                Value dim_idx = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
-                Value pos_tensor = construct_op.getOperand(4 * dim);
-                Value  dim_size = rewriter.create<tensor::ExtractOp>(loc, index_type, pos_tensor, dim_idx);
-                Value pos_start = rewriter.create<arith::MulIOp>(loc, index_type, dim_size, access_op.getPrevDim()); 
-                rewriter.restoreInsertionPoint(loop_end);
-                access_pos = rewriter.create<arith::AddIOp>(loc, index_type, pos_start, induction_var);
-              }
-              access_crd = crd;
-            }
-          }
-          rewriter.replaceAllUsesWith(access_op.getPos(), access_pos);
-          rewriter.replaceAllUsesWith(access_op.getCrd(), access_crd);
-        } else {
-          rewriter.replaceAllUsesWith(access_op.getPos(), crd);
-          rewriter.replaceAllUsesWith(access_op.getCrd(), crd);
-        }
-        rewriter.eraseOp(access_op);
-      } 
-    }
-
-    for(Operation* user : op->getUsers())
+      // Recurse down tree
+      rewriter.restoreInsertionPoint(loop_end);
+      if(mlir::failed(convertIndexNode(user, rewriter)))
+        return failure();
+    } else if (llvm::isa<IndexTreeComputeOp>(user))
     {
-       if(llvm::isa<IndexTreeIndicesOp>(user))
-      {
-        // Recurse down tree
-        rewriter.restoreInsertionPoint(loop_end);
-        if(mlir::failed(convertIndexNode(user, rewriter)))
-          return failure();
-      } else if (llvm::isa<IndexTreeComputeOp>(user))
-      {
-        // Generate available compute expressions
-        rewriter.restoreInsertionPoint(loop_end);
-        if(mlir::failed(convertCompute(user, rewriter)))
-          return failure();
-      }
+      // Generate available compute expressions
+      rewriter.restoreInsertionPoint(loop_end);
+      if(mlir::failed(convertCompute(user, rewriter)))
+        return failure();
     }
-    rewriter.eraseOp(op);
-    deleteDomain(domain_op, rewriter);
+  }
+  rewriter.eraseOp(op);
+  deleteDomain(domain_op, rewriter);
+  return success();
+}
+
+struct IndexTreeOpInlining : public mlir::ConversionPattern {
+  IndexTreeOpInlining(mlir::MLIRContext *ctx)
+      : mlir::ConversionPattern(IndexTreeOp::getOperationName(), 1, ctx) {}
+
+  mlir::LogicalResult
+  matchAndRewrite(Operation* op, ArrayRef<mlir::Value> operands,
+                  mlir::ConversionPatternRewriter &rewriter) const final {
+    Block& block = op->getRegion(0).front();
+    Operation *terminator = block.getTerminator();
+    ValueRange results = terminator->getOperands();
+    rewriter.mergeBlockBefore(&block, op);
+    rewriter.replaceOp(op, results);
+    rewriter.eraseOp(terminator);
+    return success();
+  }
+};
+
+struct SetOpRemoval : public mlir::ConversionPattern {
+  SetOpRemoval(mlir::MLIRContext *ctx)
+      : mlir::ConversionPattern(TensorSetOp::getOperationName(), 1, ctx) {}
+
+  mlir::LogicalResult
+  match(Operation* op) const override{
     return success();
   }
 
+
+  void rewrite(Operation* op, ArrayRef<mlir::Value> operands,
+                  mlir::ConversionPatternRewriter &rewriter) const {
+
+    Value lhs = op->getOperand(0);
+    Value rhs = op->getOperand(1);
+    IRMapping map;
+    map.map(rhs, lhs);
+
+    for(Operation* rhs_user : rhs.getUsers())
+    {
+      if(rhs_user != op && op->getBlock() == rhs_user->getBlock() && op->isBeforeInBlock(rhs_user))
+      {
+        // TODO: Fix me!!!!!!
+        assert(llvm::isa<tensorAlgebra::PrintOp>(rhs_user));
+        PrintOp print = llvm::cast<PrintOp>(rhs_user);
+        print.getInputMutable().assign(lhs);
+      }
+    }
+    rewriter.eraseOp(op);
+    return;
+  }
+};
+
 void LowerIndexTreeToSCFPass::runOnOperation()
 {
+
+  // Convert all the index trees to loops
   std::vector<IndexTreeRootOp> iTreeRoots;
   func::FuncOp funcOp = getOperation();
   funcOp.walk([&](IndexTreeRootOp op){ iTreeRoots.push_back(op); });
@@ -1011,8 +1062,22 @@ void LowerIndexTreeToSCFPass::runOnOperation()
         convertCompute(user, rewriter);
     }
     rewriter.eraseOp(op);
-    return;
   }
+
+  // TODO:
+  // Convert SparseTensorOps into ta.SpConstructOp
+  // Convert insert operations into dynamic allocations
+  
+
+  // Inline the index tree
+  mlir::ConversionTarget target(getContext());
+  target.addLegalDialect<scf::SCFDialect, arith::ArithDialect>();
+  target.addIllegalOp<indexTree::IndexTreeOp, tensorAlgebra::TensorSetOp>();
+  mlir::RewritePatternSet patterns(&getContext());
+  patterns.add<IndexTreeOpInlining, SetOpRemoval>(&getContext());
+  if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
+    signalPassFailure();
+
 }
 
 /// Lower sparse tensor algebra operation to loops

@@ -7,7 +7,7 @@
 
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/IndexMap.h"
+#include "llvm/ADT/IndexedMap.h"
 
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -221,35 +221,35 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
   InferOutputDomains(MLIRContext *context)
       : OpRewritePattern<IndexTreeSparseTensorOp>(context, /*benefit=*/1) {}
 
-  Value copyDomain(Value domain, mlir::PatternRewriter &rewriter, IRMapping& map, Location* loc)
+  Value copyDomain(Value domain, mlir::PatternRewriter &rewriter, IRMapping& map, Location loc) const
   {
     Value new_domain;
     Operation* domain_op = domain.getDefiningOp();
     if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op) || llvm::isa<IndexTreeDomainUnionOp>(domain_op))
     {
       for(Value subdomain : domain_op->getOperands()){
-        copyDomain(subdomain, rewriter, map);
+        copyDomain(subdomain, rewriter, map, loc);
       }
     }
     
     if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
     {
       // Clone without parent
-      auto sparse_domain_op = llvm::cast<IndexTreeSparseDomainOp>(domain_op)
+      auto sparse_domain_op = llvm::cast<IndexTreeSparseDomainOp>(domain_op);
       new_domain = rewriter.create<IndexTreeSparseDomainOp>(loc, 
-                                                                 domain_op->getResultTypes(),
-                                                                 sparse_domain_op.getTensor(),
-                                                                 sparse_domain_op.getDimAttr(),
-                                                                 sparse_domain_op.getFormatAttr(),
-                                                                 sparse_domain_op.getPos(),
-                                                                 sparse_domain_op.getCrd(),
-                                                                 sparse_domain_op.getPosSize(),
-                                                                 sparse_domain_op.getCordSize(),
-                                                                 nullptr);
-      map.map(domain_op, new_domain);
+                                                            domain_op->getResultTypes(),
+                                                            sparse_domain_op.getTensor(),
+                                                            sparse_domain_op.getDimAttr(),
+                                                            sparse_domain_op.getFormatAttr(),
+                                                            sparse_domain_op.getPos(),
+                                                            sparse_domain_op.getCrd(),
+                                                            sparse_domain_op.getPosSize(),
+                                                            sparse_domain_op.getCordSize(),
+                                                            nullptr);
+      map.map(sparse_domain_op, new_domain);
     } else {
       // Clone
-      new_domain = rewriter.clone(domain_op, map);
+      new_domain = rewriter.clone(*domain_op, map)->getResult(0);
     }
     return new_domain;
   }
@@ -276,7 +276,7 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
     auto crds = lhs_op.getCrds();
     unsigned dims = lhs_op.getNumOperands();
     Value empty_domain = lhs_op.getOperand(0);
-    IndexMap<uint32_t, Value> domains(empty_domain);
+    llvm::IndexedMap<Value> domains(empty_domain);
     domains.reserve(dims);
     for(Value crd : crds){
       auto access_op = llvm::dyn_cast<IndexTreeIndexToTensorOp>(crd.getDefiningOp());
@@ -296,12 +296,13 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
     auto loc = op->getLoc();
     auto context = rewriter.getContext();
     SmallVector<Value> new_args;
+    IRMapping map;
     for(unsigned dim = 0; dim < dims; dim++){
-      Value domain_copy = copyDomain(domains[dim]);
+      Value domain_copy = copyDomain(domains[dim], rewriter, map, loc);
       new_args.push_back(domain_copy);
     }
     auto new_tensor = rewriter.create<IndexTreeSparseTensorOp>(loc, op->getResult(0).getType(), new_args);
-    rewriter.replaceOp(op, {new_tensor});
+    rewriter.replaceOp(op, new_tensor->getResults());
     return success();
   }
 };
