@@ -319,30 +319,30 @@ def comment_unneeded_sparse(input_, arg_vals):
 
 def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
 
-    path_to_comet = cfg.comet_path+"/bin/comet-opt"
-    command = path_to_comet + mlir_lower_flags + mlir_in
-    p = subprocess.run(shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,close_fds=False)
+    path_to_comet = cfg.comet_path+"/bin/comet-opt -x mlir "
+    command = path_to_comet + mlir_lower_flags
+    p = subprocess.run(shlex.split(command), input = mlir_in.encode('utf-8') , stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,close_fds=False)
     if p.returncode != 0:
         cleanup()
         raise AssertionError("comet-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
 
 
-    scf_out_file = temp_dir + uuid_s+'loops.mlir'
+    # scf_out_file = temp_dir + uuid_s+'loops.mlir'
 
-    if(os.path.exists(scf_out_file) == False):
-        f = open(os.path.join( os.getcwd(), scf_out_file), 'w')
-        files_to_cleanup.append(os.path.join( os.getcwd(), scf_out_file))
-    else:
-        f = open(scf_out_file, 'w')
-        files_to_cleanup.append(os.path.join( os.getcwd(), scf_out_file))
+    # if(os.path.exists(scf_out_file) == False):
+    #     f = open(os.path.join( os.getcwd(), scf_out_file), 'w')
+    #     files_to_cleanup.append(os.path.join( os.getcwd(), scf_out_file))
+    # else:
+    #     f = open(scf_out_file, 'w')
+    #     files_to_cleanup.append(os.path.join( os.getcwd(), scf_out_file))
 
     scf_out  = p.stderr.decode()
     scf_out = comment_unneeded_sparse(scf_out, arg_vals)
     scf_out = comment_unneeded_dense(scf_out, arg_vals)
-    f.write(scf_out)
-    f.close()
+    # f.write(scf_out)
+    # f.close()
 
-    return scf_out_file
+    return scf_out
 
 
 def lower_scf_to_llvm(scf_in, scf_lower_flags, uuid_s):
@@ -499,8 +499,9 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
 
     llvmir_file = uuid_s+'.ll'
 
-    path_to_cometopt = cfg.comet_path+"/bin/comet-opt"
-    to_llvm_command = path_to_cometopt + scf_lower_flags + llvm_in
+    # path_to_cometopt = cfg.comet_path+"/bin/comet-opt"
+    path_to_cometopt = cfg.comet_path+"/bin/comet-opt -x mlir"
+    to_llvm_command = path_to_cometopt + scf_lower_flags #+ llvm_in
     translate_mlir_command = cfg.llvm_path+"/bin/mlir-translate --mlir-to-llvmir -- " 
 
     libname =   "./lib"+llvmir_file+func_name+".so"
@@ -510,7 +511,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     # 1. Call comet to lower scf code to llvm
     # 2. Call mlir-translate to convert llvm to llvmir 
     # 3. Call clang to generate library
-    p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | ' + gcc_command , stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | ' + gcc_command , input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 
     if(p.returncode != 0):
         cleanup()
@@ -689,17 +690,18 @@ def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_nam
 
     uuid_s = str(uuid.uuid4())
     ta_dialect_file = temp_dir+uuid_s+'.mlir'
-    if(os.path.exists(ta_dialect_file) == False):
-        f = open(os.path.join( os.getcwd(), ta_dialect_file), 'w')
-        files_to_cleanup.append(os.path.join( os.getcwd(), ta_dialect_file))
-    else:
-        f = open(ta_dialect_file, 'w')
+    # if(os.path.exists(ta_dialect_file) == False):
+    #     f = open(os.path.join( os.getcwd(), ta_dialect_file), 'w')
+    #     files_to_cleanup.append(os.path.join( os.getcwd(), ta_dialect_file))
+    # else:
+    #     f = open(ta_dialect_file, 'w')
     
-    f.write(ta_dialect_rep)
-    f.close()
+    # f.write(ta_dialect_rep)
+    # f.close()
 
     # Convert TA to SCF
-    scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals, uuid_s)
+    # scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals, uuid_s)
+    scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_rep, mlir_lower_flags, args_vals, uuid_s)
 
     #lower the SCF dialect to LLVMIR and execute
     result,llvmir_file = translate_and_exec_llvm_with_jit(scf_out_file, scf_lower_flags, func_name, args_vals, outputs, uuid_s)
