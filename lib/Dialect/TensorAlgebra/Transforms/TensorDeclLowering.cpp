@@ -232,12 +232,15 @@ namespace
     }
   }
 
- Operation* insertSparseTensorDeclOp(PatternRewriter & rewriter,
+Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
+                               MLIRContext* ctx,
+                               Location loc,
                                unsigned rank_size, 
                                std::vector<Value>& tensorload_sizes_vec,
                                std::vector<Value>& array_sizes_vec,
                                std::vector<std::vector<int64_t>>& allPerms,
-                               std::vector<Value>& dimSizes)
+                               std::vector<Value>& dimSizes,
+                               std::string formats_str)
   {
     comet_debug() << " Get users after ";
     /// create sparse tensor construct after lowering each sparse tensor output users
@@ -270,6 +273,7 @@ namespace
     comet_debug() << "\n ";
 
     auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
+    std::vector<Attribute> dim_format_attrs = mlir::tensorAlgebra::getFormatsAttr(formats_str, rank_size, ctx);
 
     Value sptensor;
     if (rank_size == 2)
@@ -296,8 +300,7 @@ namespace
                                                                               array_sizes_vec[8],      /// Aval_size (size of value array)
                                                                               dimSizes[0],             /// dim1_size(size of each dimension in sparse tensor)
                                                                               dimSizes[1]              /// dim2_size (size of each dimension in sparse tensor)
-                                                                          },
-                                                                          2);
+                                                                          }, 2, rewriter.getArrayAttr(dim_format_attrs));
     }
     else if (rank_size == 3)
     {
@@ -332,8 +335,7 @@ namespace
                                                                               dimSizes[0],              /// dim1_size (size of each dimension in sparse tensor)
                                                                               dimSizes[1],              /// dim2_size (size of each dimension in sparse tensor)
                                                                               dimSizes[2]               /// dim3_size
-                                                                          },
-                                                                          3);
+                                                                          }, 3, rewriter.getArrayAttr(dim_format_attrs));
     }
     else
     {
@@ -342,9 +344,6 @@ namespace
 
     comet_debug() << "SparseTensorConstructOp generated for sparse output tensor:\n";
     comet_vdump(sptensor);
-
-    /// create ta.index_label operation.
-    comet_vdump(op);
 
     return sptensor;
   }
@@ -385,7 +384,7 @@ namespace
 
     comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
-    Operation* new_tensor;
+    Value new_tensor;
 
     /// sparse output
     if (isDense(formats_str, ", ") == false)
@@ -652,7 +651,7 @@ namespace
             Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes);
             tensorload_sizes_vec.push_back(tensorload_sizes);
           }
-          new_tensor = insertSparseTensorDeclOp(rewriter, rank_size, tensorload_sizes_vec, array_sizes_vec, allPerms, dim_sizes);
+          new_tensor = insertSparseTensorDeclOp(rewriter, op.getContext(), loc, rank_size, tensorload_sizes_vec, array_sizes_vec, allPerms, dimSizes, formats_str);
           break;
         }
         else if (isa<indexTree::IndexTreeLHSOperandOp>(u))
@@ -666,7 +665,7 @@ namespace
           indexTree::DomainType domain_type = indexTree::DomainType::get(op.getContext()); 
           rewriter.setInsertionPoint(op);
           Value empty_domain = rewriter.create<indexTree::IndexTreeEmptyDomainOp>(loc, domain_type);
-          llvm::SmallVector<Value> args = llvm::SmallVector<Value>(rank_size, empty_domain)
+          llvm::SmallVector<Value> args = llvm::SmallVector<Value>(rank_size, empty_domain);
           new_tensor = rewriter.create<indexTree::IndexTreeSparseTensorOp>(loc, op->getResult(0).getType(), args);
 
 
@@ -686,7 +685,7 @@ namespace
           break;
         }
       }
-      rewriter.replaceOp(op, sptensor);
+      rewriter.replaceOp(op, {new_tensor});
     }
     else
     { /// format == "Dense"

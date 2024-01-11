@@ -233,30 +233,30 @@ def IndexTreeSymbolicComputeOp : IndexTree_Op<"IndexTreeSymbolicComputeOp", [Pur
 }
 
 def IndexTreeSparseTensorOp : IndexTree_Op<"IndexTreeSparseTensorOp", [Pure]>{
-  let summary = "Declare a sparse tensor from an index tree domain"
+  let summary = "Declare a sparse tensor from an index tree domain";
   let description = [{}];
 
   let arguments = (ins Variadic<IndexTree_DomainType>:$domains);
   let results = (outs TA_AnyTensor);
 }
 
-def IndexTreeDynamicallyAllocatedTensorOp : IndexTree_Op<"IndexTreeDynamicallyAllocatedTensor" [Pure]>{
-  let summary = "Declare a tensor that allocates memory on insert"
+def IndexTreeDynamicallyAllocatedTensorOp : IndexTree_Op<"IndexTreeDynamicallyAllocatedTensor", [Pure]>{
+  let summary = "Declare a tensor that allocates memory on insert";
   let description = [{}];
 
-  let arguments = (ins Variadic<I32Attr> formats);
+  let arguments = (ins I32ArrayAttr:$formats);
   let results = (outs TA_AnyTensor);
 }
 
 def IndexTreeSparseInsertOp : IndexTree_Op<"IndexTreeSparseInsertOp", [Pure, SameVariadicOperandSize]>{
-  let summary = "Insert element into a sparse tensor"
+  let summary = "Insert element into a sparse tensor";
   let description = [{}];
 
   let arguments = (
     ins TA_AnyTensor:$tensor, 
     Variadic<Index>:$pos,
-    Variadic<Index>:$crds>
-  )
+    Variadic<Index>:$crds
+  );
 
   let results = (outs TA_AnyTensor);
 }
