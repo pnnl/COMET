@@ -378,8 +378,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
-  //   optPM.addPass(mlir::createTensorBufferizePass());
-  //   pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
+    optPM.addPass(mlir::createTensorBufferizePass());
+    pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
 
   //   if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
   //   {
@@ -404,52 +404,52 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // /// Late lowering passes
   // /// =============================================================================
 
-  // optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
-  // optPM.addPass(mlir::comet::createLateLoweringPass());
-  // optPM.addPass(mlir::createCanonicalizerPass());
-  // optPM.addPass(mlir::createCSEPass());
+  optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
+  optPM.addPass(mlir::comet::createLateLoweringPass());
+  optPM.addPass(mlir::createCanonicalizerPass());
+  optPM.addPass(mlir::createCSEPass());
 
   // /// =============================================================================
 
-  // if (isLoweringToLLVM || emitLLVM)
-  // {
-  //   /// Blanket-convert any remaining high-level vector ops to loops if any remain.
-  //   pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
-  //   /// Blanket-convert any remaining linalg ops to loops if any remain.
-  //   pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
-  //   /// Blanket-convert any remaining affine ops if any remain.
-  //   pm.addPass(mlir::createLowerAffinePass());
-  //   /// Convert SCF to CF (always needed).
-  //   pm.addPass(mlir::createConvertSCFToCFPass());
-  //   /// Sprinkle some cleanups.
-  //   pm.addPass(mlir::createCanonicalizerPass());
-  //   pm.addPass(mlir::createCSEPass());
-  //   /// Blanket-convert any remaining linalg ops to LLVM if any remain.
-  //   pm.addPass(mlir::createConvertLinalgToLLVMPass());
-  //   /// Convert vector to LLVM (always needed).
-  //   pm.addPass(mlir::createConvertVectorToLLVMPass());
-  //   //// Convert Math to LLVM (always needed).
-  //   pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertMathToLLVMPass());
-  //   /// Expand complicated MemRef operations before lowering them.
-  //   pm.addPass(mlir::memref::createExpandStridedMetadataPass());
-  //   /// The expansion may create affine expressions. Get rid of them.
-  //   pm.addPass(mlir::createLowerAffinePass());
-  //   /// Convert MemRef to LLVM (always needed).
-  //   pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
-  //   /// Convert Func to LLVM (always needed).
-  //   pm.addPass(mlir::createConvertFuncToLLVMPass());
-  //   /// Convert Index to LLVM (always needed).
-  //   pm.addPass(mlir::createConvertIndexToLLVMPass());
-  //   /// Convert remaining unrealized_casts (always needed).
-  //   pm.addPass(mlir::createReconcileUnrealizedCastsPass());
+  if (isLoweringToLLVM || emitLLVM)
+  {
+    /// Blanket-convert any remaining high-level vector ops to loops if any remain.
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
+    /// Blanket-convert any remaining linalg ops to loops if any remain.
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
+    /// Blanket-convert any remaining affine ops if any remain.
+    pm.addPass(mlir::createLowerAffinePass());
+    /// Convert SCF to CF (always needed).
+    pm.addPass(mlir::createConvertSCFToCFPass());
+    /// Sprinkle some cleanups.
+    pm.addPass(mlir::createCanonicalizerPass());
+    pm.addPass(mlir::createCSEPass());
+    /// Blanket-convert any remaining linalg ops to LLVM if any remain.
+    pm.addPass(mlir::createConvertLinalgToLLVMPass());
+    /// Convert vector to LLVM (always needed).
+    pm.addPass(mlir::createConvertVectorToLLVMPass());
+    //// Convert Math to LLVM (always needed).
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertMathToLLVMPass());
+    /// Expand complicated MemRef operations before lowering them.
+    pm.addPass(mlir::memref::createExpandStridedMetadataPass());
+    /// The expansion may create affine expressions. Get rid of them.
+    pm.addPass(mlir::createLowerAffinePass());
+    /// Convert MemRef to LLVM (always needed).
+    pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
+    /// Convert Func to LLVM (always needed).
+    pm.addPass(mlir::createConvertFuncToLLVMPass());
+    /// Convert Index to LLVM (always needed).
+    pm.addPass(mlir::createConvertIndexToLLVMPass());
+    /// Convert remaining unrealized_casts (always needed).
+    pm.addPass(mlir::createReconcileUnrealizedCastsPass());
 
-  //   if (mlir::failed(pm.run(*module)))
-  //     return 4;
-  //   return 0;
-  // }
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+    return 0;
+  }
 
-  // if (mlir::failed(pm.run(*module)))
-  //   return 4;
+  if (mlir::failed(pm.run(*module)))
+    return 4;
   return 0;
 }
 
