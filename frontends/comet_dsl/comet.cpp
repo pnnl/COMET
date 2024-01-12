@@ -574,13 +574,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Convert remaining unrealized_casts (always needed).
     pm.addPass(mlir::createReconcileUnrealizedCastsPass());
 
-  //   if (mlir::failed(pm.run(*module)))
-  //     return 4;
-  //   return 0;
-  // }
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+    return 0;
+  }
 
-  // if (mlir::failed(pm.run(*module)))
-  //   return 4;
+  if (mlir::failed(pm.run(*module)))
+    return 4;
   return 0;
 }
 
