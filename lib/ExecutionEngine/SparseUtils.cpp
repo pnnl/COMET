@@ -2326,10 +2326,10 @@ void read_input_2D(int32_t fileID,
     FileReader.FileReaderWrapperFinalize();
     
     // Originally: num_rows
-    desc_A1pos->data[0] = ellpack_matrix.num_rows;
+    desc_A1pos->data[0] = ellpack_matrix.num_cols;
     
     // Originally: num_cols
-    desc_A2block_pos->data[0] = ellpack_matrix.num_cols;
+    desc_A2block_pos->data[0] = ellpack_matrix.num_rows;
 
     for (uint64_t i = 0; i < ellpack_matrix.num_cols * ellpack_matrix.num_rows; i++)
     {

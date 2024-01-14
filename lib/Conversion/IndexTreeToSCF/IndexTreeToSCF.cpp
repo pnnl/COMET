@@ -1385,18 +1385,39 @@ namespace
           builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
           
           // Insert the index calculations
-          // i = n * A1_pos + i
+          // i = n * A1_pos + i (A1_pos -> A2_block_pos)
           Value c0 = builder.create<ConstantIndexOp>(loc, 0);
           std::vector<Value> indices = {c0};
-          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][0], indices);
-          Value mul1 = builder.create<MulIOp>(loc, forLoop2.getInductionVar(), column);
-          Value add1 = builder.create<AddIOp>(loc, mul1, parent_forop.getInductionVar());
+          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][6], indices);
+          Value mul1 = builder.create<MulIOp>(loc, parent_forop.getInductionVar(), column);     //forLoop2
+          Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());   // parent_forop
           parent_accessIndex = add1;
+          
+          //opstree->inductionVars.push_back(forLoop2.getInductionVar());
           opstree->inductionVars.push_back(add1);
+          //opstree->inductionVars.push_back(forLoop2.getInductionVar());
           
           parent_forop = forLoop2;
+          
+          /// Generate: int j = A2crd[m];
+          genForOpFormat_S(builder,
+                           loc,
+                           opstree,
+                           tensor,
+                           id,
+                           i,
+                           allAllocs,
+                           opstree_forops,
+                           parent_forop,
+                           parent_accessIndex,
+                           forLoop /* output */,
+                           accessIndex /* output */);
+          opstree->forOps.push_back(forLoop2);
+          //opstree->accessIdx.push_back(forLoop2.getInductionVar());
+          //opstree->forOps.push_back(forLoop);
+          opstree->accessIdx.push_back(accessIndex);
         }
-        
+        else {
         /// Generate: int j = A2crd[m];
         genForOpFormat_S(builder,
                          loc,
@@ -1413,6 +1434,7 @@ namespace
                          accessIndex /* output */);
         opstree->forOps.push_back(forLoop);
         opstree->accessIdx.push_back(accessIndex);
+        }//end else
       }
       else
       {
@@ -2095,6 +2117,8 @@ namespace
     else
     { /// general dense or mixed mode computation, no need workspace transformations
       std::vector<Value> allLoads(main_tensor_nums);
+      bool isEllpack = false;
+      
       for (auto m = 0; m < main_tensor_nums; m++)
       {
         Value load_op;
@@ -2133,9 +2157,27 @@ namespace
           load_op = builder.create<memref::LoadOp>(loc,
                                                  main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], final_idx);
         } else if (m == 0 && sparse_format == "ELL") {
-          auto last = nested_InductionVars.size() - 2;  // was 1 below
+          /*for (auto v : nested_InductionVars) {
+            llvm::errs() << v << "\n";
+            llvm::errs() << "-\n";
+          }
+          llvm::errs() << "===\n";
+          for (auto r : allValueAccessIdx) {
+            for (auto v : r) {
+            llvm::errs() << v << "\n";
+            llvm::errs() << "-\n";
+            }
+            llvm::errs() << "--\n";
+          }
+          llvm::errs() << "===\n";*/
+          
+          auto last = nested_InductionVars.size() - 2;  // was 1 below (2)
           load_op = builder.create<memref::LoadOp>(loc,
                                                    main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], nested_InductionVars[last]);
+        } else if (m == 2 && sparse_format == "ELL") {
+          isEllpack = true;
+          load_op = builder.create<memref::LoadOp>(loc,
+                                                   main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[0]);
         } else {
           load_op = builder.create<memref::LoadOp>(loc,
                                                    main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
@@ -2144,6 +2186,11 @@ namespace
         allLoads[m] = load_op;
         comet_debug() << " ";
         comet_vdump(load_op);
+        
+        /*for (auto l : allLoads) {
+            llvm::errs() << l << "\n";
+        }
+        llvm::errs() << "-----------------\n";*/
       }
       comet_debug() << " allLoads.size(): " << allLoads.size() << "\n";
 
@@ -2431,9 +2478,12 @@ namespace
                                                        compressedWorkspace);
         Value reduceResult = getSemiringFirstVal(builder, loc, semiringFirst, allLoads[2], elementWiseResult,
                                                  compressedWorkspace);
+        int index = 2;
+        if (isEllpack) index = 0;
+        
         builder.create<memref::StoreOp>(loc, reduceResult,
                                         main_tensors_all_Allocs[2][main_tensors_all_Allocs[2].size() - 1],
-                                        allValueAccessIdx[2]);
+                                        allValueAccessIdx[index]);  //2
       }
     }
   }
