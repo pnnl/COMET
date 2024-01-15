@@ -44,6 +44,7 @@
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
+#include "mlir/Dialect/SCF/Transforms/Passes.h"
 
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
@@ -476,6 +477,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
+    optPM.addPass(mlir::createSCFBufferizePass());
     optPM.addPass(mlir::tensor::createTensorBufferizePass());
     pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
     pm.addPass(mlir::createConvertLinalgToLoopsPass());
