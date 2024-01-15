@@ -124,10 +124,11 @@ namespace
           /// If the Input type is tensor
           if (inputType.isa<TensorType>())
           {
-            auto rhs = op->getOperand(0).getDefiningOp();
-            auto alloc_op = cast<memref::AllocOp>(rhs->getOperand(0).getDefiningOp());
-            comet_vdump(alloc_op);
-            auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
+            auto rhs = op->getOperand(0);
+            auto tensor_type = llvm::cast<TensorType>(inputType);
+            auto memref_type = MemRefType::get(tensor_type.getShape(), tensor_type.getElementType());
+            auto buffer = rewriter.create<bufferization::ToMemrefOp>(loc, memref_type, rhs);
+            auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, buffer);
             rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
           }
           else if (inputType.isa<SparseTensorType>())
