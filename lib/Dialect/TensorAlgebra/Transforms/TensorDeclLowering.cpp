@@ -637,7 +637,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
               comet_debug() << " AllocOp: ";
               comet_vdump(alloc_sizes);
             }
-            Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes);
+            Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes, rewriter.getUnitAttr(), rewriter.getUnitAttr());
             tensorload_sizes_vec.push_back(tensorload_sizes);
           }
           new_tensor = insertSparseTensorDeclOp(rewriter, op.getContext(), loc, rank_size, tensorload_sizes_vec, array_sizes_vec, allPerms, dimSizes, formats_str);
@@ -705,7 +705,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       comet_debug() << " AllocOp: ";
       comet_vdump(alloc_sizes1);
 
-      Value tensorLoad = rewriter.create<ToTensorOp>(loc, alloc_sizes1);
+      Value tensorLoad = rewriter.create<ToTensorOp>(loc, alloc_sizes1, rewriter.getUnitAttr(), rewriter.getUnitAttr());
       comet_vdump(tensorLoad);
 
       op.replaceAllUsesWith(tensorLoad);
@@ -781,7 +781,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
       cast<memref::AllocOp>(init_alloc.getDefiningOp()).setAlignmentAttr(rewriter.getI64IntegerAttr(32));
 
-      Value tensorLoad = rewriter.create<ToTensorOp>(loc, init_alloc);
+      Value tensorLoad = rewriter.create<ToTensorOp>(loc, init_alloc, rewriter.getUnitAttr(), rewriter.getUnitAttr());
       comet_debug() << " TensorLoad:\n";
       comet_vdump(tensorLoad);
 
@@ -1235,7 +1235,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         std::vector<Value> alloc_tensor_vec;
         for (unsigned int i = 0; i < sp_decl.getTotalArrayCount(); i++)
         {
-          Value tensorLoad = rewriter.create<ToTensorOp>(loc, alloc_sizes_vec[i]);
+          Value tensorLoad = rewriter.create<ToTensorOp>(loc, alloc_sizes_vec[i], rewriter.getUnitAttr(), rewriter.getUnitAttr());
           alloc_tensor_vec.push_back(tensorLoad);
         }
 

@@ -90,8 +90,9 @@ namespace
       tensorLoadOp = cast<ToTensorOp>(tensorOperand.getDefiningOp());
       auto memref = tensorLoadOp.getMemref();
       auto valueAttr = tensorFillOp.getValue();
+      
+      rewriter.setInsertionPoint(tensorLoadOp);
       Value constantOp = rewriter.create<ConstantOp>(loc, valueAttr);
-
       rewriter.create<linalg::FillOp>(loc, constantOp, memref);
       rewriter.eraseOp(op);
 
