@@ -3,6 +3,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Index/IR/IndexOps.h"
 #include "mlir/Pass/Pass.h"
 
 #include "llvm/ADT/StringSet.h"
@@ -122,10 +123,17 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
       //Domain is dense
       //TODO (alokvk2): Figure out if we need to take the root index variable or the allocation
       //Right now I don't know how to get back to the root index variable.
-      Operation* toTensor = tensor.getDefiningOp();
-      memref::AllocOp alloc = toTensor->getOperand(0).getDefiningOp<memref::AllocOp>();
-      Value max = alloc.getOperand(0);
-      new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max);
+      auto tensor_type = llvm::cast<TensorType>(tensor.getType());
+      auto max = tensor_type.getShape()[dim];
+      Value max_val;
+      if(max < 0) {
+        Operation* toTensor = tensor.getDefiningOp();
+        memref::AllocOp alloc = toTensor->getOperand(0).getDefiningOp<memref::AllocOp>();
+        max_val = alloc.getOperand(0);
+      } else {
+        max_val = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(max));
+      }
+      new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max_val);
     }
     rewriter.replaceOp(domain_op, new_domain);
     return success();

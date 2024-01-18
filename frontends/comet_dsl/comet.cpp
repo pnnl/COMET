@@ -45,6 +45,8 @@
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
 #include "mlir/Dialect/SCF/Transforms/Passes.h"
+#include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+
 
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
@@ -477,10 +479,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
-    optPM.addPass(mlir::createSCFBufferizePass());
-    optPM.addPass(mlir::tensor::createTensorBufferizePass());
-    pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
-    pm.addPass(mlir::createConvertLinalgToLoopsPass());
 
   //   if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
   //   {
@@ -508,11 +506,16 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // /// =============================================================================
   // /// Late lowering passes
   // /// =============================================================================
+  mlir::bufferization::OneShotBufferizationOptions opts;
+  opts.allowUnknownOps = true;
+  pm.addPass(mlir::bufferization::createOneShotBufferizePass(opts));
 
-  optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
-  optPM.addPass(mlir::comet::createLateLoweringPass());
-  // pm.addPass(mlir::createCanonicalizerPass());
-  optPM.addPass(mlir::createCSEPass());
+  mlir::OpPassManager &late_lowering_pm = pm.nest<mlir::func::FuncOp>();
+  late_lowering_pm.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
+  late_lowering_pm.addPass(mlir::comet::createLateLoweringPass());
+  
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(mlir::createCSEPass());
 
 #ifdef ENABLE_GPU_TARGET
   if (CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringtoTriton))
