@@ -11,7 +11,7 @@ def main() {
 	IndexLabel [b] = [?];           
 
 	#Tensor Declarations
-	Tensor<double> A([a, b], {BCSR});	  
+	Tensor<double> A([a, b], {ELL});	  
 	Tensor<double> B([b], {Dense});
 	Tensor<double> C([a], {Dense});
 
@@ -23,8 +23,8 @@ def main() {
 
 	C[a] = A[a, b] * B[b];
 	
-	#print(A);
-	#print(C);
+	print(A);
+	print(C);
 }
 
 # Print the result for verification.
