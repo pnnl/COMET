@@ -39,6 +39,9 @@ namespace mlir
         // Create a pass for concretizing the domain from the tensor definitions 
         std::unique_ptr<Pass> createIndexTreeDomainConcretizationPass();
 
+        // Create a pass for creating the symbolic pass 
+        std::unique_ptr<Pass> createIndexTreeSymbolicComputePass();
+
         /// Create a pass for applying compressed workspace transformation into IndexTreeIR
         // std::unique_ptr<Pass> createIndexTreeWorkspaceTransformationsPass();
 

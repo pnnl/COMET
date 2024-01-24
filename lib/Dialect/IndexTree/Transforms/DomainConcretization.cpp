@@ -265,6 +265,13 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
   mlir::LogicalResult
   matchAndRewrite(IndexTreeSparseTensorOp op,
                   mlir::PatternRewriter &rewriter) const override {
+    for(auto domain : op.getDomains())
+    {
+      if(!llvm::isa<IndexTreeEmptyDomainOp>(domain.getDefiningOp()))
+      {
+        return failure();
+      }
+    }
 
     // Get the LHSOperandOp which creates thise tensor
     Value tensor = op->getResult(0);
@@ -282,10 +289,10 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
 
     
     auto crds = lhs_op.getCrds();
-    unsigned dims = lhs_op.getNumOperands();
+    unsigned dims = (lhs_op.getNumOperands() - 1) / 2;
     Value empty_domain = lhs_op.getOperand(0);
     llvm::IndexedMap<Value> domains(empty_domain);
-    domains.reserve(dims);
+    domains.resize(dims);
     for(Value crd : crds){
       auto access_op = llvm::dyn_cast<IndexTreeIndexToTensorOp>(crd.getDefiningOp());
       if(access_op == nullptr){

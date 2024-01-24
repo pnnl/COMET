@@ -80,4 +80,16 @@ def IndexTreeDomainConcretization : Pass<"indextree-domain-concretization", "fun
     let constructor = "comet::createIndexTreeDomainConcretizationPass()";
 }
 
+def IndexTreeSymbolicComputePass : Pass<"indextree-symbolic-compute", "func::FuncOp"> {
+    let summary = "Create index-tree for symbolic computations for sparse output";
+    let description = [{
+        Inserting values into a sparse output tensor cannot be done in parallel because it requires
+        sequential access to the row pointers and dynamic allocation. The symbolic pass
+        computes the size of allocations and row pointers without performing the computations
+        so the sparse tensors can be allocated and the computations can be done in parallel.
+    }];
+
+    let constructor = "comet::createIndexTreeSymbolicComputePass()";
+}
+
 #endif /// COMET_DIALECT_INDEXTREE_PASSES
