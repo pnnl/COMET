@@ -220,14 +220,16 @@ def IndexTreeIndexToTensorOp : IndexTree_Op<"IndexToTensorDim", [Pure]>{
   );
 }
 
-def IndexTreeSymbolicComputeOp : IndexTree_Op<"IndexTreeSymbolicComputeOp", [Pure]>{
+def SymbolicComputeOp : IndexTree_Op<"SymbolicComputeOp", [Pure]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring);
+  let arguments = (ins IndexTree_NodeType:$parent);
 
-  let results = (outs IndexTree_DomainType);
+  //TODO: Do we want another data type to describe this?
+  //TODO: Do we want to return a domain per dimension?
+  let results = (outs Variadic<IndexTree_DomainType>);
 
   //let hasVerifier = 1;
 }
@@ -247,18 +249,4 @@ def IndexTreeDynamicallyAllocatedTensorOp : IndexTree_Op<"IndexTreeDynamicallyAl
   let arguments = (ins I32ArrayAttr:$formats);
   let results = (outs TA_AnyTensor);
 }
-
-def IndexTreeSparseInsertOp : IndexTree_Op<"IndexTreeSparseInsertOp", [Pure, SameVariadicOperandSize]>{
-  let summary = "Insert element into a sparse tensor";
-  let description = [{}];
-
-  let arguments = (
-    ins TA_AnyTensor:$tensor, 
-    Variadic<Index>:$pos,
-    Variadic<Index>:$crds
-  );
-
-  let results = (outs TA_AnyTensor);
-}
-
 #endif // INDEXTREE_OPS
