@@ -1038,7 +1038,7 @@ struct Coo3DTensor
         }
         else
         {
-          llvm::errs() << __FILE__ << " " << __LINE__ <<  "ERROR: parsing FROSTT tensor: invalid problem description: " << line << "\n";
+          llvm::errs() << __FILE__ << " " << __LINE__ << "ERROR: parsing FROSTT tensor: invalid problem description: " << line << "\n";
         }
       }
       else
@@ -1046,7 +1046,7 @@ struct Coo3DTensor
         /// Edge
         if (current_nz >= num_nonzeros)
         {
-          llvm::errs() << __FILE__ << " " << __LINE__ <<  "ERROR: parsing FROSTT tensor: encountered more than " << num_nonzeros << "\n";
+          llvm::errs() << __FILE__ << " " << __LINE__ << "ERROR: parsing FROSTT tensor: encountered more than " << num_nonzeros << "\n";
         }
 
         uint64_t idx_i, idx_j, idx_k;
@@ -1060,7 +1060,7 @@ struct Coo3DTensor
         idx_i = strtol(l, &t, 0);
         if (t == l)
         {
-          llvm::errs() << __FILE__ << " " << __LINE__ <<  "ERROR: parsing FROSTT tensor: badly formed row at edge " << current_nz << "\n";
+          llvm::errs() << __FILE__ << " " << __LINE__ << "ERROR: parsing FROSTT tensor: badly formed row at edge " << current_nz << "\n";
         }
         l = t;
 
@@ -1068,7 +1068,7 @@ struct Coo3DTensor
         idx_j = strtol(l, &t, 0);
         if (t == l)
         {
-          llvm::errs() << __FILE__ << " " << __LINE__ <<  "ERROR: parsing FROSTT tensor: badly formed col at edge " << current_nz << "\n";
+          llvm::errs() << __FILE__ << " " << __LINE__ << "ERROR: parsing FROSTT tensor: badly formed col at edge " << current_nz << "\n";
         }
         l = t;
 
@@ -1076,7 +1076,7 @@ struct Coo3DTensor
         idx_k = strtol(l, &t, 0);
         if (t == l)
         {
-          llvm::errs() << __FILE__ << " " << __LINE__ <<  "ERROR: parsing FROSTT tensor: badly formed col at edge " << current_nz << "\n";
+          llvm::errs() << __FILE__ << " " << __LINE__ << "ERROR: parsing FROSTT tensor: badly formed col at edge " << current_nz << "\n";
         }
         l = t;
 
@@ -2342,7 +2342,6 @@ void read_input_3D(int32_t fileID,
     {
       desc_Aval->data[i] = mg_3dtensor.Aval[i];
     }
-    // std::cout << "Finish Mode-generic format conversion\n";
   }
   else
   {

@@ -259,9 +259,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createFindOptimalTCFactorizationPass());
   }
 
-  // optPM.addPass(mlir::comet::createLowerTAMulChainPass()); /// Lowering for chain operations
-  ///  =============================================================================
-
   ///  =============================================================================
   ///  Check if there are missing tensor declaration operations introduced by compound expressions.
   ///  If so, add a new tensor declaration to represent intermediate tensors
@@ -354,7 +351,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
                                                                                 /// should be lowered before sparse output tensor declarations
     optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass());     /// lowering for sparse output tensor declarations
                                                                                 //(sparse_output_tensor_decl and temp_sparse_output_tensor_decl)
-    
+
     optPM.addPass(mlir::comet::createDimOpLoweringPass());
 
     /// The partial Fusion pass might add new tensor.fill operations

@@ -49,7 +49,7 @@ using namespace mlir::bufferization;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -84,12 +84,11 @@ static bool arePermutations(const std::vector<T> &vec1,
 /// Detect whether memref dims [dim, dim + extent) can be reshaped without
 /// copies.
 [[maybe_unused]] static bool isReshapableDimBand(unsigned dim, unsigned extent,
-                                ArrayRef<int64_t> sizes,
-                                ArrayRef<AffineExpr> strides)
+                                                 ArrayRef<int64_t> sizes,
+                                                 ArrayRef<AffineExpr> strides)
 {
   assert(sizes.size() == strides.size() && "mismatched ranks");
   /// off by 1 indexing to avoid out of bounds
-  ///                       V
   for (auto idx = dim, e = dim + extent; idx + 1 < e; ++idx)
   {
     /// Only bands of static shapes are reshapable. This is due to the fact that
@@ -267,7 +266,7 @@ namespace
         {
           auto shape = rhs1MemrefType.getShape();
           rhs1Dims.push_back(shape[idx]);
-          if(rhs1MemrefType.isDynamicDim(idx))
+          if (rhs1MemrefType.isDynamicDim(idx))
           {
             operands.push_back(rhs1Memref.getDefiningOp()->getOperand(rhs1MemrefType.getDynamicDimIndex(idx)));
           }
@@ -294,7 +293,7 @@ namespace
         {
           auto shape = rhs2MemrefType.getShape();
           rhs2Dims.push_back(shape[idx]);
-          if(rhs2MemrefType.isDynamicDim(idx))
+          if (rhs2MemrefType.isDynamicDim(idx))
           {
             operands.push_back(rhs2Memref.getDefiningOp()->getOperand(rhs2MemrefType.getDynamicDimIndex(idx)));
           }
@@ -322,7 +321,7 @@ namespace
         {
           auto shape = lhsMemrefType.getShape();
           lhsDims.push_back(shape[idx]);
-          if(lhsMemrefType.isDynamicDim(idx))
+          if (lhsMemrefType.isDynamicDim(idx))
           {
             operands.push_back(lhsMemref.getDefiningOp()->getOperand(lhsMemrefType.getDynamicDimIndex(idx)));
           }
@@ -356,7 +355,12 @@ namespace
       bool isRHS1SumPermutation = arePermutations(allPerms[0], sumIndices);
       bool isRHS2SumPermutation = arePermutations(allPerms[1], sumIndices);
 
-      comet_debug() << __LINE__ << "mIdxSize, nIdxSize, kIdxSize: " << mIdxSize << ", " << nIdxSize << ", " << kIdxSize << " isRHS1SumPermutation, isRHS2SumPermutation: " << isRHS1SumPermutation << ", " << isRHS2SumPermutation << "\n";
+      comet_debug() << __LINE__ << "mIdxSize, nIdxSize, kIdxSize: "
+                    << mIdxSize << ", "
+                    << nIdxSize << ", "
+                    << kIdxSize << " isRHS1SumPermutation, isRHS2SumPermutation: "
+                    << isRHS1SumPermutation << ", "
+                    << isRHS2SumPermutation << "\n";
 
       /// Do reshape if needed
       if (isRHS1SumPermutation)
@@ -558,7 +562,7 @@ namespace
         matvecop.getOperation()->setAttr("__alpha__", alphaAttr);
         matvecop.getOperation()->setAttr("__beta__", betaAttr);
 
-        /// Add attribute to the linalg.matvec operations
+        /// TODO(gkestor): Add attribute to the linalg.matvec operations
         /// matvecop.setAttr(kLinalgTransformMarker, rewriter.getStringAttr(kLinalgTransformMarker));
       }
       else if (isRHS2SumPermutation)
@@ -576,7 +580,7 @@ namespace
         matvecop.getOperation()->setAttr("__alpha__", alphaAttr);
         matvecop.getOperation()->setAttr("__beta__", betaAttr);
 
-        /// Add attribute to the linalg.matvec operations
+        /// TODO(gkestor): Add attribute to the linalg.matvec operations
         /// matvecop.setAttr(kLinalgTransformMarker, rewriter.getStringAttr(kLinalgTransformMarker));
       }
       else

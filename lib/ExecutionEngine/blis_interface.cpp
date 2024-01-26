@@ -60,7 +60,7 @@ void bli_dgemm_x86_ukr(
   }
   else
   {
-    llvm::errs() << __FILE__ << " " << __LINE__ <<   "ERROR: Undefined microkernel"
+    llvm::errs() << __FILE__ << " " << __LINE__ << "ERROR: Undefined microkernel"
                  << "\n";
   }
 }
@@ -88,7 +88,8 @@ void bli_dgemm_arm_ukr(
   }
   else
   {
-    llvm::errs() << __FILE__ << " " << __LINE__ <<  "Undefined microkernel" << "\n";
+    llvm::errs() << __FILE__ << " " << __LINE__ << "Undefined microkernel"
+                 << "\n";
   }
 }
 #endif

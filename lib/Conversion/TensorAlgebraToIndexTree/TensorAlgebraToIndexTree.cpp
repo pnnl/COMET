@@ -161,7 +161,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
 
   auto B = tree->getOrCreateTensor(rhs1_tensor, rhs1_labels, allFormats[0]);
   auto C = tree->getOrCreateTensor(rhs2_tensor, rhs2_labels, allFormats[1]);
-  auto A = tree->getOrCreateTensor(lhs_tensor,  lhs_labels, allFormats[2]);
+  auto A = tree->getOrCreateTensor(lhs_tensor, lhs_labels, allFormats[2]);
 
   Tensor *M;
   std::unique_ptr<UnitExpression> e;
@@ -169,7 +169,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   if (mask_tensor != nullptr) /// mask is an optional input
   {
     comet_debug() << "mask input provided by user\n";
-    M = tree->getOrCreateTensor(mask_tensor, empty, allFormats[2]); /// We don't need indexlabel info for the mask 
+    M = tree->getOrCreateTensor(mask_tensor, empty, allFormats[2]); /// We don't need indexlabel info for the mask
     e = make_unique<UnitExpression>(A, B, C, M, "*");
   }
   else
@@ -208,7 +208,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
       auto &odomain = outputDomains.at(index);
       node->setOutputDomain(odomain);
     }
-    comet_debug() << "index " << index <<"\n";
+    comet_debug() << "index " << index << "\n";
 
     parent = node;
   }
@@ -244,7 +244,7 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
 
   auto B = tree->getOrCreateTensor(rhs1_tensor, rhs1_labels, allFormats[0]);
   auto C = tree->getOrCreateTensor(rhs2_tensor, rhs2_labels, allFormats[1]);
-  auto A = tree->getOrCreateTensor(lhs_tensor,  lhs_labels, allFormats[2]);
+  auto A = tree->getOrCreateTensor(lhs_tensor, lhs_labels, allFormats[2]);
 
   auto e = make_unique<UnitExpression>(A, B, C, "*");
 

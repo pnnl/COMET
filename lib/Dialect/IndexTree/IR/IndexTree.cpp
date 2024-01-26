@@ -24,7 +24,6 @@
 #include "comet/Dialect/IndexTree/IR/IndexTree.h"
 #include "comet/Dialect/IndexTree/Transforms/UnitExpression.h"
 
-
 using namespace std;
 
 // *********** For debug purpose *********//
@@ -98,15 +97,15 @@ void Index_Tree::print(string msg)
   getRoot()->print(0);
 }
 
-IndicesType Index_Tree::getIndices(std::vector<mlir::Value>& lbls)
+IndicesType Index_Tree::getIndices(std::vector<mlir::Value> &lbls)
 {
   IndicesType indices;
 
-  for(auto lbl: lbls)
+  for (auto lbl : lbls)
   {
     comet_vdump(lbl);
-    void* lbl_ptr = lbl.getAsOpaquePointer();
-    if(indexLabelToId.count(lbl_ptr) == 0)
+    void *lbl_ptr = lbl.getAsOpaquePointer();
+    if (indexLabelToId.count(lbl_ptr) == 0)
     {
       comet_debug() << "Index Label just created:" << indexID << "\n";
       indexLabelToId[lbl_ptr] = indexID;
@@ -118,7 +117,7 @@ IndicesType Index_Tree::getIndices(std::vector<mlir::Value>& lbls)
   return indices;
 }
 
-Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, std::vector<mlir::Value>& allIndexLabels, FormatsType &formats)
+Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, std::vector<mlir::Value> &allIndexLabels, FormatsType &formats)
 {
   IndicesType indices = getIndices(allIndexLabels);
   comet_debug() << "Num Indices: " << indices.size() << ", Num formats " << formats.size() << "\n";
