@@ -135,20 +135,21 @@ namespace
     return opName;
   };
 
-  bool is_number(const std::string& s)
+  bool is_number(const std::string &s)
   {
-    return !s.empty() && std::find_if(s.begin(), s.end(), [](unsigned char c) {return !std::isdigit(c);} ) == s.end();
+    return !s.empty() && std::find_if(s.begin(), s.end(), [](unsigned char c)
+                                      { return !std::isdigit(c); }) == s.end();
   }
 
   constexpr ElType lub(ElType first, ElType second)
   {
     return ElType(static_cast<int>(first) | static_cast<int>(second));
   }
-  
-  template<typename T>
-  std::vector<mlir::Value> getOperationResultIndexLabels(mlir::Operation* op)
+
+  template <typename T>
+  std::vector<mlir::Value> getOperationResultIndexLabels(mlir::Operation *op)
   {
-    auto cast_op =  cast<T>(op);
+    auto cast_op = cast<T>(op);
     return cast_op.getResultIndexLabels();
   }
   // Implementation of a simple MLIR emission from the Tensor Algebra AST.
@@ -204,7 +205,7 @@ namespace
     /// added to the mapping. When the processing of a function is terminated, the
     /// scope is destroyed and the mappings created in this scope are dropped.
     llvm::ScopedHashTable<StringRef, mlir::Value> symbolTable;
-    std::map<std::string, int64_t> ilabel_symbolTable;  // [TODO] This needs to use scopedhashtable
+    std::map<std::string, int64_t> ilabel_symbolTable;   // [TODO] This needs to use scopedhashtable
     std::map<std::string, mlir::Value> labelToTensorDim; // [TODO] This needs to use scopedhashtable
 
     /// A mapping for the functions that have been code generated to MLIR.
@@ -238,16 +239,16 @@ namespace
       labelToTensorDim[var] = value;
     }
 
-    void declarelabel(IndexLabelDeclExprAST& label)
+    void declarelabel(IndexLabelDeclExprAST &label)
     {
       {
-        if(label.getEnd() == mlir::ShapedType::kDynamic)
+        if (label.getEnd() == mlir::ShapedType::kDynamic)
         {
           ilabel_symbolTable[label.getName().str()] = mlir::ShapedType::kDynamic;
         }
         else
         {
-          ilabel_symbolTable[label.getName().str()] = (label.getEnd()- label.getBegin() ) / label.getIncrement();
+          ilabel_symbolTable[label.getName().str()] = (label.getEnd() - label.getBegin()) / label.getIncrement();
         }
       }
     }
@@ -374,7 +375,7 @@ namespace
 
         for (const auto &lbl : lblsSet)
         {
-          comet_debug()<< lbl << "\n";
+          comet_debug() << lbl << "\n";
           lhs_lbls.insert(lbl);
         }
       }
@@ -401,7 +402,7 @@ namespace
         auto lblsVec = cast<LabeledTensorExprAST>(rhsAST)->getLabelNames();
         for (const auto &lbl : lblsVec)
         {
-          comet_debug()<< lbl << "\n";
+          comet_debug() << lbl << "\n";
           rhs_lbls.insert(lbl);
         }
       }
@@ -509,27 +510,7 @@ namespace
       {
         comet_debug() << " lhs or rhs are binaryop\n";
         /// lhs && rhs are binaryop
-        std::set<mlir::Operation *> summed_labels;
-
-        if (lhsAST->getKind() == ExprAST::ExprASTKind::Expr_BinOp)
-        {
-          comet_debug() << " lhs is binaryop\n";
-          auto lhsOp = lhs.getDefiningOp();
-
-          comet_pdump(lhsOp);
-          if (isa<ChainMulOp>(lhsOp))
-          {
-            auto lhsMulOp = cast<ChainMulOp>(lhsOp);
-            for (auto val : lhsMulOp.getSumLabels())
-            {
-              summed_labels.insert(val.getDefiningOp());
-            }
-          }
-        }
-        else
-        {
-          comet_debug() << " lhs is not binaryop\n";
-        }
+ 
 
         if (rhsAST->getKind() == ExprAST::ExprASTKind::Expr_BinOp)
         {
@@ -537,18 +518,15 @@ namespace
           auto rhsOp = rhs.getDefiningOp();
 
           comet_pdump(rhsOp);
-          if (isa<ChainMulOp>(rhsOp))
-          {
-            auto rhsMulOp = cast<ChainMulOp>(rhsOp);
-            for (auto val : rhsMulOp.getSumLabels())
-            {
-              summed_labels.insert(val.getDefiningOp());
-            }
-          }
-          else if (isa<TensorAddOp>(rhsOp))
+          if (isa<TensorAddOp>(rhsOp))
           {
             // TODO(gkestor) check for AddOp
             llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: Not supported RHS operation - Tensor addition\n";
+          }
+          else if (isa<TensorSubtractOp>(rhsOp))
+          {
+            // TODO(gkestor) check for subtract operation
+            llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: Not supported RHS operation - Tensor subtraction\n";
           }
           else if (isa<mlir::tensorAlgebra::TransposeOp>(rhsOp))
           { // * transpose(A[i,j])
@@ -578,32 +556,6 @@ namespace
           comet_debug() << n << " ";
         }
         comet_debug() << "\n";
-
-        std::vector<mlir::Value> lbls;
-        for (const auto &lbl_str : sum_labels)
-        {
-          if (auto var = symbolTable.lookup(lbl_str))
-          {
-            if (isa<IndexLabelOp>(var.getDefiningOp()))
-            {
-              if (summed_labels.find(var.getDefiningOp()) ==
-                  summed_labels.end())
-              {
-                lbls.push_back(var);
-              }
-            }
-            else
-            {
-              emitError(loc(binop.loc()), "Index label variable required '")
-                  << lbl_str << "'";
-            }
-          }
-          else
-          {
-            emitError(loc(binop.loc()), " Unknown variable BinaryExprAST' ")
-                << lbl_str << "'";
-          }
-        }
 
         std::vector<std::string> result_lbls;
         std::set<std::string> sum_lbls_set(sum_labels.begin(), sum_labels.end());
@@ -658,15 +610,15 @@ namespace
         else if (isa<TensorElewsMultOp>(lhs_labeledtensor.getDefiningOp()))
         {
           lhs_lbls_value = getOperationResultIndexLabels<TensorElewsMultOp>(lhs_labeledtensor.getDefiningOp());
-        } 
+        }
         else if (isa<TensorAddOp>(lhs_labeledtensor.getDefiningOp()))
         {
           lhs_lbls_value = getOperationResultIndexLabels<TensorAddOp>(lhs_labeledtensor.getDefiningOp());
-        } 
+        }
         else if (isa<TensorSubtractOp>(lhs_labeledtensor.getDefiningOp()))
         {
           lhs_lbls_value = getOperationResultIndexLabels<TensorSubtractOp>(lhs_labeledtensor.getDefiningOp());
-        } 
+        }
         else if (isa<mlir::tensorAlgebra::TransposeOp>(lhs_labeledtensor.getDefiningOp()))
         {
           lhs_lbls_value = getOperationResultIndexLabels<mlir::tensorAlgebra::TransposeOp>(lhs_labeledtensor.getDefiningOp());
@@ -687,21 +639,21 @@ namespace
           }
         }
         else if (isa<TensorMultOp>(rhs_labeledtensor.getDefiningOp()))
-        { 
+        {
           rhs_lbls_value = getOperationResultIndexLabels<TensorMultOp>(rhs_labeledtensor.getDefiningOp());
         }
         else if (isa<TensorElewsMultOp>(rhs_labeledtensor.getDefiningOp()))
         {
           rhs_lbls_value = getOperationResultIndexLabels<TensorElewsMultOp>(rhs_labeledtensor.getDefiningOp());
-        } 
+        }
         else if (isa<TensorAddOp>(rhs_labeledtensor.getDefiningOp()))
         {
           rhs_lbls_value = getOperationResultIndexLabels<TensorAddOp>(rhs_labeledtensor.getDefiningOp());
-        } 
+        }
         else if (isa<TensorSubtractOp>(rhs_labeledtensor.getDefiningOp()))
         {
           rhs_lbls_value = getOperationResultIndexLabels<TensorSubtractOp>(rhs_labeledtensor.getDefiningOp());
-        } 
+        }
         else if (isa<mlir::tensorAlgebra::TransposeOp>(rhs_labeledtensor.getDefiningOp()))
         {
           rhs_lbls_value = getOperationResultIndexLabels<mlir::tensorAlgebra::TransposeOp>(rhs_labeledtensor.getDefiningOp());
@@ -826,25 +778,24 @@ namespace
 
         auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
 
-        auto res_map = affineMapArrayAttr[affineMapArrayAttr.size()-1].cast<mlir::AffineMapAttr>().getValue();
+        auto res_map = affineMapArrayAttr[affineMapArrayAttr.size() - 1].cast<mlir::AffineMapAttr>().getValue();
 
         /// get return-type based on affine-maps
         std::vector<int64_t> result_dims;
 
-        for(auto v : res_map.getResults())
+        for (auto v : res_map.getResults())
         {
-          for(size_t i = 0; i < affineMapArrayAttr.size() - 1; i++)
+          for (size_t i = 0; i < affineMapArrayAttr.size() - 1; i++)
           {
             auto map = affineMapArrayAttr[i].cast<mlir::AffineMapAttr>().getValue();
-            if(auto pos = map.getResultPosition(v)) 
+            if (auto pos = map.getResultPosition(v))
             {
               result_dims.push_back((i == 0 ? lhs_labeledtensor : rhs_labeledtensor).getType().cast<mlir::TensorType>().getDimSize(*pos));
               break;
-            } 
+            }
           }
-        }   
+        }
         auto ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
-
 
         SmallVector<mlir::StringRef, 8> formats;
         std::vector<mlir::Value> exprs{lhs_labeledtensor, rhs_labeledtensor};
@@ -1042,8 +993,6 @@ namespace
           comet_vdump(tcop);
           return tcop;
         }
-        case '/':
-          return builder.create<DivOp>(location, ret_tensor_type, lhs, rhs, lbls);
 
         case tok_elews:
           comet_vdump(lhs_tensor);
@@ -1427,13 +1376,12 @@ namespace
     {
       mlir::Value value;
       declarelabel(labeldecl);
-        value =
-            builder.create<IndexLabelOp>(loc(labeldecl.loc()));
+      value =
+          builder.create<IndexLabelOp>(loc(labeldecl.loc()));
       if (failed(declare(labeldecl.getName(), value)))
         return nullptr;
       return value;
     }
-
 
     /// Handle tensor declaration
     mlir::Value mlirGen(TensorDeclExprAST &tensordecl)
@@ -1449,12 +1397,12 @@ namespace
         {
           dims_sizes.push_back(mlir::ShapedType::kDynamic);
         }
-        else if( symbolTable.lookup(lbl_str))
+        else if (symbolTable.lookup(lbl_str))
         {
           dims_sizes.push_back(ilabel_symbolTable[lbl_str]);
-          if(ilabel_symbolTable[lbl_str] == mlir::ShapedType::kDynamic)
+          if (ilabel_symbolTable[lbl_str] == mlir::ShapedType::kDynamic)
           {
-            if(labelToTensorDim.end() != labelToTensorDim.find(lbl_str) )
+            if (labelToTensorDim.end() != labelToTensorDim.find(lbl_str))
             {
               labels.push_back(labelToTensorDim[lbl_str]);
             }
@@ -1489,11 +1437,11 @@ namespace
 
         /// If a dynamic index label is first used in sparse tensor declaration, its size is determined by the size
         /// of the tensor's respective dimension size.
-        for(size_t i = 0; i < tensordecl.getDims().size(); i++)
+        for (size_t i = 0; i < tensordecl.getDims().size(); i++)
         {
-          if( labelToTensorDim.count(tensordecl.getDims()[i]) == 0)
+          if (labelToTensorDim.count(tensordecl.getDims()[i]) == 0)
           {
-            declarelabeltotensordim( tensordecl.getDims()[i], builder.create<TensorDimOp>(loc(tensordecl.loc()), value, i ));
+            declarelabeltotensordim(tensordecl.getDims()[i], builder.create<TensorDimOp>(loc(tensordecl.loc()), value, i));
           }
         }
       }
@@ -1525,7 +1473,7 @@ namespace
       std::vector<std::string> all_lbls = rhs_lbls;
       all_lbls.insert(all_lbls.end(), lhs_lbls.begin(), lhs_lbls.end());
       std::vector<mlir::Value> all_lbls_value;
-      for(auto s: all_lbls)
+      for (auto s : all_lbls)
       {
         all_lbls_value.push_back(symbolTable.lookup(s));
       }
@@ -1534,7 +1482,7 @@ namespace
       unsigned dim = 0;
       for (const auto &lbl : all_lbls)
       {
-        if(expr_map.find(lbl) == expr_map.end())
+        if (expr_map.find(lbl) == expr_map.end())
         {
           expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
         }
@@ -1639,7 +1587,7 @@ namespace
       mlir::Value rhs_tensor = symbolTable.lookup(transpose.getName());
 
       comet_vdump(rhs_tensor);
-      
+
       auto rhs_lbls = transpose.getSrcDims();
       auto lhs_lbls = transpose.getDstDims();
 
@@ -1650,7 +1598,7 @@ namespace
       unsigned dim = 0;
       for (const auto &lbl : all_lbls)
       {
-        if(expr_map.find(lbl) == expr_map.end())
+        if (expr_map.find(lbl) == expr_map.end())
         {
           expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
         }
@@ -1752,12 +1700,12 @@ namespace
       auto res_map = affineMapArrayAttr[1].cast<mlir::AffineMapAttr>().getValue();
       std::vector<mlir::Value> indices;
       std::vector<int64_t> shape;
-      for(auto v : res_map.getResults())
+      for (auto v : res_map.getResults())
       {
         auto map = affineMapArrayAttr[0].cast<mlir::AffineMapAttr>().getValue();
-        if(auto pos = map.getResultPosition(v)) 
+        if (auto pos = map.getResultPosition(v))
         {
-          if(isa<mlir::TensorType>(rhs_tensor.getType()) && !rhs_tensor.getType().cast<mlir::TensorType>().isDynamicDim(*pos))
+          if (isa<mlir::TensorType>(rhs_tensor.getType()) && !rhs_tensor.getType().cast<mlir::TensorType>().isDynamicDim(*pos))
           {
             shape.push_back(rhs_tensor.getType().cast<mlir::TensorType>().getDimSize(*pos));
           }
@@ -1767,7 +1715,7 @@ namespace
             shape.push_back(mlir::ShapedType::kDynamic);
           }
         }
-      }      
+      }
 
       /// Create Tensor Declarations Ops and populate formats (for lhs)
       mlir::Value lhs_tensor;
@@ -1791,7 +1739,7 @@ namespace
 
         /// no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
         /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
-        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, builder.getF64Type()),  indices, formatAttr, builder.getBoolAttr(true));
+        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, builder.getF64Type()), indices, formatAttr, builder.getBoolAttr(true));
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
         comet_vdump(lhs_tensor);
 
@@ -2590,7 +2538,6 @@ namespace
 
       comet_debug() << " dims size: " << result_dims.size() << "\n";
 
-
       /// The attribute is a vector with a floating point value per element
       /// (number) in the array
       std::vector<double> data;
@@ -2604,7 +2551,6 @@ namespace
         double randNum = static_cast<double>(rand()) / (static_cast<float>(RAND_MAX / upperLimit));
         data.push_back(randNum);
       }
-
 
       /// This is the actual attribute that holds the list of values for this
       /// tensor literal.

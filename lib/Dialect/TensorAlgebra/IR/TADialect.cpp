@@ -30,11 +30,9 @@
 #include "comet/Dialect/TensorAlgebra/IR/TATypes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
-
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
-
 
 using namespace mlir;
 using namespace mlir::tensorAlgebra;
@@ -146,7 +144,6 @@ void DenseConstantOp::build(mlir::OpBuilder &builder, mlir::OperationState &stat
   auto dataAttribute = DenseElementsAttr::get(dataType, value);
   DenseConstantOp::build(builder, state, dataType, dataAttribute);
 }
-
 
 /// The 'OpAsmParser' class provides a collection of methods for parsing
 /// various punctuation, as well as attributes, operands, types, etc. Each of
@@ -273,22 +270,6 @@ void FuncOp::print(mlir::OpAsmPrinter &p)
 }
 
 //===----------------------------------------------------------------------===//
-/// chaing multiplication Op
-void ChainMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                       mlir::Value lhs, mlir::Value rhs)
-{
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
-  state.addOperands({lhs, rhs});
-}
-
-void ChainMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, mlir::TensorType resultType,
-                       mlir::Value lhs, mlir::Value rhs)
-{
-  state.addTypes(resultType);
-  state.addOperands({lhs, rhs});
-}
-
-//===----------------------------------------------------------------------===//
 /// DivOp
 void DivOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                   mlir::Value lhs, mlir::Value rhs)
@@ -344,13 +325,12 @@ mlir::LogicalResult TAReturnOp::verify()
 
 // Helper builder to simplify building fron integer index
 void TensorDimOp::build(mlir::OpBuilder &builder, mlir::OperationState &result,
-                          Value source, int64_t index) 
+                        Value source, int64_t index)
 {
   auto loc = result.location;
   Value indexValue = builder.create<mlir::arith::ConstantIndexOp>(loc, index);
   build(builder, result, builder.getIndexType(), source, indexValue);
 }
-
 
 //===----------------------------------------------------------------------===//
 /// TA Types

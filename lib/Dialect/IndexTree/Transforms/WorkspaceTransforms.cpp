@@ -60,11 +60,10 @@ using llvm::StringRef;
 #define DEBUG_TYPE "workspace-transformations"
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
-
 
 const bool compressedworkspace = true;
 
@@ -503,7 +502,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   Operation *itComputeOpFirstUsers = *(itComputeOp.getOperation()->getUsers().begin());
   builder.setInsertionPoint(itComputeOpFirstUsers); /// Insert before itree Op
   std::vector<mlir::Value> w_lbls_value;
-  if(outputItComputeOp.getType().cast<TensorType>().isDynamicDim(sparseDimOrderInOutput))
+  if (outputItComputeOp.getType().cast<TensorType>().isDynamicDim(sparseDimOrderInOutput))
   {
     auto opIdx = outputItComputeOp.getType().cast<TensorType>().getDynamicDimIndex(sparseDimOrderInOutput);
     w_lbls_value.push_back(outputItComputeOp.getDefiningOp()->getOperand(opIdx));

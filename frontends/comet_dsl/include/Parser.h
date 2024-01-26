@@ -42,7 +42,7 @@
 #include <vector>
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -1052,15 +1052,15 @@ namespace tensorAlgebra
         if (lexer.getCurToken() == '[')
         {
           lexer.getNextToken(); /// eat [
-          
+
           /// Possible values are: an index label, a numeric, or a ?
           while (lexer.getCurToken() == tok_number || lexer.getCurToken() == tok_identifier || lexer.getCurToken() == '?')
           {
-            if(lexer.getCurToken() == tok_number)
+            if (lexer.getCurToken() == tok_number)
             {
-              dims.push_back(std::to_string((int)lexer.getValue()));             
+              dims.push_back(std::to_string((int)lexer.getValue()));
             }
-            else if(lexer.getCurToken() == tok_identifier)
+            else if (lexer.getCurToken() == tok_identifier)
             {
               dims.push_back(lexer.getId().str());
             }
@@ -1669,11 +1669,11 @@ namespace tensorAlgebra
     std::unique_ptr<R> parseError(T &&expected, U &&context = "")
     {
       auto curToken = lexer.getCurToken();
-      llvm::errs() << __FILE__ << ":" << __LINE__ <<   "Parse error (" << lexer.getLastLocation().line << ", "
+      llvm::errs() << __FILE__ << ":" << __LINE__ << "Parse error (" << lexer.getLastLocation().line << ", "
                    << lexer.getLastLocation().col << "): expected '" << expected
                    << "' " << context << " but has Token " << curToken;
       if (isprint(curToken))
-        llvm::errs() << __FILE__ << ":" << __LINE__ <<  " '" << (char)curToken << "'";
+        llvm::errs() << __FILE__ << ":" << __LINE__ << " '" << (char)curToken << "'";
       llvm::errs() << "\n";
       return nullptr;
     }
