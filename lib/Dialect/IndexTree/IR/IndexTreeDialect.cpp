@@ -30,7 +30,6 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
-
 using namespace mlir;
 using namespace mlir::indexTree;
 

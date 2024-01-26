@@ -77,7 +77,6 @@ namespace comet
 #include "comet/Conversion/Passes.h.inc"
 } /// namespace comet
 
-
 namespace
 {
 
@@ -581,7 +580,7 @@ namespace
       comet_debug() << " order: " << order << "\n";
       if (order == ancestorsOps[0]->getChildren().size())
       {
-       llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not belong to parent's children\n";
+        llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Not belong to parent's children\n";
       }
       else
       {
@@ -646,7 +645,7 @@ namespace
     if (tensor.getType().isa<mlir::RankedTensorType>())
     { /// Dense tensor
       Value upperBound;
-      auto dim = builder.create<tensor::DimOp>(loc,tensor, id);
+      auto dim = builder.create<tensor::DimOp>(loc, tensor, id);
       upperBound = dim;
 
       auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
@@ -730,7 +729,6 @@ namespace
           comet_debug() << " opstree->parent is not NULL\n";
           comet_debug() << " parent forop\n";
           comet_vdump(parent_forop);
-
 
           /// TODO (PT) Not sure why this (now commented out) code was needed but it breaks spgemm for cases like C = A * A
           ///  check if parent's and child's upper bounds come from the same sparse tensor
@@ -2089,7 +2087,7 @@ namespace
             upperBound = builder.create<ConstantIndexOp>(loc, dimSize);
             comet_vdump(upperBound);
           }
-          
+
           denseDimsSize.push_back(upperBound);
         }
         builder.setInsertionPointAfter(forLoops[0]);
@@ -4218,15 +4216,15 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
 
   std::vector<mlir::Value> wp_ops;
   dfsRootOpTree(rootOp.getChildren(), wp_ops);
-// #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
+  // #ifdef DEBUG_MODE_LowerIndexTreeToSCFPass
   comet_debug() << " wp_ops.size(): " << wp_ops.size() << "\n";
-  for ([[maybe_unused]]auto n : wp_ops)
+  for ([[maybe_unused]] auto n : wp_ops)
   {
     comet_debug() << " ";
     comet_vdump(n);
     /// Declare opsTree
   }
-// #endif
+  // #endif
 
   /// In ops vector, for each op, the parent of each op can get from getUsers()
   /// Since it's a tree structure, only one user ==> which is the parent

@@ -54,7 +54,7 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "tensor-decl-lowering"
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -176,7 +176,7 @@ std::unique_ptr<Pass> mlir::comet::createTensorFillLoweringPass()
   return std::make_unique<TensorFillLoweringPass>();
 }
 
-namespace 
+namespace
 {
 
   struct DimOpLowering : public OpRewritePattern<tensorAlgebra::TensorDimOp>
@@ -197,18 +197,18 @@ namespace
       comet_vdump(op);
 
       auto tensor = op.getTensor();
-      if( tensor.getType().isa<SparseTensorType>() )
+      if (tensor.getType().isa<SparseTensorType>())
       {
         SparseTensorConstructOp spconstruct = cast<SparseTensorConstructOp>(tensor.getDefiningOp());
-        ::mlir::TypedValue< ::mlir::IndexType> idx = op.getIndex();
+        ::mlir::TypedValue<::mlir::IndexType> idx = op.getIndex();
         auto realIndex = getConstantIntValue(idx);
         op.replaceAllUsesWith(spconstruct.getIndices()[18 + *realIndex]);
         rewriter.eraseOp(op);
       }
-      else if (tensor.getType().isa<TensorType>()) 
+      else if (tensor.getType().isa<TensorType>())
       {
-        ::mlir::TypedValue< ::mlir::IndexType> idx = op.getIndex();
-        auto dim = rewriter.create<tensor::DimOp> (op.getLoc(), tensor,  idx);
+        ::mlir::TypedValue<::mlir::IndexType> idx = op.getIndex();
+        auto dim = rewriter.create<tensor::DimOp>(op.getLoc(), tensor, idx);
         rewriter.replaceAllUsesWith(op, dim);
         rewriter.eraseOp(op);
       }

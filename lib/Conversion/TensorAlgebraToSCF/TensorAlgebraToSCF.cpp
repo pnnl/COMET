@@ -36,14 +36,13 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 
-
 using namespace mlir;
 using namespace mlir::arith;
 using namespace mlir::bufferization;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -97,7 +96,7 @@ namespace
 
       comet_debug() << "User_setop: " << user_setOp << "/n";
       Value alloc;
-      if(user_setOp)
+      if (user_setOp)
       {
         if (isa<ToTensorOp>(setnewop.getOperand(1).getDefiningOp()))
         {

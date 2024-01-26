@@ -593,41 +593,6 @@ def ReduceOp : TA_Op<"reduce",[Pure]> {
   //let hasVerifier = 1;
 }
 
-def ChainMulOp : TA_Op<"chain_mul",
-    [Pure]> {
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs, Variadic<IndexLabel>:$sum_labels);
-
-  let results = (outs AnyTensor);
-
-  //TODO(gkestor): add verifier
-  //let hasVerifier = 1;
-
-  /// Allow building a MulOp with from the two input operands.
-  let builders = [
-    OpBuilder<(ins "Value":$lhs, "Value":$rhs)>,
-    OpBuilder<(ins "TensorType":$resultType, "Value":$lhs, "Value":$rhs)>,
-  ]; 
-}
-
-def ChainSetOp : TA_Op<"chain_set_op", [Pure]>{
-
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
-  let results = (outs AnyTensor);
-  
-  //let hasCanonicalizer = 1; 
-
-  //TODO(gkestor): add verifier
-  //let hasVerifier = 1;
-}
-
 def TensorAddOp : TA_Op<"add",
     [Pure]> {
   let summary = "element-wise addition operation";

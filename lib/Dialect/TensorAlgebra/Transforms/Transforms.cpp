@@ -63,66 +63,6 @@ std::vector<Value> dim_format;
 
 namespace
 {
-  /// Chain of multiplication operations produces ChainSetOp
-  /// and it needs to be lowered
-  struct ChainSetOpLowering : public ConversionPattern
-  {
-    ChainSetOpLowering(MLIRContext *ctx)
-        : ConversionPattern(tensorAlgebra::ChainSetOp::getOperationName(), 1,
-                            ctx) {}
-
-    LogicalResult
-    matchAndRewrite(Operation *op, ArrayRef<Value> operands,
-                    ConversionPatternRewriter &rewriter) const final
-    {
-      // assert(isa<tensorAlgebra::ChainSetOp>(op));
-
-      // comet_debug() << "ChainSetOpLowering begin\n";
-      // comet_pdump(op);
-      // auto ctx = rewriter.getContext();
-      // auto loc = op->getLoc();
-
-      // auto lhs = operands[0].getDefiningOp();
-      // auto rhs = operands[1].getDefiningOp();
-
-      // assert(isa<tensorAlgebra::LabeledTensorOp>(lhs));
-      // auto lhsLT = cast<tensorAlgebra::LabeledTensorOp>(lhs);
-
-      // Operation *rhsOp;
-      // if (isa<tensorAlgebra::ChainMulOp>(rhs))
-      // {
-      //   comet_debug() << "\n";
-      //   rhsOp = cast<tensorAlgebra::ChainMulOp>(rhs);
-      // }
-      // else if (isa<tensorAlgebra::TensorAddOp>(rhs))
-      // {
-      //   comet_debug() << "\n";
-      //   rhsOp = cast<tensorAlgebra::TensorAddOp>(rhs);
-      // }
-      // else
-      // {
-      //   comet_debug() << "Neither MulOp, AddOp, it is: ";
-      //   comet_pdump(rhs);
-      //   comet_debug() << "ChainSetOpLowering end\n";
-      //   return success();
-      // }
-
-      // comet_debug() << "\n";
-      // auto lhsTensor = lhsLT.getTensor();
-      // comet_debug() << "\n";
-      // auto labels = lhsLT.getLabels();
-      // comet_debug() << "\n";
-      // std::vector<Value> lhsLabels(labels.begin(), labels.end());
-
-      // comet_pdump(rhsOp);
-      // comet_debug() << "\n";
-      // replaceSetOp(rhsOp, lhsTensor, lhsLabels, loc, rewriter);
-      // rewriter.eraseOp(op);
-      // comet_debug() << "ChainSetOpLowering end\n";
-      return success();
-    }
-  };
-
   /// TODO(gkestor): test TensorCopyLowering
   struct TensorCopyLowering : public ConversionPattern
   {
@@ -203,20 +143,8 @@ namespace
 
 }
 
-/// =============================================================================
-//
-/// These patterns lowers tensor multiplication chains into s series of ta.tc operations.
-//
-//===----------------------------------------------------------------------===//
-void mlir::tensorAlgebra::populateLowerTAMulChainPatterns(
-    RewritePatternSet &patterns, MLIRContext *context)
-{
-  patterns.insert<ChainSetOpLowering>(context);
-}
-
 void mlir::tensorAlgebra::populateSTCRemoveDeadOpsPatterns(
     RewritePatternSet &patterns, MLIRContext *context)
 {
-  patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::ChainMulOp>>(context);
   patterns.insert<RemoveDeadTAOpLowering<tensorAlgebra::IndexLabelOp>>(context);
 }
