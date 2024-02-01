@@ -314,7 +314,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// sparse input tensor declaration lowering, also generate sparse_output_tensor declaration if needed
   /// input and output sparse tensor declaration lowering are distant and need different information
   optPM.addPass(mlir::comet::createSparseTensorDeclLoweringPass());
-  // optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createTensorFillLoweringPass());
 
