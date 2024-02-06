@@ -74,6 +74,8 @@ endif()
 set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
 
 
+link_directories(comet ${CMAKE_CURRENT_SOURCE_DIR}/install/lib)
+
 #-------------------------------------------------------------------------------
 # BLIS Configuration
 #-------------------------------------------------------------------------------
@@ -111,7 +113,7 @@ add_custom_target(comet-doc)
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/install/include/blis/")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/mcl/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/install/include")
 
 # Add COMET files to the include path
 include_directories(${COMET_MAIN_INCLUDE_DIR})
@@ -125,6 +127,7 @@ add_subdirectory(include/comet)
 add_subdirectory(lib)
 add_subdirectory(frontends/comet_dsl)
 add_subdirectory(integration_test)
+add_subdirectory(tools)
 
 
 option(COMET_INCLUDE_DOCS "Generate build targets for the COMET docs.")

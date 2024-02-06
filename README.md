@@ -63,7 +63,7 @@ $ patch -s -p0 < comet-blis.patch
 ```
 $ cd $COMET_SRC
 $ cd blis
-$ ./configure --prefix=`pwd` auto
+$ ./configure --prefix=$COMET_SRC/install auto
 $ make [-j]
 $ make check [-j]
 $ make install [-j]
@@ -74,13 +74,18 @@ $ make install [-j]
 ```
 $ cd $COMET_SRC
 $ cd mcl
-$ ./configure --prefix=`pwd`
+$ git submodule init
+$ git submodule update
+$ autoreconf --install
+$ ./configure --prefix=$COMET_SRC/install 
 $ make [-j]
+$ ./src/sched/mcl_sched & 
 $ make check [-j]
+$ killall mcl_sched
 $ make install [-j]
 ```
 
-7) **Build and test COMET:**
+7) **Build and test COMET:** Make sure that *libatomic_ops* and *uthash* libraries are installed on the system
 
 ```
 $ cd $COMET_SRC
