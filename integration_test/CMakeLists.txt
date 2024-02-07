@@ -5,8 +5,6 @@ set(COMET_INTEGRATION_TEST_DEPENDS
   mlir-cpu-runner
   )
 
-
-
 set(COMET_INTEGRATION_TIMEOUT 60) # Set a 60s timeout on individual tests.
 
 # Passed to lit.site.cfg.py.in to set up the path where to find the libraries.
@@ -30,6 +28,7 @@ add_lit_testsuite(check-comet-integration "Running the COMET integration tests"
   ${CMAKE_CURRENT_BINARY_DIR}
   DEPENDS ${COMET_INTEGRATION_TEST_DEPENDS}
   )
+
 set_target_properties(check-comet-integration PROPERTIES FOLDER "IntegrationTests")
 
 add_lit_testsuites(COMET_INTEGRATION ${CMAKE_CURRENT_SOURCE_DIR}

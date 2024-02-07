@@ -28,7 +28,7 @@ after some optimizations.
 
 ```
 $ git clone https://github.com/pnnl/COMET.git
-$ export COMET_SRC=`pwd`\COMET
+$ export COMET_SRC=`pwd`/COMET
 $ cd $COMET_SRC
 $ git submodule init
 $ git submodule update
@@ -79,13 +79,13 @@ $ git submodule update
 $ autoreconf --install
 $ ./configure --prefix=$COMET_SRC/install 
 $ make [-j]
-$ ./src/sched/mcl_sched & 
+$ ./src/sched/mcl_sched& 
 $ make check [-j]
-$ killall mcl_sched
+$ killall *-mcl_sched
 $ make install [-j]
 ```
 
-7) **Build and test COMET:** Make sure that *libatomic_ops* and *uthash* libraries are installed on the system
+7) **Build and test COMET:** 
 
 ```
 $ cd $COMET_SRC
