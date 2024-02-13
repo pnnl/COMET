@@ -666,7 +666,10 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           rewriter.setInsertionPoint(op);
           Value empty_domain = rewriter.create<indexTree::IndexTreeEmptyDomainOp>(loc, domain_type);
           llvm::SmallVector<Value> args = llvm::SmallVector<Value>(rank_size, empty_domain);
-          new_tensor = rewriter.create<indexTree::IndexTreeSparseTensorOp>(loc, op->getResult(0).getType(), args);
+          /// create sptensor_construct
+          SmallVector<mlir::Type, 1> elementTypes = {rewriter.getF64Type()};
+          auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
+          new_tensor = rewriter.create<indexTree::IndexTreeSparseTensorOp>(loc, ty, args);
 
 
           // Eventually, there are 2 cases:
@@ -685,6 +688,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           break;
         }
       }
+      op.replaceAllUsesWith(new_tensor);
       rewriter.replaceOp(op, {new_tensor});
     }
     else

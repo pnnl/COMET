@@ -3,6 +3,8 @@ mlir_tablegen(IndexTreeOps.h.inc -gen-op-decls)
 mlir_tablegen(IndexTreeOps.cpp.inc -gen-op-defs)
 mlir_tablegen(IndexTreeDialect.h.inc -gen-dialect-decls -dialect=it)
 mlir_tablegen(IndexTreeDialect.cpp.inc -gen-dialect-defs -dialect=it)
+mlir_tablegen(IndexTreeOpInterfaces.h.inc -gen-op-interface-decls)
+mlir_tablegen(IndexTreeOpInterfaces.cpp.inc -gen-op-interface-defs)
 add_public_tablegen_target(COMETIndexTreeOpsIncGen)
 
 set(LLVM_TARGET_DEFINITIONS IndexTreeTypes.td)

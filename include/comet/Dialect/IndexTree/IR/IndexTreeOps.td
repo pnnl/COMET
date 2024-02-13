@@ -129,7 +129,7 @@ def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
 
   //TODO(gkestor): rethink the use of comp_worksp_opt, should we decouple that?
   /// MaskType attribute: {push, pull, auto, none}
-  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, BoolAttr:$comp_worksp_opt, StrAttr:$semiring);
+  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, StrAttr:$semiring);
 
   let results = (outs TA_AnyTensor);
 
@@ -147,7 +147,35 @@ def IndexTreeTensorDomainOp : IndexTree_Op<"DomainOp", [Pure]>{
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeSparseDomainOp : IndexTree_Op<"SparseDomainOp", [Pure]>{
+def IndexTreeEmptyDomainOp : IndexTree_Op<"EmptyDomain", [Pure]>{
+  let summary = "";
+  let description = [{
+  }];
+
+  let results = (outs IndexTree_DomainType:$domain);
+}
+
+def ConcreteDomainInterface : OpInterface<"ConcreteDomain"> {
+  let description = [{
+    Describes an operation which implements a concrete domain. That is
+    the domain is fully-dscribed by it's arguments and does not rely on the
+    the tensor definition to create the domain.
+  }];
+  let cppNamespace = "::mlir::indexTree"; 
+
+  let methods = [
+    InterfaceMethod<[{
+      Method to get the dimension size of a concrete dimension.
+    }],
+      "mlir::Value", "getDimensionSize", (ins), /*methodBody=*/[{
+        return $_op.getDimSize();
+    }]>,
+  ];
+}
+
+def IndexTreeSparseDomainOp : IndexTree_Op<"SparseDomainOp", 
+    [Pure, ConcreteDomainInterface]>{
+
   let summary = "";
   let description = [{
   }];
@@ -159,47 +187,51 @@ def IndexTreeSparseDomainOp : IndexTree_Op<"SparseDomainOp", [Pure]>{
       AnyTensor:$pos,
       AnyTensor:$crd,
       Index:$pos_size,
-      Index:$cord_size,
+      Index:$crd_size,
+      Index:$dim_size,
       Optional<AnyTypeOf<[Index, IndexTree_TensorAccessType]>>:$parent);
 
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeDenseDomainOp : IndexTree_Op<"DenseDomainOp", [Pure]>{
+def IndexTreeDenseDomainOp : IndexTree_Op<"DenseDomainOp", 
+    [Pure, SameVariadicOperandSize, ConcreteDomainInterface]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins AnyTypeOf<[UI32,Index]>:$max);
+  let arguments = (ins AnyTypeOf<[UI32,Index]>:$dim_size, Variadic<TA_AnyTensor>:$tensors, I32ArrayAttr:$dims);
 
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeDomainUnionOp : IndexTree_Op<"DomainUnionOp", [Pure]>{
+def IndexTreeDomainUnionOp : IndexTree_Op<"DomainUnionOp", 
+    [Pure, UnknownDomain, ConcreteDomainInterface]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins Variadic<IndexTree_DomainType>:$domains);
-
+  let arguments = (ins Variadic<IndexTree_DomainType>:$domains, Index:$dim_size);
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeDomainIntersectionOp : IndexTree_Op<"DomainIntersectionOp", [Pure]>{
+def IndexTreeDomainIntersectionOp : IndexTree_Op<"DomainIntersectionOp",
+    [Pure, UnknownDomain, ConcreteDomainInterface]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins Variadic<IndexTree_DomainType>:$domains);
-
+  let arguments = (ins Variadic<IndexTree_DomainType>:$domains, Index:$dim_size);
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeEmptyDomainOp : IndexTree_Op<"EmptyDomain", [Pure]>{
+def IndexTreeNestedDomainOp : IndexTree_Op<"NestedDomainOp",
+    [Pure, UnknownDomain, ConcreteDomainInterface]>{
   let summary = "";
   let description = [{
   }];
-
+  
+  let arguments = (ins Variadic<IndexTree_DomainType>:$domains, Index:$dim_size);
   let results = (outs IndexTree_DomainType:$domain);
 }
 
@@ -220,33 +252,113 @@ def IndexTreeIndexToTensorOp : IndexTree_Op<"IndexToTensorDim", [Pure]>{
   );
 }
 
-def SymbolicComputeOp : IndexTree_Op<"SymbolicComputeOp", [Pure]>{
+def DeclDomainOp : IndexTree_Op<"DeclDomainOp", [Pure]>{
   let summary = "";
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_NodeType:$parent);
+  let arguments = (ins Index:$dim_size, Index:$num_rows, OptionalAttr<BoolAttr>:$is_dynamic);
+  let results = (outs IndexTree_SymbolicDomainType);
+}
 
-  //TODO: Do we want another data type to describe this?
-  //TODO: Do we want to return a domain per dimension?
-  let results = (outs Variadic<IndexTree_DomainType>);
+def ComputeSymbolicDomainOp : IndexTree_Op<"ComputeSymbolicDomainOp", [Pure]>{
+  let summary = "";
+  let description = [{}];
 
-  //let hasVerifier = 1;
+  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_SymbolicDomainType:$domain, DefaultValuedAttr<BoolAttr, "false">:$is_unique);
+  let results = (outs IndexTree_SymbolicDomainType);
+}
+
+def ComputeSymbolicDomainRowOp : IndexTree_Op<"ComputeSymbolicDomainRowOp", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_SymbolicDomainType:$domain, DefaultValuedAttr<BoolAttr, "true">:$needs_mark);
+  let results = (outs IndexTree_SymbolicDomainType);
+}
+
+def SymbolicDomainInsertOp : IndexTree_Op<"SymbolicDomainInsertOp", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins IndexTree_SymbolicDomainType:$domain, Index:$crd, DefaultValuedAttr<BoolAttr, "false">:$is_unique);
+  let results = (outs IndexTree_SymbolicDomainType);
+}
+
+def SymbolicDomainEndRowOp : IndexTree_Op<"SymbolicDomainEndRowOp", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins IndexTree_SymbolicDomainType:$domain, DefaultValuedAttr<BoolAttr, "true">:$needs_mark);
+  let results = (outs IndexTree_SymbolicDomainType);
+}
+
+def SymbolicDomainConstructOp : IndexTree_Op<"SymbolicDomain", [Pure]>{
+  let arguments = (
+    ins Index:$pos_size, 
+        Index:$pos_alloc_size,
+        Index:$crd_size,
+        Index:$dim_size,
+        MemRefOf<[Index]>:$pos,
+        MemRefOf<[Index]>:$mark_array,
+        OptionalAttr<BoolAttr>:$is_dynamic
+  );
+  let results = (outs IndexTree_SymbolicDomainType);
+}
+
+def SymbolicDomainGetPosSize : IndexTree_Op<"SymbolicDomainGetPosSize", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins IndexTree_SymbolicDomainType:$domain);
+  let results = (outs Index:$pos_size);
+}
+
+def SymbolicDomainGetPosAllocSize : IndexTree_Op<"SymbolicDomainGetPosAllocSize", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins IndexTree_SymbolicDomainType:$domain);
+  let results = (outs Index:$pos_alloc_size);
+}
+
+def SymbolicDomainGetCrdSize : IndexTree_Op<"SymbolicDomainGetCrdSize", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins IndexTree_SymbolicDomainType:$domain);
+  let results = (outs Index:$crd_size);
+}
+
+def SymbolicDomainGetDimSize : IndexTree_Op<"SymbolicDomainGetDimSize", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins IndexTree_SymbolicDomainType:$domain);
+  let results = (outs Index:$dim_size);
+}
+
+def SymbolicDomainGetPos : IndexTree_Op<"SymbolicDomainGetPos", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins IndexTree_SymbolicDomainType:$domain);
+  let results = (outs MemRefOf<[Index]>:$pos);
+}
+
+def SymbolicDomainGetMarkArray : IndexTree_Op<"SymbolicDomainGetPos", [Pure]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins IndexTree_SymbolicDomainType:$domain);
+  let results = (outs MemRefOf<[Index]>:$mark_array);
 }
 
 def IndexTreeSparseTensorOp : IndexTree_Op<"IndexTreeSparseTensorOp", [Pure]>{
   let summary = "Declare a sparse tensor from an index tree domain";
   let description = [{}];
 
-  let arguments = (ins Variadic<IndexTree_DomainType>:$domains);
-  let results = (outs TA_AnyTensor);
-}
-
-def IndexTreeDynamicallyAllocatedTensorOp : IndexTree_Op<"IndexTreeDynamicallyAllocatedTensor", [Pure]>{
-  let summary = "Declare a tensor that allocates memory on insert";
-  let description = [{}];
-
-  let arguments = (ins I32ArrayAttr:$formats);
+  let arguments = (ins Variadic<IndexTree_AnyDomainType>:$domains);
   let results = (outs TA_AnyTensor);
 }
 #endif // INDEXTREE_OPS

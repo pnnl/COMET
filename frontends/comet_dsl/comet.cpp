@@ -480,7 +480,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createIndexTreeSymbolicComputePass());
 
     /// Finally lowering index tree to SCF dialect
-    // optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
+    optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
+    optPM.addPass(mlir::comet::createConvertSymbolicDomainsPass());
 
   //   if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
   //   {

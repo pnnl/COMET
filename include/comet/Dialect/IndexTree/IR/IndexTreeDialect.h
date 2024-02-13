@@ -42,6 +42,12 @@
 #define GET_TYPEDEF_CLASSES
 #include "comet/Dialect/IndexTree/IR/IndexTreeTypes.h.inc"
 
+// Include the trait definitions
+#include "comet/Dialect/IndexTree/IR/IndexTreeTraits.h"
+
+// Include the op interface definitions
+#include "comet/Dialect/IndexTree/IR/IndexTreeOpInterfaces.h.inc"
+
 /// Include the auto-generated header file containing the declarations of the
 /// Index Tree operations and also the operations of the Shape Inference Op Interface.
 //===----------------------------------------------------------------------===//

@@ -35,12 +35,19 @@ def IndexTree_OperandType : IndexTree_Type<"Operand", "operand"> {
   let description = [{}];
 }
 
+def IndexTree_SymbolicDomainType : IndexTree_Type<"SymbolicDomain", "symbolic_domain"> {
+  let summary = "Type representing a computed iteration/tensor domain";
+  let description = [{}];
+}
+
 def IndexTree_DomainType : IndexTree_Type<"Domain", "domain"> {
   let summary = "Type representing an iteration domain";
   let description = [{
     Type for storing iteration domain of an index variable.
   }];
 }
+
+def IndexTree_AnyDomainType : AnyTypeOf<[IndexTree_SymbolicDomainType, IndexTree_DomainType]>;
 
 def IndexTree_ProvenanceGraphType : IndexTree_Type<"ProvenanceGraph", "prov_graph"> {
     let summary = "Provenance graph for index tree transformations";

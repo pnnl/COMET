@@ -50,6 +50,9 @@ using namespace mlir::tensorAlgebra;
 #define GET_TYPEDEF_CLASSES
 #include "comet/Dialect/IndexTree/IR/IndexTreeTypes.cpp.inc"
 
+// Include the op interface definitions
+#include "comet/Dialect/IndexTree/IR/IndexTreeOpInterfaces.cpp.inc"
+
 
 #define GET_OP_CLASSES
 #include "comet/Dialect/IndexTree/IR/IndexTreeOps.cpp.inc"
@@ -68,3 +71,6 @@ void IndexTreeDialect::initialize()
 #include "comet/Dialect/IndexTree/IR/IndexTreeOps.cpp.inc"
       >();
 }
+
+using namespace mlir;
+using namespace mlir::indexTree;

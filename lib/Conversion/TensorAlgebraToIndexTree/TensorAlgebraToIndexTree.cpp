@@ -362,7 +362,6 @@ struct TensorMultOpLowering : public mlir::ConversionPattern {
       parent,
       lhs_operand,
       rhs_operands,
-      rewriter.getBoolAttr(false),
       rewriter.getStringAttr(semiring)
   );
 

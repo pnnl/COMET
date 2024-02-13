@@ -43,6 +43,19 @@ def ConvertIndexTreeToSCF : Pass<"convert-it-to-scf"> {
   ];
 }
 
+def ConvertSymbolicDomains : Pass<"convert-symbolic-domains"> {
+  let summary = " "
+                "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createConvertSymbolicDomainsPass()";
+  let dependentDialects = [
+    "memref::MemRefDialect",
+    "scf::SCFDialect"
+  ];
+}
+
 //===----------------------------------------------------------------------===//
 // TensorAlgebraToIndexTree
 //===----------------------------------------------------------------------===//

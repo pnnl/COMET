@@ -47,19 +47,20 @@ include "mlir/Pass/PassBase.td"
 /// Workspace Transformations
 ///===----------------------------------------------------------------------===///
 
-//def IndexTreeWorkspaceTranformations: Pass<"indextree-workspace-transformations"> {
-//  let summary = "Compressed workspace transformation on IndexTree dialect"
-//                "to produce sparse output";
-//  let description = [{
-//
-//      }];
-//  let constructor = "comet::createIndexTreeWorkspaceTransformationsPass(";
-//  let dependentDialects = [
-//    "comet::IndexTreeDialect",
-//    "memref::MemRefDialect",
-//    "scf::SCFDialect"
-//  ];
-//}
+def IndexTreeWorkspaceTranformations: Pass<"indextree-workspace-transformations", "func::FuncOp"> {
+  let summary = "Compressed workspace transformation on IndexTree dialect"
+                "to produce sparse output";
+  let description = [{}];
+  let constructor = "comet::createIndexTreeWorkspaceTransformationsPass()";
+  let dependentDialects = ["comet::IndexTreeDialect"];
+}
+
+def IndexTreeLoopInvariantCodeMotion: Pass<"indextree-loop-invariant-code-motion", "func::FuncOp"> {
+  let summary = "Detect and move loop invariant computation to outer most loop";
+  let description = [{}];
+  let constructor = "comet::createIndexTreeLoopInvariantCodeMotionPass()";
+  let dependentDialects = ["comet::IndexTreeDialect"];
+}
 
 def IndexTreeDomainInference : Pass<"indextree-domain-inference", "func::FuncOp"> {
     let summary = "Infer domain of index variables";
