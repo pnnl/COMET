@@ -12,7 +12,13 @@ def IndexTreeDialect : Dialect {
   // We set this bit to generate the declarations for the dialect's type parsing
   // and printing hooks.
   let useDefaultTypePrinterParser = 1;
-  
 }
+
+class IndexTreeOpTrait<string name> : NativeOpTrait<""> {
+  let trait = name;
+  let cppNamespace = "::mlir::indexTree";
+}
+
+def UnknownDomain : IndexTreeOpTrait<"UnknownDomain">;
 
 #endif // INDEXTREE_BASE

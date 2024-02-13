@@ -767,6 +767,27 @@ def TensorInsertOp : TA_Op<"TAInsertOp", [Pure, SameVariadicOperandSize]>{
 
   let results = (outs TA_AnyTensor);
 }
+
+def TensorExtractOp : TA_Op<"TAExtractOp", [Pure, SameVariadicOperandSize]>{
+  let summary = "Extract from a sparse tensor. Sparse Tensor equivalent of tensor.extract";
+  let description = [{}];
+
+  let arguments = (
+    ins TA_AnyTensor:$tensor, 
+    Index:$pos
+  );
+
+  let results = (outs AnyFloat);
+}
+
+def TensorAllocWorkspaceOp : TA_Op<"TensorAllocWorkspace", [Pure]>{
+  let summary = "Create a dense workspace to be used as an intermediate output tensor";
+  let description = [{}];
+
+  let arguments = (ins Variadic<Index>:$dims);
+  let results = (outs WorkspaceTensor:$result);
+}
+
 #endif /// TA_OPS
 
 

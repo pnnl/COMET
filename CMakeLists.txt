@@ -107,6 +107,8 @@ add_custom_target(comet-headers)
 set_target_properties(comet-headers PROPERTIES FOLDER "Misc")
 add_custom_target(comet-doc)
 
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 # Add MLIR, LLVM and BLIS headers to the include path
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
