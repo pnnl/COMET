@@ -118,9 +118,55 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
           TensorFormatEnumAttr::get(context, format), 
           pos, crd, pos_size, crd_size, dim_size, parent);
       }
-    }
-    else
-    {
+    } else if(llvm::isa<tensorAlgerba::WorkspaceTensor>(tensor.getType())) {
+      auto index_type = rewriter.getIndexType()
+      Value dim_size = rewriter.create<tensorAlgebra::WorkspaceGetDimSize>(loc, index_type, tensorm rewriter.getI32Attr(dim));
+      
+      Value parent = domain_op.getParent();
+      if(!parent)
+      {
+        // Get associated index
+        IndexTreeIndicesOp index_op; 
+        Operation* use = *(domain_op->user_begin());
+        // TODO: Fix danger of infinite loop!!!
+        while(!(index_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(use)))
+        {
+          use = *(use->user_begin());
+        }
+        assert(index_op);
+
+        if(dim == 0)
+        {
+          parent = nullptr;
+        } else
+        {
+          // Infer parent index variable
+          for(Operation* use : index_op->getUsers())
+          {
+            IndexTreeIndexToTensorOp access_op = llvm::dyn_cast<indexTree::IndexTreeIndexToTensorOp>(use);
+            if(!access_op || access_op.getTensor() != tensor || access_op.getDim() != dim)
+              continue;
+
+            parent = access_op.getPrevDim();
+            IndexTreeIndexToTensorOp prev_access_op = 
+              llvm::cast<indexTree::IndexTreeIndexToTensorOp>(parent.getDefiningOp());
+            if(mlir::failed(this->liftAccessOp(domain_op, prev_access_op)))
+              return failure();
+
+            break;
+          }
+        }
+      }
+
+      new_domain = rewriter.create<indexTree::IndexTreeWorkspaceDomainOp>(
+        loc,
+        domain_type,
+        tensor,
+        max,
+        rewriter.getI32Attr(dim),
+        parent,
+      );
+    } else {
       //Domain is dense
       //TODO (alokvk2): Figure out if we need to take the root index variable or the allocation
       //Right now I don't know how to get back to the root index variable.

@@ -655,9 +655,13 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           rewriter.setInsertionPoint(op);
           Value empty_domain = rewriter.create<indexTree::IndexTreeEmptyDomainOp>(loc, domain_type);
           llvm::SmallVector<Value> args = llvm::SmallVector<Value>(rank_size, empty_domain);
+
+          mlir::Type element_type = rewriter.getF64Type();
+          llvm::SmallVector<int> dim_sizes = llvm::SmallVector<int>(rank_size, ShapedType::kDynamic);
+          llvm:SmallVector<unsigned> format = llvm::SmallVector<unsigned>(rank_size, 0); // TODO: Figure out format!!
+
           /// create sptensor_construct
-          SmallVector<mlir::Type, 1> elementTypes = {rewriter.getF64Type()};
-          auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
+          auto ty = tensorAlgebra::SparseTensorType::get(element_type, dim_sizes, format);
           new_tensor = rewriter.create<indexTree::IndexTreeSparseTensorOp>(loc, ty, args);
 
 

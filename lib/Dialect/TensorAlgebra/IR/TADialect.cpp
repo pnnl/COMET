@@ -405,27 +405,6 @@ namespace mlir
   }   /// end namespace tensoralgebra
 } /// end namespace mlir
 
-/// Create an instance of a `SparseTensorType` with the given element types. There
-/// *must* be at least one element type.
-SparseTensorType SparseTensorType::get(llvm::ArrayRef<mlir::Type> elementTypes)
-{
-  assert(!elementTypes.empty() && "expected at least 1 element type");
-
-  /// Call into a helper 'get' method in 'TypeBase' to get a uniqued instance
-  /// of this type. The first two parameters are the context to unique in and the
-  /// kind of the type. The parameters after the type kind are forwarded to the
-  /// storage instance.
-  mlir::MLIRContext *ctx = elementTypes.front().getContext();
-  return Base::get(ctx, elementTypes);
-}
-
-/// Returns the element types of this sparse tensor type.
-llvm::ArrayRef<mlir::Type> SparseTensorType::getElementTypes()
-{
-  /// 'getImpl' returns a pointer to the internal storage instance.
-  return getImpl()->elementTypes;
-}
-
 //===----------------------------------------------------------------------===//
 /// TableGen'd enum definitions
 //===----------------------------------------------------------------------===//

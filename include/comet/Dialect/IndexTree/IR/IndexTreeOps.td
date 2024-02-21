@@ -205,6 +205,20 @@ def IndexTreeDenseDomainOp : IndexTree_Op<"DenseDomainOp",
   let results = (outs IndexTree_DomainType:$domain);
 }
 
+def IndexTreeWorkspaceDomainOp : IndexTree_Op<"WorkspaceDomainOp", 
+    [Pure, ConcreteDomainInterface]>{
+  let summary = "";
+  let description = [{}];
+
+  let arguments = (ins 
+    WorkspaceTensor:$tensor,
+    Index:$max,
+    UI32Attr:$dim, 
+    Optional<AnyTypeOf<[Index, IndexTree_TensorAccessType]>>:$parent
+  );
+  let results = (outs IndexTree_DomainType:$domain);
+}
+
 def IndexTreeDomainUnionOp : IndexTree_Op<"DomainUnionOp", 
     [Pure, UnknownDomain, ConcreteDomainInterface]>{
   let summary = "";
