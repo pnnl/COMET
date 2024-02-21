@@ -993,16 +993,30 @@ def TensorExtractOp : TA_Op<"TAExtractOp", [Pure, SameVariadicOperandSize]>{
   let results = (outs AnyFloat);
 }
 
-def TensorAllocWorkspaceOp : TA_Op<"TensorAllocWorkspace", [Pure]>{
+def SpTensorGetPos : TA_Op<"SpTensorGetPos", [Pure]>{
+  let arguments = (ins SparseTensor:$tensor, Index:$dim);
+  let results = (outs I32Tensor:$pos);
+}
+
+def SpTensorInsertCrd : TA_Op<"SpTensorInsertPos", [Pure]>{
+  let arguemnts = (ins SparseTensor:$tensor, Index:$dim, Index:$idx, Index:$crd);
+  let results = (outs SparseTensor:$result);
+}
+
+def AllocWorkspaceOp : TA_Op<"AllocWorkspace", [Pure]>{
   let summary = "Create a dense workspace to be used as an intermediate output tensor";
   let description = [{}];
 
-  let arguments = (ins Variadic<Index>:$dims);
+  let arguments = (ins SparseTensor:$tensor, Variadic<Index>:$dims, Variadic<Index>:$dim_sizes);
   let results = (outs WorkspaceTensor:$result);
 }
 
+def WorkspaceGetDimSize : TA_Op<"WorkspaceGetDimSize", [Pure]>{
+  let summary = "Create a workspace reference from tensor, values and mark array";
+  let description = [{}];
+
+  let arguments = (ins WorkspaceTensor:$workspace, I32Attr:$dim);
+  let results = (outs Index:$dim_size);
+}
+
 #endif /// TA_OPS
-
-
-
-

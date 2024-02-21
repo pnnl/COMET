@@ -737,8 +737,45 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
         break;
       }
     }
-  } else if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op))
-  {
+  } else if(llvm::isa<IndexTreeWorkspaceDomainOp>(domain_op)) {
+    auto workspace_domain_op = llvm::cast<IndexTreeWorkspaceDomainOp>(domain_op);
+    Value start_idx = workspace_domain_op.getParent();
+    if(!start_idx){
+      start_idx = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
+    }
+    Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
+    Value end_idx = rewriter.create<arith::AddIOp>(loc, index_type, start_idx, inc);
+    auto pos_type = mlir::RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getI32Type());
+    Value pos = rewriter.create<tensorAlgebra::SpTensorGetPos>(loc, pos_type, workspace_domain_op.getTensor());
+    /** TODO: Sort pos array? **/
+    Value lb = rewriter.create<tensor::ExtractOp>(loc, index_type, pos, start_idx);
+    Value ub = rewriter.create<tensor::ExtractOp>(loc, index_type, pos, end_idx);
+    Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
+                                                    rewriter.getIndexAttr(1));
+    scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, loop_init_args);
+    Block* loop_body = for_loop.getBody();
+
+    rewriter.setInsertionPointToStart(loop_body);
+    Value crd_idx = for_loop.getInductionVar();
+    induction_var = crd_idx;
+    crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
+
+    unsigned init_arg_idx = 0;
+    for(Value init_arg : loop_init_args){
+      map.map(init_arg, for_loop.getRegionIterArg(init_arg_idx));
+      init_arg_idx += 1;
+    }
+    
+    fillSubtree(loc, rewriter, subtree, loop_outputs, for_loop.getResults(), map);
+    rewriter.setInsertionPoint(for_loop.getBody()->getTerminator());
+    loop_end = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointAfter(for_loop);
+
+    tensor_access_map.insert(std::make_pair(
+      std::make_pair(sparse_domain.getTensor(), sparse_domain.getDim()), 
+      std::make_pair(crd_idx, crd)
+    ));
+  } else if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op)) {
     // Intersection between sparse domains
     auto domains = domain_op->getOperands();
     Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
