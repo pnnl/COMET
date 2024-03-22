@@ -36,7 +36,13 @@ debug = False
 temp_dir = '.cometpy/'
 
 if not os.path.exists(temp_dir):
-    os.mkdir(temp_dir)
+    try:
+        os.mkdir(temp_dir)
+    except:
+        if os.path.exists(temp_dir):
+            pass
+        else:
+            raise "Could not create .cometpy/"
 
 platform_args = ""
 
