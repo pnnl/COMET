@@ -919,18 +919,32 @@ namespace
         }
         comet_debug() << __LINE__ << " formats.size(): " << formats.size() << "\n";
         assert(formats.size() == 2 && " less than 2 input tensors\n");
-        if (formats[0].compare("CSR") == 0 && formats[1].compare("CSR") == 0)
-        {
-          formats.push_back("CSR");
-        }
-        else if (formats[0].compare("Dense") == 0 && formats[1].compare("Dense") == 0)
-        {
-          formats.push_back("Dense");
-        }
-        else if (out_format.length() > 0) // non-empty format string provided.
+        if (out_format.length() > 0) // non-empty format string provided.
         {
           comet_debug() << " Output Format: " << out_format << "\n";
           formats.push_back(out_format);
+        }
+        else if (formats[0].compare("CSR") == 0)
+        {
+          if(formats[1].compare("CSR") == 0)
+          {
+            formats.push_back("CSR");
+          }
+          else if(formats[1].compare("Dense") == 0)
+          {
+            formats.push_back("Dense");
+          }
+        }
+        else if (formats[0].compare("Dense") == 0)
+        {
+          if(formats[1].compare("CSR") == 0) // Redundant but shows the intention
+          {
+            formats.push_back("Dense");
+          }
+          else if(formats[1].compare("Dense") == 0) // Redundant but shows the intention
+          {
+            formats.push_back("Dense");
+          }
         }
         else
         {
