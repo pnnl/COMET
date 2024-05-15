@@ -240,40 +240,15 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                std::vector<Value>& array_sizes_vec,
                                std::vector<std::vector<int64_t>>& allPerms,
                                std::vector<Value>& dimSizes,
-                               std::string formats_str)
+                               std::string formats_str,
+                               Type ty)
   {
     comet_debug() << " Get users after ";
     /// create sparse tensor construct after lowering each sparse tensor output users
     comet_debug() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
     /// create sptensor_construct
-    SmallVector<mlir::Type, 1> elementTypes;
-    for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
-    {
-      assert(tensorload_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
-      comet_debug() << " " << i << " ";
-      comet_vdump(tensorload_sizes_vec[i]);
-      elementTypes.push_back(tensorload_sizes_vec[i].getType());
-    }
-    comet_debug() << "\n ";
-    /// [0 ... 2*rank_size, 2*rank_size+1 ... 4*rank_size+1, 4*rank_size+2 ... 5*rank_size + 1]
-    /// 2d+1 + 2d+1 + d => 5d+2
-    for (unsigned int i = 0; i < 4 * rank_size + 1; i++)
-    {
-      assert(array_sizes_vec.size() > 0 && "ERROR: Please report this error to the developers!");
-      comet_debug() << " " << i << " ";
-      comet_vdump(array_sizes_vec[i]);
-      elementTypes.push_back(array_sizes_vec[i].getType());
-    }
-    comet_debug() << "\n ";
-    for (unsigned int i = 0; i < rank_size; i++)
-    {
-      assert(dimSizes.size() > 0 && "ERROR: Please report this error to the developers!");
-      elementTypes.push_back(dimSizes[i].getType());
-    }
-    comet_debug() << "\n ";
-
-    auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
-    std::vector<Attribute> dim_format_attrs = mlir::tensorAlgebra::getFormatsAttr(formats_str, rank_size, ctx);
+    
+    std::vector<int32_t> dim_formats = mlir::tensorAlgebra::getFormats(formats_str, rank_size, ctx);
 
     Value sptensor;
     if (rank_size == 2)
@@ -300,7 +275,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                                                               array_sizes_vec[8],      /// Aval_size (size of value array)
                                                                               dimSizes[0],             /// dim1_size(size of each dimension in sparse tensor)
                                                                               dimSizes[1]              /// dim2_size (size of each dimension in sparse tensor)
-                                                                          }, 2, rewriter.getArrayAttr(dim_format_attrs));
+                                                                          }, 2, rewriter.getI32ArrayAttr(dim_formats));
     }
     else if (rank_size == 3)
     {
@@ -335,7 +310,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                                                               dimSizes[0],              /// dim1_size (size of each dimension in sparse tensor)
                                                                               dimSizes[1],              /// dim2_size (size of each dimension in sparse tensor)
                                                                               dimSizes[2]               /// dim3_size
-                                                                          }, 3, rewriter.getArrayAttr(dim_format_attrs));
+                                                                          }, 3, rewriter.getI32ArrayAttr(dim_formats));
     }
     else
     {
@@ -651,7 +626,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
             Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes, rewriter.getUnitAttr(), rewriter.getUnitAttr());
             tensorload_sizes_vec.push_back(tensorload_sizes);
           }
-          new_tensor = insertSparseTensorDeclOp(rewriter, op.getContext(), loc, rank_size, tensorload_sizes_vec, array_sizes_vec, allPerms, dimSizes, formats_str);
+          new_tensor = insertSparseTensorDeclOp(rewriter, op.getContext(), loc, rank_size, tensorload_sizes_vec, array_sizes_vec, allPerms, dimSizes, formats_str, op.getResult().getType());
           break;
         }
         else if (isa<indexTree::IndexTreeLHSOperandOp>(u))
@@ -667,13 +642,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           Value empty_domain = rewriter.create<indexTree::IndexTreeEmptyDomainOp>(loc, domain_type);
           llvm::SmallVector<Value> args = llvm::SmallVector<Value>(rank_size, empty_domain);
 
-          mlir::Type element_type = rewriter.getF64Type();
-          llvm::SmallVector<int> dim_sizes = llvm::SmallVector<int>(rank_size, ShapedType::kDynamic);
-          llvm:SmallVector<unsigned> format = llvm::SmallVector<unsigned>(rank_size, 0); // TODO: Figure out format!!
-
-          /// create sptensor_construct
-          auto ty = tensorAlgebra::SparseTensorType::get(element_type, dim_sizes, format);
-          new_tensor = rewriter.create<indexTree::IndexTreeSparseTensorOp>(loc, ty, args);
+          new_tensor = rewriter.create<indexTree::IndexTreeSparseTensorOp>(loc, op.getResult().getType(), args);
 
 
           // Eventually, there are 2 cases:
@@ -974,6 +943,16 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         {
           comet_debug() << " the tensor has use in TensorDimOp and this use will be ignored!\n";
         }
+        else if (isa<tensorAlgebra::AllocWorkspaceOp>(u1))
+        {
+          /// do nothing!
+          comet_debug() << " the tensor has use in AllocWorkspaceOp\n";
+        }
+        else if (isa<tensorAlgebra::AllocWorkspaceOp>(u1))
+        {
+          /// do nothing!
+          comet_debug() << " the tensor has use in AllocWorkspaceOp\n";
+        }
         else
         {
           u1->dump();
@@ -1033,7 +1012,8 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         Value alloc_sizes_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_index, alloc_sizes);
 
         std::vector<Value> dim_format = mlir::tensorAlgebra::getFormatsValue(formats_str, rank_size, rewriter, loc, indexType);
-        std::vector<Attribute> dim_format_attrs = mlir::tensorAlgebra::getFormatsAttr(formats_str, rank_size, ctx);
+        std::vector<int32_t> dim_format_int = mlir::tensorAlgebra::getFormats(formats_str, rank_size, ctx);
+        auto dim_format_attrs = rewriter.getI32ArrayAttr(dim_format_int);
         comet_debug() << " Get the dim_format\n";
 
         /// inform the runtime of what env var to use for parsing input file
@@ -1222,18 +1202,8 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           alloc_tensor_vec.push_back(tensorLoad);
         }
 
-        /// create sptensor_construct
-        SmallVector<mlir::Type, 1> elementTypes;
-        for (unsigned int i = 0; i < sp_decl.getTotalArrayCount(); i++)
-        {
-          elementTypes.push_back(alloc_tensor_vec[i].getType());
-        }
-        for (unsigned int i = 0; i < 5 * rank_size + 1; i++)
-        {
-          elementTypes.push_back(array_sizes[i].getType());
-        }
-
-        auto ty = tensorAlgebra::SparseTensorType::get(elementTypes);
+        llvm::SmallVector<int64_t> dim_sizes(rank_size, ShapedType::kDynamic); // TODO: Determine sizes!!!!
+        auto ty = op.getResult().getType();
 
         Value sptensor;
         if (rank_size == 2)
@@ -1243,7 +1213,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                                                                                  alloc_tensor_vec[4], alloc_tensor_vec[5], /// A2
                                                                                                  alloc_tensor_vec[6], alloc_tensor_vec[7], /// A2_tile
                                                                                                  alloc_tensor_vec[8], array_sizes[0], array_sizes[1], array_sizes[2], array_sizes[3], array_sizes[4], array_sizes[5], array_sizes[6], array_sizes[7], array_sizes[8], array_sizes[9], array_sizes[10]},
-                                                                             2, rewriter.getArrayAttr(dim_format_attrs));
+                                                                             2, dim_format_attrs);
         }
         else if (rank_size == 3)
         {
@@ -1254,7 +1224,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                                                                                  alloc_tensor_vec[8], alloc_tensor_vec[9],   /// A3
                                                                                                  alloc_tensor_vec[10], alloc_tensor_vec[11], /// A3_tile
                                                                                                  alloc_tensor_vec[12], array_sizes[0], array_sizes[1], array_sizes[2], array_sizes[3], array_sizes[4], array_sizes[5], array_sizes[6], array_sizes[7], array_sizes[8], array_sizes[9], array_sizes[10], array_sizes[11], array_sizes[12], array_sizes[13], array_sizes[14], array_sizes[15], array_sizes[16], array_sizes[17], array_sizes[18]},
-                                                                             3, rewriter.getArrayAttr(dim_format_attrs));
+                                                                             3, dim_format_attrs);
         }
         else
         {
@@ -1478,6 +1448,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::DenseConstantOp,
                         tensorAlgebra::TensorDimOp,
                         tensorAlgebra::ScalarOp,
+                        tensorAlgebra::AllocWorkspaceOp,
                         func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
@@ -1528,6 +1499,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::DenseConstantOp,
                         tensorAlgebra::TensorDimOp,
                         tensorAlgebra::ScalarOp,
+                        tensorAlgebra::AllocWorkspaceOp,
                         func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))

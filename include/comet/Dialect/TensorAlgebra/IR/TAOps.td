@@ -198,7 +198,7 @@ def SparseOutputTensorDeclOp : TA_Op<"sparse_output_tensor_decl", [Pure]> {
   let arguments = (ins Variadic<Index>:$labels, StrAttr:$format);
 
   /// The constant operation returns a single value of TensorType.
-  let results = (outs AnyTensor);
+  let results = (outs TA_AnyTensor);
 
   /// Invoke a static verify method to verify this constant operation.
   
@@ -228,7 +228,7 @@ def TempSparseOutputTensorDeclOp : TA_Op<"temp_sparse_output_tensor_decl", [Pure
   let arguments = (ins Variadic<Index>:$labels, StrAttr:$format);
 
   /// The constant operation returns a single value of TensorType.
-  let results = (outs AnyTensor);
+  let results = (outs TA_AnyTensor);
 
   //TODO(gkestor): add verifier
   //let hasVerifier = 1;
@@ -943,7 +943,7 @@ def GenericCallOp : TA_Op<"generic_call",
   ];
 }
 
-def TensorFillFromFileOp : TA_Op<"fill_from_file", [Pure]>{
+def TensorFillFromFileOp : TA_Op<"fill_from_file">{
   let summary = "";
   let description = [{
   }];
@@ -993,30 +993,44 @@ def TensorExtractOp : TA_Op<"TAExtractOp", [Pure, SameVariadicOperandSize]>{
   let results = (outs AnyFloat);
 }
 
-def SpTensorGetPos : TA_Op<"SpTensorGetPos", [Pure]>{
-  let arguments = (ins SparseTensor:$tensor, Index:$dim);
-  let results = (outs I32Tensor:$pos);
+def SpTensorGetCrd : TA_Op<"SpTensorGetCrd", [Pure]>{
+  let arguments = (ins TA_AnyTensor:$tensor, Index:$idx, OptionalAttr<I32Attr>:$dim);
+  let results = (outs Index:$crd);
 }
 
-def SpTensorInsertCrd : TA_Op<"SpTensorInsertPos", [Pure]>{
-  let arguemnts = (ins SparseTensor:$tensor, Index:$dim, Index:$idx, Index:$crd);
-  let results = (outs SparseTensor:$result);
+def SpTensorInsertCrd : TA_Op<"SpTensorInsertCrd", [Pure]>{
+  let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim, Index:$idx, Index:$crd);
+  let results = (outs TA_AnyTensor:$result);
 }
 
-def AllocWorkspaceOp : TA_Op<"AllocWorkspace", [Pure]>{
+def SpTensorGetDimSize : TA_Op<"SpTensorGetDimSize", [Pure]>{
+  let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim);
+  let results = (outs Index:$result);
+}
+
+def SpTensorGetNNZ : TA_Op<"SpTensorGetNNZ", [Pure]>{
+  let arguments = (ins TA_AnyTensor:$tensor, OptionalAttr<I32Attr>:$dim);
+  let results = (outs Index:$result);
+}
+
+def TensorFindPos : TA_Op<"TensorFindPos", [Pure]>{
+  let arguments = (ins TA_AnyTensor:$tensor, Index:$crd, I32Attr:$dim, DefaultValuedAttr<BoolAttr, "false">:$is_linear);
+  let results = (outs Index:$result);
+}
+
+def AllocWorkspaceOp : TA_Op<"AllocWorkspace", [Pure, SameVariadicOperandSize]>{
   let summary = "Create a dense workspace to be used as an intermediate output tensor";
   let description = [{}];
 
-  let arguments = (ins SparseTensor:$tensor, Variadic<Index>:$dims, Variadic<Index>:$dim_sizes);
+  let arguments = (ins SparseTensor:$tensor, I32ArrayAttr:$dims);
   let results = (outs WorkspaceTensor:$result);
 }
 
-def WorkspaceGetDimSize : TA_Op<"WorkspaceGetDimSize", [Pure]>{
-  let summary = "Create a workspace reference from tensor, values and mark array";
+def WorkspaceClearOp : TA_Op<"WorkspaceClear", [Pure]>{
+  let summary = "Clear the workspace for use in the next iteration";
   let description = [{}];
 
-  let arguments = (ins WorkspaceTensor:$workspace, I32Attr:$dim);
-  let results = (outs Index:$dim_size);
+  let arguments = (ins WorkspaceTensor:$tensor);
+  let results = (outs WorkspaceTensor:$result);
 }
-
 #endif /// TA_OPS

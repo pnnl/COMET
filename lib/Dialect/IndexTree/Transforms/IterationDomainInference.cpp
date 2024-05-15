@@ -1,11 +1,13 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Index/IR/IndexOps.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 #include "llvm/ADT/StringSet.h"
 
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
+#include "comet/Dialect/IndexTree/Patterns.h"
 
 using namespace mlir;
 using namespace mlir::indexTree;
@@ -31,7 +33,6 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
     if(op.getDomain())
       return failure();
 
-    OpBuilder builder(op);
     Location loc = op.getLoc();
     auto context = builder.getContext();
     indexTree::DomainType domain_type = indexTree::DomainType::get(context);
@@ -90,7 +91,7 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
         }
         if(intersection_domains.size() > 1)
           domains.push_back(builder.create<indexTree::IndexTreeDomainIntersectionOp>(
-                          loc, domain_type, intersection_domains, zero));
+                          loc, domain_type, intersection_domains, nullptr));
         else
           domains.push_back(intersection_domains[0]);
       }
@@ -99,19 +100,19 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
     Value final_domain;
     if(domains.size() > 1) {
       final_domain = builder.create<indexTree::IndexTreeDomainUnionOp>(loc, 
-            domain_type, domains, zero);
+            domain_type, domains, nullptr);
     } else {
       final_domain = domains[0];
     }
 
     indexTree::IndexNodeType index_node_type = indexTree::IndexNodeType::get(context); 
     builder.replaceOpWithNewOp<indexTree::IndexTreeIndicesOp>(
-                          op, loc, index_node_type, op.getParent(), final_domain);
+                          op, index_node_type, op.getParent(), final_domain);
     return success();
   }
 };
 
-void comet::indexTree::populateDomainInferencePatterns(
+void mlir::indexTree::populateDomainInferencePatterns(
     MLIRContext *context, RewritePatternSet &patterns) {
   patterns.add<InferIndexDomain>(context);
 }

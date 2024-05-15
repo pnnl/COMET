@@ -46,6 +46,7 @@
 #include "mlir/Analysis/SliceAnalysis.h"
 
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/ScopedPrinter.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/iterator_range.h"
 #include <iostream>
@@ -75,7 +76,6 @@ using llvm::SmallDenseMap;
 // *********** For debug purpose *********//
 // #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
-#undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
 
 namespace comet
@@ -238,8 +238,7 @@ namespace
   }
 
   Value getSemiringSecondVal(OpBuilder &builder, Location &loc,
-                             llvm::StringRef &semiringSecond, Value &Input0, Value &Input1,
-                             bool compressedWorkspace)
+                             llvm::StringRef &semiringSecond, Value &Input0, Value &Input1)
   {
 
     Value elementWiseResult;
@@ -348,8 +347,7 @@ namespace
   }
 
   Value getSemiringFirstVal(OpBuilder &builder, Location &loc,
-                            llvm::StringRef &semiringFirst, Value &Input0, Value &Input1,
-                            bool compressedWorkspace)
+                            llvm::StringRef &semiringFirst, Value &Input0, Value &Input1)
   {
 
     Value reduceResult;
@@ -363,29 +361,11 @@ namespace
     }
     else if (semiringFirst == "minxy")
     {
-      if (!compressedWorkspace)
-      {
-        llvm::errs() << "Not supported semiring operator "
-                        "(please use compressed workspace optimization or opt-comp-workspace "
-                        "where this operation is known to work): "
-                     << "min"
-                     << "\n";
-        /// we should not proceed forward from this point to avoid in-correct results from generated code.
-      }
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OLT, Input0, Input1);
       reduceResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
     }
     else if (semiringFirst == "max")
     {
-      if (!compressedWorkspace)
-      {
-        llvm::errs() << "Not supported semiring operator "
-                        "(please use compressed workspace optimization or opt-comp-workspace "
-                        "where this operation is known to work): "
-                     << "max"
-                     << "\n";
-        /// we should not proceed forward from this point to avoid in-correct results from generated code.
-      }
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OGT, Input0, Input1);
       reduceResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
     }
@@ -437,8 +417,8 @@ namespace
     void deleteDomain(Operation* op, IRRewriter &rewriter);
     Value convertOperand(IndexTreeLHSOperandOp op, IRRewriter &rewriter);
     Value convertOperand(IndexTreeOperandOp op, IRRewriter &rewriter);
-    mlir::LogicalResult convertCompute(Operation* op, IRRewriter& rewriter);
-    mlir::LogicalResult convertIndexNode(Operation* op, IRRewriter& rewriter);
+    mlir::LogicalResult convertCompute(Operation* op, IRRewriter &rewriter);
+    mlir::LogicalResult convertIndexNode(Operation* op, IRRewriter &rewriter);
   };
 }
 
@@ -454,12 +434,16 @@ LowerIndexTreeToSCFPass::convertOperand(IndexTreeOperandOp op, IRRewriter &rewri
   if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
     return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, crds);
   } else {
-    SparseTensorConstructOp construct_op = tensor.getDefiningOp<SparseTensorConstructOp>();
-    int32_t rank = construct_op.getTensorRank();
-    Value values_tensor = construct_op->getOperand(4 * rank);
-    tensor_type = llvm::dyn_cast<mlir::TensorType>(values_tensor.getType());
+    Type element_type;
+    if(llvm::isa<SparseTensorType>(tensor.getType()))
+    {
+      element_type = llvm::cast<SparseTensorType>(tensor.getType()).getElementType();
+    } else if(llvm::isa<WorkspaceType>(tensor.getType()))
+    {
+      element_type = llvm::cast<WorkspaceType>(tensor.getType()).getElementType();
+    }
     Value pos = positions[positions.size() - 1];
-    return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), values_tensor, pos);
+    return rewriter.create<TensorExtractOp>(loc, element_type, tensor, pos);
   }
 }
 
@@ -498,24 +482,27 @@ LowerIndexTreeToSCFPass::convertCompute(Operation *op,
       elementwise_result = rhs_value;
     } else {
       elementwise_result = getSemiringSecondVal(rewriter, loc, semiringParts.second, 
-                                                elementwise_result, rhs_value,
-                                                compute_op.getCompWorkspOpt());
+                                                elementwise_result, rhs_value);
     }
   }
 
   IndexTreeLHSOperandOp lhs = llvm::cast<IndexTreeLHSOperandOp>(compute_op.getLhs().getDefiningOp());
   Value reduce_result = convertOperand(lhs, rewriter);
   reduce_result = getSemiringFirstVal(rewriter, loc, semiringParts.first, 
-                                      reduce_result, elementwise_result,
-                                      compute_op.getCompWorkspOpt());
+                                      reduce_result, elementwise_result);
 
   Value old_tensor = lhs.getTensor();
   Value output_tensor;
+
+  // LLVM_DEBUG({
+  //   lhs->emitOpError() << "Creating Tensor Insert Op" <<  "\n";
+  // });
+  
   if(llvm::isa<mlir::TensorType>(old_tensor.getType()))
   {
     output_tensor = rewriter.create<tensor::InsertOp>(loc, old_tensor.getType(), reduce_result, old_tensor, lhs.getCrds());
   } else {
-    output_tensor = rewriter.create<tensorAlgebra::TensorInsertOp>(loc, old_tensor.getType(), old_tensor, lhs.getCrds(), lhs.getPos(), reduce_result);
+    output_tensor = rewriter.create<tensorAlgebra::TensorInsertOp>(loc, old_tensor.getType(), old_tensor, lhs.getPos(), lhs.getCrds(), reduce_result);
   }
   rewriter.replaceAllUsesWith(op->getResult(0), output_tensor);
   rewriter.eraseOp(op);
@@ -537,11 +524,17 @@ LowerIndexTreeToSCFPass::collectChildren(IndexTreeIndicesOp root)
     {
       Value domain = llvm::cast<IndexTreeIndicesOp>(user).getDomain();
       Operation* domain_op = domain.getDefiningOp();
-      if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op) || llvm::isa<IndexTreeDomainUnionOp>(domain_op))
+      if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op))
       {
-        for(auto child_domain : domain_op->getOperands())
-        {
-          result.insert(child_domain.getDefiningOp());
+        auto intersection_domain_op = llvm::cast<IndexTreeDomainIntersectionOp>(domain_op);
+        for(Value subdomain : intersection_domain_op.getDomains()){
+          result.insert(subdomain.getDefiningOp());
+        }
+      } else if(llvm::isa<IndexTreeDomainUnionOp>(domain_op))
+      {
+        auto union_domain_op = llvm::cast<IndexTreeDomainUnionOp>(domain_op);
+        for(Value subdomain : union_domain_op.getDomains()){
+          result.insert(subdomain.getDefiningOp());
         }
       }
       result.insert(domain_op);
@@ -595,17 +588,29 @@ LowerIndexTreeToSCFPass::fillSubtree(Location loc,
     rewriter.replaceAllUsesWith(*old, *replacement);
   }
 
-  for(auto remove = subtree.rbegin(); remove != subtree.rend(); remove++)
+  for(auto r_iter = subtree.rbegin(); r_iter != subtree.rend(); r_iter++)
   {
-    rewriter.eraseOp((*remove));
+    Operation* remove = *r_iter;
+    // LLVM_DEBUG({
+    //   remove->emitOpError() << "Trying to erase op" <<  "\n";
+    //   for(auto user : remove->getUsers()) {
+    //     user->emitOpError() << "Still used by op" << "\n";
+    //   }
+    // });
+    rewriter.eraseOp(remove);
   }
 }
 
 void
 LowerIndexTreeToSCFPass::deleteDomain(Operation* op, IRRewriter &rewriter) {
-  auto subdomains = op->getOperands();
   rewriter.eraseOp(op);
   if(llvm::isa<IndexTreeDomainIntersectionOp>(op)){
+    auto subdomains = llvm::cast<IndexTreeDomainIntersectionOp>(op).getDomains();
+    for(Value subdomain : subdomains) {
+      deleteDomain(subdomain.getDefiningOp(), rewriter);
+    }
+  } else if(llvm::isa<IndexTreeDomainUnionOp>(op)){
+    auto subdomains = llvm::cast<IndexTreeDomainUnionOp>(op).getDomains();
     for(Value subdomain : subdomains) {
       deleteDomain(subdomain.getDefiningOp(), rewriter);
     }
@@ -634,23 +639,39 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
   SmallDenseMap<std::pair<Value, unsigned>, std::pair<Value, Value>> tensor_access_map;
   IRMapping map;
 
+  
+  IndexTreeComputeOp compute_op; 
+  ComputeSymbolicDomainOp symbolic_op = nullptr;
+  ComputeSymbolicDomainRowOp end_row_op = nullptr;
   for(Operation* child : subtree){
-    IndexTreeComputeOp compute_op; 
-    ComputeSymbolicDomainOp symbolic_op;
+    
     if((compute_op = llvm::dyn_cast<IndexTreeComputeOp>(child)))
     {
       Value loop_output = compute_op->getResult(0);
       Value lhs_tensor = compute_op.getLhs().getDefiningOp()->getOperand(0);
       loop_outputs.push_back(loop_output);
-      loop_init_args.push_back(lhs_tensor);
+
+      if(auto clean_op = lhs_tensor.getDefiningOp<IndexTreeCleanWorkspaceOp>()){
+        loop_init_args.push_back(clean_op.getWorkspace());
+      } else {
+        loop_init_args.push_back(lhs_tensor);
+      }
+      compute_op = nullptr;
     } else if((symbolic_op = llvm::dyn_cast<ComputeSymbolicDomainOp>(child)))
     {
-      Value loop_output = symbolic_op->getResult(0);
-      Value input_domain = symbolic_op.getDomain();
-      loop_outputs.push_back(loop_output);
-      loop_init_args.push_back(input_domain);
-    }
+      loop_init_args.push_back(symbolic_op.getDomain());      
+    } else if((end_row_op = llvm::dyn_cast<ComputeSymbolicDomainRowOp>(child)))
+    {
+      loop_outputs.push_back(end_row_op->getResult(0));
+    } 
   }
+  // TODO: Determining loop outputs won't work if computing two domains at once!!!
+  // If we are computing a symbolic domain, but do not see the end of the row, 
+  // yield symbolic domain
+  if(symbolic_op && !end_row_op) {
+    loop_outputs.push_back(symbolic_op->getResult(0));
+  }
+
 
   before = rewriter.saveInsertionPoint();
 
@@ -745,11 +766,10 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
     }
     Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
     Value end_idx = rewriter.create<arith::AddIOp>(loc, index_type, start_idx, inc);
-    auto pos_type = mlir::RankedTensorType::get({mlir::ShapedType::kDynamic}, builder.getI32Type());
-    Value pos = rewriter.create<tensorAlgebra::SpTensorGetPos>(loc, pos_type, workspace_domain_op.getTensor());
-    /** TODO: Sort pos array? **/
-    Value lb = rewriter.create<tensor::ExtractOp>(loc, index_type, pos, start_idx);
-    Value ub = rewriter.create<tensor::ExtractOp>(loc, index_type, pos, end_idx);
+
+    /** TODO: Sort crd array? **/
+    Value lb = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
+    Value ub = rewriter.create<tensorAlgebra::SpTensorGetNNZ>(loc, index_type, workspace_domain_op.getTensor());
     Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
                                                     rewriter.getIndexAttr(1));
     scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, loop_init_args);
@@ -758,7 +778,7 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
     rewriter.setInsertionPointToStart(loop_body);
     Value crd_idx = for_loop.getInductionVar();
     induction_var = crd_idx;
-    crd = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getCrd(), crd_idx);
+    crd = rewriter.create<tensorAlgebra::SpTensorGetCrd>(loc, index_type, workspace_domain_op.getTensor(), crd_idx, nullptr);
 
     unsigned init_arg_idx = 0;
     for(Value init_arg : loop_init_args){
@@ -772,12 +792,12 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
     rewriter.setInsertionPointAfter(for_loop);
 
     tensor_access_map.insert(std::make_pair(
-      std::make_pair(sparse_domain.getTensor(), sparse_domain.getDim()), 
+      std::make_pair(workspace_domain_op.getTensor(), 0), 
       std::make_pair(crd_idx, crd)
     ));
   } else if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op)) {
     // Intersection between sparse domains
-    auto domains = domain_op->getOperands();
+    auto domains = llvm::cast<IndexTreeDomainIntersectionOp>(domain_op).getDomains();
     Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
     SmallVector<Value> loop_conditions;
     SmallVector<Value> array_crds;
@@ -941,19 +961,19 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
   }
   OpBuilder::InsertPoint after = rewriter.saveInsertionPoint();
   
-
   for(Operation* user : op->getUsers())
   {
     if(llvm::isa<IndexTreeIndexToTensorOp>(user))
     {
       IndexTreeIndexToTensorOp access_op = llvm::cast<IndexTreeIndexToTensorOp>(user);
       Value tensor = access_op.getTensor();
-      SparseTensorConstructOp construct_op = tensor.getDefiningOp<SparseTensorConstructOp>();
-      if(construct_op)
+      
+      if(llvm::isa<tensorAlgebra::SparseTensorType>(tensor.getType()))
       {
         // Tensor is Sparse
+        auto tensor_type = llvm::cast<tensorAlgebra::SparseTensorType>(tensor.getType());
         auto dim = access_op.getDim();
-        TensorFormatEnum format = construct_op.getDimensionFormats()[2 * dim].cast<TensorFormatEnumAttr>().getValue();
+        TensorFormatEnum format = (TensorFormatEnum) tensor_type.getFormat()[2 * dim];
         Value access_pos;
         Value access_crd;
         switch(format)
@@ -962,9 +982,20 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
           case TensorFormatEnum::CN: //TODO: Figure out difference
           case TensorFormatEnum::S:
           {
-            auto access_pair = tensor_access_map[std::make_pair(tensor, dim)];
-            access_pos = access_pair.first;
-            access_crd = access_pair.second;
+            auto key = std::make_pair(tensor, dim);
+            if(tensor_access_map.find(key) != tensor_access_map.end()){
+              auto access_pair = tensor_access_map[key];
+              access_pos = access_pair.first;
+              access_crd = access_pair.second;
+            } else {
+              // TODO: Determine weather of not the sequence of accesses is linear or not
+              // Right now we blindly say that it will be linear. But this will cause problems
+              // A better temporary solution would be to determine that it is not linear,
+              // then raise a not implemented error when trying to lower the resulting op
+              rewriter.restoreInsertionPoint(loop_end);
+              access_crd = crd;
+              access_pos = rewriter.create<tensorAlgebra::TensorFindPos>(loc, index_type, tensor, crd, rewriter.getI32IntegerAttr(dim), rewriter.getBoolAttr(true));
+            }
             break;
           }
           case TensorFormatEnum::D:
@@ -975,8 +1006,7 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
             } else {
               rewriter.restoreInsertionPoint(before);
               Value dim_idx = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
-              Value pos_tensor = construct_op.getOperand(4 * dim);
-              Value  dim_size = rewriter.create<tensor::ExtractOp>(loc, index_type, pos_tensor, dim_idx);
+              Value dim_size = rewriter.create<tensorAlgebra::SpTensorGetDimSize>(loc, index_type, tensor, rewriter.getI32IntegerAttr(dim));
               Value pos_start = rewriter.create<arith::MulIOp>(loc, index_type, dim_size, access_op.getPrevDim()); 
               rewriter.restoreInsertionPoint(loop_end);
               access_pos = rewriter.create<arith::AddIOp>(loc, index_type, pos_start, induction_var);
@@ -994,14 +1024,33 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
     }
   }
 
-  for(Operation* user : op->getUsers())
+  rewriter.restoreInsertionPoint(loop_end);
+  auto users = topologicalSort(llvm::SetVector<Operation*>(op->user_begin(), op->user_end()));
+  for(Operation* user : users)
   {
-    rewriter.restoreInsertionPoint(loop_end);
+    LLVM_DEBUG({
+      user->emitOpError() << "Converting node from " << op <<  "\n";
+    });
+    if (llvm::isa<IndexTreeCleanWorkspaceOp>(user))
+    {
+      auto clean_workspace_op = llvm::cast<IndexTreeCleanWorkspaceOp>(user);
+      Value workspace = rewriter.create<WorkspaceClearOp>(loc, user->getResultTypes(), clean_workspace_op.getWorkspace());
+      rewriter.replaceOp(user, {workspace});
+    }
+  }
+  for(Operation* user : users)
+  {
+    LLVM_DEBUG({
+      user->emitOpError() << "Converting node from " << op <<  "\n";
+    });
+
     if(llvm::isa<IndexTreeIndicesOp>(user))
     {
       // Recurse down tree
       if(mlir::failed(convertIndexNode(user, rewriter)))
         return failure();
+      // loop_end = rewriter.saveInsertionPoint();
+
     } else if (llvm::isa<IndexTreeComputeOp>(user))
     {
       // Generate available compute expressions
@@ -1031,6 +1080,7 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
   }
   rewriter.eraseOp(op);
   deleteDomain(domain_op, rewriter);
+  rewriter.restoreInsertionPoint(after);
   return success();
 }
 

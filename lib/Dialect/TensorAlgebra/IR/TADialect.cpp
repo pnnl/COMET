@@ -32,6 +32,7 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
+#include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;
 using namespace mlir::tensorAlgebra;
@@ -41,6 +42,10 @@ using namespace mlir::tensorAlgebra;
 //===----------------------------------------------------------------------===//
 /// TADialect
 //===----------------------------------------------------------------------===//
+
+
+//===----------------------------------------------------------------------===//
+/// ConstantOp
 
 /// Build a constant operation.
 /// The builder is passed as an argument, so is the state that this method is
@@ -263,71 +268,47 @@ void TensorDimOp::build(mlir::OpBuilder &builder, mlir::OperationState &result,
 /// TA Types
 //===----------------------------------------------------------------------===//
 
-namespace mlir
+// Implements the shaped type interface for the workspace type
+ShapedType WorkspaceType::cloneWith(std::optional<llvm::ArrayRef<int64_t>> shape, Type elementType) const
 {
-  namespace tensorAlgebra
-  {
-    namespace detail
-    {
-      /// This class represents the internal storage of the tensorAlgebra `SparseTensorType`.
-      struct SparseTensorTypeStorage : public mlir::TypeStorage
-      {
-        /// The `KeyTy` is a required type that provides an interface for the storage
-        /// instance. This type will be used when uniquing an instance of the type
-        /// storage. For our struct type, we will unique each instance structurally on
-        /// the elements that it contains.
-        using KeyTy = llvm::ArrayRef<mlir::Type>;
+  // TODO: This may (?) require converting dimensions? Not sure 
+  assert(false && "Workspace tensor cannot not be closed into another type");
+  return NULL;
+}
 
-        /// A constructor for the type storage instance.
-        SparseTensorTypeStorage(llvm::ArrayRef<mlir::Type> elementTypes)
-            : elementTypes(elementTypes) {}
+bool WorkspaceType::hasRank() const
+{
+  return true;
+}
 
-        /// Define the comparison function for the key type with the current storage
-        /// instance. This is used when constructing a new instance to ensure that we
-        /// haven't already uniqued an instance of the given key.
-        bool operator==(const KeyTy &key) const { return key == elementTypes; }
+llvm::ArrayRef<int64_t> WorkspaceType::getShape() const
+{
+  return getDims();
+}
 
-        /// Define a hash function for the key type. This is used when uniquing
-        /// instances of the storage, see the `SparseTensorType::get` method.
-        /// Note: This method isn't necessary as both llvm::ArrayRef and mlir::Type
-        /// have hash functions available, so we could just omit this entirely.
-        static llvm::hash_code hashKey(const KeyTy &key)
-        {
-          return llvm::hash_value(key);
-        }
+// Implements the shaped type interface for the sparse tensor type
+ShapedType SparseTensorType::cloneWith(std::optional<llvm::ArrayRef<int64_t>> shape, Type elementType) const
+{
+  // TODO: This may (?) require converting dimensions? Not sure 
+  assert(false && "Sparse tensor cannot not be closed into another type");
+  return NULL;
+}
 
-        /// Define a construction function for the key type from a set of parameters.
-        /// These parameters will be provided when constructing the storage instance
-        /// itself.
-        /// Note: This method isn't necessary because KeyTy can be directly
-        /// constructed with the given parameters.
-        static KeyTy getKey(llvm::ArrayRef<mlir::Type> elementTypes)
-        {
-          return KeyTy(elementTypes);
-        }
+bool SparseTensorType::hasRank() const
+{
+  return true;
+}
 
-        /// Define a construction method for creating a new instance of this storage.
-        /// This method takes an instance of a storage allocator, and an instance of a
-        /// `KeyTy`. The given allocator must be used for *all* necessary dynamic
-        /// allocations used to create the type storage and its internal.
-        static SparseTensorTypeStorage *construct(mlir::TypeStorageAllocator &allocator,
-                                                  const KeyTy &key)
-        {
-          /// Copy the elements from the provided `KeyTy` into the allocator.
-          llvm::ArrayRef<mlir::Type> elementTypes = allocator.copyInto(key);
+llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
+{
+  return getDims();
+}
 
-          /// Allocate the storage instance and construct it.
-          return new (allocator.allocate<SparseTensorTypeStorage>())
-              SparseTensorTypeStorage(elementTypes);
-        }
-
-        /// The following field contains the element types of the struct.
-        llvm::ArrayRef<mlir::Type> elementTypes;
-      };
-
-    } /// end namespace detail
-  } /// end namespace tensoralgebra
-} /// end namespace mlir
+//===----------------------------------------------------------------------===//
+/// TableGen'd type definitions
+//===----------------------------------------------------------------------===//
+#define GET_TYPEDEF_CLASSES
+#include "comet/Dialect/TensorAlgebra/IR/TATypes.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 /// TableGen'd enum definitions
@@ -349,6 +330,11 @@ namespace mlir
 /// the point of registration of types and operations for the dialect.
 void TADialect::initialize()
 {
+  addTypes<
+#define GET_TYPEDEF_LIST
+#include "comet/Dialect/TensorAlgebra/IR/TATypes.cpp.inc"
+      >();
+
   addAttributes<
 #define GET_ATTRDEF_LIST
 #include "comet/Dialect/TensorAlgebra/IR/TAAttrs.cpp.inc"
@@ -358,6 +344,4 @@ void TADialect::initialize()
 #define GET_OP_LIST
 #include "comet/Dialect/TensorAlgebra/IR/TAOps.cpp.inc"
       >();
-  // addTypes<IndexLabelType, SparseTensorType>();
-  addTypes<SparseTensorType, IndexLabelType>();
 }

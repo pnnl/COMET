@@ -1,4 +1,4 @@
-//===- Passes.h - Conversion Pass Construction and Registration -----------===//
+//===- Patterns.h - Conversion Pass Construction and Registration -----------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -21,37 +21,20 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef COMET_DIALECT_INDEXTREE_PASSES_H
-#define COMET_DIALECT_INDEXTREE_PASSES_H
+#ifndef COMET_DIALECT_INDEXTREE_PATTERNS_H
+#define COMET_DIALECT_INDEXTREE_PATTERNS_H
 
-#include "mlir/Pass/Pass.h"
+#include "mlir/Transforms/DialectConversion.h"
 
 namespace mlir
 {
-    namespace comet
+    namespace indexTree
     {
-/// Generate the code for registering conversion passes.
-#define GEN_PASS_DECL
-#include "comet/Dialect/IndexTree/Passes.h.inc"
-        // Create a pass for infering the domain from the use of the index variables
-        std::unique_ptr<Pass> createIndexTreeDomainInferencePass();
-
-        // Create a pass for concretizing the domain from the tensor definitions 
-        std::unique_ptr<Pass> createIndexTreeDomainConcretizationPass();
-
-        // Create a pass for creating the symbolic pass 
-        std::unique_ptr<Pass> createIndexTreeSymbolicComputePass();
-
-        // Create a pass for inlining the index tree
-        std::unique_ptr<Pass> createIndexTreeInliningPass();
-
-        /// Create a pass for applying compressed workspace transformation into IndexTreeIR
-        std::unique_ptr<Pass> createIndexTreeWorkspaceTransformationsPass();
-
-        /// Create a pass for the redundancy-aware kernel fusion on index tree dialect for some compound expressions
-        // std::unique_ptr<Pass> createIndexTreeKernelFusionPass();
+        void populateDomainInferencePatterns(MLIRContext *context, RewritePatternSet &patterns);
+        void populateDomainConcretizationPatterns(MLIRContext *context, RewritePatternSet &patterns);
+        void populateIndexTreeTypeConversionPatterns(MLIRContext *context, RewritePatternSet &patterns, TypeConverter &typeConverter, ConversionTarget& target);
+        void populateIndexTreeInliningPatterns(MLIRContext *context, RewritePatternSet &patterns);
     }
-
 }
 
 #endif // COMET_DIALECT_INDEXTREE_PASSES_H

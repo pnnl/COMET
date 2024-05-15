@@ -13,6 +13,7 @@
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
+#include "comet/Dialect/IndexTree/Patterns.h"
 
 using namespace mlir;
 using namespace mlir::indexTree;
@@ -118,9 +119,9 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
           TensorFormatEnumAttr::get(context, format), 
           pos, crd, pos_size, crd_size, dim_size, parent);
       }
-    } else if(llvm::isa<tensorAlgerba::WorkspaceTensor>(tensor.getType())) {
-      auto index_type = rewriter.getIndexType()
-      Value dim_size = rewriter.create<tensorAlgebra::WorkspaceGetDimSize>(loc, index_type, tensorm rewriter.getI32Attr(dim));
+    } else if(llvm::isa<tensorAlgebra::WorkspaceType>(tensor.getType())) {
+      auto index_type = rewriter.getIndexType();
+      Value dim_size = rewriter.create<tensorAlgebra::SpTensorGetDimSize>(loc, index_type, tensor, rewriter.getI32IntegerAttr(dim));
       
       Value parent = domain_op.getParent();
       if(!parent)
@@ -162,9 +163,9 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
         loc,
         domain_type,
         tensor,
-        max,
-        rewriter.getI32Attr(dim),
-        parent,
+        dim_size,
+        rewriter.getUI32IntegerAttr(dim),
+        parent
       );
     } else {
       //Domain is dense
@@ -203,8 +204,12 @@ struct SimplifyIntersectionOp : public OpRewritePattern<IndexTreeDomainIntersect
     SmallVector<Attribute> dims;
     SmallVector<Value> maximums;
     IndexTreeDenseDomainOp operand_op;
-    for(auto operand : op->getOperands())
+    for(auto operand : op.getDomains())
     {
+      if(!llvm::isa<ConcreteDomain>(operand.getDefiningOp())){
+        return failure();
+      }
+
       if((operand_op = operand.getDefiningOp<IndexTreeDenseDomainOp>()))
       {
         to_remove.push_back(operand_op.getOperation());
@@ -244,6 +249,9 @@ struct SimplifyIntersectionOp : public OpRewritePattern<IndexTreeDomainIntersect
     } else
     {
       // Keep only non-dense operands
+      if(domains.size() == op.getDomains().size() && op.getDimSize() != nullptr){
+        return failure();
+      }
       auto loc = op->getLoc();
       auto context = rewriter.getContext();
       indexTree::DomainType domain_type = indexTree::DomainType::get(context);
@@ -274,6 +282,10 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
     Operation* operand_op;
     for(auto operand : op.getDomains())
     {
+      if(!llvm::isa<ConcreteDomain>(operand.getDefiningOp())){
+        return failure();
+      }
+
       if((operand_op = operand.getDefiningOp<IndexTreeDenseDomainOp>())){
         rewriter.replaceOp(op, {operand});
         can_replace = true;
@@ -290,6 +302,10 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
           rewriter.eraseOp(operand_op);
       }
     } else {
+      if(op.getDimSize() != nullptr){
+        return failure();
+      }
+
       Value dim_size = llvm::dyn_cast<ConcreteDomain>(op.getDomains()[0].getDefiningOp()).getDimensionSize();
       auto loc = op->getLoc();
       auto context = rewriter.getContext();
@@ -313,9 +329,17 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
   {
     Value new_domain;
     Operation* domain_op = domain.getDefiningOp();
-    if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op) || llvm::isa<IndexTreeDomainUnionOp>(domain_op))
+    if(llvm::isa<IndexTreeDomainIntersectionOp>(domain_op))
     {
-      for(Value subdomain : domain_op->getOperands()){
+      auto intersection_domain_op = llvm::cast<IndexTreeDomainIntersectionOp>(domain_op);
+      for(Value subdomain : intersection_domain_op.getDomains()){
+        copyDomain(subdomain, rewriter, map, loc, index_vars);
+      }
+    }
+    if(llvm::isa<IndexTreeDomainUnionOp>(domain_op))
+    {
+      auto union_domain_op = llvm::cast<IndexTreeDomainUnionOp>(domain_op);
+      for(Value subdomain : union_domain_op.getDomains()){
         copyDomain(subdomain, rewriter, map, loc, index_vars);
       }
     }
@@ -355,8 +379,8 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
         // Create or fold so multiple levels of nested domains are foleded into one
         new_domain = rewriter.createOrFold<IndexTreeNestedDomainOp>(loc, 
                                                                     domain_op->getResultTypes(),
-                                                                    new_parent_domain, 
-                                                                    new_domain);
+                                                                    llvm::SmallVector<Value>{new_parent_domain, new_domain},
+                                                                    sparse_domain_op.getDimSize());
       }
     } else {
       // Clone
@@ -427,9 +451,9 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
   }
 };
 
-void comet::indexTree::populateDomainConcretizationPatterns(
+void indexTree::populateDomainConcretizationPatterns(
     MLIRContext *context, RewritePatternSet &patterns) {
-  patterns.add<ConcretizeTensorDomain, SimplifyIntersectionOp, InferOutputDomains>(context);
+  patterns.add<ConcretizeTensorDomain, SimplifyIntersectionOp, SimplifyUnionOp, InferOutputDomains>(context);
 }
 
 struct IndexTreeDomainConcretization : comet::impl::IndexTreeDomainConcretizationBase<IndexTreeDomainConcretization> {
@@ -438,7 +462,6 @@ struct IndexTreeDomainConcretization : comet::impl::IndexTreeDomainConcretizatio
   void runOnOperation() {
     mlir::RewritePatternSet domain_concretization_patterns(&getContext());
     indexTree::populateDomainConcretizationPatterns(&getContext(), domain_concretization_patterns);
-    tensor_domain_patterns.add<domain_concretization_patterns>(&getContext());
     mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(domain_concretization_patterns));
   }
 };
