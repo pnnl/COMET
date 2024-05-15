@@ -42,8 +42,11 @@ namespace mlir
         // Create a pass for creating the symbolic pass 
         std::unique_ptr<Pass> createIndexTreeSymbolicComputePass();
 
+        // Create a pass for inlining the index tree
+        std::unique_ptr<Pass> createIndexTreeInliningPass();
+
         /// Create a pass for applying compressed workspace transformation into IndexTreeIR
-        // std::unique_ptr<Pass> createIndexTreeWorkspaceTransformationsPass();
+        std::unique_ptr<Pass> createIndexTreeWorkspaceTransformationsPass();
 
         /// Create a pass for the redundancy-aware kernel fusion on index tree dialect for some compound expressions
         // std::unique_ptr<Pass> createIndexTreeKernelFusionPass();

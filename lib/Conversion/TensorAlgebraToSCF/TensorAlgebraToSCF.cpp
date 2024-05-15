@@ -25,7 +25,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
-#include "comet/Dialect/TensorAlgebra/IR/TATypes.h"
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"

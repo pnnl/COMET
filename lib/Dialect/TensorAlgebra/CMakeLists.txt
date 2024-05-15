@@ -15,6 +15,7 @@ add_llvm_library(COMETTensorAlgebraDialect
 
 add_dependencies(
   COMETTensorAlgebraDialect
+  COMETTensorAlgebraTypesIncGen
   COMETTensorAlgebraOpsIncGen
   COMETTensorAlgebraPassIncGen
   )

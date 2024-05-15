@@ -8,3 +8,8 @@ mlir_tablegen(TAEnums.cpp.inc -gen-enum-defs)
 mlir_tablegen(TAAttrs.h.inc -gen-attrdef-decls)
 mlir_tablegen(TAAttrs.cpp.inc -gen-attrdef-defs)
 add_public_tablegen_target(COMETTensorAlgebraOpsIncGen)
+
+set(LLVM_TARGET_DEFINITIONS TATypes.td)
+mlir_tablegen(TATypes.h.inc -gen-typedef-decls)
+mlir_tablegen(TATypes.cpp.inc -gen-typedef-defs)
+add_public_tablegen_target(COMETTensorAlgebraTypesIncGen)

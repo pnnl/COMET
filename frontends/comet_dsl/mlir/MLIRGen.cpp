@@ -1604,9 +1604,24 @@ namespace
       if (isDense(formats_str, ", ") == false)
       {
         /// BoolAttr is false because there is explicit sparse densor declaration.
-        /// SparseTensorDeclOp is not for temporaries in compound expressions
+        /// SparseTensorDeclOp is not for temporaries in compound expression
+        std::vector<int32_t> format = mlir::tensorAlgebra::getFormats(tensor_format, dims_sizes.size(), builder.getContext());
+        mlir::Type element_type;
+        switch (vartype.elt_ty)
+        {
+          case VarType::TY_FLOAT:
+            element_type =  builder.getF32Type();
+            break;
+          case VarType::TY_DOUBLE:
+            element_type = builder.getF64Type();
+            break;
+          case VarType::TY_INT:
+            element_type  = builder.getIntegerType(64);
+            break;
+        }
+        auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, dims_sizes, format);
         value = builder.create<SparseTensorDeclOp>(loc(tensordecl.loc()),
-                                                   tensor_type, labels, tensor_format, false);
+                                                   sp_tensor_type, labels, tensor_format, false);
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
         comet_vdump(value);
       }
@@ -1863,6 +1878,10 @@ namespace
         /// for SparseTensorDeclOp create
         mlir::StringRef format_strref = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
+
+        std::vector<int32_t> format = mlir::tensorAlgebra::getFormats(format_strref, result_dims.size(), builder.getContext());
+        mlir::Type element_type = builder.getF64Type();
+        auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, result_dims, format);
 
         /// no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
         /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries

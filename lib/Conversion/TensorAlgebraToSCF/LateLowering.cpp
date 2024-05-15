@@ -72,6 +72,7 @@ namespace
       FloatType f64Type = FloatType::getF64(ctx);
       IndexType indexType = IndexType::get(ctx);
       Type unrankedMemrefType_f64 = UnrankedMemRefType::get(f64Type, 0);
+      Type unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
 
       auto printTensorF64Func = FunctionType::get(ctx, {mlir::UnrankedMemRefType::get(f64Type, 0)}, {});
       auto printTensorIndexFunc = FunctionType::get(ctx, {mlir::UnrankedMemRefType::get(indexType, 0)}, {});
@@ -112,61 +113,38 @@ namespace
           module.push_back(print_func);
         }
 
+        std::string comet_print_i64Str = "comet_print_memref_i64";
+        if (!hasFuncDeclaration(module, comet_print_i64Str))
+        {
+          print_func = func::FuncOp::create(loc, comet_print_i64Str, printTensorIndexFunc, ArrayRef<NamedAttribute>{});
+          print_func.setPrivate();
+          module.push_back(print_func);
+        }
+
         if (inputType.isa<MemRefType>())
         {
           auto alloc_op = cast<memref::AllocOp>(op->getOperand(0).getDefiningOp());
           comet_vdump(alloc_op);
           auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
           rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
-        }
-        else
+        }else if (inputType.isa<TensorType>())
         {
-          /// If the Input type is tensor
-          if (inputType.isa<TensorType>())
-          {
-            auto rhs = op->getOperand(0);
-            auto tensor_type = llvm::cast<TensorType>(inputType);
-            auto memref_type = MemRefType::get(tensor_type.getShape(), tensor_type.getElementType());
-            auto buffer = rewriter.create<bufferization::ToMemrefOp>(loc, memref_type, rhs);
+          auto rhs = op->getOperand(0);
+          auto tensor_type = llvm::cast<TensorType>(inputType);
+          auto memref_type = MemRefType::get(tensor_type.getShape(), tensor_type.getElementType());
+          auto buffer = rewriter.create<bufferization::ToMemrefOp>(loc, memref_type, rhs);
+
+          if(llvm::isa<IndexType>(tensor_type.getElementType())){
+            auto u = rewriter.create<memref::CastOp>(loc, unrankedMemref_index, buffer);
+            rewriter.create<func::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
+          } else {
             auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, buffer);
             rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
           }
-          else if (inputType.isa<SparseTensorType>())
-          {
-            std::string comet_print_i64Str = "comet_print_memref_i64";
-            if (!hasFuncDeclaration(module, comet_print_i64Str))
-            {
-              print_func = func::FuncOp::create(loc, comet_print_i64Str, printTensorIndexFunc, ArrayRef<NamedAttribute>{});
-              print_func.setPrivate();
-              module.push_back(print_func);
-            }
-
-            auto sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp());
-            Type unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
-
-            auto rhs = op->getOperand(0).getDefiningOp();
-            for (int rsize = 0; rsize < sp_op.getDimArrayCount(); rsize += 2)
-            {
-              /// accessing xD_pos array and creating cast op for its alloc
-              auto xD_pos = rhs->getOperand(rsize).getDefiningOp();
-              auto alloc_rhs = cast<memref::AllocOp>(xD_pos->getOperand(0).getDefiningOp());
-              auto u = rewriter.create<memref::CastOp>(loc, unrankedMemref_index, alloc_rhs);
-              rewriter.create<func::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
-
-              /// accessing xD_crd array and creating cast op for its alloc
-              auto xD_crd = rhs->getOperand(rsize + 1).getDefiningOp();
-              alloc_rhs = cast<memref::AllocOp>(xD_crd->getOperand(0).getDefiningOp());
-              u = rewriter.create<memref::CastOp>(loc, unrankedMemref_index, alloc_rhs);
-              rewriter.create<func::CallOp>(loc, comet_print_i64Str, SmallVector<Type, 2>{}, ValueRange{u});
-            }
-
-            auto xD_value = rhs->getOperand(sp_op.getValueArrayPos()).getDefiningOp();
-            auto alloc_rhs = cast<memref::AllocOp>(xD_value->getOperand(0).getDefiningOp());
-            auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_rhs);
-            rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
-          }
-          else
-            llvm::errs() << __FILE__ << " " << __LINE__ << "Unknown Data type\n";
+        }
+        else
+        {
+          llvm::errs() << __FILE__ << " " << __LINE__ << "Unknown Data type\n";
         }
       }
 

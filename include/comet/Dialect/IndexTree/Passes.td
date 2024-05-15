@@ -55,13 +55,6 @@ def IndexTreeWorkspaceTranformations: Pass<"indextree-workspace-transformations"
   let dependentDialects = ["comet::IndexTreeDialect"];
 }
 
-def IndexTreeLoopInvariantCodeMotion: Pass<"indextree-loop-invariant-code-motion", "func::FuncOp"> {
-  let summary = "Detect and move loop invariant computation to outer most loop";
-  let description = [{}];
-  let constructor = "comet::createIndexTreeLoopInvariantCodeMotionPass()";
-  let dependentDialects = ["comet::IndexTreeDialect"];
-}
-
 def IndexTreeDomainInference : Pass<"indextree-domain-inference", "func::FuncOp"> {
     let summary = "Infer domain of index variables";
     let description = [{
@@ -91,6 +84,12 @@ def IndexTreeSymbolicComputePass : Pass<"indextree-symbolic-compute", "func::Fun
     }];
 
     let constructor = "comet::createIndexTreeSymbolicComputePass()";
+}
+
+def IndexTreeInliningPass : Pass <"indextree-inlining", "func::FuncOp"> {
+    let summary = "Inline index tree";
+    let description = [{}];
+    let constructor = "comet::createIndexTreeInliningPass()";
 }
 
 #endif /// COMET_DIALECT_INDEXTREE_PASSES

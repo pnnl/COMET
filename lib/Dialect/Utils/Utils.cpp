@@ -483,14 +483,14 @@ namespace mlir
     }
 
     /// for string delimiter
-    std::vector<std::string> stringSplit(std::string s, std::string delimiter)
+    std::vector<llvm::StringRef> stringSplit(llvm::StringRef s, llvm::StringRef delimiter)
     {
       /// comet_debug() << "split formats string: " << s << ", deli: "<< delimiter << ".\n";
 
-      std::vector<std::string> res;
+      std::vector<llvm::StringRef> res;
 
       std::string format = "";
-      for (unsigned int i = 0; i < s.length(); i++)
+      for (unsigned int i = 0; i < s.size(); i++)
       {
         comet_debug() << "s[" << i << "]: " << s[i] << "\n";
         if (s[i] != delimiter[0] && s[i] != delimiter[1])
@@ -509,13 +509,13 @@ namespace mlir
       res.push_back(format);
 
       comet_debug() << "The final format: ";
-      print_vector<std::string>(res);
+      print_vector<llvm::StringRef>(res);
       return res;
     }
 
-    std::vector<std::vector<std::string>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms)
+    std::vector<std::vector<llvm::StringRef>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms)
     {
-      std::vector<std::vector<std::string>> allFormats(allPerms.size());
+      std::vector<std::vector<llvm::StringRef>> allFormats(allPerms.size());
       /// format with each input matrix: ["CSR", "D", "D"] SpMM
       for (unsigned int i = 0; i < opFormatsArrayAttr.size(); i++)
       {
@@ -814,7 +814,7 @@ namespace mlir
       return false;
     }
 
-    std::vector<Value> getFormatsValue(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IndexType indexType)
+    std::vector<Value> getFormatsValue(llvm::StringRef formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IndexType indexType)
     {
       Value format_unk = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(-1));
       Value format_dense = rewriter.create<ConstantOp>(loc, indexType, rewriter.getIndexAttr(0));
@@ -829,42 +829,42 @@ namespace mlir
       { /// 2D
         comet_debug() << " 2D\n";
         /// Value dim0_format, dim1_format;
-        if (formats_str.compare(0, 3, "CSR") == 0)
+        if (formats_str.compare("CSR") == 0)
         {
           dim_format.push_back(format_dense);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 4, "DCSR") == 0)
+        else if (formats_str.compare("DCSR") == 0)
         {
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 3, "COO") == 0)
+        else if (formats_str.compare("COO") == 0)
         { /// COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 3, "ELL") == 0)
+        else if (formats_str.compare("ELL") == 0)
         { /// ELL
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 4, "BCSR") == 0)
+        else if (formats_str.compare("BCSR") == 0)
         { /// BCSR
           dim_format.push_back(format_dense);
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
         }
-        else if (formats_str.compare(0, 3, "CSB") == 0)
+        else if (formats_str.compare("CSB") == 0)
         { /// CSB
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
@@ -873,22 +873,22 @@ namespace mlir
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
-          std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
+          std::vector<llvm::StringRef> format_vec = stringSplit(formats_str, ", ");
           for (auto n : format_vec)
           {
-            if (n.compare(0, 1, "D") == 0)
+            if (n.compare("D") == 0)
             {
               dim_format.push_back(format_dense);
             }
-            else if (n.compare(0, 2, "CU") == 0)
+            else if (n.compare("CU") == 0)
             {
               dim_format.push_back(format_compressed);
             }
-            else if (n.compare(0, 2, "CN") == 0)
+            else if (n.compare("CN") == 0)
             {
               dim_format.push_back(format_compressednonunique);
             }
-            else if (n.compare(0, 1, "S") == 0)
+            else if (n.compare("S") == 0)
             {
               dim_format.push_back(format_singleton);
             }
@@ -903,7 +903,7 @@ namespace mlir
       { /// 3D
         comet_debug() << " 3D\n";
         /// Value dim0_format, dim1_format, dim2_format;
-        if (formats_str.compare(0, 3, "CSF") == 0)
+        if (formats_str.compare("CSF") == 0)
         {
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
@@ -912,7 +912,7 @@ namespace mlir
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 11, "ModeGeneric") == 0)
+        else if (formats_str.compare("ModeGeneric") == 0)
         {
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
@@ -921,7 +921,7 @@ namespace mlir
           dim_format.push_back(format_dense);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 3, "COO") == 0)
+        else if (formats_str.compare("COO") == 0)
         { /// COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
@@ -932,25 +932,25 @@ namespace mlir
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
-          std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
+          std::vector<llvm::StringRef> format_vec = stringSplit(formats_str, ", ");
           comet_debug() << " format_vec.size(): " << format_vec.size() << " \n";
 
           for (auto n : format_vec)
           {
             comet_debug() << "Current format attribute: " << n << "---\n";
-            if (n.compare(0, 1, "D") == 0)
+            if (n.compare("D") == 0)
             {
               dim_format.push_back(format_dense);
             }
-            else if (n.compare(0, 2, "CU") == 0)
+            else if (n.compare("CU") == 0)
             {
               dim_format.push_back(format_compressed);
             }
-            else if (n.compare(0, 2, "CN") == 0)
+            else if (n.compare("CN") == 0)
             {
               dim_format.push_back(format_compressednonunique);
             }
-            else if (n.compare(0, 1, "S") == 0)
+            else if (n.compare("S") == 0)
             {
               dim_format.push_back(format_singleton);
             }
@@ -977,7 +977,7 @@ namespace mlir
       return dim_format;
     }
 
-    std::vector<Value> getFormatsValueInt(std::string formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IntegerType intType)
+    std::vector<Value> getFormatsValueInt(llvm::StringRef formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IntegerType intType)
     {
       Value format_unk = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, -1));
       Value format_dense = rewriter.create<ConstantOp>(loc, intType, rewriter.getIntegerAttr(intType, 0));
@@ -992,42 +992,42 @@ namespace mlir
       { /// 2D
         comet_debug() << " 2D\n";
         /// Value dim0_format, dim1_format;
-        if (formats_str.compare(0, 3, "CSR") == 0)
+        if (formats_str.compare("CSR") == 0)
         {
           dim_format.push_back(format_dense);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 4, "DCSR") == 0)
+        else if (formats_str.compare("DCSR") == 0)
         {
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 3, "COO") == 0)
+        else if (formats_str.compare("COO") == 0)
         { /// COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 3, "ELL") == 0)
+        else if (formats_str.compare("ELL") == 0)
         { /// ELL
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 4, "BCSR") == 0)
+        else if (formats_str.compare("BCSR") == 0)
         { /// BCSR
           dim_format.push_back(format_dense);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
         }
-        else if (formats_str.compare(0, 3, "CSB") == 0)
+        else if (formats_str.compare("CSB") == 0)
         { /// CSB
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
@@ -1036,22 +1036,22 @@ namespace mlir
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
-          std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
+          std::vector<llvm::StringRef> format_vec = stringSplit(formats_str, ", ");
           for (auto n : format_vec)
           {
-            if (n.compare(0, 1, "D") == 0)
+            if (n.compare("D") == 0)
             {
               dim_format.push_back(format_dense);
             }
-            else if (n.compare(0, 2, "CU") == 0)
+            else if (n.compare("CU") == 0)
             {
               dim_format.push_back(format_compressed);
             }
-            else if (n.compare(0, 2, "CN") == 0)
+            else if (n.compare("CN") == 0)
             {
               dim_format.push_back(format_compressednonunique);
             }
-            else if (n.compare(0, 1, "S") == 0)
+            else if (n.compare("S") == 0)
             {
               dim_format.push_back(format_singleton);
             }
@@ -1066,7 +1066,7 @@ namespace mlir
       { /// 3D
         comet_debug() << " 3D\n";
         /// Value dim0_format, dim1_format, dim2_format;
-        if (formats_str.compare(0, 3, "CSF") == 0)
+        if (formats_str.compare("CSF") == 0)
         {
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
@@ -1075,7 +1075,7 @@ namespace mlir
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 11, "ModeGeneric") == 0)
+        else if (formats_str.compare("ModeGeneric") == 0)
         {
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
@@ -1084,7 +1084,7 @@ namespace mlir
           dim_format.push_back(format_dense);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 3, "COO") == 0)
+        else if (formats_str.compare("COO") == 0)
         { /// COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
@@ -1095,25 +1095,25 @@ namespace mlir
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
-          std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
+          std::vector<llvm::StringRef> format_vec = stringSplit(formats_str, ", ");
           comet_debug() << " format_vec.size(): " << format_vec.size() << " \n";
           /// print_vector<std::string>(format_vec);
           for (auto n : format_vec)
           {
             comet_debug() << "Current format attribute: " << n << "---\n";
-            if (n.compare(0, 1, "D") == 0)
+            if (n.compare("D") == 0)
             {
               dim_format.push_back(format_dense);
             }
-            else if (n.compare(0, 2, "CU") == 0)
+            else if (n.compare("CU") == 0)
             {
               dim_format.push_back(format_compressed);
             }
-            else if (n.compare(0, 2, "CN") == 0)
+            else if (n.compare("CN") == 0)
             {
               dim_format.push_back(format_compressednonunique);
             }
-            else if (n.compare(0, 1, "S") == 0)
+            else if (n.compare("S") == 0)
             {
               dim_format.push_back(format_singleton);
             }
@@ -1142,57 +1142,57 @@ namespace mlir
 
     // TODO (alokvk2): Not good to have this replicated 3 times. Ideally this is only used for "special" formats (i.e. CSR, COO etc.)
     // And this converts it to a vector of TAFormatAttrs.
-    std::vector<Attribute> getFormatsAttr(std::string formats_str, int rank_size, MLIRContext* ctx)
+    std::vector<int32_t> getFormats(llvm::StringRef formats_str, int rank_size, MLIRContext* ctx)
     {
-      auto format_unk = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::UNK);
-      auto format_dense = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::D);
-      auto format_compressed = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::CU);
-      auto format_compressednonunique = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::CN);
-      auto format_singleton = TensorFormatEnumAttr::get(ctx, TensorFormatEnum::S);
+      auto format_unk =  (int32_t)TensorFormatEnum::UNK;
+      auto format_dense = (int32_t)TensorFormatEnum::D;
+      auto format_compressed = (int32_t)TensorFormatEnum::CU;
+      auto format_compressednonunique = (int32_t)TensorFormatEnum::CN;
+      auto format_singleton = (int32_t)TensorFormatEnum::S;
       /// read_input_sizes_2D_f64 or read_input_sizes_3D_f64
       comet_debug() << "\n";
-      std::vector<Attribute> dim_format;
+      std::vector<int32_t> dim_format;
 
       if (rank_size == 2)
       { /// 2D
         comet_debug() << " 2D\n";
         /// Value dim0_format, dim1_format;
-        if (formats_str.compare(0, 3, "CSR") == 0)
+        if (formats_str.compare("CSR") == 0)
         {
           dim_format.push_back(format_dense);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 4, "DCSR") == 0)
+        else if (formats_str.compare("DCSR") == 0)
         {
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 3, "COO") == 0)
+        else if (formats_str.compare("COO") == 0)
         { /// COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 3, "ELL") == 0)
+        else if (formats_str.compare("ELL") == 0)
         { /// ELL
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 4, "BCSR") == 0)
+        else if (formats_str.compare("BCSR") == 0)
         { /// BCSR
           dim_format.push_back(format_dense);
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
         }
-        else if (formats_str.compare(0, 3, "CSB") == 0)
+        else if (formats_str.compare("CSB") == 0)
         { /// CSB
           dim_format.push_back(format_dense);
           dim_format.push_back(format_dense);
@@ -1201,22 +1201,22 @@ namespace mlir
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
-          std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
+          std::vector<llvm::StringRef> format_vec = stringSplit(formats_str, ", ");
           for (auto n : format_vec)
           {
-            if (n.compare(0, 1, "D") == 0)
+            if (n.compare("D") == 0)
             {
               dim_format.push_back(format_dense);
             }
-            else if (n.compare(0, 2, "CU") == 0)
+            else if (n.compare("CU") == 0)
             {
               dim_format.push_back(format_compressed);
             }
-            else if (n.compare(0, 2, "CN") == 0)
+            else if (n.compare("CN") == 0)
             {
               dim_format.push_back(format_compressednonunique);
             }
-            else if (n.compare(0, 1, "S") == 0)
+            else if (n.compare("S") == 0)
             {
               dim_format.push_back(format_singleton);
             }
@@ -1231,7 +1231,7 @@ namespace mlir
       { /// 3D
         comet_debug() << " 3D\n";
         /// Value dim0_format, dim1_format, dim2_format;
-        if (formats_str.compare(0, 3, "CSF") == 0)
+        if (formats_str.compare("CSF") == 0)
         {
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
@@ -1240,7 +1240,7 @@ namespace mlir
           dim_format.push_back(format_compressed);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 11, "ModeGeneric") == 0)
+        else if (formats_str.compare("ModeGeneric") == 0)
         {
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
@@ -1249,7 +1249,7 @@ namespace mlir
           dim_format.push_back(format_dense);
           dim_format.push_back(format_unk);
         }
-        else if (formats_str.compare(0, 3, "COO") == 0)
+        else if (formats_str.compare("COO") == 0)
         { /// COO
           dim_format.push_back(format_compressednonunique);
           dim_format.push_back(format_unk);
@@ -1260,25 +1260,25 @@ namespace mlir
         }
         else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
         {
-          std::vector<std::string> format_vec = stringSplit(formats_str, ", ");
+          std::vector<llvm::StringRef> format_vec = stringSplit(formats_str, ", ");
           comet_debug() << " format_vec.size(): " << format_vec.size() << " \n";
           /// print_vector<std::string>(format_vec);
           for (auto n : format_vec)
           {
             comet_debug() << "Current format attribute: " << n << "---\n";
-            if (n.compare(0, 1, "D") == 0)
+            if (n.compare("D") == 0)
             {
               dim_format.push_back(format_dense);
             }
-            else if (n.compare(0, 2, "CU") == 0)
+            else if (n.compare("CU") == 0)
             {
               dim_format.push_back(format_compressed);
             }
-            else if (n.compare(0, 2, "CN") == 0)
+            else if (n.compare("CN") == 0)
             {
               dim_format.push_back(format_compressednonunique);
             }
-            else if (n.compare(0, 1, "S") == 0)
+            else if (n.compare("S") == 0)
             {
               dim_format.push_back(format_singleton);
             }

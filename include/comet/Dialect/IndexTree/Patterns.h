@@ -1,4 +1,4 @@
-//===- TATypes.h - Types definitions for the TensorAlgebra IR ----------------------===//
+//===- Patterns.h - Conversion Pass Construction and Registration -----------===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -19,39 +19,22 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// =============================================================================
-//
-// This file implements the IR Dialect Types for Tensor Algebra Dialect.
-//
 //===----------------------------------------------------------------------===//
 
-#ifndef TENSORALGEBRA_TYPES_H_
-#define TENSORALGEBRA_TYPES_H_
+#ifndef COMET_DIALECT_INDEXTREE_PATTERNS_H
+#define COMET_DIALECT_INDEXTREE_PATTERNS_H
 
-#include "mlir/IR/Dialect.h"
-#include "mlir/IR/Types.h"
+#include "mlir/Transforms/DialectConversion.h"
 
 namespace mlir
 {
-  class MLIRContext;
-
-  namespace tensorAlgebra
-  {
-
-    class RangeType : public Type::TypeBase<RangeType, Type, TypeStorage>
+    namespace indexTree
     {
-    public:
-      /// Used for generic hooks in TypeBase.
-      using Base::Base;
+        void populateDomainInferencePatterns(MLIRContext *context, RewritePatternSet &patterns);
+        void populateDomainConcretizationPatterns(MLIRContext *context, RewritePatternSet &patterns);
+        void populateIndexTreeTypeConversionPatterns(MLIRContext *context, RewritePatternSet &patterns, TypeConverter &typeConverter, ConversionTarget& target);
+        void populateIndexTreeInliningPatterns(MLIRContext *context, RewritePatternSet &patterns);
+    }
+}
 
-      static RangeType get(MLIRContext *context)
-      {
-        /// Custom, uniq'ed construction in the MLIRContext.
-        return Base::get(context);
-      }
-    };
-
-  } /// namespace tensorAlgebra
-} /// namespace mlir
-
-#endif /// TENSORALGEBRA_TYPES_H_
+#endif // COMET_DIALECT_INDEXTREE_PASSES_H

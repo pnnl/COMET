@@ -91,4 +91,18 @@ def ConvertTensorAlgebraToSCF : Pass<"convert-ta-to-scf"> {
   ];
 }
 
+def SparseTensorConversionPass : Pass<"convert-sparse-tensor"> {
+  let summary = "Lowers operations on Tensor Algebra sparse tensors to mlir tensor operations";
+  let description = [{}];
+  
+  let constructor = "comet::createSparseTensorConversionPass()";
+
+  let dependentDialects = [
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "index::IndexDialect",
+    "tensor::TensorDialect"
+  ];
+}
+
 #endif /// COMET_CONVERSION_PASSES

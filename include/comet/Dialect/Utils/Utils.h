@@ -105,7 +105,7 @@ namespace mlir
     void print_vector_value(std::vector<Value> vec);
 
     std::string dump2str(Value t);
-    std::vector<std::string> stringSplit(std::string s, std::string delimiter);
+    std::vector<llvm::StringRef> stringSplit(llvm::StringRef s, llvm::StringRef delimiter);
     std::vector<unsigned> getReverseIdentityPermutation(size_t size);
     std::vector<unsigned> getIdentityPermutation(size_t size);
 
@@ -121,7 +121,7 @@ namespace mlir
     std::vector<unsigned> getFreeIndices(std::vector<unsigned> rhs_perm, std::vector<unsigned> lhs_perm);
     std::vector<unsigned> getSumIndices(std::vector<unsigned> rhs_perm, std::vector<unsigned> rhs_perm_free);
     std::vector<unsigned> getIndexIterateOrder(std::vector<unsigned> rhs1_perm, std::vector<unsigned> rhs2_perm);
-    std::vector<std::vector<std::string>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms);
+    std::vector<std::vector<llvm::StringRef>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms);
     bool checkIsElementwise(std::vector<std::vector<int>> allPerms);
     bool checkIsMixedMode(std::vector<std::vector<std::string>> formats);
     bool checkIsDense(std::vector<std::string> format);
@@ -129,11 +129,11 @@ namespace mlir
     bool isDense(std::string s, std::string delim);
     bool isMergedIndex(std::vector<std::string> format_vec, int cur_idx, int sumIndex);
 
-    std::vector<Value> getFormatsValue(std::string formats_str, int rank_size,
+    std::vector<Value> getFormatsValue(llvm::StringRef formats_str, int rank_size,
                                        PatternRewriter &rewriter, Location loc, IndexType indexType);
-    std::vector<Value> getFormatsValueInt(std::string formats_str, int rank_size,
+    std::vector<Value> getFormatsValueInt(llvm::StringRef formats_str, int rank_size,
                                           PatternRewriter &rewriter, Location loc, IntegerType intType);
-    std::vector<Attribute> getFormatsAttr(std::string formats_str, int rank_size, MLIRContext* ctx);
+    std::vector<int32_t> getFormats(llvm::StringRef formats_str, int rank_size, MLIRContext* ctx);
 
     double loopCostHeuristic(const std::vector<unsigned> &loopOrder, size_t dim_,
                              std::vector<unsigned> &sourceOrder, std::vector<unsigned> &destOrder);

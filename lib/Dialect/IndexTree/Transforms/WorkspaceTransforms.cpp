@@ -26,6 +26,7 @@
 
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
+#include "comet/Dialect/IndexTree/Patterns.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
@@ -33,6 +34,8 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+
 
 #include "llvm/Support/Debug.h"
 #include <iostream>
@@ -46,6 +49,7 @@
 #include <string>
 #include <utility>
 #include <queue>
+#include <tuple>
 
 using namespace mlir;
 using namespace mlir::bufferization;
@@ -92,11 +96,11 @@ namespace
 
 struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
   TransformSparseOutput(MLIRContext *context)
-    : OpRewritePattern<IndexTreeComputeOp>(context, /*benefit=*/1) {}
+    : OpRewritePattern<IndexTreeComputeOp>(context, /*benefit=*/0.5) {}
 
   mlir::LogicalResult
   matchAndRewrite(IndexTreeComputeOp compute_op, mlir::PatternRewriter &rewriter) const override {
-    IndexTreeLHSOperandOp lhs_op = op.getLhs().getDefiningOp<IndexTreeLHSOperandOp>();
+    IndexTreeLHSOperandOp lhs_op = compute_op.getLhs().getDefiningOp<IndexTreeLHSOperandOp>();
     Value old_output = lhs_op.getTensor();
 
     // Check to see if output is sparse
@@ -104,13 +108,13 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
       return failure();
 
     // Check to see if there are "redundant" inserts
-    llvm::SmallDenseMap<Value, std:pair<Value, Value>> index_vars;
+    llvm::SmallDenseMap<Value, IndexTreeIndexToTensorOp> index_vars;
     for(auto pos : lhs_op.getPos()) {
       auto index_to_tensor = pos.getDefiningOp<IndexTreeIndexToTensorOp>();
       if(index_to_tensor){
         index_vars.insert(std::make_pair(
           index_to_tensor.getIndex(),
-          std::make_pair(index_to_tensor.getPos(), index_to_tensor.getCrd())
+          index_to_tensor
         ));
       }
     }
@@ -126,15 +130,14 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
     
     // Find output dimensions after reduction variable
     // to include in workspace
-    llvm::SmallVector<Value> workspace_sizes;
-    llvm::SmallVector<Value> pos;
-    llvm::SmallVector<Value> crds;
+    unsigned workspace_rank = 0;
+    llvm::SmallVector<IndexTreeIndexToTensorOp> accesses;
+    llvm::SmallVector<int32_t> dims;
     while(index_vars.find(parent) != index_vars.end()){
-      auto pos_crd = index_vars[parent];
-      ConcreteDomain domain = node.getDomain().getDefiningOp<ConcreteDomain>(); 
-      workspace_sizes.push_back(domain.getDimensionSize());
-      pos.push_back(pos_crd.first);
-      crds.push_back(pos_crd.second);
+      auto access_op = index_vars[parent];
+      accesses.push_back(access_op);
+      dims.push_back(access_op.getDim());
+      workspace_rank++;
 
       parent = node.getParent();
       node = parent.getDefiningOp<IndexTreeIndicesOp>();
@@ -143,22 +146,57 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
       }    
     }
     //Match success!
+    // Parent contains reduction variable
 
     // Declare the workspace outside of the tree
-    std::reverse(workspace_sizes.begin(), workspace_sizes.end());
-    std::reverse(pos);
-    std::reverse(crds);
-    auto tree_op = compute_op.getParentOfType<IndexTreeOp>();
+    auto loc = compute_op.getLoc();
+    auto tree_op = compute_op->getParentOfType<IndexTreeOp>();
     rewriter.setInsertionPoint(tree_op);
-    llvm::SmallVector type_param(workspace_sizes.size(), ShapedType::kDyanmic);
-    Type workspace_type = WorkspaceTensor::get(type_param);
-    Value workspace = rewriter.create<TensorAllocWorkspaceOp>(op.getLoc(), workspace_type, workspace_sizes);
+    Type element_type = llvm::cast<SparseTensorType>(old_output.getType()).getElementType();
+    llvm::SmallVector<int64_t> dim_sizes(workspace_rank, ShapedType::kDynamic);
+    Type workspace_type = WorkspaceType::get(compute_op.getContext(), element_type, dim_sizes);
+    std::reverse(dims.begin(), dims.end());
+    Value workspace = rewriter.create<AllocWorkspaceOp>(loc, workspace_type, old_output, rewriter.getI32ArrayAttr(dims));
+
+    
+    // Clean the workspace before use
+    rewriter.setInsertionPoint(node);
+    Value clean_workspace = rewriter.create<IndexTreeCleanWorkspaceOp>(loc, workspace_type, node.getParent(), workspace);
 
     // Create new compute op
     auto context = getContext();
     rewriter.setInsertionPoint(compute_op);
+    Type index_type = rewriter.getIndexType();
+    llvm::SmallVector<Value> pos;
+    llvm::SmallVector<Value> crds;
+    std::reverse(accesses.begin(), accesses.end());
+    int32_t dim = 0;
+    Value prev_dim = nullptr;
+    for(auto access_op : accesses)
+    {
+      auto new_access_op = rewriter.create<IndexTreeIndexToTensorOp>(
+        loc,
+        TypeRange({index_type, index_type}),
+        clean_workspace,
+        access_op.getIndex(),
+        rewriter.getUI32IntegerAttr(dim),
+        prev_dim
+      );
+
+      pos.push_back(new_access_op.getPos());
+      crds.push_back(new_access_op.getCrd());
+      prev_dim = new_access_op.getPos();
+      dim++;
+    }
+
     Type operand_type = OperandType::get(context);
-    Value new_lhs = rewriter.create<IndexTreeLHSOperandOp>(loc, operand_type, workspace, pos, crds);
+    Value new_lhs = rewriter.create<IndexTreeLHSOperandOp>(
+      loc, 
+      operand_type,
+      clean_workspace,
+      pos,
+      crds
+    );
     Value new_workspace = rewriter.create<IndexTreeComputeOp>(
       loc,
       workspace_type,
@@ -168,16 +206,132 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
       compute_op.getSemiringAttr()
     );
 
-    Attribute noop_attr = rewriter.getStringAttr("noop_noop");
-    rewriter.replaceOp<IndexTreeComputeOp>(
+    pos.clear();
+    crds.clear();
+    dim = 0;
+    prev_dim = nullptr;
+    for(auto access_op : accesses)
+    {
+      auto new_access_op = rewriter.create<IndexTreeIndexToTensorOp>(
+        loc,
+        TypeRange({index_type, index_type}),
+        new_workspace,
+        access_op.getIndex(),
+        rewriter.getUI32IntegerAttr(dim),
+        prev_dim
+      );
+
+      pos.push_back(new_access_op.getPos());
+      crds.push_back(new_access_op.getCrd());
+      prev_dim = new_access_op.getPos();
+      dim++;
+    }
+
+    Value new_rhs = rewriter.create<IndexTreeOperandOp>(
       loc,
+      operand_type,
+      new_workspace,
+      pos,
+      crds
+    );
+
+    rewriter.replaceOpWithNewOp<IndexTreeComputeOp>(
+      compute_op,
       old_output.getType(),
       compute_op.getParent(),
       compute_op.getLhs(),
-      new_workspace,
-      noop_attr
+      ValueRange{new_rhs,},
+      "noop_noop"
     );
 
+    return success();    
+  }
+};
+
+struct MoveInvariantComputeOp : public OpRewritePattern<IndexTreeComputeOp> {
+  MoveInvariantComputeOp (MLIRContext *context)
+    : OpRewritePattern<IndexTreeComputeOp>(context, /*benefit=*/2) {}
+
+  mlir::LogicalResult
+  matchAndRewrite(IndexTreeComputeOp compute_op, mlir::PatternRewriter &rewriter) const override {
+    // Collect all indices used in this compute expression
+    llvm::SmallDenseSet<Value> used_indices;
+    IndexTreeLHSOperandOp lhs_op = compute_op.getLhs().getDefiningOp<IndexTreeLHSOperandOp>();
+    for(auto pos : lhs_op.getPos()) {
+      auto index_to_tensor = pos.getDefiningOp<IndexTreeIndexToTensorOp>();
+      if(!index_to_tensor)
+        return failure();
+      used_indices.insert(index_to_tensor.getIndex());
+    }
+    
+    auto rhs_operands = compute_op.getRhs();
+    for(Value rhs : rhs_operands) {
+      IndexTreeOperandOp operand_op = rhs.getDefiningOp<IndexTreeOperandOp>();
+      for(auto pos : operand_op.getPos()) {
+        auto index_to_tensor = pos.getDefiningOp<IndexTreeIndexToTensorOp>();
+        if(!index_to_tensor)
+          return failure();
+        used_indices.insert(index_to_tensor.getIndex());
+      }
+    }
+
+    // We want to find all of the indices that this compute op is nested under
+    // and check if they are used in this compute expression. Every time we come
+    // across an unused index, the index nodes that we have seen so far need to be copied
+    // to form a new branch of the tree. We also keep track of the parent at the fork
+    llvm::SmallVector<Value> seen_indices;
+    llvm::SmallVector<Value> indices_to_copy;
+    Value parent = compute_op.getParent();
+    Value fork = parent;
+    IndexTreeIndicesOp node = parent.getDefiningOp<IndexTreeIndicesOp>();
+    while(node) {
+      if(used_indices.find(parent) != used_indices.end()) {
+        // Used index variable
+        seen_indices.push_back(parent);
+      } else {
+        // Unused index variable
+        fork = node.getParent();
+        indices_to_copy.insert(indices_to_copy.begin(), seen_indices.rbegin(), seen_indices.rend());
+        seen_indices.clear();
+      }
+
+      parent = node.getParent();
+      node = parent.getDefiningOp<IndexTreeIndicesOp>();
+    }
+
+    if(fork == compute_op.getParent()) {
+      return failure(); // Match failed, no indces to move.
+    }
+
+    // Success!
+    IRMapping map;
+    auto context = rewriter.getContext();
+    auto loc = compute_op.getLoc();
+    IndexNodeType index_node_type = IndexNodeType::get(context); 
+    parent = fork;
+    for(auto index : indices_to_copy)
+    {
+      Value new_index = rewriter.create<IndexTreeIndicesOp>(loc, index_node_type, parent);
+      map.map(index, new_index);
+      parent = new_index;
+    }
+
+    for(auto pos : lhs_op.getPos()) {
+      Operation* index_to_tensor = pos.getDefiningOp();
+      rewriter.clone(*index_to_tensor, map);
+    }
+    rewriter.clone(*lhs_op.getOperation(), map);
+    
+    for(Value rhs : rhs_operands) {
+      IndexTreeOperandOp operand_op = rhs.getDefiningOp<IndexTreeOperandOp>();
+      for(auto pos : operand_op.getPos()) {
+        Operation* index_to_tensor = pos.getDefiningOp();
+        rewriter.clone(*index_to_tensor, map);
+      }
+      rewriter.clone(*operand_op.getOperation(), map);
+    }
+    Operation* new_compute_op = rewriter.clone(*compute_op.getOperation(), map);
+    rewriter.replaceOp(compute_op, new_compute_op->getResults());
     return success();    
   }
 };
@@ -186,13 +340,10 @@ void IndexTreeWorkspaceTransformationsPass::runOnOperation()
 {
   comet_debug() << __FILE__ << " " << __LINE__ << " starting CompressedWorkspaceTransforms pass \n";
   mlir::RewritePatternSet workspace_transformation_patterns(&getContext());
-  workspace_transformation_patterns.add<TransformSparseOutput>(&getContext());
 
-  // Add patterns to move invariant compute ops out of a loop and infer new variables
-  indexTree::populateLoopInvariantCodeMotionPatterns(&getContext(), code_motion_patterns);
-  indexTree::populateDomainInferencePatterns(&getContext(), code_motion_patterns);
-  indexTree::populateDomainConcretizationPatterns(&getContext(), code_motion_patterns);
-
+  workspace_transformation_patterns.add<TransformSparseOutput, MoveInvariantComputeOp>(&getContext());
+  indexTree::populateDomainInferencePatterns(&getContext(), workspace_transformation_patterns); //For new index variables
+  indexTree::populateDomainConcretizationPatterns(&getContext(), workspace_transformation_patterns);
   mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(workspace_transformation_patterns));
   comet_debug() << __FILE__ << " " << __LINE__ << " ending CompressedWorkspaceTransforms pass \n";
 }

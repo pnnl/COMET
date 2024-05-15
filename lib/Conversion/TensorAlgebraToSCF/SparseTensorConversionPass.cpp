@@ -2,6 +2,8 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
+#include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
+#include "comet/Dialect/IndexTree/Patterns.h"
 
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Index/IR/IndexAttrs.h"
@@ -10,72 +12,894 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Dialect/Func/Transforms/DecomposeCallGraphTypes.h"
+#include "mlir/Dialect/Func/Transforms/FuncConversions.h"
+#include "mlir/Dialect/SCF/Transforms/Patterns.h"
 #include "mlir/Pass/Pass.h"
 
-/** Derived from mlir upstream SparseTensorConversion pass */
-/** Significant credit goes to all those authors. */
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/ScopedPrinter.h"
 
 using namespace mlir;
 using namespace mlir::tensorAlgebra;
 
+#define DEBUG_TYPE "sparse_tensor"
+
+namespace mlir {
+  namespace comet{
+    #define GEN_PASS_DEF_SPARSETENSORCONVERSIONPASS
+    #include "comet/Conversion/Passes.h.inc"
+  }
+}
+
 /** Helper structures to turn sparse tensor into pointers */
-struct {
-  Value pos_size;
+struct Dimension {
+  Value dim_size;
+  Value insert_pos;
+  TensorFormatEnum format;
+
   Value pos;
-  Value crd_size;
+  Value pos_size;
   Value crd;
+  Value crd_size;
 
-  bool has_tile;
-  Value tile_pos_size;
-  Value tile_pos;
-  Value tile_crd_size;
-  Value tile_crd;  
-} Dimension;
+  bool has_block;
+  Value block_pos;
+  Value block_pos_size;
+  Value block_crd; 
+  Value block_crd_size;
+   
+};
 
-struct {
-  Dimension* dims;
-  Value val_size;
+struct SparseTensor {
+  SmallVector<Dimension, 3> dims;
   Value vals;
-} SparseTensor;
+  Value val_size;
+};
 
-static void parse_sparse_tensor_args(SparseTensorType type, ArrayRef<Value> args, SpraseTensor& result)
+struct Workspace {
+    Value workspace;
+    Value mark_value;
+    Value mark_array;
+    Value num_crds;
+    Value crds;
+};
+
+static bool unpack_sparse_tensor(Value sparse_tensor, SparseTensor& result)
 {
   /** Helper function to turn arguments from an unrealized cast to sparse tensor */
+  if (auto cast =
+          sparse_tensor.getDefiningOp<UnrealizedConversionCastOp>()) {
+    SparseTensorType type = llvm::dyn_cast<SparseTensorType>(sparse_tensor.getType());
+    if(!type)
+      return false;
+
+    auto format = type.getFormat();
+    auto dim_sizes = type.getDims();
+    auto cur_arg = cast.getInputs().begin();
+    for(unsigned i = 0; i < dim_sizes.size(); i++){
+      Dimension d;
+      d.dim_size = *cur_arg;
+      cur_arg++;
+      d.insert_pos = *cur_arg;
+      cur_arg++;
+      d.format = (TensorFormatEnum)format[2 * i];
+      switch(d.format){
+        case TensorFormatEnum::D: {
+          d.pos = *cur_arg;
+          cur_arg++;
+          d.pos_size = *cur_arg;
+          cur_arg++;
+          break;
+        }
+        case TensorFormatEnum::CU:
+        case TensorFormatEnum::CN: {
+          d.pos = *cur_arg;
+          cur_arg++;
+          d.pos_size = *cur_arg;
+          cur_arg++;
+
+          d.crd = *cur_arg;
+          cur_arg++;
+          d.crd_size = *cur_arg;
+          cur_arg++;
+          break;
+        }
+        case TensorFormatEnum::S: {
+          d.crd = *cur_arg;
+          cur_arg++;
+          d.crd_size = *cur_arg;
+          cur_arg++;
+          break;
+        }
+        default: {
+          assert(false && "Could not unpack unknown format to sparse tensor.");
+        }
+      }
+      result.dims.push_back(d);
+    }
+    result.vals = *cur_arg;
+    cur_arg++;
+    result.val_size = *cur_arg;
+    return true;
+  }
+  return false;
+}
+
+static void pack_sparse_tensor(SparseTensorType type, SparseTensor& sparse_tensor, SmallVectorImpl<Value>& result)
+{
+  for(Dimension d : sparse_tensor.dims)
+  {
+    result.push_back(d.dim_size);
+    result.push_back(d.insert_pos);
+    switch(d.format){
+      case TensorFormatEnum::D: {
+        result.push_back(d.pos);
+        result.push_back(d.pos_size);
+        break;
+      }
+      case TensorFormatEnum::CU:
+      case TensorFormatEnum::CN: {
+        result.push_back(d.pos);
+        result.push_back(d.pos_size);
+        result.push_back(d.crd);
+        result.push_back(d.crd_size);
+        break;
+      }
+      case TensorFormatEnum::S: {
+        result.push_back(d.crd);
+        result.push_back(d.crd_size);
+        break;
+      }
+      default: {
+          assert(false && "Could not unpack unknown format to sparse tensor.");
+        }
+    }
+  }
+  result.push_back(sparse_tensor.vals);
+  result.push_back(sparse_tensor.val_size);
   return;
 }
 
+static bool unpack_workspace(Value workspace_val, Workspace& result)
+{
+  if (auto cast =
+          workspace_val.getDefiningOp<UnrealizedConversionCastOp>()) {
+    auto cur_arg = cast.getInputs().begin();
+    result.workspace = *cur_arg;
+    cur_arg++;
+    result.mark_value = *cur_arg;
+    cur_arg++;
+    result.mark_array = *cur_arg;
+    cur_arg++;
+    result.num_crds = *cur_arg;
+    cur_arg++;
+    result.crds = *cur_arg;
+    return true;
+  }
+  return false;
+
+}
+static void pack_workspace(WorkspaceType type, Workspace& workspace, SmallVectorImpl<Value>& result)
+{
+  result.push_back(workspace.workspace);
+  result.push_back(workspace.mark_value);
+  result.push_back(workspace.mark_array);
+  result.push_back(workspace.num_crds);
+  result.push_back(workspace.crds);
+}
+
 namespace {
-struct ConvertSpTensorInsertOp
-    : public OpRewritePattern<TensorInsertOp> {
-  using OpRewritePattern<TensorInsertOp>::OpRewritePattern;
-  ConvertTensorInsertOp(MLIRContext *context)
-      : OpRewritePattern(context) {}
+class ConvertSpTensorConstructOp
+    : public OpConversionPattern<SparseTensorConstructOp> {
+  using OpConversionPattern<SparseTensorConstructOp>::OpConversionPattern;
   LogicalResult
-  matchAndRewrite(scf::YieldOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const final {
+  matchAndRewrite(SparseTensorConstructOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    // This is unnecessarily complicated because sptensor_construct does not have named arguments
+    SparseTensor sp_tensor;
+    SparseTensorType sp_tensor_type = llvm::cast<SparseTensorType>(op->getResult(0).getType());
+    auto inputs = op.getIndices();
+    unsigned rank = sp_tensor_type.getDims().size();
+    for(unsigned i = 0; i < rank; i++)
+    {
+      Dimension d;
+      d.format = (TensorFormatEnum) sp_tensor_type.getFormat()[2 * i];
+      d.dim_size = inputs[(8 * rank) + 2 + i];
+      d.insert_pos = rewriter.create<index::ConstantOp>(op.getLoc(), rewriter.getIndexType(), rewriter.getIndexAttr(0));
+      d.pos = inputs[(4 * i)];
+      d.crd = inputs[(4 * i) + 1];
+      d.pos_size = inputs[(4 * rank) + 1 + (4 * i)];
+      d.crd_size = inputs[(4 * rank) + 1 + (4 * i) + 1];
+      sp_tensor.dims.push_back(d);
+    }
+
+    sp_tensor.vals = inputs[(4 * rank)];
+    sp_tensor.val_size = inputs[(8*rank)+1];
+
+    SmallVector<Value, 12> cast_args;
+    pack_sparse_tensor(sp_tensor_type, sp_tensor, cast_args);
+    rewriter.replaceOpWithNewOp<UnrealizedConversionCastOp>(op, sp_tensor_type, cast_args);
     return success();
   }
 };
 
-struct ConvertWorkspaceTensorInsertOp
-    : public OpRewritePattern<TensorInsertOp> {
-  using OpRewritePattern<TensorInsertOp>::OpRewritePattern;
-  ConvertTensorInsertOp(MLIRContext *context)
-      : OpRewritePattern(context) {}
+class ConvertSpTensorInsertOp
+    : public OpConversionPattern<TensorInsertOp> {
+  using OpConversionPattern<TensorInsertOp>::OpConversionPattern;
+  ConvertSpTensorInsertOp(MLIRContext *context)
+      : OpConversionPattern(context) {}
   LogicalResult
-  matchAndRewrite(scf::YieldOp op, OpAdaptor adaptor,
+  matchAndRewrite(tensorAlgebra::TensorInsertOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    if(!llvm::isa<SparseTensorType>(op.getTensor().getType())){
+      return failure();
+    }
+
+    SparseTensor sp_tensor;
+    TensorInsertOpAdaptor insertAdpator = llvm::cast<TensorInsertOpAdaptor>(adaptor);
+    if(!unpack_sparse_tensor(insertAdpator.getTensor(), sp_tensor)) {
+      return failure();
+    }
+
+    // Match successful!
+    auto loc = op.getLoc();
+    Type index_type = rewriter.getIndexType();
+    unsigned i = 0;
+    for(Dimension& dim : sp_tensor.dims) {
+      if(dim.format != TensorFormatEnum::D) {
+        Value crd_idx = insertAdpator.getPos()[i];
+        Value crd = insertAdpator.getCrds()[i];
+        Value crd_tensor = dim.crd;
+        Value crd_size = dim.crd_size;
+        crd_tensor = rewriter.create<tensor::InsertOp>(
+          loc,
+          crd_tensor.getType(),
+          crd,
+          crd_tensor,
+          crd_idx);
+        dim.crd = crd_tensor;
+
+        // TODO: This is wrong if we insert the same crd multiple times but format is CU?
+        Value inc = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
+        dim.insert_pos = rewriter.create<index::AddOp>(loc, index_type, dim.insert_pos, inc);
+
+        /** TODO: Implement tensor resize */
+        /** TODO: Insert into CSR only has to be done once per idx? */
+      }
+      
+      i++;
+    }
+    Value vals = sp_tensor.vals;
+    Value val_idx = insertAdpator.getPos()[insertAdpator.getPos().size() - 1];
+    vals = rewriter.create<tensor::InsertOp>(loc, 
+                                             vals.getType(),
+                                             insertAdpator.getValue(),
+                                             vals,
+                                             val_idx);
+    sp_tensor.vals = vals;
+    SparseTensorType sp_tensor_type = llvm::cast<SparseTensorType>(op.getTensor().getType());
+
+    SmallVector<Value, 12> cast_args;
+    pack_sparse_tensor(sp_tensor_type, sp_tensor, cast_args);
+    rewriter.replaceOpWithNewOp<UnrealizedConversionCastOp>(op, sp_tensor_type, cast_args);
+    return success();
+  }
+};
+
+class ConvertSpTensorExtractOp
+    : public OpConversionPattern<TensorExtractOp> {
+  using OpConversionPattern<TensorExtractOp>::OpConversionPattern;
+  ConvertSpTensorExtractOp(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(tensorAlgebra::TensorExtractOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    TensorExtractOpAdaptor extractAdaptor = llvm::cast<TensorExtractOpAdaptor>(adaptor);
+    if(!llvm::isa<SparseTensorType>(extractAdaptor.getTensor().getType())){
+      return failure();
+    }
+
+    SparseTensor sp_tensor;
+    if(!unpack_sparse_tensor(extractAdaptor.getTensor(), sp_tensor)) {
+      return failure();
+    }
+
+    llvm::ScopedPrinter logger{llvm::dbgs()};
+    LLVM_DEBUG({
+      logger.startLine() << "Unpacked sparse tensor: " << extractAdaptor.getTensor().getDefiningOp<UnrealizedConversionCastOp>() <<  "\n";
+    });
+    // Match successful!
+    auto loc = op.getLoc();
+    Type float_type = llvm::cast<TensorType>(sp_tensor.vals.getType()).getElementType();
+    Value result = rewriter.create<tensor::ExtractOp>(loc, float_type, sp_tensor.vals, extractAdaptor.getPos());
+    rewriter.replaceOp(op, {result});
+    return success();
+  }
+};
+
+class ConvertSpTensorInsertCrd
+    : public OpConversionPattern<SpTensorInsertCrd> {
+  using OpConversionPattern<SpTensorInsertCrd>::OpConversionPattern;
+  ConvertSpTensorInsertCrd(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(SpTensorInsertCrd op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
+    SparseTensor sp_tensor;
+    auto opAdaptor = llvm::cast<SpTensorInsertCrdAdaptor>(adaptor);
+    if(!unpack_sparse_tensor(opAdaptor.getTensor(), sp_tensor)) {
+      return failure();
+    }
+
+    // Match successful!
+    auto loc = op.getLoc();
+    Type index_type = rewriter.getIndexType();
+    Dimension& dim = sp_tensor.dims[opAdaptor.getDim()];
+    if(dim.format != TensorFormatEnum::D) {
+      Value crd_idx = opAdaptor.getIdx();
+      Value crd = opAdaptor.getCrd();
+      Value crd_tensor = dim.crd;
+      Value crd_size = dim.crd_size;
+      crd_tensor = rewriter.create<tensor::InsertOp>(loc,
+                                                     crd_tensor.getType(),
+                                                     crd,
+                                                     crd_tensor,
+                                                     crd_idx);
+      dim.crd = crd_tensor;
+
+      // Update tensor insert state
+      Value inc = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
+      dim.insert_pos = rewriter.create<index::AddOp>(loc, index_type, dim.insert_pos, inc);
+    }
+
+    SparseTensorType sp_tensor_type = llvm::cast<SparseTensorType>(opAdaptor.getTensor().getType());
+    SmallVector<Value, 12> cast_args;
+    pack_sparse_tensor(sp_tensor_type, sp_tensor, cast_args);
+    rewriter.replaceOpWithNewOp<UnrealizedConversionCastOp>(op, sp_tensor_type, cast_args);
+    return success();
+  }
+};
+
+class ConvertSpTensorGetDimSize
+    : public OpConversionPattern<SpTensorGetDimSize> {
+  using OpConversionPattern<SpTensorGetDimSize>::OpConversionPattern;
+  ConvertSpTensorGetDimSize(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(SpTensorGetDimSize op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    SpTensorGetDimSizeAdaptor tensorAdaptor = llvm::cast<SpTensorGetDimSizeAdaptor>(adaptor);
+    SparseTensor sp_tensor;
+    if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
+      return failure();
+    }
+    rewriter.replaceOp(op, {sp_tensor.dims[tensorAdaptor.getDim()].dim_size});
+    return success();
+  }
+};
+
+class ConvertSpTensorFindPos
+    : public OpConversionPattern<TensorFindPos> {
+  using OpConversionPattern<TensorFindPos>::OpConversionPattern;
+  ConvertSpTensorFindPos(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(TensorFindPos op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    TensorFindPosAdaptor tensorAdaptor = llvm::cast<TensorFindPosAdaptor>(adaptor);
+    SparseTensor sp_tensor;
+    if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
+      return failure();
+    }
+
+    if(tensorAdaptor.getIsLinear())
+    {
+      rewriter.replaceOp(op, {sp_tensor.dims[tensorAdaptor.getDim()].insert_pos});
+    } else {
+      assert(false && "Lowering non-unique inserts is not yet supported, please use workspace transform");
+    }
+    
+    return success();
+  }
+};
+
+class ConvertAllocWorkspaceOp
+    : public OpConversionPattern<AllocWorkspaceOp> {
+  using OpConversionPattern<AllocWorkspaceOp>::OpConversionPattern;
+  ConvertAllocWorkspaceOp(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(AllocWorkspaceOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto alloc_adaptor = llvm::cast<AllocWorkspaceOpAdaptor>(adaptor);
+    auto loc = op.getLoc();
+    Type index_type = rewriter.getIndexType();
+
+    Value sp_tensor = op.getTensor();
+    auto sp_tensor_type = llvm::cast<SparseTensorType>(sp_tensor.getType());
+    auto dims = alloc_adaptor.getDims();
+    SmallVector<int64_t> dim_attrs(dims.size(), ShapedType::kDynamic);
+    SmallVector<Value> sizes;
+    for(auto dim : dims)
+    {
+      Value dim_size = rewriter.create<SpTensorGetDimSize>(loc, index_type, sp_tensor, llvm::cast<IntegerAttr>(dim));
+      sizes.push_back(dim_size);
+    }
+
+    Workspace workspace;
+    Type workspace_tensor_type = RankedTensorType::get(dim_attrs, sp_tensor_type.getElementType());
+    workspace.workspace = rewriter.create<tensor::EmptyOp>(loc, workspace_tensor_type, sizes);
+    workspace.mark_value = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32Type(), rewriter.getI32IntegerAttr(1));
+    Type workspace_mark_type = RankedTensorType::get(dim_attrs, rewriter.getI32Type());
+    workspace.mark_array = rewriter.create<tensor::EmptyOp>(loc, workspace_mark_type, sizes);
+    workspace.num_crds = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
+    Type crds_type = RankedTensorType::get({ShapedType::kDynamic,}, index_type);
+    workspace.crds = rewriter.create<tensor::EmptyOp>(loc, crds_type, sizes);
+
+    auto workspace_type = llvm::cast<WorkspaceType>(op->getResult(0).getType());
+    /** TODO: Support higher dimensional workspaces! */
+    assert(workspace_type.getDims().size() == 1 && "Workspace dimensions > 1 are currently unsupported.");
+
+    SmallVector<Value, 6> cast_args;
+    pack_workspace(workspace_type, workspace, cast_args);
+    rewriter.replaceOpWithNewOp<UnrealizedConversionCastOp>(op, workspace_type, cast_args);
+    return success();    
+  }
+};
+
+class ConvertWorkspaceGetNNZ
+    : public OpConversionPattern<SpTensorGetNNZ> {
+  using OpConversionPattern<SpTensorGetNNZ>::OpConversionPattern;
+  ConvertWorkspaceGetNNZ(MLIRContext *context)
+      : OpConversionPattern(context) {}
+
+  LogicalResult
+  matchAndRewrite(SpTensorGetNNZ op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto opAdaptor = llvm::cast<SpTensorGetNNZAdaptor>(adaptor);
+    if(!llvm::isa<WorkspaceType>(opAdaptor.getTensor().getType())){
+      return failure();
+    }
+    Workspace workspace;
+    if(!unpack_workspace(opAdaptor.getTensor(), workspace)){
+      return failure();
+    }
+
+    rewriter.replaceOp(op, {workspace.num_crds,});
+    return success();
+  }
+};
+
+class ConvertWorkspaceGetCrds
+    : public OpConversionPattern<SpTensorGetCrd> {
+  using OpConversionPattern<SpTensorGetCrd>::OpConversionPattern;
+  ConvertWorkspaceGetCrds(MLIRContext *context)
+      : OpConversionPattern(context) {}
+
+  LogicalResult
+  matchAndRewrite(SpTensorGetCrd op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto opAdaptor = llvm::cast<SpTensorGetCrdAdaptor>(adaptor);
+    if(!llvm::isa<WorkspaceType>(opAdaptor.getTensor().getType())){
+      return failure();
+    }
+    Workspace workspace;
+    if(!unpack_workspace(opAdaptor.getTensor(), workspace)){
+      return failure();
+    }
+
+    rewriter.replaceOpWithNewOp<tensor::ExtractOp>(op, op->getResultTypes(), workspace.crds, opAdaptor.getIdx());
+    return success();
+  }
+};
+
+class ConvertWorkspaceGetDimSize
+    : public OpConversionPattern<SpTensorGetDimSize> {
+  using OpConversionPattern<SpTensorGetDimSize>::OpConversionPattern;
+  ConvertWorkspaceGetDimSize(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(SpTensorGetDimSize op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    auto opAdaptor = llvm::cast<SpTensorGetDimSizeAdaptor>(adaptor);
+    if(!llvm::isa<WorkspaceType>(opAdaptor.getTensor().getType())){
+      return failure();
+    }
+
+    Workspace workspace;
+    if(!unpack_workspace(opAdaptor.getTensor(), workspace)) {
+      return failure();
+    }
+    Value dim = rewriter.create<index::ConstantOp>(op->getLoc(), rewriter.getIndexType(), rewriter.getIndexAttr(opAdaptor.getDim()));
+    rewriter.replaceOpWithNewOp<tensor::DimOp>(op, op->getResultTypes(), workspace.workspace, dim);
+    return success();
+  }
+};
+
+class ConvertWorkspaceTensorInsertOp
+    : public OpConversionPattern<TensorInsertOp> {
+  using OpConversionPattern<TensorInsertOp>::OpConversionPattern;
+  ConvertWorkspaceTensorInsertOp(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(TensorInsertOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto opAdaptor = llvm::cast<TensorInsertOpAdaptor>(adaptor);
+    if(!llvm::isa<WorkspaceType>(opAdaptor.getTensor().getType())){
+      return failure();
+    }
+    WorkspaceType workspace_type = llvm::cast<WorkspaceType>(opAdaptor.getTensor().getType());
+    assert(workspace_type.getDims().size() == 1 && "Workspace dimensions > 1 are currently unsupported.");
+
+    Workspace workspace;
+    if(!unpack_workspace(opAdaptor.getTensor(), workspace)) {
+      return failure();
+    }
+
+    auto loc = op.getLoc();
+    auto context = op.getContext();
+    ValueRange crds = opAdaptor.getCrds();
+    Value crd = crds[opAdaptor.getCrds().size() - 1];
+    Value mark_at_crd = rewriter.create<tensor::ExtractOp>(
+      loc,
+      rewriter.getI32Type(),
+      workspace.mark_array,
+      crd      
+    );
+    Value not_seen = rewriter.create<arith::CmpIOp>(
+      loc, 
+      rewriter.getI1Type(),
+      arith::CmpIPredicateAttr::get(context, arith::CmpIPredicate::ne),
+      mark_at_crd,
+      workspace.mark_value
+    );
+    
+    Operation* if_op = rewriter.create<scf::IfOp>(
+      loc,
+      not_seen,
+      [workspace, crd] (OpBuilder& builder, Location loc) {
+        Type index_type = builder.getIndexType();
+        Value new_mark = builder.create<tensor::InsertOp>(loc, workspace.mark_array.getType(), workspace.mark_value, workspace.mark_array, crd);
+        Value new_crds = builder.create<tensor::InsertOp>(loc, workspace.crds.getType(), crd, workspace.crds, workspace.num_crds);
+        Value inc = builder.create<index::ConstantOp>(loc, index_type, builder.getIndexAttr(1));
+        Value new_crd_size = builder.create<index::AddOp>(loc, index_type, workspace.num_crds, inc);
+        builder.create<scf::YieldOp>(loc, ArrayRef<Value>({new_mark, new_crd_size, new_crds}));
+      },
+      [workspace] (OpBuilder& builder, Location loc) {
+        builder.create<scf::YieldOp>(loc, ArrayRef<Value>({workspace.mark_array, workspace.num_crds, workspace.crds}));
+      }
+    );
+    workspace.mark_array = if_op->getResult(0);
+    workspace.num_crds = if_op->getResult(1);
+    workspace.crds = if_op->getResult(2);
+    workspace.workspace = rewriter.create<tensor::InsertOp>(
+      loc,
+      workspace.workspace.getType(),
+      opAdaptor.getValue(),
+      workspace.workspace,
+      crd
+    );
+
+    SmallVector<Value, 6> cast_args;
+    pack_workspace(workspace_type, workspace, cast_args);
+    rewriter.replaceOpWithNewOp<UnrealizedConversionCastOp>(op, workspace_type, cast_args);
+    return success();
+  }
+};
+
+class ConvertWorkspaceTensorExtractOp
+    : public OpConversionPattern<TensorExtractOp> {
+  using OpConversionPattern<TensorExtractOp>::OpConversionPattern;
+  ConvertWorkspaceTensorExtractOp(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(TensorExtractOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto opAdaptor = llvm::cast<TensorExtractOpAdaptor>(adaptor);
+    if(!llvm::isa<WorkspaceType>(opAdaptor.getTensor().getType())){
+      return failure();
+    }
+
+    Workspace workspace;
+    if(!unpack_workspace(opAdaptor.getTensor(), workspace)) {
+      return failure();
+    }
+
+    auto loc = op.getLoc();
+    auto context = op.getContext();
+    Value pos = opAdaptor.getPos();
+    Value mark_at_pos = rewriter.create<tensor::ExtractOp>(
+      loc,
+      rewriter.getI32Type(),
+      workspace.mark_array,
+      pos      
+    );
+    Value seen = rewriter.create<arith::CmpIOp>(
+      loc, 
+      rewriter.getI1Type(),
+      arith::CmpIPredicateAttr::get(context, arith::CmpIPredicate::eq),
+      mark_at_pos,
+      workspace.mark_value
+    );
+
+
+    Operation* if_op = rewriter.create<scf::IfOp>(
+      loc,
+      seen,
+      [op, workspace, pos] (OpBuilder& builder, Location loc) {
+        Value extracted = builder.create<tensor::ExtractOp>(loc, op->getResultTypes(), workspace.workspace, pos);
+        builder.create<scf::YieldOp>(loc, ArrayRef<Value>({extracted}));
+      },
+      [op] (OpBuilder& builder, Location loc) {
+        // TODO: Does the zero value depend on the semi-ring?
+        Type result_type  = op->getResult(0).getType();
+        Value zero = builder.create<arith::ConstantOp>(loc, result_type, builder.getFloatAttr(result_type, 0));
+        builder.create<scf::YieldOp>(loc, ArrayRef<Value>({zero}));
+      }
+    );
+
+    rewriter.replaceOp(op, if_op->getResults());
+    return success();
+  }
+};
+
+class ConvertWorkspaceClearOp
+    : public OpConversionPattern<WorkspaceClearOp> {
+  using OpConversionPattern<WorkspaceClearOp>::OpConversionPattern;
+  ConvertWorkspaceClearOp(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(WorkspaceClearOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto opAdaptor = llvm::cast<WorkspaceClearOpAdaptor>(adaptor);
+    if(!llvm::isa<WorkspaceType>(opAdaptor.getTensor().getType())){
+      return failure();
+    }
+    WorkspaceType workspace_type = llvm::cast<WorkspaceType>(opAdaptor.getTensor().getType());
+    Workspace workspace;
+    if(!unpack_workspace(opAdaptor.getTensor(), workspace)) {
+      return failure();
+    }
+    auto loc = op.getLoc();
+    Value inc = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32Type(), rewriter.getI32IntegerAttr(1));
+    workspace.mark_value = rewriter.create<arith::AddIOp>(loc, rewriter.getI32Type(), workspace.mark_value, inc);
+    workspace.num_crds = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(0));
+
+    SmallVector<Value, 6> cast_args;
+    pack_workspace(workspace_type, workspace, cast_args);
+    rewriter.replaceOpWithNewOp<UnrealizedConversionCastOp>(op, workspace_type, cast_args);
+    return success();
+  }
+};
+
+class ConvertSetOp : public OpConversionPattern<TensorSetOp> {
+  using OpConversionPattern<TensorSetOp>::OpConversionPattern;
+  ConvertSetOp(MLIRContext *context) : OpConversionPattern(context) {}
+
+  LogicalResult
+  matchAndRewrite(TensorSetOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    llvm::ScopedPrinter logger{llvm::dbgs()};
+    LLVM_DEBUG({logger.startLine() << "Erasing set op" <<  "\n";});
+
+    auto opAdaptor = llvm::cast<TensorSetOpAdaptor>(adaptor);
+    Value lhs = opAdaptor.getLhs();
+    Value rhs = op.getRhs();
+    for(OpOperand& use : rhs.getUses())
+    {
+      auto user = use.getOwner();
+      LLVM_DEBUG({logger.startLine() << "Found user" << user << "\n";});
+      // What happens about uses in other blocks?
+      if(user->getBlock() == op->getBlock() && op->isBeforeInBlock(user))
+      {
+        LLVM_DEBUG({logger.startLine() << "Operation is before in block" <<  "\n";});
+        rewriter.updateRootInPlace(user, [&]() { user->setOperand(use.getOperandNumber(), lhs); });
+      }
+    }
+    rewriter.eraseOp(op);
+
+    return success();
+  }
+};
+
+class PrintOpLowering : public OpConversionPattern<PrintOp> {
+  using OpConversionPattern<PrintOp>::OpConversionPattern;
+  PrintOpLowering(MLIRContext *context) : OpConversionPattern(context) {}
+
+  LogicalResult
+  matchAndRewrite(PrintOp op,  OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override
+  {
+    Location loc = op->getLoc();
+    auto inputType = adaptor.getInput().getType();
+
+    /// If the Input type is scalar (F64)
+    if (inputType.isa<SparseTensorType>())
+    {
+      SparseTensor sp_tensor;
+      if(!unpack_sparse_tensor(adaptor.getInput(), sp_tensor)) {
+        return failure();
+      }
+      for (Dimension& dim : sp_tensor.dims)
+      {
+        switch(dim.format){
+          case TensorFormatEnum::D: {
+            rewriter.create<PrintOp>(loc, dim.pos);
+            break;
+          }
+          case TensorFormatEnum::CU:
+          case TensorFormatEnum::CN: {
+            rewriter.create<PrintOp>(loc, dim.pos);
+            rewriter.create<PrintOp>(loc, dim.crd);
+            break;
+          }
+          case TensorFormatEnum::S: {
+            rewriter.create<PrintOp>(loc, dim.crd);
+            break;
+          }
+          default: {
+              assert(false && "Could not print unknown format to sparse tensor.");
+            }
+        }
+      }
+      rewriter.create<PrintOp>(loc, sp_tensor.vals);
+    }
+
+    /// Notify the rewriter that this operation has been removed.
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
+class GetTimeLowering : public OpConversionPattern<GetTimeOp> {
+  using OpConversionPattern<GetTimeOp>::OpConversionPattern;
+  GetTimeLowering(MLIRContext *context) : OpConversionPattern(context) {}
+
+  LogicalResult
+  matchAndRewrite(GetTimeOp op,  OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override
+  {
+    auto ctx = rewriter.getContext();
+    auto module = op->getParentOfType<ModuleOp>();
+    auto f64Type = rewriter.getF64Type();
+    std::string getTimeStr = "getTime";
+
+    if (!hasFuncDeclaration(module, getTimeStr))
+    {
+      auto getTimeFunc = FunctionType::get(ctx, {}, {FloatType::getF64(ctx)});
+      /// func @getTime() -> f64
+      func::FuncOp func1 = func::FuncOp::create(op->getLoc(), getTimeStr,
+                                                getTimeFunc, ArrayRef<NamedAttribute>{});
+      func1.setPrivate();
+      module.push_back(func1);
+    }
+
+    rewriter.replaceOpWithNewOp<func::CallOp>(op, getTimeStr, SmallVector<Type, 2>{f64Type});
+
     return success();
   }
 };
 
 }
 
+void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, RewritePatternSet &patterns, TypeConverter &typeConverter) {
+  typeConverter.addConversion(
+    [](tensorAlgebra::SparseTensorType type, SmallVectorImpl<Type> &types) {
+      ArrayRef<int64_t> dim_sizes = type.getDims();
+      ArrayRef<int32_t> format = type.getFormat();
 
-struct SparseTensorConversionPass
-    : public impl::SparseTensorConversionPassBase<SparseTensorConversionPass> {
+      auto context = type.getContext();
+      Type index_type = IndexType::get(context);
+      bool is_known_size = true;
+      int known_size = 1;
+      for(unsigned i = 0; i < dim_sizes.size(); i++) {
+        types.push_back(index_type); //Dimension size
+        types.push_back(index_type); //Insert pos
+        switch((TensorFormatEnum)format[2 * i])
+        {
+          case TensorFormatEnum::D:
+          {
+            if(dim_sizes[i] != ShapedType::kDynamic) {
+              known_size *= dim_sizes[i]; 
+            } else {
+              is_known_size = false;
+            }
+            auto pos_type = mlir::RankedTensorType::get({1,}, index_type);
+            types.push_back(pos_type); //Pos tensor
+            types.push_back(index_type); //Pos size
+            break;
+          }
+          case TensorFormatEnum::CU:
+          case TensorFormatEnum::CN:
+          {
+            Type pos_type;
+            if(is_known_size) {
+              pos_type = mlir::RankedTensorType::get({known_size,}, index_type);
+            } else {
+              pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, 
+                                                      index_type);
+            }
+            Type crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, 
+                                                    index_type);
+            is_known_size = false;
+
+            types.push_back(pos_type); //Pos tensor
+            types.push_back(index_type); //Pos size
+            types.push_back(crd_type); //Crd tensor
+            types.push_back(index_type); //Crd size
+            break;
+          }
+          case TensorFormatEnum::S:
+          {
+            Type crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, index_type);
+            types.push_back(crd_type); //Crd tensor
+            types.push_back(index_type); //Crd size
+            break;
+          }
+          default: {
+            assert(false && "Could not unpack unknown format to sparse tensor.");
+          }
+        }
+      }
+      Type element_type = type.getElementType();
+      Type value_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, element_type);
+      types.push_back(value_type); //Value tensor
+      types.push_back(index_type); //Value size
+      return success();
+    });
+
+  typeConverter.addConversion(
+    [](WorkspaceType type, SmallVectorImpl<Type> &types) {
+      Type element_type = type.getElementType();
+      ArrayRef<int64_t> dim_sizes = type.getDims();
+      auto context = type.getContext();
+      types.push_back(RankedTensorType::get(dim_sizes, element_type)); // Workspace
+      types.push_back(IntegerType::get(context, 32)); // Mark Value
+      types.push_back(RankedTensorType::get(dim_sizes, IntegerType::get(context, 32))); // Mark array
+      types.push_back(IndexType::get(context)); // Crd Size
+      types.push_back(RankedTensorType::get({ShapedType::kDynamic,}, IndexType::get(context)));// Crd tensors
+      return success();
+    });
+
+  typeConverter.addArgumentMaterialization(
+    [](OpBuilder &builder, SparseTensorType resultType, ValueRange inputs,
+        Location loc) -> Optional<Value> {
+      auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
+      return op->getResult(0);
+    });
+
+  typeConverter.addSourceMaterialization(
+    [](OpBuilder &builder, SparseTensorType resultType, ValueRange inputs,
+        Location loc) -> Optional<Value> {
+      auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
+      return op->getResult(0);
+    });
+  
+  typeConverter.addArgumentMaterialization(
+    [](OpBuilder &builder, WorkspaceType resultType, ValueRange inputs,
+        Location loc) -> Optional<Value> {
+      auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
+      return op->getResult(0);
+    });
+
+  typeConverter.addSourceMaterialization(
+    [](OpBuilder &builder, WorkspaceType resultType, ValueRange inputs,
+        Location loc) -> Optional<Value> {
+      auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
+      return op->getResult(0);
+    });
+
+  patterns.add<PrintOpLowering, ConvertSetOp, GetTimeLowering>(typeConverter, context);
+  patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorFindPos>(typeConverter, context);
+  patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
+}
+
+struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<SparseTensorConversionPass> {
+  using SparseTensorConversionPassBase::SparseTensorConversionPassBase;
+  
   SparseTensorConversionPass() = default;
   SparseTensorConversionPass(const SparseTensorConversionPass &pass) = default;
 
@@ -84,7 +908,8 @@ struct SparseTensorConversionPass
     RewritePatternSet patterns(ctx);
     TypeConverter typeConverter;
     ConversionTarget target(*ctx);
-    // Everything in the sparse dialect must go!
+
+    // Everything in the TADialect must go
     target.addIllegalDialect<tensorAlgebra::TADialect>();
     
     // The following operations and dialects may be introduced by the
@@ -92,85 +917,32 @@ struct SparseTensorConversionPass
     target.addLegalOp<tensor::ExtractOp, tensor::InsertOp>();
     target.addLegalDialect<
         arith::ArithDialect, bufferization::BufferizationDialect,
-        LLVM::LLVMDialect, memref::MemRefDialect, scf::SCFDialect>();
+        tensor::TensorDialect, memref::MemRefDialect, scf::SCFDialect,
+        func::FuncDialect, index::IndexDialect
+    >();
+    target.addLegalOp<UnrealizedConversionCastOp>();
+    target.addDynamicallyLegalOp<tensorAlgebra::PrintOp>([&](tensorAlgebra::PrintOp op) {
+      return typeConverter.isLegal(op->getOperandTypes());
+    });
 
     typeConverter.addConversion([](Type type) { return type; });
-    typeConverter.addConversion(
-      [](tensorAlgebra::SparseTensorType type, SmallVectorImpl<Type> &types) {
-        ArrayRef<int> dim_sizes = type.getDims();
-        ArrayRef<unsigned> format = type.getFormat();
-
-        auto context = type.getContext();
-        Type index_type = IndexType::get(context);
-        bool is_known_size = true;
-        int known_size = 1;
-        for(unsigned i = 0; i < dims_sizes.size()) {
-          switch((TensorFormatEnum)format[i])
-          {
-            case TensorFormatEnum::D:
-            {
-              if(dim_sizes[i] != ShapedType::kDynamic) {
-                known_size *= dim_sizes[i]; 
-              } else {
-                is_known_size = false;
-              }
-              auto pos_type = mlir::RankedTensorType::get({1,}, builder.getI32Type());
-              types.push_back(pos_type); //Pos tensor
-              types.push_back(index_type); //Pos size
-              types.push_back(index_type); //Dimension size
-            }
-            case TensorFormatEnum::CU:
-            case TensorFormatEnum::CN:
-            {
-              Type pos_type;
-              if(is_known_size) {
-                pos_type = mlir::RankedTensorType::get({known_size,}, builder.getI32Type());
-              } else {
-                pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, 
-                                                        builder.getI32Type());
-              }
-              crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, 
-                                                      builder.getI32Type());
-              is_known_size = false;
-
-              types.push_back(pos_type); //Pos tensor
-              types.push_back(crd_type); //Crd tensor
-              types.push_back(index_type); //Pos size
-              types.push_back(index_type); //Crd size
-              types.push_back(index_type); //Dimension size
-            }
-            case TensorFormatEnum::S:
-            {
-              crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, builder.getI32Type());
-              types.push_back(crd_type); //Crd tensor
-              types.push_back(index_type); //Crd size
-              types.push_back(index_type); //Dimension size
-            }
-          }
-        }
-        Type element_type = type.getElementType();
-        Type value_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, element_type);
-        types.push_back(value_type); //Value tensor
-        types.push_back(index_type); //Value size
-        return success();
-      });
-
-    typeConverter.addArgumentMaterialization(
-      [](OpBuilder &builder, SpraseTensorType resultType, ValueRange inputs,
-          Location loc) -> Optional<Value> {
-        Value value = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
-        return value;
-      });
+   
 
     // Populate with rules and apply rewriting rules.
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns,
-                                                                   converter);
-    populateCallOpTypeConversionPattern(patterns, converter);
-    scf::populateSCFStructuralTypeConversionsAndLegality(converter, patterns,
+                                                                   typeConverter);
+    populateCallOpTypeConversionPattern(patterns, typeConverter);
+    scf::populateSCFStructuralTypeConversionsAndLegality(typeConverter, patterns,
                                                          target);
-    populateSparseTensorConversionPatterns(converter, patterns);
+    mlir::indexTree::populateIndexTreeTypeConversionPatterns(ctx, patterns, typeConverter, target);
+    mlir::comet::populateSparseTensorConversionPatterns(ctx, patterns, typeConverter);
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))
       signalPassFailure();
   }
 };
+
+std::unique_ptr<Pass> mlir::comet::createSparseTensorConversionPass()
+{
+  return std::make_unique<SparseTensorConversionPass>();
+}
