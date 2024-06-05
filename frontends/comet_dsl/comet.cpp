@@ -499,6 +499,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // /// =============================================================================
   // /// Late lowering passes
   // /// =============================================================================
+  // pm.addPass(mlir::bufferization::createEmptyTensorToAllocTensorPass());
   mlir::bufferization::OneShotBufferizationOptions opts;
   opts.allowUnknownOps = true;
   pm.addPass(mlir::bufferization::createOneShotBufferizePass(opts));
