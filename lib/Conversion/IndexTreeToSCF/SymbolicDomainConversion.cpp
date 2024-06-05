@@ -126,11 +126,11 @@ struct ConvertDomainEndRowOp
       return failure();
     }
 
-    rewriter.create<memref::StoreOp>(loc, TypeRange(), domain.crd_size, domain.pos, domain.pos_size);
     Value inc = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
     Value new_pos_size = rewriter.create<index::AddOp>(loc, index_type, domain.pos_size, inc);
+
     // TODO: Dynamically resize array?
-    
+    rewriter.create<memref::StoreOp>(loc, TypeRange(), domain.crd_size, domain.pos, new_pos_size);
     Value materialized = getTypeConverter()->materializeArgumentConversion(
             rewriter,
             op.getLoc(),
@@ -163,6 +163,7 @@ struct ConvertDomainDeclarationOp
     Value inc = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1)); 
     Value pos_alloc_size = rewriter.create<index::AddOp>(loc, index_type, op.getNumRows(), inc);
     Value pos = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{pos_alloc_size}, ValueRange(), nullptr);
+    rewriter.create<memref::StoreOp>(loc, zero, pos, zero);
     Value mark_array = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{op.getDimSize()}, ValueRange(), nullptr);
     auto new_op = rewriter.create<UnrealizedConversionCastOp>(
       loc, 
@@ -220,7 +221,7 @@ struct ConvertSparseTensorOp
           Value dim_size = dense_domain_op.getDimSize();
 
           Value pos = rewriter.create<memref::AllocOp>(loc, MemRefType::get({1,}, index_type));
-          rewriter.create<memref::StoreOp>(loc, TypeRange(), one, pos, zero);
+          rewriter.create<memref::StoreOp>(loc, TypeRange(), dim_size, pos, zero);
           Value crd = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
           Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
           Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
