@@ -326,7 +326,7 @@ def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
   
 }
 
-def TensorFillOp : TA_Op<"fill", [Pure]>{
+def TensorFillOp : TA_Op<"fill">{
   
   let summary = "";
   let description = [{

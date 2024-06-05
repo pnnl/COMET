@@ -430,14 +430,14 @@ class ConvertAllocWorkspaceOp
     }
 
     Workspace workspace;
-    Type workspace_tensor_type = RankedTensorType::get(dim_attrs, sp_tensor_type.getElementType());
-    workspace.workspace = rewriter.create<tensor::EmptyOp>(loc, workspace_tensor_type, sizes);
+    auto workspace_tensor_type = RankedTensorType::get(dim_attrs, sp_tensor_type.getElementType());
+    workspace.workspace = rewriter.create<bufferization::AllocTensorOp>(loc, workspace_tensor_type, sizes);
     workspace.mark_value = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32Type(), rewriter.getI32IntegerAttr(1));
-    Type workspace_mark_type = RankedTensorType::get(dim_attrs, rewriter.getI32Type());
-    workspace.mark_array = rewriter.create<tensor::EmptyOp>(loc, workspace_mark_type, sizes);
+    auto workspace_mark_type = RankedTensorType::get(dim_attrs, rewriter.getI32Type());
+    workspace.mark_array = rewriter.create<bufferization::AllocTensorOp>(loc, workspace_mark_type, sizes);
     workspace.num_crds = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
-    Type crds_type = RankedTensorType::get({ShapedType::kDynamic,}, index_type);
-    workspace.crds = rewriter.create<tensor::EmptyOp>(loc, crds_type, sizes);
+    auto crds_type = RankedTensorType::get({ShapedType::kDynamic,}, index_type);
+    workspace.crds = rewriter.create<bufferization::AllocTensorOp>(loc, crds_type, sizes);
 
     auto workspace_type = llvm::cast<WorkspaceType>(op->getResult(0).getType());
     /** TODO: Support higher dimensional workspaces! */
@@ -715,8 +715,14 @@ class PrintOpLowering : public OpConversionPattern<PrintOp> {
   {
     Location loc = op->getLoc();
     auto inputType = adaptor.getInput().getType();
+    Type index_type = rewriter.getIndexType();
+    SmallVector<int64_t> empty_size(1, 1);
+    auto empty_type = RankedTensorType::get(empty_size, index_type);
+    Value empty_tensor = rewriter.create<bufferization::AllocTensorOp>(loc, empty_type, ValueRange(), (Value)nullptr);
+    Value neg = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(-1));
+    Value zero = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
+    empty_tensor = rewriter.create<tensor::InsertOp>(loc, empty_type, neg, empty_tensor, zero);
 
-    /// If the Input type is scalar (F64)
     if (inputType.isa<SparseTensorType>())
     {
       SparseTensor sp_tensor;
@@ -728,6 +734,7 @@ class PrintOpLowering : public OpConversionPattern<PrintOp> {
         switch(dim.format){
           case TensorFormatEnum::D: {
             rewriter.create<PrintOp>(loc, dim.pos);
+            rewriter.create<PrintOp>(loc, empty_tensor);
             break;
           }
           case TensorFormatEnum::CU:
@@ -737,6 +744,7 @@ class PrintOpLowering : public OpConversionPattern<PrintOp> {
             break;
           }
           case TensorFormatEnum::S: {
+            rewriter.create<PrintOp>(loc, empty_tensor);
             rewriter.create<PrintOp>(loc, dim.crd);
             break;
           }
@@ -746,11 +754,10 @@ class PrintOpLowering : public OpConversionPattern<PrintOp> {
         }
       }
       rewriter.create<PrintOp>(loc, sp_tensor.vals);
+      rewriter.eraseOp(op);
+      return success();
     }
-
-    /// Notify the rewriter that this operation has been removed.
-    rewriter.eraseOp(op);
-    return success();
+    return failure();
   }
 };
 
