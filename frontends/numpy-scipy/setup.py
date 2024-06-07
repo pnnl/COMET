@@ -42,7 +42,7 @@ setuptools.setup(
     install_requires=[
         'jinja2',
         'numpy',
-        'scipy>=1.9'
+        'scipy>=1.10'
     ],
-    python_requires=">=3.6",
+    python_requires=">=3.8",
 )
