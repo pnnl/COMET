@@ -182,7 +182,7 @@ pub static COMET_FUNCS: HashMap<
 > = {
     let mut shared_libs = HashSet::new();
     for lib in crate::inventory::iter::<CometLib> {
-        shared_libs.insert(lib.name.clone());
+        shared_libs.insert(lib.name);
     }
     let mut libs = vec![];
     for lib in shared_libs {
@@ -190,7 +190,7 @@ pub static COMET_FUNCS: HashMap<
     }
     let mut func_names = HashSet::new();
     for func in crate::inventory::iter::<CometFunc> {
-        func_names.insert(func.name.clone());
+        func_names.insert(func.name);
     }
     let mut map = HashMap::new();
     for func in func_names {

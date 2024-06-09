@@ -207,10 +207,10 @@ impl CometBinary {
         }
     }
     fn tensor_tensor_emit_mlir(&self, left: &TensorStruct, right: &TensorStruct) -> Result<String> {
-        let (_, left_dims) = left.index_ids_and_dims();
+        let (left_ids, left_dims) = left.index_ids_and_dims();
         let left_affine = left.indices.as_affine();
 
-        let (_, right_dims) = right.index_ids_and_dims();
+        let (right_ids, right_dims) = right.index_ids_and_dims();
         let right_affine = right.indices.as_affine();
 
         let data_type = left.ty.clone();
@@ -229,15 +229,15 @@ impl CometBinary {
                         }
                     }
                     let affine = format!("{}", union_ids.as_affine());
-                    let res = format!("%{} = \"ta.mul\"(%{},%{}, {}) {{MaskType = \"none\", __alpha__ = 1.000000e+00 : {}, __beta__ = 0.000000e+00 : {}, formats = [\"{}\", \"{}\", \"{}\"], indexing_maps = [affine_map<({}) -> ({})>, affine_map<({}) -> ({})>, affine_map<({}) -> ({})>], operand_segment_sizes = array<i32: 1, 1, {}, 0>, semiring = \"plusxy_times\"}} : ({}, {}{}) -> {}\n\n", 
-                        res_tensor.mlir_id, left.mlir_id, right.mlir_id, res_mlir_ids, data_type, data_type, left.format, right.format, res_tensor.format, affine, left_affine, affine, right_affine , affine, res_affine,  res_dims.split("x").count() -1, left_dims, right_dims, ", !ta.range".repeat(res_tensor.indices.len()), res_dims);
+                    let res = format!("%{} = \"ta.mul\"(%{},%{}, {}, {}, {}) {{MaskType = \"none\", __alpha__ = 1.000000e+00 : {}, __beta__ = 0.000000e+00 : {}, formats = [\"{}\", \"{}\", \"{}\"], indexing_maps = [affine_map<({}) -> ({})>, affine_map<({}) -> ({})>, affine_map<({}) -> ({})>], operand_segment_sizes = array<i32: 1, 1, {}, 0>, semiring = \"plusxy_times\"}} : ({}, {}{}) -> {}\n\n", 
+                        res_tensor.mlir_id, left.mlir_id, right.mlir_id, left_ids, right_ids, res_mlir_ids, data_type, data_type, left.format, right.format, res_tensor.format, affine, left_affine, affine, right_affine , affine, res_affine,  left_dims.split("x").count() -1 + right_dims.split("x").count() -1 + res_dims.split("x").count() -1, left_dims, right_dims, ", !ta.indexlabel".repeat(left.indices.len()+right.indices.len() + res_tensor.indices.len()), res_dims);
                     Ok(res)
                     
                 }
                 CometBinOp::EleWiseMul => {
                     let affine = res_affine.clone();
-                    let res = format!("%{} = \"ta.elews_mul\"(%{},%{}, {}) {{__alpha__ = 1.000000e+00 : {}, __beta__ = 0.000000e+00 : {}, formats = [\"{}\", \"{}\", \"{}\"], indexing_maps = [affine_map<({}) -> ({})>, affine_map<({}) -> ({})>, affine_map<({}) -> ({})>], semiring = \"noop_times\"}} : ({}, {}{}) -> {}\n\n", 
-                        res_tensor.mlir_id, left.mlir_id, right.mlir_id, res_mlir_ids, data_type, data_type, left.format, right.format, res_tensor.format, affine, left_affine, affine, right_affine , affine, res_affine, left_dims, right_dims, ", !ta.range".repeat(res_tensor.indices.len()), res_dims);
+                    let res = format!("%{} = \"ta.elews_mul\"(%{},%{}, {}, {}, {}) {{__alpha__ = 1.000000e+00 : {}, __beta__ = 0.000000e+00 : {}, formats = [\"{}\", \"{}\", \"{}\"], indexing_maps = [affine_map<({}) -> ({})>, affine_map<({}) -> ({})>, affine_map<({}) -> ({})>], semiring = \"noop_times\"}} : ({}, {}{}) -> {}\n\n", 
+                        res_tensor.mlir_id, left.mlir_id, right.mlir_id, left_ids, right_ids, res_mlir_ids, data_type, data_type, left.format, right.format, res_tensor.format, affine, left_affine, affine, right_affine , affine, res_affine, left_dims, right_dims, ", !ta.indexlabel".repeat(left.indices.len()+right.indices.len() + res_tensor.indices.len()), res_dims);
                     Ok(res)
                     
                 }
@@ -245,8 +245,8 @@ impl CometBinary {
                     match ops.len(){
                         1 => {
                             let affine = res_affine.clone();
-                            let res = format!("%{} = \"ta.elews_mul\"(%{},%{}, {}) {{__alpha__ = 1.000000e+00 : {}, __beta__ = 0.000000e+00 : {}, formats = [\"{}\", \"{}\", \"{}\"], indexing_maps = [affine_map<({}) -> ({})>, affine_map<({}) -> ({})>, affine_map<({}) -> ({})>], semiring = \"noop_{}\"}} : ({}, {}{}) -> {}\n\n", 
-                                res_tensor.mlir_id, left.mlir_id, right.mlir_id, res_mlir_ids, data_type, data_type, left.format, right.format, res_tensor.format, affine, left_affine, affine, right_affine , affine, res_affine, ops[0], left_dims, right_dims, ", !ta.range".repeat(res_tensor.indices.len()), res_dims);
+                            let res = format!("%{} = \"ta.elews_mul\"(%{},%{}, {}, {}, {}) {{__alpha__ = 1.000000e+00 : {}, __beta__ = 0.000000e+00 : {}, formats = [\"{}\", \"{}\", \"{}\"], indexing_maps = [affine_map<({}) -> ({})>, affine_map<({}) -> ({})>, affine_map<({}) -> ({})>], semiring = \"noop_{}\"}} : ({}, {}{}) -> {}\n\n", 
+                                res_tensor.mlir_id, left.mlir_id, right.mlir_id, left_ids, right_ids, res_mlir_ids, data_type, data_type, left.format, right.format, res_tensor.format, affine, left_affine, affine, right_affine , affine, res_affine, ops[0], left_dims, right_dims, ", !ta.indexlabel".repeat(left.indices.len()+right.indices.len() + res_tensor.indices.len()), res_dims);
                             Ok(res)
                         }, //elews_mul
                         2 => {
@@ -260,8 +260,8 @@ impl CometBinary {
                                 }
                             }
                             let affine = format!("{}", union_ids.as_affine());
-                            let res = format!("%{} = \"ta.mul\"(%{},%{}, {}) {{MaskType = \"none\", __alpha__ = 1.000000e+00 : {}, __beta__ = 0.000000e+00 : {}, formats = [\"{}\", \"{}\", \"{}\"], indexing_maps = [affine_map<({}) -> ({})>, affine_map<({}) -> ({})>, affine_map<({}) -> ({})>], operand_segment_sizes = array<i32: 1, 1, {}, 0>, semiring = \"{}_{}\"}} : ({}, {}{}) -> {}\n\n", 
-                                res_tensor.mlir_id, left.mlir_id, right.mlir_id, res_mlir_ids, data_type, data_type, left.format, right.format, res_tensor.format, affine, left_affine, affine, right_affine , affine, res_affine,  res_dims.split("x").count() -1, ops[0], ops[1], left_dims, right_dims, ", !ta.range".repeat(res_tensor.indices.len()), res_dims);
+                            let res = format!("%{} = \"ta.mul\"(%{},%{}, {}, {}, {}) {{MaskType = \"none\", __alpha__ = 1.000000e+00 : {}, __beta__ = 0.000000e+00 : {}, formats = [\"{}\", \"{}\", \"{}\"], indexing_maps = [affine_map<({}) -> ({})>, affine_map<({}) -> ({})>, affine_map<({}) -> ({})>], operand_segment_sizes = array<i32: 1, 1, {}, 0>, semiring = \"{}_{}\"}} : ({}, {}{}) -> {}\n\n", 
+                                res_tensor.mlir_id, left.mlir_id, right.mlir_id, left_ids, right_ids, res_mlir_ids, data_type, data_type, left.format, right.format, res_tensor.format, affine, left_affine, affine, right_affine , affine, res_affine,  left_dims.split("x").count() -1 + right_dims.split("x").count() -1 + res_dims.split("x").count() -1, ops[0], ops[1], left_dims, right_dims, ", !ta.indexlabel".repeat(left.indices.len()+right.indices.len() + res_tensor.indices.len()), res_dims);
                             Ok(res)
                         }, //tc
                         _ => {

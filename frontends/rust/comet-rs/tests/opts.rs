@@ -1,5 +1,8 @@
 use assert_cmd::Command;
 
+#[cfg(debug_assertions)]
+const EX_DIR: &str = "./target/debug/examples/";
+#[cfg(not(debug_assertions))]
 const EX_DIR: &str = "./target/release/examples/";
 
 fn remove_whitespace(s: &str) -> String {

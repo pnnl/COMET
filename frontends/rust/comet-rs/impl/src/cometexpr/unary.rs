@@ -89,7 +89,7 @@ impl CometDsl for CometUnary {
 
 impl CometUnary {
     fn tensor_emit_mlir(&self, tensor: &TensorStruct) -> Result<String> {
-        let (_, src_dims) = tensor.index_ids_and_dims();
+        let (src_ids, src_dims) = tensor.index_ids_and_dims();
         match &self.op {
             CometUnaryOp::Transpose(tr_indices) => {
                 if let Some(imm_tensor) = self.imm_expr.tensor() {
@@ -102,8 +102,8 @@ impl CometUnary {
                             "Transpose indices do not match"
                         );
                     }
-                    let res = format!("%{} = \"ta.transpose\"(%{}, {}) {{formats = [\"{}\", \"{}\"], indexing_maps = [ affine_map<({}) -> ({})>, affine_map<({}) -> ({})>]}} : ({}{}) -> {}\n\n", 
-                        imm_tensor.mlir_id, tensor.mlir_id, dst_ids, tensor.format, imm_tensor.format, src_affine, src_affine, src_affine, dst_affine, src_dims, ", !ta.range".repeat(tr_indices.len()), dst_dims);
+                    let res = format!("%{} = \"ta.transpose\"(%{}, {},{}) {{formats = [\"{}\", \"{}\"], indexing_maps = [ affine_map<({}) -> ({})>, affine_map<({}) -> ({})>]}} : ({}{}) -> {}\n\n", 
+                        imm_tensor.mlir_id, tensor.mlir_id, src_ids, dst_ids, tensor.format, imm_tensor.format, src_affine, src_affine, src_affine, dst_affine, src_dims, ", !ta.indexlabel".repeat(tr_indices.len() * 2), dst_dims);
                     Ok(res)
                 } else {
                     abort!(

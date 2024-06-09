@@ -5,7 +5,8 @@ use syn::parse::discouraged::Speculative;
 use syn::parse::{ParseStream, Result};
 use syn::{bracketed, parenthesized, Token};
 use syn::{Error, Ident, LitInt, Type};
-
+use std::hash::Hasher;
+use std::hash::Hash;
 use crate::CometVars;
 
 #[derive(Debug, Clone)]
@@ -125,12 +126,33 @@ impl IndexValue {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub(crate) struct IndexStruct {
     pub(crate) name: Ident,
     value: IndexValue,
+    pub(crate) dim_of : Option<(usize,usize)>,
     pub(crate) mlir_id: usize,
 }
+
+impl PartialEq for IndexStruct {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.value == other.value && self.mlir_id == other.mlir_id
+    }
+}
+
+impl Hash for IndexStruct {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.value.hash(state);
+        self.mlir_id.hash(state);
+    }
+}
+
+impl Eq for IndexStruct {}
+//     fn eq(&self, other: &Self) -> bool {
+//         self.name == other.name && self.value == other.value && self.mlir_id == other.mlir_id
+//     }
+// }
 
 impl std::cmp::Ord for IndexStruct {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -146,19 +168,22 @@ impl std::cmp::PartialOrd for IndexStruct {
 
 impl IndexStruct {
     pub(crate) fn emit_mlir(&self) -> String {
-        let mut res = "".to_string();
-        res = format!("{}%c{}{} = arith.constant 0: index\n", res, self.mlir_id, 0);
-        res = format!("{}%c{}{} = arith.constant 1: index\n", res, self.mlir_id, 1);
-        if let Ok(val) = self.val() {
-            res = format!(
-                "{}%c{}{} = arith.constant {}: index\n",
-                res, self.mlir_id, val, val
-            );
-            format!("{}%{} = \"ta.static_index_label\"(%c{}{}, %c{}{}, %c{}{}) : (index, index, index) -> !ta.range\n\n",res, self.mlir_id, self.mlir_id, 0, self.mlir_id, val, self.mlir_id,1)
-        } else {
-            format!("{}%{} = \"ta.dynamic_index_label\"(%c{}{}, %c{}{}) : (index, index) -> !ta.range\n\n",
-                    res, self.mlir_id, self.mlir_id, 0, self.mlir_id,1)
-        }
+        let res = format!("%{} = \"ta.index_label\"() : () -> !ta.indexlabel\n", self.mlir_id);
+        res
+        // format!(res, self.mlir_id)
+        // let mut res = "".to_string();
+        // res = format!("{}%c{}{} = arith.constant 0: index\n", res, self.mlir_id, 0);
+        // res = format!("{}%c{}{} = arith.constant 1: index\n", res, self.mlir_id, 1);
+        // if let Ok(val) = self.val() {
+        //     res = format!(
+        //         "{}%c{}{} = arith.constant {}: index\n",
+        //         res, self.mlir_id, val, val
+        //     );
+        //     format!("{}%{} = \"ta.static_index_label\"(%c{}{}, %c{}{}, %c{}{}) : (index, index, index) -> !ta.range\n\n",res, self.mlir_id, self.mlir_id, 0, self.mlir_id, val, self.mlir_id,1)
+        // } else {
+        //     format!("{}%{} = \"ta.dynamic_index_label\"(%c{}{}, %c{}{}) : (index, index) -> !ta.range\n\n",
+        //             res, self.mlir_id, self.mlir_id, 0, self.mlir_id,1)
+        // }
     }
 
     pub(crate) fn val(&self) -> Result<i32> {
@@ -184,6 +209,7 @@ impl IndexStruct {
         let mut index = IndexStruct {
             name: Ident::new("temp", Span::call_site()),
             value: IndexValue::Dynamic,
+            dim_of: None,
             mlir_id: *object_id,
         };
         
