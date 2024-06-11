@@ -44,6 +44,7 @@
 /// tensorAlgbra operations and also the operations of the Shape Inference Op Interface.
 //===----------------------------------------------------------------------===//
 #define GET_OP_CLASSES
+#include "comet/Dialect/TensorAlgebra/IR/TAOps.h.inc"
 
 namespace mlir
 {
@@ -72,6 +73,22 @@ namespace mlir
     /// Tensor Algebra Types
     //===----------------------------------------------------------------------===//
 
+    class IndexLabelType : public mlir::Type::TypeBase<IndexLabelType, mlir::Type, TypeStorage>
+    {
+    public:
+      /// Used for generic hooks in TypeBase.
+      using Base::Base;
+
+      static IndexLabelType get(MLIRContext *context)
+      {
+        /// Custom, uniq'ed construction in the MLIRContext.
+        return Base::get(context);
+      }
+
+      /// The name of this struct type.
+      static constexpr StringLiteral name = "ta.indexLabel";
+    };
+
     /// This class defines the TA sparse tensor type. It represents a collection of
     /// element types for data and indices of COO format.
     /// All derived types in MLIR must inherit from the CRTP class
@@ -94,10 +111,12 @@ namespace mlir
 
       /// Returns the number of element type held by this sparse tensor.
       size_t getNumElementTypes() { return getElementTypes().size(); }
+
+      /// The name of this struct type.
+      static constexpr StringLiteral name = "ta.spTensor";
     };
 
   } /// end namespace tensorAlgebra
 } /// end namespace mlir
-#include "comet/Dialect/TensorAlgebra/IR/TAOps.h.inc"
 
 #endif /// TENSORALGEBRA_DIALECT_H_

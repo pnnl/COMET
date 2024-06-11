@@ -346,6 +346,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// =============================================================================
   if (IsLoweringtoSCF || emitLoops || emitLLVM)
   {
+
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
     optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());            /// lowers dense input/output tensor declaration
     optPM.addPass(mlir::comet::createSparseTempOutputTensorDeclLoweringPass()); /// Temporary sparse output tensor declarations introduced by compound expressions
@@ -380,7 +381,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       optPM.addPass(mlir::comet::createOptDenseTransposePass());
     }
 
-    /// Dump index tree dialect.
+    /// Dump scf dialect.
     if (emitLoops)
     {
       pm.addPass(mlir::createCanonicalizerPass());
@@ -418,7 +419,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());
     /// Convert vector to LLVM (always needed).
-    pm.addPass(mlir::createConvertVectorToLLVMPass());  // TODO: add more options on a per-need basis.
+    pm.addPass(mlir::createConvertVectorToLLVMPass()); // TODO: add more options on a per-need basis.
     //// Convert Math to LLVM (always needed).
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertMathToLLVMPass());
     /// Expand complicated MemRef operations before lowering them.

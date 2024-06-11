@@ -92,7 +92,7 @@ namespace
       tensorLoadOp = cast<ToTensorOp>(tensorOperand.getDefiningOp());
       auto memref = tensorLoadOp.getMemref();
       auto valueAttr = tensorFillOp.getValue();
-      Value constantOp = rewriter.create<ConstantOp>(loc, op->getResult(0).getType(), llvm::cast<TypedAttr>(valueAttr));
+      Value constantOp = rewriter.create<ConstantOp>(loc, llvm::cast<TypedAttr>(valueAttr));
 
       rewriter.create<linalg::FillOp>(loc, constantOp, memref);
       rewriter.eraseOp(op);
