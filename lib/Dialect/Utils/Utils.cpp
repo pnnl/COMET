@@ -48,6 +48,7 @@
 std::string VALUETYPE = "f64";
 
 using namespace mlir::arith;
+using namespace mlir::affine;
 using namespace mlir::indexTree;
 
 namespace mlir

@@ -1,5 +1,6 @@
 add_llvm_library(COMETTensorAlgebraDialect
   IR/TADialect.cpp
+  # IR/TATypes.cpp
 
   Transforms/Transforms.cpp
   Transforms/LinalgTransforms.cpp

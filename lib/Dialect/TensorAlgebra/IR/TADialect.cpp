@@ -31,7 +31,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
 #include "mlir/IR/DialectImplementation.h"
-#include "mlir/IR/FunctionImplementation.h"
+#include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
 
 using namespace mlir;
@@ -443,4 +443,8 @@ void TADialect::initialize()
 #include "comet/Dialect/TensorAlgebra/IR/TAOps.cpp.inc"
       >();
   addTypes<IndexLabelType, SparseTensorType>();
+//     addTypes<
+// #define GET_TYPEDEF_LIST
+// #include "comet/Dialect/TensorAlgebra/IR/TAOpsTypes.cpp.inc"
+//       >();
 }

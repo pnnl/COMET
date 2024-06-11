@@ -30,7 +30,7 @@
 
 
 include "mlir/IR/OpBase.td" 
-include "mlir/IR/FunctionInterfaces.td"
+include "mlir/interfaces/FunctionInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"

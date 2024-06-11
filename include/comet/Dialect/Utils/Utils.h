@@ -167,7 +167,7 @@ namespace mlir
                                           std::vector<unsigned int> indexIterateOrder,
                                           std::vector<unsigned int> inputPerm);
 
-    std::vector<Value> createInductionVarAffine(std::vector<AffineForOp> affineloops,
+    std::vector<Value> createInductionVarAffine(std::vector<affine::AffineForOp> affineloops,
                                                 std::vector<int64_t> indexIterateOrder,
                                                 SmallVector<ReassociationIndices> inputPerm);
 
