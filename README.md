@@ -63,7 +63,7 @@ $ patch -s -p0 < comet-blis.patch
 ```
 $ cd $COMET_SRC
 $ cd blis
-$ ./configure --prefix=$COMET_SRC/install auto
+$ ./configure --prefix=$COMET_SRC/install --disable-shared auto
 $ make [-j]
 $ make check [-j]
 $ make install [-j]

@@ -510,7 +510,7 @@ class Tensor_Decl_Builder:
 
     tensor_decl_wrapper_text = jinja2.Template(   
         ("" * indentation_size)
-        + '%t{{lhs}} = "ta.{{decl}}_tensor_decl"{{dims_tuple}}'
+        + '%t{{lhs}} = "ta.{{decl}}ensor_decl"{{dims_tuple}}'
         + '{format = {{format}}} : '
         +"{{ranges_tuple}} -> "
         + "{{inputtype}}"
@@ -521,7 +521,7 @@ class Tensor_Decl_Builder:
 
     tensor_decl_wrapper_text_no_fill = jinja2.Template(   
         ("" * indentation_size)
-        + '%t{{lhs}} = "ta.{{decl}}_tensor_decl"{{dims_tuple}}'
+        + '%t{{lhs}} = "ta.{{decl}}ensor_decl"{{dims_tuple}}'
         + '{format = {{format}}} : '
         +"{{ranges_tuple}} -> "
         + "{{inputtype}}"
@@ -558,7 +558,7 @@ class Tensor_Decl_Builder:
                 ranges_tuple = ranges_tuple,
                 format = format,
                 inputtype = self.inputtype,
-                decl = "dense" if self.format == DENSE else "sparse",
+                decl = "dense_t" if self.format == DENSE else "spT",
                 where = where,
                 value = value
             )
@@ -569,7 +569,7 @@ class Tensor_Decl_Builder:
                 ranges_tuple = ranges_tuple,
                 format = format,
                 inputtype = self.inputtype,
-                decl = "dense" if self.format == DENSE else "sparse",
+                decl = "dense_t" if self.format == DENSE else "spT",
             )
 
 class PrintBuilder:

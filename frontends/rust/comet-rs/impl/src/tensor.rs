@@ -211,7 +211,7 @@ impl TensorStruct {
             }
             _ => {
                 let mut temp_res = format!(
-                    "%{} = \"ta.sparse_tensor_decl\"({}) {{format = \"{}\", temporal_tensor = {}}} : ({}) -> {}\n",
+                    "%{} = \"ta.spTensor_decl\"({}) {{format = \"{}\", temporal_tensor = {}}} : ({}) -> {}\n",
                     self.mlir_id,
                     ids,
                     self.format,
