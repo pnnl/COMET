@@ -48,6 +48,7 @@
 std::string VALUETYPE = "f64";
 
 using namespace mlir::arith;
+using namespace mlir::affine;
 using namespace mlir::indexTree;
 
 namespace mlir
@@ -334,7 +335,7 @@ namespace mlir
         for (size_t i = 0; i < affineMap.getNumResults(); i++)
         {
           auto expr = affineMap.getResult(i);
-          perm.push_back(expr.cast<AffineDimExpr>().getPosition());
+          perm.push_back(llvm::cast<AffineDimExpr>(expr).getPosition());
         }
 
         allPerms.push_back(perm);
@@ -2088,7 +2089,7 @@ namespace mlir
         ReassociationIndices indices;
         for (unsigned i = 0, e = map.getNumResults(); i < e; i++)
         {
-          unsigned pos = map.getResult(i).cast<AffineDimExpr>().getPosition();
+          unsigned pos = llvm::cast<AffineDimExpr>(map.getResult(i)).getPosition();
           indices.push_back(pos);
         }
         reassociation.push_back(indices);

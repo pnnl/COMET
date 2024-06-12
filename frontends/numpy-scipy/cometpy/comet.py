@@ -912,11 +912,11 @@ def compile(flags, with_jit=True):
             if format == DENSE:
                 outputs.append(np.empty(ret['shape']))
             elif format == CSR:
-                outputs.append(sp.sparse.csr_array([]))
+                outputs.append(sp.sparse.csr_array(np.empty(ret['shape'])))
             elif format == COO:
-                outputs.append(sp.sparse.coo_array([]))
+                outputs.append(sp.sparse.coo_array(np.empty(ret['shape'])))
             elif format == CSC:
-                outputs.append(sp.sparse.csc_array([]))
+                outputs.append(sp.sparse.csc_array(np.empty(ret['shape'])))
 
             arg_vals = v.inputs
             new_flags = flags

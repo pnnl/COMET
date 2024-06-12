@@ -63,7 +63,7 @@ $ patch -s -p0 < comet-blis.patch
 ```
 $ cd $COMET_SRC
 $ cd blis
-$ ./configure --prefix=$COMET_SRC/install auto
+$ ./configure --prefix=$COMET_SRC/install --disable-shared auto
 $ make [-j]
 $ make check [-j]
 $ make install [-j]
@@ -116,7 +116,8 @@ We will try our best to timely incorporate user requests.
 We encourage you to use GitHub’s tracking system to report any issues or for code contributions as mentioned above. 
 For any other queries, please feel free to contact us via email:
 * **Gokcen Kestor** (email: *first-name.last-name@pnnl.gov*), [Pacific Northwest National Laboratory (PNNL), United States.](https://www.pnnl.gov/)
-* **Rizwan Ashraf** (email: *first-name.last-name@pnnl.gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
+* **Zhen Peng** (email: *first-name.last-name@pnnl.gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
+* **Polykarpos Thomadakis** (email: *first-name.last-name@pnnl.gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
 * **Ryan Friese** (email: *first-name.last-name@pnnl.gov*), [Pacific Northwest National Laboratory, United States.](https://www.pnnl.gov/)
 
 ## Cite Our Project

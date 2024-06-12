@@ -42,15 +42,17 @@
 #include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
 
+#include "mlir/Conversion/Passes.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
 #include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
-#include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
+#include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVMPass.h"
+// #include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
-#include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
+// #include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
 #include "mlir/Conversion/VectorToSCF/VectorToSCF.h"
 
 #include "mlir/IR/Verifier.h"
@@ -201,7 +203,7 @@ int loadMLIR(mlir::MLIRContext &context,
 {
   /// Handle '.ta' input to the compiler.
   if (inputType != InputType::MLIR &&
-      !llvm::StringRef(inputFilename).endswith(".mlir"))
+      !llvm::StringRef(inputFilename).ends_with(".mlir"))
   {
     auto moduleAST = parseInputFile(inputFilename);
     if (!moduleAST)
@@ -344,6 +346,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// =============================================================================
   if (IsLoweringtoSCF || emitLoops || emitLLVM)
   {
+
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
     optPM.addPass(mlir::comet::createDenseTensorDeclLoweringPass());            /// lowers dense input/output tensor declaration
     optPM.addPass(mlir::comet::createSparseTempOutputTensorDeclLoweringPass()); /// Temporary sparse output tensor declarations introduced by compound expressions
@@ -366,7 +369,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
-    optPM.addPass(mlir::createTensorBufferizePass());
+    optPM.addPass(mlir::tensor::createTensorBufferizePass());
     pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
 
     if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
@@ -378,7 +381,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       optPM.addPass(mlir::comet::createOptDenseTransposePass());
     }
 
-    /// Dump index tree dialect.
+    /// Dump scf dialect.
     if (emitLoops)
     {
       pm.addPass(mlir::createCanonicalizerPass());
@@ -415,10 +418,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Sprinkle some cleanups.
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());
-    /// Blanket-convert any remaining linalg ops to LLVM if any remain.
-    pm.addPass(mlir::createConvertLinalgToLLVMPass());
     /// Convert vector to LLVM (always needed).
-    pm.addPass(mlir::createConvertVectorToLLVMPass());
+    pm.addPass(mlir::createConvertVectorToLLVMPass()); // TODO: add more options on a per-need basis.
     //// Convert Math to LLVM (always needed).
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertMathToLLVMPass());
     /// Expand complicated MemRef operations before lowering them.

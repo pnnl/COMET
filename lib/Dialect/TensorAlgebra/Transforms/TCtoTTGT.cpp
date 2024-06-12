@@ -169,7 +169,7 @@ namespace
         for (size_t i = 0; i < affineMap.getNumResults(); i++)
         {
           auto expr = affineMap.getResult(i);
-          perm.push_back(expr.cast<AffineDimExpr>().getPosition());
+          perm.push_back(llvm::cast<AffineDimExpr>(expr).getPosition());
         }
 
         allPerms.push_back(perm);

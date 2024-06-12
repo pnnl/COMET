@@ -170,7 +170,33 @@ impl TensorStruct {
     }
     pub(crate) fn emit_mlir(&self) -> String {
         let (ids, dims) = self.index_ids_and_dims();
-        let ta_range = "!ta.range, ".repeat(self.indices.len());
+        let mut ta_range = ", ".to_string();
+        let mut ids = self.indices.iter().fold(
+            String::new(), |acc, idx| {
+                if idx.val_mlir() == "?"  {
+                    match idx.dim_of {
+                        Some((tid, dim))  =>    {
+                            if tid != self.mlir_id {
+                                format!("{} %d{}_{},", acc, tid, dim)
+                            }
+                            else {
+                                acc
+                            }
+                        }
+                        None => {
+                            acc
+                        }
+                    }
+                }
+                else {
+                    acc
+                }
+            }
+        );
+        if ids != "" {
+            ids = ids.strip_suffix(",").expect("trying to strip commas").to_string();
+            ta_range = "index, ".repeat(ids.split(',').collect::<Vec<_>>().len()).to_string();
+        }
         let res;
         match self.format {
             TensorFormat::Dense => {
@@ -184,8 +210,8 @@ impl TensorStruct {
                 );
             }
             _ => {
-                res = format!(
-                    "%{} = \"ta.sparse_tensor_decl\"({}) {{format = \"{}\", temporal_tensor = {}}} : ({}) -> {}\n",
+                let mut temp_res = format!(
+                    "%{} = \"ta.spTensor_decl\"({}) {{format = \"{}\", temporal_tensor = {}}} : ({}) -> {}\n",
                     self.mlir_id,
                     ids,
                     self.format,
@@ -193,6 +219,19 @@ impl TensorStruct {
                     &ta_range[0..ta_range.len() - 2],
                     dims
                 );
+                let dims_len = dims.split('x').count() -1; 
+                for i in 0..dims_len {
+                    if self.indices[i].dim_of.unwrap().0 == self.mlir_id {
+
+                        temp_res = format!(
+                            "{}%c{1}_{2} = arith.constant {2}: index\n", temp_res, self.mlir_id, i
+                        );
+                        temp_res = format!(
+                            "{0}%d{1}_{2} = \"ta.dim\"(%{1}, %c{1}_{2}) : ({3},index) -> index \n", temp_res, self.mlir_id, i, dims 
+                        );
+                    }
+                }
+                res = temp_res
             }
         }
         if self.fill != TensorFill::None {
@@ -248,13 +287,30 @@ impl TensorStruct {
 
         let content;
         parenthesized!(content in fork);
-        let indices = IndicesList::my_parse(&content, vars)?; //.parse::<IndicesList>()?;
+        let mut indices = IndicesList::my_parse(&content, vars)?; //.parse::<IndicesList>()?;
         if let TensorFormat::Generic(g) = &format {
             if g.len() != indices.len() {
                 abort!(
                     fork.span(),
                     "Generic format must have the same number of indices as the tensor"
                 );
+            }
+        }
+
+        for (dim,index) in indices.indices.iter_mut().enumerate() {
+            if let Some((_,_))  = index.dim_of {
+
+            }
+            else {
+                index.dim_of = Some((*object_id, dim));
+                if let Some(var) = vars.indices.get_mut(&index.name) {
+
+                    var.dim_of = Some((*object_id, dim));       
+                }
+                else{
+
+                    panic!("Could not find index: {}", index.name);
+                }
             }
         }
 

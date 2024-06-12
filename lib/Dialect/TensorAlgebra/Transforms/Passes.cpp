@@ -42,6 +42,7 @@ using namespace mlir;
 using namespace mlir::arith;
 using namespace mlir::bufferization;
 using namespace tensorAlgebra;
+using namespace mlir::affine;
 
 // *********** For debug purpose *********//
 // #define COMET_DEBUG_MODE

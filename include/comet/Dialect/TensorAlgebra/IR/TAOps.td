@@ -30,7 +30,7 @@
 
 
 include "mlir/IR/OpBase.td" 
-include "mlir/IR/FunctionInterfaces.td"
+include "mlir/interfaces/FunctionInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
@@ -83,14 +83,10 @@ def IndexLabelOp :
     TA_Op<"index_label", [Pure]>,
     Results<(outs IndexLabel)> {
   let summary = "Create an index label type value, used to create views";
-  let description = [{
-    The `ta.index_label` op creates a ta.index_label.
 
-    Example:
 
-      %3 = ta.index_label : !ta.index_label
-  }];
-
+  let arguments = (ins );
+  let results = (outs AnyType:$output);
   let builders = [OpBuilder<(ins ), 
     [{
       auto indexLabelType = IndexLabelType::get($_builder.getContext());
@@ -133,7 +129,7 @@ def DenseTensorDeclOp : TA_Op<"dense_tensor_decl", [Pure]> {
   //let hasVerifier = 1;
 }
 
-def SparseTensorDeclOp : TA_Op<"sparse_tensor_decl", [Pure]> {
+def SparseTensorDeclOp : TA_Op<"spTensor_decl", [Pure]> {
   /// Provide a summary and description for this operation. This can be used to
   /// auto-generate documenatation of the operations within our dialect.
   let summary = "Create a tensor declaration";
@@ -142,7 +138,7 @@ def SparseTensorDeclOp : TA_Op<"sparse_tensor_decl", [Pure]> {
     to the operation as an attribute. For example:
 
     ```mlir
-      %0 = "ta.sparse_tensor_decl"()
+      %0 = "ta.spTensor_decl"()
          { labels = vector[] : tensor<*x*xf64> }
         : () -> tensor<2x3xf64>
     ```
@@ -279,14 +275,14 @@ def DenseConstantOp : TA_Op<"constant", [Pure]> {
   let hasVerifier = 1;
 }
 
-def SparseTensorConstructOp : TA_Op<"sptensor_construct", [Pure]>{
+def SparseTensorConstructOp : TA_Op<"spTensor_construct", [Pure]>{
 
   let summary = "";
   let description = [{
   }];
 
   //The size of arguments depends on the rank of sparse tensors
-  //For example, for 2D sparse matrix, sptensor_construct consists of 12 elements:
+  //For example, for 2D sparse matrix, spTensor_construct consists of 12 elements:
   //A1pos, A1crd (first dimension) - each dimension consists of pos and crd arrays 
   //A2pos, A2crd (second dimension)
   //Aval (value array, nonzero elements)
@@ -903,6 +899,8 @@ def FuncOp : TA_Op<"func", [
 
     /// Returns the result types of this function.
     ArrayRef<Type> getResultTypes() { return getFunctionType().getResults(); }
+
+    Region *getCallableRegion() { return &getBody(); }
   }];
   let hasCustomAssemblyFormat = 1;
   let skipDefaultBuilders = 1;

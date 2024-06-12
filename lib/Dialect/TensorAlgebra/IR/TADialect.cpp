@@ -27,11 +27,10 @@
 //===----------------------------------------------------------------------===//
 #include <iostream>
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
-#include "comet/Dialect/TensorAlgebra/IR/TATypes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
 #include "mlir/IR/DialectImplementation.h"
-#include "mlir/IR/FunctionImplementation.h"
+#include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
 
 using namespace mlir;
@@ -42,97 +41,6 @@ using namespace mlir::tensorAlgebra;
 //===----------------------------------------------------------------------===//
 /// TADialect
 //===----------------------------------------------------------------------===//
-
-Type mlir::tensorAlgebra::TADialect::parseType(DialectAsmParser &parser) const
-{
-  /// Parse the main keyword for the type.
-  StringRef keyword;
-  /// for "indexlabel" and "sptensor" type
-  if (parser.parseKeyword(&keyword))
-    return Type();
-
-  MLIRContext *context = getContext();
-
-  /// Handle 'range' types.
-  if (keyword == "indexlabel")
-  {
-    return IndexLabelType::get(context);
-  }
-
-  /// Parse the element types of the sptensor.
-  if (keyword == "sptensor")
-  {
-    if (parser.parseLess())
-    {
-      return Type();
-    }
-
-    SmallVector<mlir::Type, 1> elementTypes;
-    do
-    {
-      /// Parse the current element type.
-      llvm::SMLoc typeLoc = parser.getCurrentLocation();
-      mlir::Type elementType;
-
-      if (parser.parseType(elementType))
-        return nullptr;
-
-      /// Check that the type is either a TensorType or another StructType.
-      if (!elementType.isa<mlir::TensorType, SparseTensorType, IndexType>())
-      {
-        parser.emitError(typeLoc, "element type for a struct must either "
-                                  "be a TensorType or a StructType, got: ")
-            << elementType;
-        return Type();
-      }
-      elementTypes.push_back(elementType);
-
-      /// Parse the optional: `,`
-    } while (succeeded(parser.parseOptionalComma()));
-
-    /// Parse: `>`
-    if (parser.parseGreater())
-      return Type();
-
-    return SparseTensorType::get(elementTypes);
-  }
-
-  parser.emitError(parser.getNameLoc(),
-                   "unknown TensorAlgebra type: " + keyword);
-  return Type();
-}
-
-/// IndexLabelType prints as just "indexlabel".
-static void print(IndexLabelType type, DialectAsmPrinter &printer)
-{
-  printer << "indexlabel";
-}
-
-void mlir::tensorAlgebra::TADialect::printType(
-    Type type, DialectAsmPrinter &printer) const
-{
-  if (type.isa<IndexLabelType>())
-  {
-    print(type.cast<IndexLabelType>(), printer);
-  }
-  else if (type.isa<SparseTensorType>())
-  {
-    /// Currently the only toy type is a struct type.
-    SparseTensorType sparseTensorType = type.cast<SparseTensorType>();
-
-    /// Print the struct type according to the parser format.
-    printer << "sptensor<";
-    llvm::interleaveComma(sparseTensorType.getElementTypes(), printer);
-    printer << '>';
-  }
-  else
-  {
-    llvm_unreachable("Unhandled TensorAlgebra type");
-  }
-}
-
-//===----------------------------------------------------------------------===//
-/// ConstantOp
 
 /// Build a constant operation.
 /// The builder is passed as an argument, so is the state that this method is
@@ -225,9 +133,21 @@ CallInterfaceCallable GenericCallOp::getCallableForCallee()
   return (*this)->getAttrOfType<SymbolRefAttr>("callee");
 }
 
+/// Set the callee for the generic call operation, this is required by the call
+/// interface.
+void GenericCallOp::setCalleeFromCallable(CallInterfaceCallable callee) {
+  (*this)->setAttr("callee", callee.get<SymbolRefAttr>());
+}
+
 /// Get the argument operands to the called function, this is required by the
 /// call interface.
 Operation::operand_range GenericCallOp::getArgOperands() { return getInputs(); }
+
+/// Get the argument operands to the called function as a mutable range, this is
+/// required by the call interface.
+MutableOperandRange GenericCallOp::getArgOperandsMutable() {
+  return getInputsMutable();
+}
 
 //===----------------------------------------------------------------------===//
 /// FuncOp
@@ -342,7 +262,7 @@ namespace mlir
   {
     namespace detail
     {
-      /// This class represents the internal storage of the Toy `SparseTensorType`.
+      /// This class represents the internal storage of the tensorAlgebra `SparseTensorType`.
       struct SparseTensorTypeStorage : public mlir::TypeStorage
       {
         /// The `KeyTy` is a required type that provides an interface for the storage
@@ -361,7 +281,7 @@ namespace mlir
         bool operator==(const KeyTy &key) const { return key == elementTypes; }
 
         /// Define a hash function for the key type. This is used when uniquing
-        /// instances of the storage, see the `StructType::get` method.
+        /// instances of the storage, see the `SparseTensorType::get` method.
         /// Note: This method isn't necessary as both llvm::ArrayRef and mlir::Type
         /// have hash functions available, so we could just omit this entirely.
         static llvm::hash_code hashKey(const KeyTy &key)
@@ -399,7 +319,7 @@ namespace mlir
       };
 
     } /// end namespace detail
-  }   /// end namespace tensoralgebra
+  } /// end namespace tensoralgebra
 } /// end namespace mlir
 
 /// Create an instance of a `SparseTensorType` with the given element types. There
@@ -423,6 +343,94 @@ llvm::ArrayRef<mlir::Type> SparseTensorType::getElementTypes()
   return getImpl()->elementTypes;
 }
 
+Type mlir::tensorAlgebra::TADialect::parseType(DialectAsmParser &parser) const
+{
+  /// Parse the main keyword for the type.
+  StringRef keyword;
+  /// for "indexlabel" and "spTensor" type
+  if (parser.parseKeyword(&keyword))
+    return Type();
+
+  MLIRContext *context = getContext();
+
+  /// Handle 'range' types.
+  if (keyword == "indexlabel")
+  {
+    return IndexLabelType::get(context);
+  }
+
+  /// Parse the element types of the spTensor.
+  if (keyword == "spTensor")
+  {
+    if (parser.parseLess())
+    {
+      return Type();
+    }
+
+    SmallVector<mlir::Type, 1> elementTypes;
+    do
+    {
+      /// Parse the current element type.
+      llvm::SMLoc typeLoc = parser.getCurrentLocation();
+      mlir::Type elementType;
+
+      if (parser.parseType(elementType))
+        return nullptr;
+
+      /// Check that the type is either a TensorType or another SparseTensorType.
+      if (!elementType.isa<mlir::TensorType, SparseTensorType, IndexType>())
+      {
+        parser.emitError(typeLoc, "element type for a struct must either "
+                                  "be a TensorType or a SparseTensorType, got: ")
+            << elementType;
+        return Type();
+      }
+      elementTypes.push_back(elementType);
+
+      /// Parse the optional: `,`
+    } while (succeeded(parser.parseOptionalComma()));
+
+    /// Parse: `>`
+    if (parser.parseGreater())
+      return Type();
+
+    return SparseTensorType::get(elementTypes);
+  }
+
+  parser.emitError(parser.getNameLoc(),
+                   "unknown TensorAlgebra type: " + keyword);
+  return Type();
+}
+
+/// IndexLabelType prints as just "indexlabel".
+static void print(IndexLabelType type, DialectAsmPrinter &printer)
+{
+  printer << "indexlabel";
+}
+
+void mlir::tensorAlgebra::TADialect::printType(
+    Type type, DialectAsmPrinter &printer) const
+{
+  if (type.isa<IndexLabelType>())
+  {
+    print(type.cast<IndexLabelType>(), printer);
+  }
+  else if (type.isa<SparseTensorType>())
+  {
+    /// Currently the only sparse tensor type is a struct type.
+    SparseTensorType sparseTensorType = type.cast<SparseTensorType>();
+
+    /// Print the struct type according to the parser format.
+    printer << "spTensor<";
+    llvm::interleaveComma(sparseTensorType.getElementTypes(), printer);
+    printer << '>';
+  }
+  else
+  {
+    llvm_unreachable("Unhandled TensorAlgebra type");
+  }
+}
+
 //===----------------------------------------------------------------------===//
 /// TableGen'd op method definitions
 //===----------------------------------------------------------------------===//
@@ -442,5 +450,6 @@ void TADialect::initialize()
 #define GET_OP_LIST
 #include "comet/Dialect/TensorAlgebra/IR/TAOps.cpp.inc"
       >();
-  addTypes<IndexLabelType, SparseTensorType>();
+  // addTypes<IndexLabelType, SparseTensorType>();
+  addTypes<SparseTensorType, IndexLabelType>();
 }

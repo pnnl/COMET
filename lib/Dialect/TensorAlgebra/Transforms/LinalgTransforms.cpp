@@ -61,6 +61,7 @@ using namespace mlir;
 using namespace mlir::linalg;
 using namespace mlir::arith;
 using namespace mlir::tensorAlgebra;
+using namespace mlir::affine;
 
 // *********** For debug purpose *********//
 // #define COMET_DEBUG_MODE
@@ -265,7 +266,9 @@ static void addPatternForTiling(MLIRContext *context,
                                 ArrayRef<int64_t> interchange = {})
 {
   scf::SCFTilingOptions tilingOptions;
-  tilingOptions.setTileSizes(tileSizes).setInterchange(interchange);
+  SmallVector<OpFoldResult> tileSizesOfr =
+      getAsIndexOpFoldResult(context, tileSizes);
+  tilingOptions.setTileSizes(tileSizesOfr).setInterchange(interchange);
   LinalgTransformationFilter filter(StringAttr::get(context, filterName),
                                     StringAttr::get(context, updatedFilterName));
   patterns.add<LinalgTilingLoops>(context, tilingOptions, filter);
@@ -589,7 +592,7 @@ struct OptDenseTranspose : public ConversionPattern
               /// k = (i,j]. k is unsigned, should be >= 0. use k-1, so k>=1
               while (k > 0 && k > i)
               {
-                mlir::interchangeLoops(loops[currentOrder[k - 1]], loops[currentOrder[k]]);
+                mlir::affine::interchangeLoops(loops[currentOrder[k - 1]], loops[currentOrder[k]]);
                 std::swap(currentOrder[k - 1], currentOrder[k]);
                 k--;
               }
@@ -615,7 +618,7 @@ struct OptDenseTranspose : public ConversionPattern
           tileSizes.push_back(tile_size);
         }
         SmallVector<AffineForOp, 6> tiledNest;
-        if (failed(mlir::tilePerfectlyNested(newLoops, tileSizes, &tiledNest)))
+        if (failed(mlir::affine::tilePerfectlyNested(newLoops, tileSizes, &tiledNest)))
           return failure();
 
         comet_vdump(tiledNest[0]);

@@ -47,6 +47,7 @@
 using namespace mlir;
 using namespace mlir::arith;
 using namespace mlir::bufferization;
+using namespace mlir::affine;
 
 using namespace mlir::tensorAlgebra;
 using namespace mlir::indexTree;
@@ -91,7 +92,7 @@ namespace
       tensorLoadOp = cast<ToTensorOp>(tensorOperand.getDefiningOp());
       auto memref = tensorLoadOp.getMemref();
       auto valueAttr = tensorFillOp.getValue();
-      Value constantOp = rewriter.create<ConstantOp>(loc, valueAttr);
+      Value constantOp = rewriter.create<ConstantOp>(loc, llvm::cast<TypedAttr>(valueAttr));
 
       rewriter.create<linalg::FillOp>(loc, constantOp, memref);
       rewriter.eraseOp(op);

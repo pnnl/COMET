@@ -2566,10 +2566,11 @@ namespace
         data.push_back(randNum);
       }
 
+       auto lhs_labeledtensor_dataType = mlir::RankedTensorType::get(1, lhs_labeledtensor.getType());
       /// This is the actual attribute that holds the list of values for this
       /// tensor literal.
       auto dataAttribute =
-          mlir::DenseElementsAttr::get(lhs_labeledtensor.getType(), llvm::ArrayRef(data));
+          mlir::DenseElementsAttr::get(lhs_labeledtensor_dataType, llvm::ArrayRef(data));
 
       /// Build the MLIR op `ta.constant`. This invokes the `DenseConstantOp::build`
       /// method.
