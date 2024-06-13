@@ -71,7 +71,7 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
       if(format == TensorFormatEnum::D)
       {
         Value max = construct_op.getOperand((8*rank) + 2 + dim); //TODO: Fix magic numbers
-        new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max, tensor, rewriter.getI32ArrayAttr({dim}));
+        new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max, tensor, rewriter.getI32ArrayAttr({static_cast<int>(dim)}));
       } else
       {
         Value pos = construct_op.getOperand(4 * dim);
@@ -181,7 +181,7 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
       } else {
         max_val = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(max));
       }
-      new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max_val, tensor, rewriter.getI32ArrayAttr({dim}));
+      new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max_val, tensor, rewriter.getI32ArrayAttr({static_cast<int>(dim)}));
     }
     rewriter.replaceOp(domain_op, new_domain);
     return success();

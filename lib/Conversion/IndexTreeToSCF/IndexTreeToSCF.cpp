@@ -684,7 +684,7 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
                                                   rewriter.getIndexAttr(1));
     scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, loop_init_args);
     crd = for_loop.getInductionVar();
-    induction_var = crd;
+    induction_var = crd;    
 
     unsigned init_arg_idx = 0;
     for(Value init_arg : loop_init_args){
@@ -1001,14 +1001,14 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
           {
             // TODO: This is incorrect, deal with reordering!!!!
             if(!access_op.getPrevDim()){
-              access_pos = induction_var;
+              access_pos = crd;
             } else {
               rewriter.restoreInsertionPoint(before);
               Value dim_idx = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
               Value dim_size = rewriter.create<tensorAlgebra::SpTensorGetDimSize>(loc, index_type, tensor, rewriter.getI32IntegerAttr(dim));
               Value pos_start = rewriter.create<arith::MulIOp>(loc, index_type, dim_size, access_op.getPrevDim()); 
               rewriter.restoreInsertionPoint(loop_end);
-              access_pos = rewriter.create<arith::AddIOp>(loc, index_type, pos_start, induction_var);
+              access_pos = rewriter.create<arith::AddIOp>(loc, index_type, pos_start,crd);
             }
             access_crd = crd;
           }
