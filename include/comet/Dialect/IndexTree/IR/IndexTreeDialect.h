@@ -61,7 +61,7 @@ namespace mlir
 {
     namespace indexTree
     {
-        static const llvm::StringSet<> Semiring_intersectOps{"land", "times"};
+        static const llvm::StringSet<> Semiring_intersectOps{"land", "times", "pairxy"};
     }
 }
 
