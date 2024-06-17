@@ -790,6 +790,38 @@ class GetTimeLowering : public OpConversionPattern<GetTimeOp> {
   }
 };
 
+class PrintElapsedTimeLowering : public OpConversionPattern<PrintElapsedTimeOp> {
+  using OpConversionPattern<PrintElapsedTimeOp>::OpConversionPattern;
+  PrintElapsedTimeLowering(MLIRContext *context) : OpConversionPattern(context) {}
+    
+  LogicalResult
+  matchAndRewrite(PrintElapsedTimeOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override
+    {
+      auto ctx = rewriter.getContext();
+      auto module = op->getParentOfType<ModuleOp>();
+
+      auto start = adaptor.getStart();
+      auto end = adaptor.getEnd();
+      std::string printElapsedTimeStr = "printElapsedTime";
+      auto f64Type = rewriter.getF64Type();
+
+      if (!hasFuncDeclaration(module, printElapsedTimeStr))
+      {
+        auto printElapsedTimeFunc = FunctionType::get(ctx, {f64Type, f64Type}, {});
+        /// func @printElapsedTime(f64, f64) -> ()
+        func::FuncOp func1 = func::FuncOp::create(op->getLoc(), printElapsedTimeStr,
+                                                  printElapsedTimeFunc, ArrayRef<NamedAttribute>{});
+        func1.setPrivate();
+        module.push_back(func1);
+      }
+
+      rewriter.replaceOpWithNewOp<func::CallOp>(op, printElapsedTimeStr, SmallVector<Type, 2>{}, ValueRange{start, end});
+
+      return success();
+    }
+  };
+
 }
 
 void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, RewritePatternSet &patterns, TypeConverter &typeConverter) {
@@ -899,7 +931,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
       return op->getResult(0);
     });
 
-  patterns.add<PrintOpLowering, ConvertSetOp, GetTimeLowering>(typeConverter, context);
+  patterns.add<PrintOpLowering, ConvertSetOp, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
   patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorFindPos>(typeConverter, context);
   patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
 }

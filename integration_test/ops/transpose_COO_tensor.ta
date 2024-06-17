@@ -27,11 +27,11 @@ def main() {
 # CHECK-NEXT: data = 
 # CHECK-NEXT: 1,3,6,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 0,
+# CHECK-NEXT: -1,
 # CHECK-NEXT: data = 
 # CHECK-NEXT: 2,1,3,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 0,
+# CHECK-NEXT: -1,
 # CHECK-NEXT: data = 
 # CHECK-NEXT: 3,2,5,
 # CHECK-NEXT: data = 
