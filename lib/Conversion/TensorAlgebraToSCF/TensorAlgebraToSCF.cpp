@@ -219,8 +219,9 @@ namespace
       { /// for dense
         comet_debug() << "Dense transpose\n";
 
-        auto inputTensorLoadOp = cast<ToTensorOp>(op->getOperand(0).getDefiningOp());
-        auto inputMemref = inputTensorLoadOp.getMemref();
+        auto  inputTensor = op->getOperand(0);
+        // auto inputTensorLoadOp = cast<ToTensorOp>(op->getOperand(0).getDefiningOp());
+        // auto inputMemref = inputTensorLoadOp.getMemref();
 
         for (auto u : op.getOperation()->getResult(0).getUsers())
         {
@@ -233,13 +234,10 @@ namespace
         }
 
         comet_vdump(lhs);
-        auto outputMemref = lhs.getDefiningOp()->getOperand(0);
-        rewriter.create<linalg::TransposeOp>(loc, inputMemref, outputMemref, llvm::ArrayRef<int64_t>(allPerms[1]));
-        Value res_value = rewriter.create<ToTensorOp>(loc, outputMemref);
-
-        op.replaceAllUsesWith(res_value);
-        rewriter.eraseOp(op);
-
+        // auto outputMemref = lhs.getDefiningOp()->getOperand(0);
+        auto la_transpose = rewriter.create<linalg::TransposeOp>(loc, inputTensor, lhs, llvm::ArrayRef<int64_t>(allPerms[1]));
+        // Value res_value = rewriter.create<ToTensorOp>(loc, outputMemref, rewriter.getUnitAttr(), rewriter.getUnitAttr());
+        rewriter.replaceOp(op, la_transpose.getResults());
         return success();
       }
       else
