@@ -155,7 +155,6 @@ jobs:
       run: cd ${{github.workspace}}/frontends/numpy-scipy/ && pip3 install -e .
     
     - name: Test CometPy
-      working-directory: ${{github.workspace}}/build
+      working-directory: ${{github.workspace}}/frontends/numpy-scipy/integration_tests/
 
-      run: | 
-        cd ${{github.workspace}}/frontends/numpy-scipy/integration_tests/ && python3 numpy_integration.py -v
+      run: python3 numpy_integration.py -v
