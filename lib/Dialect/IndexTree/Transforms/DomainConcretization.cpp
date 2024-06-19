@@ -175,9 +175,11 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
       auto max = tensor_type.getShape()[dim];
       Value max_val;
       if(max < 0) {
-        Operation* toTensor = tensor.getDefiningOp();
-        memref::AllocOp alloc = toTensor->getOperand(0).getDefiningOp<memref::AllocOp>();
-        max_val = alloc.getOperand(0);
+        auto prev = rewriter.saveInsertionPoint();
+        rewriter.setInsertionPointAfter(tensor.getDefiningOp());
+        Value dim_val = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(dim));
+        max_val = rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), tensor, dim_val);
+        rewriter.restoreInsertionPoint(prev);
       } else {
         max_val = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(max));
       }
@@ -377,7 +379,7 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
       if(new_parent_domain)
       {
         // Create or fold so multiple levels of nested domains are foleded into one
-        new_domain = rewriter.create<IndexTreeNestedDomainOp>(loc, 
+        new_domain = rewriter.createOrFold<IndexTreeNestedDomainOp>(loc, 
                                                                     domain_op->getResultTypes(),
                                                                     llvm::SmallVector<Value>{new_parent_domain, new_domain},
                                                                     sparse_domain_op.getDimSize());
@@ -385,6 +387,17 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
     } else {
       // Clone
       new_domain = rewriter.clone(*domain_op, map)->getResult(0);
+    }
+
+    auto new_domain_op = new_domain.getDefiningOp();
+    for(auto arg : new_domain_op->getOperands())
+    {
+      Operation* origin = arg.getDefiningOp();
+      if(new_domain_op->getBlock() == origin->getBlock() && new_domain_op->isBeforeInBlock(origin))
+      {
+        rewriter.updateRootInPlace(new_domain_op, [&]() { new_domain_op->moveAfter(origin); });
+        rewriter.setInsertionPointAfter(new_domain_op);
+      }
     }
     return new_domain;
   }

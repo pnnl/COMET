@@ -1032,8 +1032,13 @@ namespace
         {
           comet_debug() << " Output Format: " << out_format << "\n";
           formats.push_back(out_format);
-          std::vector format_array = getFormats(out_format, result_dims.size(), builder.getContext());
-          ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, result_dims, format_array);
+          if(out_format.compare("Dense") == 0)
+          {
+            ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
+          } else {
+            std::vector format_array = getFormats(out_format, result_dims.size(), builder.getContext());
+            ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, result_dims, format_array);
+          }
         }
         else
         {
