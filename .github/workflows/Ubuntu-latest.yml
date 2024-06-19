@@ -14,7 +14,7 @@ env:
   COMET_SRC: ${{github.workspace}}
 
 jobs:
-  build-comet:
+  build-and-test-comet:
     # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
     # You can convert this to a matrix build if you need cross-platform coverage.
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
@@ -22,9 +22,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    # - uses: lukka/get-cmake@latest
-    - name: Install CMake
-      run: sudo apt-get install cmake && sudo apt-get install ninja-build
+    - uses: lukka/get-cmake@latest
+    # - name: Install CMake
+    #   run: sudo apt-get install cmake && sudo apt-get install ninja-build
     
     - name: Cache Submodules
       id: cache-submodule
@@ -56,28 +56,28 @@ jobs:
       # Build your program with the given configuration
       run: rm -rf ${{github.workspace}}/build && mkdir ${{github.workspace}}/build && cd ${{github.workspace}}/build && cmake -G Ninja .. -DMLIR_DIR=${{github.workspace}}/llvm/build/lib/cmake/mlir -DLLVM_DIR=${{github.workspace}}/llvm/build/lib/cmake/llvm -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release && ninja 
 
-  test-comet-backend:
+  # test-comet-backend:
 
-    needs: build-comet
-    runs-on: ubuntu-latest
+  #   needs: build-comet
+  #   runs-on: ubuntu-latest
     
-    steps:
-    - uses: actions/checkout@v4
-    # - uses: lukka/get-cmake@latest
-    - name: Install CMake
-      run: sudo apt-get install cmake && sudo apt-get install ninja-build
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #   # - uses: lukka/get-cmake@latest
+  #   - name: Install CMake
+  #     run: sudo apt-get install cmake && sudo apt-get install ninja-build
       
-    - name: Cache Submodules
-      id: cache-submodule
-      uses: actions/cache@v4
-      # if: always()
-      with:
-        path: |
-          ${{github.workspace}}/llvm
-          ${{github.workspace}}/blis/
-          ${{github.workspace}}/install/
-          ${{github.workspace}}/build/
-        key: ${{ runner.os }}-submodules
+  #   - name: Cache Submodules
+  #     id: cache-submodule
+  #     uses: actions/cache@v4
+  #     # if: always()
+  #     with:
+  #       path: |
+  #         ${{github.workspace}}/llvm
+  #         ${{github.workspace}}/blis/
+  #         ${{github.workspace}}/install/
+  #         ${{github.workspace}}/build/
+  #       key: ${{ runner.os }}-submodules
     
     - name: Initialize Python 3.11
       uses: actions/setup-python@v4
@@ -89,9 +89,7 @@ jobs:
       run: |
           sudo apt-get install -y python3-psutil
           sudo apt-get install -y python3-pip
-
-
-            
+           
     - name: Test
       working-directory: ${{github.workspace}}/build
       shell: bash
@@ -131,7 +129,7 @@ jobs:
   #       cargo test
   
   test-cometpy:
-    needs: build-comet
+    needs: build-and-test-comet
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
