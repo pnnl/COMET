@@ -20,6 +20,7 @@
 //
 
 #include <cassert>
+#include <unordered_set>
 
 #include "comet/Conversion/TensorAlgebraToIndexTree/TensorAlgebraToIndexTree.h"
 
@@ -55,6 +56,50 @@ namespace
     void runOnOperation() override;
   };
 } /// namespace
+
+/**
+ * @brief Check if the given allPerms is from one of the chosen operations.
+ * Current algorithm is to check the pattern of the allPerms to see if it is tensor contraction.
+ * Current chosen operations includes: 
+ * dense matrix-matrix multiplication (MM), 
+ * dense matrix-vector multiplication (MV), 
+ * sparse matrix-dense matrix multiplication (SpMM), 
+ * sparse matrix-dense vector multiplication (SpMV)
+ * 
+ * @param allPerms allPerms from the operation. For example, [[d0, d1], [d1, d2], [d0, d2]]
+ * @return true : it is one of the chosen operations.
+ * @return false : it is not.
+ */
+bool check_chosen_operations(const std::vector<std::vector<int64_t>> &allPerms) {
+  if (allPerms.size() != 3) {
+    return false;
+  }
+  /// do lhs = op(rhs1, rhs2)
+  const std::vector<int64_t> &rhs1_perms = allPerms[0];
+  const std::vector<int64_t> &rhs2_perms = allPerms[1];
+  const std::vector<int64_t> &lhs_perms = allPerms[2];
+
+  if (rhs1_perms.size() == 2) {
+    if (rhs2_perms.size() == 2 && lhs_perms.size() == 2) {
+      /// If it is op(matrix, matrix)
+      if (rhs1_perms[0] == lhs_perms[0] && 
+          rhs1_perms[1] == rhs2_perms[0] && 
+          rhs2_perms[1] == lhs_perms[1]) {
+        /// Then op is MM or SpMM
+        return true;
+      }
+    } else if (rhs2_perms.size() == 1 && lhs_perms.size() == 1) {
+      /// If it is op(matrix, vector)
+      if (rhs1_perms[0] == lhs_perms[0] &&
+          rhs1_perms[1] == rhs2_perms[0]) {
+        /// Then op is MV or SpMV
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 Value getRealLhs(Operation *op)
 {
@@ -137,6 +182,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
   Value lhs_tensor = getRealLhs(op);
   Value mask_tensor = op.getMask();
+  // rhs1_tensor.getDefiningOp
 
   comet_debug() << "LowerTensorAlgebraToIndexTreePass: doTensorMultOp\n";
   comet_debug() << "rhs1-tensor\n";
@@ -154,6 +200,24 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
 
   auto allPerms = getAllPerms(op.getIndexingMaps());
   assert(allPerms.size() == 3);
+
+  #ifdef COMET_DEBUG_MODE
+  comet_debug() << "\n";
+  llvm::errs() << "[";
+  for (auto &perm : allPerms) {
+    llvm::errs() << "[";
+    for (auto &i : perm) {
+      llvm::errs() << i << ",";
+    }
+    llvm::errs() << "],";
+  }
+  llvm::errs() << "]\n";
+  comet_debug() << "";
+  // comet_debug() << allPerms;
+  #endif
+
+  /// If the operation is one of the chosen operations, then record output indices as parallel interators.
+  bool is_chosen_operations = check_chosen_operations(allPerms);
 
   auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
   auto SemiringOp = op.getSemiringAttr();
@@ -191,11 +255,12 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
   IndicesType rhs2_indices = tree->getIndices(rhs2_labels);
 
   IndicesType allIndices = getUnion(rhs1_indices, rhs2_indices);
+  tree->setSizeOfIteratorTypes(allIndices.size());  // Set the total number of iterators
 
   auto lhsIndices = A->getIndices();
 
   TreeNode *parent = tree->getRoot();
-  for (unsigned long i = 0; i < allIndices.size(); i++)
+  for (unsigned long i = 0; i < allIndices.size(); ++i)
   {
     int index = allIndices[i];
     auto &idomain = inputDomains.at(index);
@@ -203,12 +268,25 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree)
     auto node = tree->addIndexNode(index, parent, idomain);
 
     /// If this index appears on the lhs too, set output domain for the index node
+    /// and also set the index as a parallel iterator
+    unique_ptr<IteratorType> iteratorType(new IteratorType);
+    comet_debug() << iteratorType->dump() << "\n";
     if (std::find(lhsIndices.begin(), lhsIndices.end(), index) != lhsIndices.end())
     {
       auto &odomain = outputDomains.at(index);
       node->setOutputDomain(odomain);
+      if (is_chosen_operations) {
+        /// If the operation is one of the chosen ones, and the index appears on the lhs,
+        /// then the index has "parallel" as its iterator type.
+        iteratorType->setType("parallel");
+      }
     }
     comet_debug() << "index " << index << "\n";
+    /// Set the iterator type of the node
+    tree->setIteratorTypeByIndex(index, std::move(iteratorType));
+    node->setIteratorType(tree->getIteratorTypeByIndex(index));
+    comet_debug() << "tree: " << tree->getIteratorTypeByIndex(index)->dump() << "\n";
+    comet_debug() << "node: " << node->getIteratorType()->dump() << "\n";
 
     parent = node;
   }
@@ -431,10 +509,13 @@ void treeToDialect(Index_Tree *tree)
       SmallVector<int64_t, 1> ids;
       ids.push_back(node->getId());
 
-      Value indexNodeOp = builder.create<IndexTreeIndicesOp>(loc,
-                                                             i64Type,
-                                                             children,
-                                                             indicesAttr);
+      /// new attribute iterator_type
+      auto dumb_iterator_type = builder.getStringAttr(node->getIteratorType()->getType());
+      Value indexNodeOp = builder.create<indexTree::IndexTreeIndicesOp>(loc,
+                                                                        i64Type,
+                                                                        children,
+                                                                        indicesAttr,
+                                                                        dumb_iterator_type);
 
       nodeToOp[node] = indexNodeOp;
 
@@ -462,6 +543,10 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
 {
   unique_ptr<Index_Tree> tree;
   func::FuncOp func = getOperation();
+// #ifdef COMET_DEBUG_MODE
+//   comet_debug() << "Before LowerTensorAlgebraToIndexTreePass\n";
+//   func.dump();
+// #endif
 
   tree = Index_Tree::createTreeWithRoot();
   bool formIndexTreeDialect = false;
@@ -473,11 +558,17 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
     {
       if (isa<TensorMultOp>(&op))
       {
+        #ifdef COMET_DEBUG_MODE
+        comet_debug() << "\n !!! doTensorMultOp\n";
+        #endif
         doTensorMultOp(cast<TensorMultOp>(&op), tree);
         formIndexTreeDialect = true;
       }
       else if (isa<TensorElewsMultOp>(&op))
       {
+        #ifdef COMET_DEBUG_MODE
+        comet_debug() << "\n !!! doElementWiseOp<TensorElewsMultOp>\n";
+        #endif
         doElementWiseOp<TensorElewsMultOp>(cast<TensorElewsMultOp>(&op), tree);
         formIndexTreeDialect = true;
       }
@@ -486,11 +577,17 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
         /// elementwise addition and subtraction
         if (isa<TensorAddOp>(&op))
         {
+          #ifdef COMET_DEBUG_MODE
+          comet_debug() << "\n !!! doElementWiseOp<TensorAddOp>\n";
+          #endif
           doElementWiseOp<TensorAddOp>(cast<TensorAddOp>(&op), tree);
         }
 
         if (isa<TensorSubtractOp>(&op))
         {
+          #ifdef COMET_DEBUG_MODE
+          comet_debug() << "\n !!! doElementWiseOp<TensorSubtractOp>\n";
+          #endif
           doElementWiseOp<TensorSubtractOp>(cast<TensorSubtractOp>(&op), tree);
         }
         formIndexTreeDialect = true;

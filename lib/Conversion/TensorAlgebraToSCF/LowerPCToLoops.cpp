@@ -171,7 +171,7 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody(Location loc, OpBuilder &bui
   if (isa<indexTree::IndexTreeIndicesOp>(op) && indices != NULL)
   {
     indexTree::IndexTreeIndicesOp it_indices_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(op);
-    Value indices_op_new = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, indices, it_indices_op.getIndices());
+    Value indices_op_new = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, indices, it_indices_op.getIndices(), it_indices_op.getIteratorType());
 
     indices = indices_op_new; /// for subsequent IndexTreeIndicesOp creation
   }
@@ -180,7 +180,7 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody(Location loc, OpBuilder &bui
   if (isa<indexTree::IndexTreeIndicesOp>(op) && compute != NULL && indices == NULL)
   {
     indexTree::IndexTreeIndicesOp it_indices_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(op);
-    indices = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, compute, it_indices_op.getIndices());
+    indices = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, compute, it_indices_op.getIndices(), it_indices_op.getIteratorType());
   }
 
   if (isa<indexTree::IndexTreeOp>(op) && indices != NULL)
