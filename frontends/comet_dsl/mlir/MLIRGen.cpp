@@ -71,7 +71,7 @@ using llvm::Twine;
 using StringSet = std::set<std::string>;
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -591,23 +591,41 @@ namespace
         comet_debug() << "\n";
 
         auto lhs_tensor = lhs.getDefiningOp()->getOpResult(0).getType();
-        assert(lhs_tensor.isa<mlir::TensorType>());
 
         comet_pdump(lhs.getDefiningOp());
+        
         auto lhs_labeledtensor = lhs.getDefiningOp()->getOpResult(0);
 
         comet_vdump(lhs_labeledtensor); // ta.labeled_tensor
-        auto lhs_el_type = lhs_tensor.cast<mlir::TensorType>().getElementType();
+        mlir::Type lhs_el_type;
+        if(auto tensor_type = llvm::dyn_cast<mlir::TensorType>(lhs_tensor)){
+          lhs_el_type = tensor_type.getElementType();
+        }
+        else if(auto tensor_type = llvm::dyn_cast<SparseTensorType>(lhs_tensor)){
+          lhs_el_type = tensor_type.getElementType();
+        }
+        else {
+          assert(false && "Expected a tensor input");
+        }
 
         auto rhs_tensor = rhs.getDefiningOp()->getOpResult(0).getType();
 
         comet_pdump(rhs.getDefiningOp());
-        assert(rhs_tensor.isa<mlir::TensorType>());
 
         auto rhs_labeledtensor = rhs.getDefiningOp()->getOpResult(0);
 
         comet_vdump(rhs_labeledtensor);
-        auto rhs_el_type = rhs_tensor.cast<mlir::TensorType>().getElementType();
+        mlir::Type rhs_el_type;
+        if(auto tensor_type = llvm::dyn_cast<mlir::TensorType>(rhs_tensor)){
+          rhs_el_type = tensor_type.getElementType();
+        }
+        else if(auto tensor_type = llvm::dyn_cast<SparseTensorType>(rhs_tensor)){
+          rhs_el_type = tensor_type.getElementType();
+        }
+        else {
+          assert(false && "Expected a tensor input");
+        }
+
         auto result_type = getBinOpResultType(lhs_el_type, rhs_el_type);
         comet_debug() << __LINE__ << " ";
         comet_vdump(result_type);
@@ -817,8 +835,6 @@ namespace
         }
 
         std::vector<int64_t> result_dims = getDimSizes(ret_lbls_value);
-        auto ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
-
         auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
 
         SmallVector<mlir::StringRef, 8> formats;
@@ -1000,18 +1016,24 @@ namespace
         }
         comet_debug() << __LINE__ << " formats.size(): " << formats.size() << "\n";
         assert(formats.size() == 2 && " less than 2 input tensors\n");
+        mlir::Type ret_tensor_type;
         if (formats[0].compare("CSR") == 0 && formats[1].compare("CSR") == 0)
         {
           formats.push_back("CSR");
+          std::vector format_array = getFormats("CSR", result_dims.size(), builder.getContext());
+          ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, result_dims, format_array);
         }
         else if (formats[0].compare("Dense") == 0 && formats[1].compare("Dense") == 0)
         {
           formats.push_back("Dense");
+          ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
         }
         else if (out_format.length() > 0) // non-empty format string provided.
         {
           comet_debug() << " Output Format: " << out_format << "\n";
           formats.push_back(out_format);
+          std::vector format_array = getFormats(out_format, result_dims.size(), builder.getContext());
+          ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, result_dims, format_array);
         }
         else
         {
@@ -1881,7 +1903,7 @@ namespace
 
         std::vector<int32_t> format = mlir::tensorAlgebra::getFormats(format_strref, result_dims.size(), builder.getContext());
         mlir::Type element_type = builder.getF64Type();
-        auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, result_dims, format);
+        return_type = SparseTensorType::get(builder.getContext(), element_type, result_dims, format);
 
         /// no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
         /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries

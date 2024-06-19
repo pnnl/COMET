@@ -377,7 +377,7 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
       if(new_parent_domain)
       {
         // Create or fold so multiple levels of nested domains are foleded into one
-        new_domain = rewriter.createOrFold<IndexTreeNestedDomainOp>(loc, 
+        new_domain = rewriter.create<IndexTreeNestedDomainOp>(loc, 
                                                                     domain_op->getResultTypes(),
                                                                     llvm::SmallVector<Value>{new_parent_domain, new_domain},
                                                                     sparse_domain_op.getDimSize());
