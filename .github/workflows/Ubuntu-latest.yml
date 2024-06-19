@@ -22,8 +22,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: lukka/get-cmake@latest
-
+    # - uses: lukka/get-cmake@latest
+    - name: Install CMake
+      run: sudo apt-get install cmake
     
     - name: Cache Submodules
       id: cache-submodule
@@ -62,8 +63,10 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
-    - uses: lukka/get-cmake@latest
-
+    # - uses: lukka/get-cmake@latest
+    - name: Install CMake
+      run: sudo apt-get install cmake
+      
     - name: Cache Submodules
       id: cache-submodule
       uses: actions/cache@v4
