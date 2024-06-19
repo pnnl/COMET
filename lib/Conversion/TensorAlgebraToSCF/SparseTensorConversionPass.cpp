@@ -692,8 +692,8 @@ class ConvertSetOp : public OpConversionPattern<TensorSetOp> {
     {
       auto user = use.getOwner();
       LLVM_DEBUG({logger.startLine() << "Found user" << user << "\n";});
-      // What happens about uses in other blocks?
-      if(user->getBlock() == op->getBlock() && op->isBeforeInBlock(user))
+      auto ancestor = op->getBlock()->findAncestorOpInBlock(*user);
+      if(ancestor && op->isBeforeInBlock(ancestor))
       {
         LLVM_DEBUG({logger.startLine() << "Operation is before in block" <<  "\n";});
         rewriter.updateRootInPlace(user, [&]() { user->setOperand(use.getOperandNumber(), lhs); });
@@ -797,30 +797,30 @@ class PrintElapsedTimeLowering : public OpConversionPattern<PrintElapsedTimeOp> 
   LogicalResult
   matchAndRewrite(PrintElapsedTimeOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override
+  {
+    auto ctx = rewriter.getContext();
+    auto module = op->getParentOfType<ModuleOp>();
+
+    auto start = adaptor.getStart();
+    auto end = adaptor.getEnd();
+    std::string printElapsedTimeStr = "printElapsedTime";
+    auto f64Type = rewriter.getF64Type();
+
+    if (!hasFuncDeclaration(module, printElapsedTimeStr))
     {
-      auto ctx = rewriter.getContext();
-      auto module = op->getParentOfType<ModuleOp>();
-
-      auto start = adaptor.getStart();
-      auto end = adaptor.getEnd();
-      std::string printElapsedTimeStr = "printElapsedTime";
-      auto f64Type = rewriter.getF64Type();
-
-      if (!hasFuncDeclaration(module, printElapsedTimeStr))
-      {
-        auto printElapsedTimeFunc = FunctionType::get(ctx, {f64Type, f64Type}, {});
-        /// func @printElapsedTime(f64, f64) -> ()
-        func::FuncOp func1 = func::FuncOp::create(op->getLoc(), printElapsedTimeStr,
-                                                  printElapsedTimeFunc, ArrayRef<NamedAttribute>{});
-        func1.setPrivate();
-        module.push_back(func1);
-      }
-
-      rewriter.replaceOpWithNewOp<func::CallOp>(op, printElapsedTimeStr, SmallVector<Type, 2>{}, ValueRange{start, end});
-
-      return success();
+      auto printElapsedTimeFunc = FunctionType::get(ctx, {f64Type, f64Type}, {});
+      /// func @printElapsedTime(f64, f64) -> ()
+      func::FuncOp func1 = func::FuncOp::create(op->getLoc(), printElapsedTimeStr,
+                                                printElapsedTimeFunc, ArrayRef<NamedAttribute>{});
+      func1.setPrivate();
+      module.push_back(func1);
     }
-  };
+
+    rewriter.replaceOpWithNewOp<func::CallOp>(op, printElapsedTimeStr, SmallVector<Type, 2>{}, ValueRange{start, end});
+
+    return success();
+  }
+};
 
 }
 
@@ -854,13 +854,8 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
           case TensorFormatEnum::CU:
           case TensorFormatEnum::CN:
           {
-            Type pos_type;
-            if(is_known_size) {
-              pos_type = mlir::RankedTensorType::get({known_size,}, index_type);
-            } else {
-              pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, 
+            Type pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, 
                                                       index_type);
-            }
             Type crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, 
                                                     index_type);
             is_known_size = false;
