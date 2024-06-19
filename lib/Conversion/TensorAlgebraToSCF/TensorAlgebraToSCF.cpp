@@ -28,6 +28,7 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
@@ -736,6 +737,26 @@ namespace
     }
   }; /// ScalarOpsLowering
 
+class ConvertSetOp : public OpConversionPattern<TensorSetOp> {
+  using OpConversionPattern<TensorSetOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(TensorSetOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+
+    auto opAdaptor = llvm::cast<TensorSetOpAdaptor>(adaptor);
+    Value lhs = opAdaptor.getLhs();
+    Value rhs = opAdaptor.getRhs();
+    rewriter.replaceUseIf(rhs, lhs, [&](OpOperand& use) { 
+      auto user = use.getOwner();
+      auto ancestor = op->getBlock()->findAncestorOpInBlock(*user);
+      return (ancestor && op->isBeforeInBlock(ancestor)); 
+    });
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 } /// end anonymous namespace.
 
 /// This is a partial lowering to linear algebra of the tensor algebra operations that are
@@ -779,6 +800,12 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
                          bufferization::BufferizationDialect>();
 
   target.addLegalOp<func::CallOp>();
+  target.addLegalDialect<tensorAlgebra::TADialect, indexTree::IndexTreeDialect>();
+  target.addIllegalOp<tensorAlgebra::TransposeOp, 
+                      tensorAlgebra::ReduceOp,
+                      tensorAlgebra::ScalarOp,
+                      tensorAlgebra::DenseConstantOp, 
+                      tensorAlgebra::TensorSetOp>();
 
   /// Now that the conversion target has been defined, we just need to provide
   /// the set of patterns that will lower the TA operations.
@@ -787,7 +814,8 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
   patterns.insert<TensorTransposeLowering,
                   ReduceOpLowering,
                   ScalarOpsLowering,
-                  ConstantOpLowering>(&getContext());
+                  ConstantOpLowering,
+                  ConvertSetOp>(&getContext());
   /// With the target and rewrite patterns defined, we can now attempt the
   /// conversion. The conversion will signal failure if any of our `illegal`
   /// operations were not converted successfully.

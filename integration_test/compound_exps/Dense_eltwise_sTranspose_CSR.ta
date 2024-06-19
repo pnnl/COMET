@@ -27,7 +27,7 @@ def main() {
 # CHECK: data = 
 # CHECK-NEXT: 5,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 0,
+# CHECK-NEXT: -1,
 # CHECK-NEXT: data = 
 # CHECK-NEXT: 0,2,4,5,7,9,
 # CHECK-NEXT: data = 

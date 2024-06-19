@@ -675,36 +675,6 @@ class ConvertWorkspaceClearOp
   }
 };
 
-class ConvertSetOp : public OpConversionPattern<TensorSetOp> {
-  using OpConversionPattern<TensorSetOp>::OpConversionPattern;
-  ConvertSetOp(MLIRContext *context) : OpConversionPattern(context) {}
-
-  LogicalResult
-  matchAndRewrite(TensorSetOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const final {
-    llvm::ScopedPrinter logger{llvm::dbgs()};
-    LLVM_DEBUG({logger.startLine() << "Erasing set op" <<  "\n";});
-
-    auto opAdaptor = llvm::cast<TensorSetOpAdaptor>(adaptor);
-    Value lhs = opAdaptor.getLhs();
-    Value rhs = op.getRhs();
-    for(OpOperand& use : rhs.getUses())
-    {
-      auto user = use.getOwner();
-      LLVM_DEBUG({logger.startLine() << "Found user" << user << "\n";});
-      auto ancestor = op->getBlock()->findAncestorOpInBlock(*user);
-      if(ancestor && op->isBeforeInBlock(ancestor))
-      {
-        LLVM_DEBUG({logger.startLine() << "Operation is before in block" <<  "\n";});
-        rewriter.updateRootInPlace(user, [&]() { user->setOperand(use.getOperandNumber(), lhs); });
-      }
-    }
-    rewriter.eraseOp(op);
-
-    return success();
-  }
-};
-
 class PrintOpLowering : public OpConversionPattern<PrintOp> {
   using OpConversionPattern<PrintOp>::OpConversionPattern;
   PrintOpLowering(MLIRContext *context) : OpConversionPattern(context) {}
@@ -926,7 +896,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
       return op->getResult(0);
     });
 
-  patterns.add<PrintOpLowering, ConvertSetOp, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
+  patterns.add<PrintOpLowering, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
   patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorFindPos>(typeConverter, context);
   patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
 }
