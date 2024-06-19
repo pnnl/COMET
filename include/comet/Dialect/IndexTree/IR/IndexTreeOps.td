@@ -96,8 +96,10 @@ def IndexTreeIndicesOp : IndexTree_Op<"Indices", [Pure]>{
   let summary = "";
   let description = [{
   }];
-
-  let arguments = (ins Variadic<AnyType>:$children, ArrayAttr:$indices);
+  // Added `iterator_type` to the IndexTreeIndicesOp. It is analogous the `iterator_types` in the `linalg.generic` op.
+  // Candidate options: parallel, reduction, window, serial, default. What options should support needs further consideration.
+  // References: https://mlir.llvm.org/docs/Dialects/Linalg/#linalggeneric-linalggenericop
+  let arguments = (ins Variadic<AnyType>:$children, ArrayAttr:$indices, StrAttr:$iterator_type);
   let results = (outs I64:$output);
 
    //TODO(gkestor): add verifier

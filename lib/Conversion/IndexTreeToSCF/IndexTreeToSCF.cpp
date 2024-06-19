@@ -753,8 +753,8 @@ namespace
           // else
           { /// m comes from the load
             comet_debug() << " DIFFERENT:Parent and Child has the different alloc\n";
-            comet_vdump(alloc_parent_bounds);
-            comet_vdump(alloc_child_bounds);
+            // comet_vdump(alloc_parent_bounds);
+            // comet_vdump(alloc_child_bounds);
             index_lower = parent_accessIdx;
           }
         }
@@ -4376,7 +4376,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
                      formats /* output */);
 
       comet_debug() << " indices.size(): " << indices.size() << " tensors.size(): " << tensors.size() << "\n";
-      for (unsigned int m = 0; m < tensors.size(); m++)
+      for ([[maybe_unused]] unsigned int m = 0; m < tensors.size(); m++)
       {
         comet_debug() << " Formats:" << formats[m] << " " << ids[m] << " ";
         comet_vdump(tensors[m]);

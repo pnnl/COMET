@@ -803,19 +803,25 @@ mlir::Value createResetIndicesOps(
     if (index == bound_index)
     {
       /// The IndicesOp node closest to the ComputeOp node
+      /// TODO(zhen.peng): new attribute iterator_type
+      auto dumb_iterator_type = builder.getStringAttr("default");
       indices_op = builder.create<indexTree::IndexTreeIndicesOp>(
           loc,
           i64_type,
           compute_op,
-          indices_attr);
+          indices_attr,
+          dumb_iterator_type);
     }
     else
     {
+      /// TODO(zhen.peng): new attribute iterator_type
+      auto dumb_iterator_type = builder.getStringAttr("default");
       indices_op = builder.create<indexTree::IndexTreeIndicesOp>(
           loc,
           i64_type,
           last_indices_op,
-          indices_attr);
+          indices_attr,
+          dumb_iterator_type);
     }
     last_indices_op = indices_op;
   }

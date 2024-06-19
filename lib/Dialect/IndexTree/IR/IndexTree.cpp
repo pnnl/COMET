@@ -249,3 +249,16 @@ vector<mlir::Operation *> Index_Tree::getContainingTAOps()
   }
   return ops;
 }
+
+std::unordered_set<std::string> IteratorType::supported_types = {"default",
+                                                                 "serial",
+                                                                 "parallel",
+                                                                 "reduction",
+                                                                 "window"};
+void IteratorType::setType(std::string t) {
+  if (supported_types.find(t) != supported_types.end()) {
+    type = t;
+  } else {
+    llvm::errs() << "Unsupported iterator type " + t + "\n";
+  }
+}

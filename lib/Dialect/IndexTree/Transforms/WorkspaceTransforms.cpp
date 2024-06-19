@@ -243,7 +243,9 @@ void splitIndicesOp(Operation *needSplitNode, Value denseIndicesOp, OpBuilder &b
         comet_vdump(indicesOp.getOperation()->getOperand(i));
         comet_vdump(operands[i]);
         auto i64Type = builder.getI64Type();
-        Value t1 = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, operands[i], indices);
+        /// TODO(zhen.peng): new attribute iterator_type
+        auto dumb_iterator_type = builder.getStringAttr("default");
+        Value t1 = builder.create<indexTree::IndexTreeIndicesOp>(loc, i64Type, operands[i], indices, dumb_iterator_type);
 
         comet_debug() << "New IndexTreeIndicesOp added:\n";
         comet_vdump(t1);
