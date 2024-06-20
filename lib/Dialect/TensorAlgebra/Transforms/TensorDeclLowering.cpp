@@ -1492,6 +1492,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::IndexLabelDynamicOp,
                         tensorAlgebra::AllocWorkspaceOp,
+                        tensorAlgebra::TensorMultOp, // Should this be dynamically legal to only work with dense tensors?
                         func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
@@ -1541,6 +1542,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::IndexLabelStaticOp,
                         tensorAlgebra::IndexLabelDynamicOp,
                         tensorAlgebra::AllocWorkspaceOp,
+                        tensorAlgebra::TensorMultOp, // Should this be dynamically legal to only work with dense tensors?
                         func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
