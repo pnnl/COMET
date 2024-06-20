@@ -424,12 +424,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   /// =============================================================================
 
-  // /// TTGT reformulation for dense tensor contraction operations
-  // if (IsLoweringTCtoTTGT)
-  // {
-  //   /// Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
-  //   optPM.addPass(mlir::comet::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
-  // }
+  /// TTGT reformulation for dense tensor contraction operations
+  if (IsLoweringTCtoTTGT)
+  {
+    /// Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
+    optPM.addPass(mlir::comet::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
+  }
 
   // /// =============================================================================
   // /// Operation based optimizations
