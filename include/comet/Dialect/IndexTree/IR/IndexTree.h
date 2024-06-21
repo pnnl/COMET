@@ -27,7 +27,6 @@
 #include <algorithm>
 #include <map>
 #include <set>
-#include <string>
 
 #include "comet/Dialect/IndexTree/Transforms/Tensor.h"
 
@@ -39,14 +38,14 @@ class IteratorType;
 class TreeNode
 {
 public:
-  int index = -1;  /// The iterator index. For example, i:0, j:1, k:2.
+  int index = -1; /// The iterator index. For example, i:0, j:1, k:2.
   UnitExpression *expr = nullptr;
   std::vector<TreeNode *> children;
   TreeNode *parent = nullptr;
   IterDomain *inputDomain = nullptr;
   IterDomain *outputDomain = nullptr;
-  int id = 0;  /// The location in Index_Tree's vector of nodes.
-  IteratorType *iteratorType;  /// Used for IndexTreeIndicesOp, to tell if an index can be parallelized
+  int id = 0;                 /// The location in Index_Tree's vector of nodes.
+  IteratorType *iteratorType; /// Used for IndexTreeIndicesOp, to tell if an index can be parallelized
 
 public:
   TreeNode() = default;
@@ -208,7 +207,7 @@ class Index_Tree
   std::map<UnitExpression *, TreeNode *> exprToNode;
   std::map<void *, unique_ptr<Tensor>> valueToTensor;
   std::map<void *, int> indexLabelToId;
-  std::vector<unique_ptr<IteratorType>> iteratorTypes;  /// Iterator types of all iterators, referred by the indices
+  std::vector<unique_ptr<IteratorType>> iteratorTypes; /// Iterator types of all iterators, referred by the indices
   unsigned int indexID = 0;
 
 public:
@@ -302,19 +301,23 @@ public:
 
   static unique_ptr<Index_Tree> createTreeWithRoot();
 
-  TreeNode *getNodeById(size_t id) {
+  TreeNode *getNodeById(size_t id)
+  {
     return nodes[id].get();
   }
 
-  void setSizeOfIteratorTypes(size_t size) {
+  void setSizeOfIteratorTypes(size_t size)
+  {
     iteratorTypes.resize(size);
   }
 
-  void setIteratorTypeByIndex(size_t index, unique_ptr<IteratorType> type) {
+  void setIteratorTypeByIndex(size_t index, unique_ptr<IteratorType> type)
+  {
     iteratorTypes[index] = std::move(type);
   }
 
-  IteratorType *getIteratorTypeByIndex(size_t index) {
+  IteratorType *getIteratorTypeByIndex(size_t index)
+  {
     return iteratorTypes[index].get();
   }
 };
@@ -324,20 +327,29 @@ public:
  * Currently supported types are listed in the SUPPORTED_TYPES (lib/Dialect/IndexTree/IR/IndexTree.cpp), which is refered to `linalg.generic` (https://mlir.llvm.org/docs/Dialects/Linalg/#linalggeneric-linalggenericop).
  * The use of "default" needs further consideration.
  */
-class IteratorType {
+class IteratorType
+{
 private:
   static std::unordered_set<std::string> supported_types;
   std::string type = "default";
+
 public:
   IteratorType() = default;
 
-  std::string getType() {
+  IteratorType(std::string type)
+  {
+    setType(type);
+  }
+
+  std::string getType()
+  {
     return type;
   }
 
   void setType(std::string t);
 
-  std::string dump() {
+  std::string dump()
+  {
     return type;
   }
 };
