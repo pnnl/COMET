@@ -76,6 +76,32 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include "comet/TritonConfig.h"
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+
+int exec(const char* cmd, std::string& result) {
+    char buffer[128];
+    result = "";
+    FILE* pipe = popen(cmd, "r");
+    while (fgets(buffer, sizeof buffer, pipe) != NULL) {
+        result += buffer;
+    }
+    return pclose(pipe);
+}
+
+mlir::OwningOpRef<mlir::ModuleOp> createModuleFromString(mlir::MLIRContext &context, const std::string &moduleStr) {
+    llvm::SourceMgr sourceMgr;
+    sourceMgr.AddNewSourceBuffer(
+        llvm::MemoryBuffer::getMemBuffer(moduleStr), llvm::SMLoc());
+    
+    mlir::OwningOpRef<mlir::ModuleOp> module = mlir::parseSourceFile<mlir::ModuleOp>(sourceMgr, &context);
+    if (!module)
+        llvm::errs() << "Error: failed to parse module from string.\n";
+    
+    return module;
+}
 
 using namespace mlir::tensorAlgebra;
 using namespace mlir::indexTree;
@@ -119,11 +145,24 @@ static cl::opt<bool> emitLLVM("emit-llvm", cl::desc("output the LLVM dialect dum
 
 static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Code generation target"), 
     cl::values(
-      clEnumVal(CPU, "Codegen target is CPU"), 
-      clEnumVal(GPU, "Codegen target is GPU"))
+      clEnumVal(CPU, "Codegen target is CPU")
+      #ifdef ENABLE_GPU_TARGET
+      , 
+      clEnumVal(GPU, "Codegen target is GPU")
+      #endif
+    )
   );
 
-
+#ifdef ENABLE_GPU_TARGET
+static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::desc("GPU Block size in X direction"));
+static cl::opt<int> GPUBlockSizeY("gpu-block-y-size", cl::desc("GPU Block size in Y direction"));
+static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::desc("GPU Block size in R direction"));
+static cl::opt<int> GPUComputeCapability("gpu-compute-capability", cl::desc("GPU compute capability"));
+static cl::opt<int> GPUNumWarps("gpu-num-warps", cl::init(4), cl::desc("GPU number of warps"));
+static cl::opt<int> GPUThreadsPerWarp("gpu-threads-per-warp", cl::init(32), cl::desc("GPU threads per warp"));
+static cl::opt<int> GPUNumCTAs("gpu-num-ctas", cl::init(2), cl::desc("GPU num CTAs"));
+static cl::opt<int> GPUNumStages("gpu-num-stages", cl::init(1), cl::desc("GPU num stages"));
+#endif
 
 /// =============================================================================
 /// Optimization at the TA dialect (High-level optimizations) for tensor contraction operations
@@ -210,6 +249,44 @@ std::unique_ptr<tensorAlgebra::ModuleAST> parseInputFile(llvm::StringRef filenam
   tensorAlgebra::Parser parser(lexer);
   return parser.parseModule();
 }
+#ifdef ENABLE_GPU_TARGET
+std::string tritonOpt(int blockX, int blockY, int blockR,  int computeCapability, int numWarps = 4, int threadsPerWarp=32, int numStages=1, int numCTAs = 1) {
+  std::string triton_path = TRITON_PATH;
+  std::string command = triton_path +"/bin/triton-opt";
+  std::string args = " --comet-to-gpu=\"blockX="+std::to_string(blockX) +" blockY="+std::to_string(blockY)+" blockR="+ std::to_string(blockR)+"\" " +
+      "--loop-invariant-code-motion  \
+      --convert-parallel-loops-to-gpu \
+      --gpu-kernel-outlining  \
+      --canonicalize \
+      --convert-gpu-kernel-to-triton=\"blockX="+std::to_string(blockX) +" blockY="+std::to_string(blockY)+" blockR="+ std::to_string(blockR)+"\" " +
+      "--lower-affine \
+      --canonicalize \
+      --cse \
+      --symbol-dce \
+      --canonicalize \
+      --loop-invariant-code-motion  \
+      --comet-rewrite-loops \
+      --loop-invariant-code-motion \
+      --canonicalize --cse \
+      --symbol-dce \
+      --canonicalize \
+      --loop-invariant-code-motion \
+      --lower-gpu-device-to-cuda=\"numWarps="+std::to_string(numWarps)+" threadsPerWarp="+std::to_string(threadsPerWarp)+" numStages="+std::to_string(numStages)+" numCTAs="+std::to_string(numCTAs)+" computeCapability="+std::to_string(computeCapability)+"\" " +
+      "--lower-gpu-host-to-cuda \
+      --canonicalize \
+      --convert-scf-to-cf \
+      --expand-strided-metadata  \
+      --finalize-memref-to-llvm \
+      --convert-index-to-llvm  \
+      --convert-math-to-llvm \
+      --convert-ub-to-llvm \
+      --convert-arith-to-llvm \
+      --convert-func-to-llvm \
+      --reconcile-unrealized-casts";
+
+  return command+args;
+}
+#endif
 
 int loadMLIR(mlir::MLIRContext &context,
              mlir::OwningOpRef<mlir::ModuleOp> &module)
@@ -358,7 +435,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// =============================================================================
   /// Lowering all the operations to loops
   /// =============================================================================
-  if (IsLoweringtoSCF || emitLoops || emitLLVM)
+  if (IsLoweringtoSCF || emitLoops || emitLLVM )
   {
 
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
@@ -385,6 +462,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
     optPM.addPass(mlir::tensor::createTensorBufferizePass());
     pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
+    pm.addPass(mlir::createConvertLinalgToLoopsPass());
 
     if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
     {
@@ -407,6 +485,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     ///  =============================================================================
   }
 
+
   /// =============================================================================
   /// Late lowering passes
   /// =============================================================================
@@ -415,6 +494,27 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   optPM.addPass(mlir::comet::createLateLoweringPass());
   pm.addPass(mlir::createCanonicalizerPass());
   optPM.addPass(mlir::createCSEPass());
+  #ifdef ENABLE_GPU_TARGET
+  if(CodegenTarget == GPU)
+  {
+    if (mlir::failed(pm.run(*module)))
+        return 4;
+    std::string outputMlir;
+    llvm::raw_string_ostream os(outputMlir);
+    module->print(os);
+    os.flush();
+    
+    std::string output;
+    int err = exec(("echo \""+outputMlir+"\" "+ " | "+tritonOpt(GPUBlockSizeX,GPUBlockSizeY,GPUBlockSizeR, GPUComputeCapability, GPUNumWarps, GPUThreadsPerWarp, GPUNumStages, GPUNumCTAs)).c_str(), output);
+    if(err) {
+      llvm::errs() << output;
+      return 4;
+    }
+    // module->set(output);
+    module = createModuleFromString(context, output);
+    // return 4;
+  }
+  #endif
 
   /// =============================================================================
 

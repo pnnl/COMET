@@ -13,6 +13,16 @@ get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 
 llvm_update_compile_flags(comet-opt)
+option(ENABLE_GPU_TARGET OFF) 
+
+if(${ENABLE_GPU_TARGET})
+  set(TRITON_BUILD_PATH "" CACHE PATH "Path to Triton Installation")
+  if(NOT EXISTS "${TRITON_BUILD_PATH}/bin/triton-opt")
+  message(FATAL_ERROR "triton-opt  not found: ${TRITON_BUILD_PATH}/bin/triton-opt")
+  endif()
+  configure_file(TritonConfig.h.in ${CMAKE_BINARY_DIR}/include/comet/TritonConfig.h)
+  add_definitions(-DENABLE_GPU_TARGET)
+endif()
 
 set(LIBS
   MLIRAnalysis
