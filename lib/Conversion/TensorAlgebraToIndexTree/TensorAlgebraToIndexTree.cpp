@@ -130,7 +130,7 @@ bool check_chosen_operations(const std::vector<std::vector<int64_t>> &allPerms,
 Value getRealLhs(Operation *op)
 {
   assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubtractOp>(op));
-  Operation *firstUser;
+  Operation *firstUser = nullptr;
   for (auto user : op->getResult(0).getUsers())
   {
     firstUser = user;
@@ -433,7 +433,7 @@ Operation *getSetOpForTC(Operation *op)
   assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubtractOp>(op));
   /// TODO(gkestor): fix the issue with getUsers() after getRealRhs().
   comet_debug() << "The following loop may cause issue!\n";
-  Operation *firstUser;
+  Operation *firstUser = nullptr;
   for (auto user : op->getResult(0).getUsers())
   {
     firstUser = user;
