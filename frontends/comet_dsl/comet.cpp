@@ -76,7 +76,9 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#ifdef ENABLE_GPU_TARGET
 #include "comet/TritonConfig.h"
+#endif
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -160,7 +162,7 @@ static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::desc("GPU Block size i
 static cl::opt<int> GPUComputeCapability("gpu-compute-capability", cl::desc("GPU compute capability"));
 static cl::opt<int> GPUNumWarps("gpu-num-warps", cl::init(4), cl::desc("GPU number of warps"));
 static cl::opt<int> GPUThreadsPerWarp("gpu-threads-per-warp", cl::init(32), cl::desc("GPU threads per warp"));
-static cl::opt<int> GPUNumCTAs("gpu-num-ctas", cl::init(2), cl::desc("GPU num CTAs"));
+static cl::opt<int> GPUNumCTAs("gpu-num-ctas", cl::init(1), cl::desc("GPU num CTAs"));
 static cl::opt<int> GPUNumStages("gpu-num-stages", cl::init(1), cl::desc("GPU num stages"));
 #endif
 
@@ -253,7 +255,8 @@ std::unique_ptr<tensorAlgebra::ModuleAST> parseInputFile(llvm::StringRef filenam
 std::string tritonOpt(int blockX, int blockY, int blockR,  int computeCapability, int numWarps = 4, int threadsPerWarp=32, int numStages=1, int numCTAs = 1) {
   std::string triton_path = TRITON_PATH;
   std::string command = triton_path +"/bin/triton-opt";
-  std::string args = " --comet-to-gpu=\"blockX="+std::to_string(blockX) +" blockY="+std::to_string(blockY)+" blockR="+ std::to_string(blockR)+"\" " +
+  std::string args = 
+      " --comet-to-gpu=\"blockX="+std::to_string(blockX) +" blockY="+std::to_string(blockY)+" blockR="+ std::to_string(blockR)+"\" " +
       "--loop-invariant-code-motion  \
       --convert-parallel-loops-to-gpu \
       --gpu-kernel-outlining  \
@@ -494,7 +497,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   optPM.addPass(mlir::comet::createLateLoweringPass());
   pm.addPass(mlir::createCanonicalizerPass());
   optPM.addPass(mlir::createCSEPass());
-  #ifdef ENABLE_GPU_TARGET
+
+
+  /// =============================================================================
+
+  if (isLoweringToLLVM || emitLLVM)
+  {
+#ifdef ENABLE_GPU_TARGET
   if(CodegenTarget == GPU)
   {
     if (mlir::failed(pm.run(*module)))
@@ -515,11 +524,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // return 4;
   }
   #endif
-
-  /// =============================================================================
-
-  if (isLoweringToLLVM || emitLLVM)
-  {
     optPM.addPass(mlir::createCanonicalizerPass());
     /// Blanket-convert any remaining high-level vector ops to loops if any remain.
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
