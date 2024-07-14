@@ -1407,7 +1407,7 @@ namespace
       auto tensor_format = tensordecl.getFormat();
       for (const auto &lbl_str : dim_lbls)
       {
-        if (auto var = lbl_str == "?")
+        if (lbl_str == "?")
         {
           dims_sizes.push_back(mlir::ShapedType::kDynamic);
         }
