@@ -60,6 +60,20 @@ class ConvertIndexTreeTypes : public OpConversionPattern<indexTree::IndexTreeOp>
   mlir::LogicalResult
   matchAndRewrite(indexTree::IndexTreeOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    // Convert the operands
+    SmallVector<Value> unpacked;
+    for (Value v : adaptor.getOperands()) {
+      if (auto cast =
+              dyn_cast_or_null<UnrealizedConversionCastOp>(v.getDefiningOp())) {
+        if (cast.getInputs().size() != 1) {
+          unpacked.append(cast.getInputs().begin(), cast.getInputs().end());
+          continue;
+        }
+      }
+      // 1 : 1 type conversion.
+      unpacked.push_back(v);
+    }
+
     SmallVector<Type> dstTypes;
     SmallVector<unsigned> offsets;
     offsets.push_back(0);
@@ -71,7 +85,7 @@ class ConvertIndexTreeTypes : public OpConversionPattern<indexTree::IndexTreeOp>
     }
 
     // Calls the actual converter implementation to convert the operation.
-    auto newOp = rewriter.create<indexTree::IndexTreeOp>(op.getLoc(), dstTypes);
+    auto newOp = rewriter.create<indexTree::IndexTreeOp>(op.getLoc(), dstTypes, unpacked);
     rewriter.inlineRegionBefore(op.getRegion(), newOp.getRegion(), newOp.getRegion().end());
 
     // Packs the return value.

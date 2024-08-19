@@ -248,7 +248,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
   auto MaskingTypeAttr = mult_op.getMaskTypeAttr();
 
   auto tensor_type = op->getResultTypes()[0];
-  auto itree_op = rewriter.create<IndexTreeOp>(loc, tensor_type);
+  auto itree_op = rewriter.create<IndexTreeOp>(loc, tensor_type, lhs_tensor);
   Region* body = &itree_op.getRegion();
   loc = body->getLoc();
   Block* block = rewriter.createBlock(body);

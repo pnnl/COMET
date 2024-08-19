@@ -57,6 +57,7 @@ def IndexTreeOp : IndexTree_Op<"itree",
   let summary = "Create a scope for index tree iteration";
   let description = [{}];
 
+  let arguments = (ins Variadic<AnyType>:$inputs);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$region);
 }
@@ -162,7 +163,7 @@ def ConcreteDomainInterface : OpInterface<"ConcreteDomain"> {
     the domain is fully-dscribed by it's arguments and does not rely on the
     the tensor definition to create the domain.
   }];
-  let cppNamespace = "::mlir::indexTree"; 
+  let cppNamespace = "::mlir::indexTree";
 
   let methods = [
     InterfaceMethod<[{

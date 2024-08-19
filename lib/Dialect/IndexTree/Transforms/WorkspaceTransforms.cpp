@@ -157,7 +157,6 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
     Type workspace_type = WorkspaceType::get(compute_op.getContext(), element_type, dim_sizes);
     std::reverse(dims.begin(), dims.end());
     Value workspace = rewriter.create<AllocWorkspaceOp>(loc, workspace_type, old_output, rewriter.getI32ArrayAttr(dims));
-
     
     // Clean the workspace before use
     rewriter.setInsertionPoint(node);
@@ -243,6 +242,24 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
       ValueRange{new_rhs,},
       "noop_noop"
     );
+
+
+    // Update the index tree op
+    SmallVector<Value> tree_args(tree_op->getOperands());
+    SmallVector<Type> tree_types(tree_op->getResultTypes());
+    tree_args.push_back(workspace);
+    tree_types.push_back(workspace_type);
+    rewriter.setInsertionPoint(tree_op);
+    auto newOp = rewriter.create<IndexTreeOp>(loc, tree_types, tree_args);
+    rewriter.inlineRegionBefore(tree_op.getRegion(), newOp.getRegion(), newOp.getRegion().end());
+    indexTree::YieldOp yield = cast<indexTree::YieldOp>(newOp.getRegion().getBlocks().front().getTerminator());
+    rewriter.updateRootInPlace(yield, [&]() {
+      yield->insertOperands(yield->getNumOperands(), ValueRange{workspace});
+    });
+    for(unsigned i = 0; i < tree_op.getNumResults(); i++){
+      rewriter.replaceAllUsesWith(tree_op.getResult(i), newOp.getResult(i));
+    }
+    rewriter.eraseOp(tree_op);
 
     return success();    
   }

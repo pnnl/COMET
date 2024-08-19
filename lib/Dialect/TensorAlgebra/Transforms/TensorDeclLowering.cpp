@@ -889,11 +889,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           /// do nothing!
           comet_debug() << " the tensor has use in AllocWorkspaceOp\n";
         }
-        else if (isa<tensorAlgebra::AllocWorkspaceOp>(u1))
-        {
-          /// do nothing!
-          comet_debug() << " the tensor has use in AllocWorkspaceOp\n";
-        }
         else if(isa<func::CallOp>(u1))
         {
           /// do nothing!
@@ -902,6 +897,11 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         else if(isa<func::ReturnOp>(u1))
         {
           comet_debug() << " the tensor has use in func::ReturnOp\n";
+        }
+        else if (isa<indexTree::IndexTreeOp>(u1))
+        {
+          /// do nothing!
+          comet_debug() << " the tensor has use in a Index Tree\n";
         }
         else
         {

@@ -74,7 +74,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
                                   parent_node,
                                   dim-1,
                                   nullptr);
-        parent = tensor_access_op.getCrd();
+        parent = tensor_access_op.getPos();
       }
       new_domain = rewriter.create<IndexTreeSparseDomainOp>(loc, 
                                                             domain_op->getResultTypes(),
@@ -158,6 +158,8 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
 
     // Declare Sparse Domains and allocate position vectors for each dimension
     llvm::SmallDenseMap<Value, Value> symbolic_domains;
+    llvm::SmallVector<Value> input_domains;
+
     auto domain_type = SymbolicDomainType::get(context);
     auto index_type = rewriter.getIndexType();
     Value cur_pos_size = nullptr;
@@ -185,6 +187,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
         Value dim_size = concrete_domain.getDimensionSize();
         Value symbolic_domain = rewriter.create<DeclDomainOp>(loc, domain_type, dim_size, num_rows, is_dynamic);
         symbolic_domains.insert(std::make_pair(domain, symbolic_domain));
+        input_domains.push_back(symbolic_domain);
       }
       
       if(llvm::isa<IndexTreeDenseDomainOp>(domain_op))
@@ -201,7 +204,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
       dim += 1;
     }
 
-    auto itree_op = rewriter.create<IndexTreeOp>(loc, llvm::SmallVector<Type>(symbolic_domains.size(), domain_type));
+    auto itree_op = rewriter.create<IndexTreeOp>(loc, llvm::SmallVector<Type>(symbolic_domains.size(), domain_type), input_domains);
     Region* body = &itree_op.getRegion();
     loc = body->getLoc();
     Block* block = rewriter.createBlock(body);
