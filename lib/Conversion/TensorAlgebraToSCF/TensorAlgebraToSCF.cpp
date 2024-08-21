@@ -104,6 +104,9 @@ namespace
           comet_vdump(alloc_op);
           alloc = alloc_op;
         }
+        else {
+          alloc = rewriter.create<memref::AllocOp>(loc, memRefType);
+        }
       }
       else
       {
