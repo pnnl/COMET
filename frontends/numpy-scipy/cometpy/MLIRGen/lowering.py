@@ -447,16 +447,16 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                 A2tile_crd = np.array([-1], dtype=np.int64)
                 # CSR
                 if ndarray.format == 'csr':
-                    A1pos = np.array([ndarray.get_shape()[0]], dtype=np.int64)
+                    A1pos = np.array([ndarray.shape[0]], dtype=np.int64)
                     A1crd = np.array([-1], dtype=np.int64)
                     A2pos = ndarray.indptr.astype('int64')
                     A2crd = ndarray.indices.astype('int64')
 
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                 
-                    # llvm_args += [*np_array_to_memref(np.array([1, 1, ndarray.get_shape()[0] + 1, ndarray.getnnz(), ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
+                    # llvm_args += [*np_array_to_memref(np.array([1, 1, ndarray.shape[0] + 1, ndarray.nnz, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
                     # With tiles
-                    llvm_args += [*np_array_to_memref(np.array([1, 1, 0, 0, ndarray.get_shape()[0] + 1, ndarray.getnnz(), 0, 0, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
+                    llvm_args += [*np_array_to_memref(np.array([1, 1, 0, 0, ndarray.shape[0] + 1, ndarray.nnz, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
                 # COO
                 elif ndarray.format == 'coo':
                     A1pos = np.array([0, ndarray.nnz], dtype=np.int64)
@@ -466,21 +466,21 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
 
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                 
-                    # llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 1, ndarray.getnnz(), ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
+                    # llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 1, ndarray.nnz, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
                     # With tiles
-                    llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 0, 0, 1, ndarray.getnnz(), 0, 0, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
+                    llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 0, 0, 1, ndarray.nnz, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
                 
                 # CSC
                 elif ndarray.format == 'csc':
                     A1pos = ndarray.indptr.astype('int64')
                     A1crd = ndarray.indices.astype('int64')
-                    A2pos = np.array([ndarray.get_shape()[1]], dtype=np.int64)
+                    A2pos = np.array([ndarray.shape[1]], dtype=np.int64)
                     
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                 
-                    # llvm_args += [*np_array_to_memref(np.array([ndarray.get_shape()[1] + 1, ndarray.nnz, 1, 1, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
+                    # llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 1, 1, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
                     # With tiles
-                    llvm_args += [*np_array_to_memref(np.array([ndarray.get_shape()[1] + 1, ndarray.nnz, 0, 0, 1, 1, 0, 0, ndarray.getnnz(), ndarray.get_shape()[0], ndarray.get_shape()[1]], dtype='int64'))]
+                    llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 0, 0, 1, 1, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
                 
                 Aval = ndarray.data.astype('float64')
                 # Based on the  desc_A1pos/crd, desc_A2pos/crd, desc_Aval arrays in SparseUtils.cpp: read_input_2D
