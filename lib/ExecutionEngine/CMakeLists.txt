@@ -1,6 +1,6 @@
-# if(ENABLE_GPU_TARGET)
-# find_package(CUDAToolkit REQUIRED)
-# endif()
+if(ENABLE_GPU_TARGET)
+find_package(CUDAToolkit REQUIRED)
+endif()
 
 set(SOURCES
   blis_interface.cpp

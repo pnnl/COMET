@@ -125,7 +125,6 @@ option(ENABLE_GPU_TARGET OFF)
 if(${ENABLE_GPU_TARGET})
   set(TRITON_PATH "" CACHE PATH "Path to Triton")
   set(TRITON_BUILD_PATH "${CMAKE_BINARY_DIR}/triton" CACHE INTERNAL "Path to Triton Build")
-  
   add_subdirectory(${TRITON_PATH} ${TRITON_BUILD_PATH})
   get_property(triton_libs GLOBAL PROPERTY TRITON_LIBS)
   include_directories("${TRITON_PATH}")
