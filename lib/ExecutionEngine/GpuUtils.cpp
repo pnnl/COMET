@@ -6,6 +6,16 @@
 #include <cuda.h>
 #include <algorithm>
 
+#define CU_CHECK(call) \
+do { \
+    CUresult res = call; \
+    if (res != CUDA_SUCCESS) { \
+        fprintf(stderr, "CU Error: %s:%d, ", __FILE__, __LINE__); \
+        fprintf(stderr, "code: %d\n", res); \
+        exit(1); \
+    } \
+} while (0)
+
 CUcontext cuContext = NULL;
 CUmodule cuModule = NULL;
 char* moduleImg = NULL;

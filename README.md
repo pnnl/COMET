@@ -44,7 +44,7 @@ $ mkdir llvm/build
 $ cd llvm/build
 $ cmake -G Ninja ../llvm \
     -DLLVM_ENABLE_PROJECTS="mlir;openmp;clang" \
-    -DLLVM_TARGETS_TO_BUILD="AArch64;X86" \
+    -DLLVM_TARGETS_TO_BUILD="AArch64;X86;NVPTX" \
     -DCMAKE_OSX_ARCHITECTURES="arm64" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=Release
@@ -70,7 +70,14 @@ $ make check [-j]
 $ make install [-j]
 ```
 
-6) **Build and test COMET:**
+6) ** Patch Triton: **
+```
+$ cd $COMET_SRC
+$ cd triton
+$ git apply ${COMET_SRC}/triton.patch
+```
+
+7) **Build and test COMET:**
 
 ```
 $ cd $COMET_SRC
@@ -79,6 +86,8 @@ $ cd build
 $ cmake -G Ninja .. \
     -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
     -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
+    -DENABLE_GPU_TARGET=ON \
+    -DTRITON_PATH=$PWD/../triton/ \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=Release
 $ ninja

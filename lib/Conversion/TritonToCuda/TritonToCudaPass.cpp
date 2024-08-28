@@ -199,7 +199,7 @@ mlir::comet::createLowerTritonDeviceToCudaPass(int numWarps,
                                                 int numCTAs,
                                                 int numStages,
                                                 int computeCapability) {
-  return std::make_unique<::LowerTritonDeviceToCuda>();
+  return std::make_unique<::LowerTritonDeviceToCuda>(numWarps, threadsPerWarp, numCTAs, numStages, computeCapability);
 }
 
 class LowerGpuHostToCuda
