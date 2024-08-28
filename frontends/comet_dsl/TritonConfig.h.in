@@ -1,6 +1,0 @@
-#ifndef CONFIG_H
-#define CONFIG_H
-
-#define TRITON_PATH "${TRITON_BUILD_PATH}"
-
-#endif 
