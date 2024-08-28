@@ -477,8 +477,8 @@ namespace
       comet_debug() << "lowerSparseOutputTensorDec::TempSparseOutputTensorDeclOp lowering\n";
     }
 
-    assert(isa<SparseOutputTensorDeclOp>(op) || isa<TempSparseOutputTensorDeclOp>(op) &&
-                                                    "Op should be either SparseOutputTensorDeclOp or TempSparseOutputTensorDeclOp");
+    assert(isa<SparseOutputTensorDeclOp>(op) || (isa<TempSparseOutputTensorDeclOp>(op) &&
+                                                    "Op should be either SparseOutputTensorDeclOp or TempSparseOutputTensorDeclOp"));
 
     comet_vdump(op);
     auto loc = op.getLoc();

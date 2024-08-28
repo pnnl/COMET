@@ -1,7 +1,16 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 309855e0c..b2530e31c 100644
+index 309855e..4bc4db7 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
+@@ -20,7 +20,7 @@ if(NOT WIN32)
+ endif()
+ 
+ 
+-
++set_directory_properties(PROPERTIES COMPILE_OPTIONS "-w")
+ # Options
+ option(TRITON_BUILD_TUTORIALS "Build C++ Triton tutorials" ON)
+ option(TRITON_BUILD_PYTHON_MODULE "Build Python Triton bindings" OFF)
 @@ -103,7 +103,7 @@ endfunction()
  
  
@@ -22,7 +31,7 @@ index 309855e0c..b2530e31c 100644
 +# add_subdirectory(test)
 +# add_subdirectory(unittest)
 diff --git a/include/triton/Dialect/NVGPU/IR/CMakeLists.txt b/include/triton/Dialect/NVGPU/IR/CMakeLists.txt
-index f8932cdc4..37fb66417 100644
+index f8932cd..37fb664 100644
 --- a/include/triton/Dialect/NVGPU/IR/CMakeLists.txt
 +++ b/include/triton/Dialect/NVGPU/IR/CMakeLists.txt
 @@ -1,8 +1,8 @@
@@ -37,7 +46,7 @@ index f8932cdc4..37fb66417 100644
  mlir_tablegen(Ops.h.inc -gen-op-decls)
  mlir_tablegen(Ops.cpp.inc -gen-op-defs)
 diff --git a/include/triton/Dialect/NVGPU/IR/NVGPUDialect.td b/include/triton/Dialect/NVGPU/IR/NVGPUDialect.td
-index 6978173d4..3b76e10c7 100644
+index 6978173..3b76e10 100644
 --- a/include/triton/Dialect/NVGPU/IR/NVGPUDialect.td
 +++ b/include/triton/Dialect/NVGPU/IR/NVGPUDialect.td
 @@ -25,7 +25,7 @@
