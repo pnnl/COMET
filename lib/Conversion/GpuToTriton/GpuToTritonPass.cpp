@@ -182,8 +182,8 @@ void handleBinaryExpr(Operation* op, std::map<const void*, mlir::Value>& m, Affi
   auto binOp = llvm::cast<mlir::AffineBinaryOpExpr>(exp);
   auto lhs = m[binOp.getLHS().getAsOpaquePointer()];
   auto rhs = m[binOp.getRHS().getAsOpaquePointer()];
-  auto lhsT = lhs.getType();
-  auto rhsT = rhs.getType();
+  // auto lhsT = lhs.getType();
+  // auto rhsT = rhs.getType();
 
   makeShapesEqual(op, lhs, rhs, rewriter);
 
@@ -238,9 +238,9 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
     if(op->getOperand(i).getDefiningOp() && isa<affine::AffineApplyOp>(op->getOperand(i).getDefiningOp()))
     {
       affine::AffineApplyOp affineOp = cast<affine::AffineApplyOp>(op->getOperand(i).getDefiningOp());
-      int pidXIndex = -1;
-      int pidYIndex = -1;
-      int dim = -1;
+      // int pidXIndex = -1;
+      // int pidYIndex = -1;
+      // int dim = -1;
       Value guardX = NULL, guardY = NULL, guardR = NULL;
       Value guardXExpr = NULL, guardYExpr = NULL, guardRExpr = NULL;
       std::map<const void*, mlir::Value> map, mapGuard;
@@ -411,7 +411,7 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
         }
         else
         {
-          auto binOp = llvm::cast<mlir::AffineBinaryOpExpr>(exp);
+          // auto binOp = llvm::cast<mlir::AffineBinaryOpExpr>(exp);
           // for(auto m: {map /*mapGuard*/})
           handleBinaryExpr(op, map, exp, rewriter);
           handleBinaryExpr(op, mapGuard, exp, rewriter);
@@ -713,7 +713,7 @@ void convertBlockArgTypes(mlir::triton::FuncOp func, PatternRewriter& rewriter) 
 
 void isAncestor(mlir::Operation* pop, mlir::Value val, std::vector<std::vector<mlir::Operation*>>& chain, std::vector<mlir::Operation*> op_path)
 {
-  bool res = false;
+  // bool res = false;
   op_path.push_back(pop);
   // std::vector<mlir::Operation*> path;
   for(auto op: pop->getOperands())
@@ -762,7 +762,7 @@ public:
           std::vector<std::vector<mlir::Operation*>> local_ops_chain;
           std::vector<mlir::Operation*> ops_chain;
           mlir::Value offset =  op.getPtr().getDefiningOp()->getOperand(1);
-          mlir::Value blockPtr =  op.getPtr().getDefiningOp()->getOperand(0);
+          // mlir::Value blockPtr =  op.getPtr().getDefiningOp()->getOperand(0);
           if(offset == forOp.getLoopRegions()[0]->getArgument(0))
           {
             // COMET_ERRS << " SAME:\n";
@@ -927,7 +927,7 @@ public:
         // COMET_ERRS << "NOT RUNNING\n";
       }
       rewriter.setInsertionPoint(forOp);
-      if(basePtrs.size() > 0 &&   basePtrs.size() == numLoadOps)
+      if(basePtrs.size() > 0 && numLoadOps > 0 &&  basePtrs.size() == (size_t)numLoadOps)
       {
         rewriter.replaceAllUsesWith(forOp.getLoopRegions()[0]->getArgument(0), rewriter.create<mlir::arith::ConstantIntOp>(forOp->getLoc(), 0, 32));
       }
@@ -1265,7 +1265,7 @@ public:
     rewriter.setInsertionPointToStart(yLoop.getBody());
     mlir::scf::ForOp xLoop = rewriter.create<mlir::scf::ForOp>(TTFunc->getLoc(), zero, boundX, indexNumProgramsX);
     xLoop->setAttr("programs_loop_x", rewriter.getUnitAttr());
-    bool foundYieldOp = false;
+    // bool foundYieldOp = false;
 
     auto offsetY = yLoop.getBody()->getArgument(0);
     auto offsetX = xLoop.getBody()->getArgument(0);
@@ -1470,7 +1470,7 @@ public:
     
     auto funcOp  = *op.getOps<mlir::func::FuncOp>().begin();
     auto launchOps = funcOp.getOps<mlir::gpu::LaunchFuncOp>();
-    bool changed = false;
+    // bool changed = false;
     OpBuilder builder = OpBuilder(op);
     auto gpuModules = op.getOps<mlir::gpu::GPUModuleOp>();
 
@@ -1481,7 +1481,7 @@ public:
       {
         continue;
       }
-      changed = true;
+      // changed = true;
       auto kernel_name = launchOp.getKernelName();
       auto kernel_mod_name = launchOp.getKernelModuleName();
     //   COMET_ERRS <<kernel_mod_name <<"::"<< kernel_name << "\n";

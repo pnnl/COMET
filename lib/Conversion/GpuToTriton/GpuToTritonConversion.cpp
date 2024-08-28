@@ -62,7 +62,7 @@ mlir::comet::GpuConversionTarget::GpuConversionTarget(
 
       for(auto oper: op->getOperands())
       {
-        if(auto affineOp = llvm::isa_and_nonnull<affine::AffineApplyOp>(oper.getDefiningOp()))
+        if(llvm::isa_and_nonnull<affine::AffineApplyOp>(oper.getDefiningOp()))
         {
           return false;
         }
@@ -86,10 +86,8 @@ mlir::comet::GpuConversionTarget::GpuConversionTarget(
     {
       for(auto oper : op.getCondition().getDefiningOp()->getOperands())
       {
-        if(auto affineOp = llvm::isa_and_nonnull<affine::AffineApplyOp>(oper.getDefiningOp()))
+        if(!llvm::isa_and_nonnull<affine::AffineApplyOp>(oper.getDefiningOp()))
         {
-        }
-        else {
           return false;
         }
       }
