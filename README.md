@@ -70,7 +70,7 @@ $ make check [-j]
 $ make install [-j]
 ```
 
-6) ** Patch Triton: **
+6) **Patch Triton:**
 ```
 $ cd $COMET_SRC
 $ cd triton
