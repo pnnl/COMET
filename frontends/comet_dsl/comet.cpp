@@ -177,9 +177,9 @@ static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Co
   );
 
 #ifdef ENABLE_GPU_TARGET
-static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::desc("GPU Block size in X direction"));
-static cl::opt<int> GPUBlockSizeY("gpu-block-y-size", cl::desc("GPU Block size in Y direction"));
-static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::desc("GPU Block size in R direction"));
+static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::init(32), cl::desc("GPU Block size in X direction"));
+static cl::opt<int> GPUBlockSizeY("gpu-block-y-size", cl::init(8), cl::desc("GPU Block size in Y direction"));
+static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::init(32), cl::desc("GPU Block size in R direction"));
 static cl::opt<int> GPUComputeCapability("gpu-compute-capability", cl::desc("GPU compute capability"));
 static cl::opt<int> GPUNumWarps("gpu-num-warps", cl::init(4), cl::desc("GPU number of warps"));
 static cl::opt<int> GPUThreadsPerWarp("gpu-threads-per-warp", cl::init(32), cl::desc("GPU threads per warp"));
@@ -496,7 +496,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 #ifdef ENABLE_GPU_TARGET
   if (CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringtoTriton))
   {
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
     pm.addPass(mlir::createParallelLoopToGpuPass());
     pm.addPass(mlir::createGpuKernelOutliningPass());

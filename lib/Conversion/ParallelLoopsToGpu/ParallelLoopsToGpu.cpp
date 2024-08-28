@@ -448,6 +448,11 @@ struct DetectReduction
 class ConvertParallelLoopsToGpu: public CometParallelLoopsToGpuBase<ConvertParallelLoopsToGpu> {
 public:
     ConvertParallelLoopsToGpu() = default;
+    ConvertParallelLoopsToGpu(int blockX, int blockY, int blockR) {
+        this->blockX = blockX;
+        this->blockY = blockY;
+        this->blockR = blockR;
+    }
 
     void runOnOperation() override {
         mlir::MLIRContext *context = &getContext();
@@ -525,3 +530,9 @@ public:
 std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> mlir::comet::createConvertParallelLoopsToGpuPass() {
     return std::make_unique<ConvertParallelLoopsToGpu>();
 }
+
+
+std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> mlir::comet::createConvertParallelLoopsToGpuPass(int blockX, int blockY, int blockR) {
+    return std::make_unique<ConvertParallelLoopsToGpu>(blockX, blockY, blockR);
+}
+

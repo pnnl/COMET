@@ -10,6 +10,7 @@ class FuncOp;
 template <typename T> class OperationPass;
 namespace comet {
 std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuPass();
+std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuPass(int blockX, int blockY, int blockR);
 }
 }
 

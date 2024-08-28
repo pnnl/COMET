@@ -13,7 +13,7 @@ def CometParallelLoopsToGpu : Pass<"comet-parallel-loops-to-gpu", "mlir::func::F
 
      let options = [
        Option<"blockX", "blockX",
-              "int32_t", /*default*/"128",
+              "int32_t", /*default*/"32",
               "triton block size for dim X">,
 
        Option<"blockY", "blockY",
@@ -21,7 +21,7 @@ def CometParallelLoopsToGpu : Pass<"comet-parallel-loops-to-gpu", "mlir::func::F
               "triton block size for dim Y">,
               
        Option<"blockR", "blockR",
-       "int32_t", /*default*/"64",
+       "int32_t", /*default*/"32",
        "triton block size for reduction dim">,
 
    ];
