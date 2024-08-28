@@ -1,4 +1,4 @@
-# RUN: comet-opt  --target=GPU --gpu-compute-capability=70 --gpu-block-x-size=64 --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm  %s &> mult_dense_matrix.llvm
+# RUN: comet-opt  --target=GPU --gpu-compute-capability=70 --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm  %s &> mult_dense_matrix.llvm
 # RUN: mlir-cpu-runner mult_dense_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 
