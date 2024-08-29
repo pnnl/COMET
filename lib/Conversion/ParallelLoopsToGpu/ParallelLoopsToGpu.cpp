@@ -1,4 +1,5 @@
 
+#include <iostream>
 #include <memory>
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
@@ -165,8 +166,19 @@ bool contains_arg(mlir::Block& block, mlir::BlockArgument arg)
                     return true;
                 }
             }
+            else if(llvm::isa_and_present<mlir::arith::AddIOp, mlir::arith::SubIOp, mlir::arith::MinUIOp, mlir::arith::MaxUIOp>(index.getDefiningOp())) {
+                for(auto op: index.getDefiningOp()->getOperands())
+                {
+                    if(op == arg)
+                    {
+                        return true;
+                    }
+                }
+            }
             else {
                 llvm::errs() << "Load operation without affine expression\n";
+                index.dump();
+                store_op->dump();
                 exit(1);
             }
         }
@@ -299,7 +311,7 @@ public:
             rewriter.eraseOp(parOp);
             return mlir::success();
         }
-        else if (!no_inner_parallel && !mlir::isa<mlir::scf::ForOp,mlir::scf::ParallelOp>(parOp->getParentOp())) // Y level loop
+        else if (!mlir::isa<mlir::scf::ForOp,mlir::scf::ParallelOp>(parOp->getParentOp())) // Y level loop
         {
             // auto block_size_x = rewriter.create<mlir::arith::ConstantOp>(forOp->getLoc(), rewriter.getIndexType() , rewriter.getIndexAttr(blockX) );
             auto block_size_y = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), blockY );
@@ -381,6 +393,7 @@ public:
         }
         else 
         {
+            std::cout << "Failed to match parallel Op\n";
             return mlir::failure();
         }
     }
@@ -397,9 +410,9 @@ struct DetectReduction
         bool no_inner_loops = forOp.getBody()->getOps<mlir::scf::ForOp>().empty();
         if(forOp->hasAttr("parallelDim") || forOp->hasAttr("reduceDim") )
         {
-            assert(false);
             return mlir::failure();
         }
+
 
         bool reduction = is_reduction(forOp);
         if (mlir::scf::ParallelOp parent = llvm::dyn_cast_or_null<mlir::scf::ParallelOp>(forOp->getParentOp()); parent && parent->hasAttr("parallelDim") && no_inner_loops && reduction)
@@ -516,7 +529,6 @@ public:
                 return true;
             }
         });
-
 
         if (mlir::failed(mlir::applyPartialConversion(funcOp, target2, std::move(patterns2))))
         {

@@ -235,9 +235,10 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
   mlir::Value memMask;
   for(size_t i = index_offset; i < op->getNumOperands(); i++)
   {
-    if(op->getOperand(i).getDefiningOp() && isa<affine::AffineApplyOp>(op->getOperand(i).getDefiningOp()))
+    auto affineOp = llvm::dyn_cast<affine::AffineApplyOp>(op->getOperand(i).getDefiningOp());
+    auto minOp = llvm::dyn_cast<arith::MinUIOp>(op->getOperand(i).getDefiningOp());
+    if(affineOp || (minOp && (minOp->hasAttr("GuardX") || minOp->hasAttr("GuardY") || minOp->hasAttr("GuardR"))))
     {
-      affine::AffineApplyOp affineOp = cast<affine::AffineApplyOp>(op->getOperand(i).getDefiningOp());
       // int pidXIndex = -1;
       // int pidYIndex = -1;
       // int dim = -1;
@@ -245,31 +246,57 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
       Value guardXExpr = NULL, guardYExpr = NULL, guardRExpr = NULL;
       std::map<const void*, mlir::Value> map, mapGuard;
       mlir::Value bidX, bidY, tidX, tidY;
-      for(auto& oper: affineOp->getOpOperands())
+      if (affineOp)
       {
-        if(auto defOp = llvm::dyn_cast_or_null<arith::MinUIOp>(oper.get().getDefiningOp()))
+        for(auto& oper: affineOp->getOpOperands())
         {
-          if(defOp->hasAttr("GuardX"))
+          if(auto defOp = llvm::dyn_cast_or_null<arith::MinUIOp>(oper.get().getDefiningOp()))
           {
-            guardX = defOp.getRhs();
-            guardXExpr = defOp.getLhs();
-            oper.set(defOp.getLhs());
-          }
-          else if (defOp->hasAttr("GuardY"))
-          {
-            guardY = defOp.getRhs();
-            guardYExpr = defOp.getLhs();
+            if(defOp->hasAttr("GuardX"))
+            {
+              guardX = defOp.getRhs();
+              guardXExpr = defOp.getLhs();
+              oper.set(defOp.getLhs());
+            }
+            else if (defOp->hasAttr("GuardY"))
+            {
+              guardY = defOp.getRhs();
+              guardYExpr = defOp.getLhs();
 
-            oper.set(defOp.getLhs());
-          }
-          else if (defOp->hasAttr("GuardR"))
-          {
-            guardR = defOp.getRhs();
-            guardRExpr = defOp.getLhs();
+              oper.set(defOp.getLhs());
+            }
+            else if (defOp->hasAttr("GuardR"))
+            {
+              guardR = defOp.getRhs();
+              guardRExpr = defOp.getLhs();
 
-            oper.set(defOp.getLhs());
+              oper.set(defOp.getLhs());
+            }
           }
         }
+      }
+      else if(minOp)
+      {
+        if(minOp->hasAttr("GuardX"))
+        {
+          guardX = minOp.getRhs();
+          guardXExpr = minOp.getLhs();
+        }
+        else if (minOp->hasAttr("GuardY"))
+        {
+          guardY = minOp.getRhs();
+          guardYExpr = minOp.getLhs();
+        }
+        else if (minOp->hasAttr("GuardR"))
+        {
+          guardR = minOp.getRhs();
+          guardRExpr = minOp.getLhs();
+        }
+        affineOp = cast<affine::AffineApplyOp>(minOp.getLhs().getDefiningOp());
+      }
+      else 
+      {
+        return mlir::failure();
       }
       
       auto otherFunc = [&map, &mapGuard, &op, &rewriter, &bidX, &bidY, &tidX, &tidY, &guardX, &guardY, &guardR](affine::AffineApplyOp& aaffineop)  {
@@ -463,7 +490,7 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
       {
         map.clear();
         mapGuard.clear();
-          auto op = cast<affine::AffineApplyOp>(guardRExpr.getDefiningOp());
+        auto op = cast<affine::AffineApplyOp>(guardRExpr.getDefiningOp());
         cast<affine::AffineApplyOp>(guardRExpr.getDefiningOp()).getAffineMap().getResult(0).walk(otherFunc(op));
         auto myGuard = rewriter.create<arith::CmpIOp>(op->getLoc(), arith::CmpIPredicate::slt, map[cast<affine::AffineApplyOp>(guardRExpr.getDefiningOp()).getAffineMap().getResult(0).getAsOpaquePointer()], mapGuard[cast<affine::AffineApplyOp>(guardRExpr.getDefiningOp()).getAffineMap().getResult(0).getAsOpaquePointer()]).getResult();
         if(!resultGuard) 
@@ -738,10 +765,11 @@ public:
     matchAndRewrite(mlir::scf::ForOp forOp, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
       
-      if (forOp.getNumRegionIterArgs() != 0 || forOp->hasAttr("programs_loop_x") || forOp->hasAttr("programs_loop_y")) 
+      if (forOp.getNumRegionIterArgs() != 0 || forOp->hasAttr("programs_loop_x") || forOp->hasAttr("programs_loop_y") || (forOp.getOps<mlir::triton::DotOp>().empty() && forOp.getOps<mlir::triton::ReduceOp>().empty())) 
       {
         return mlir::failure();
       }
+
     //   COMET_ERRS << forOp;
 
       std::vector<mlir::Value> operands;
@@ -932,19 +960,43 @@ public:
         rewriter.replaceAllUsesWith(forOp.getLoopRegions()[0]->getArgument(0), rewriter.create<mlir::arith::ConstantIntOp>(forOp->getLoc(), 0, 32));
       }
 
-    //   COMET_ERRS << forOp;
-      auto dotOp = *forOp.getOps<mlir::triton::DotOp>().begin();
-      
       rewriter.setInsertionPoint(forOp);
-      auto elementType = mlir::isa<mlir::RankedTensorType>(dotOp->getResultTypes()[0]) ? dotOp->getResultTypes()[0].cast<mlir::RankedTensorType>().getElementType() : dotOp->getResultTypes()[0];
-      auto init = rewriter.create<mlir::arith::ConstantOp>(forOp->getLoc(), elementType, rewriter.getZeroAttr(elementType));
-      auto initSplat = rewriter.create<mlir::triton::SplatOp>(forOp->getLoc(), dotOp->getResultTypes()[0], init);
+
+      triton::DotOp dotOp;
+      triton::ReduceOp reduceOp;
+      if (!forOp.getOps<mlir::triton::DotOp>().empty())
+      {
+        dotOp = *forOp.getOps<mlir::triton::DotOp>().begin();
+        auto elementType = mlir::isa<mlir::RankedTensorType>(dotOp->getResultTypes()[0]) ? dotOp->getResultTypes()[0].cast<mlir::RankedTensorType>().getElementType() : dotOp->getResultTypes()[0];
+        auto init = rewriter.create<mlir::arith::ConstantOp>(forOp->getLoc(), elementType, rewriter.getZeroAttr(elementType));
+        auto initSplat = rewriter.create<mlir::triton::SplatOp>(forOp->getLoc(), dotOp->getResultTypes()[0], init);
+        dotOp.getCMutable().assign(initSplat);
+        basePtrs.push_back(initSplat);
+      }
+      if (!forOp.getOps<mlir::triton::ReduceOp>().empty())
+      {
+        reduceOp = *forOp.getOps<mlir::triton::ReduceOp>().begin();
+        auto elementType = mlir::isa<mlir::RankedTensorType>(reduceOp->getUsers().begin()->getResultTypes()[0]) ? reduceOp->getUsers().begin()->getResultTypes()[0].cast<mlir::RankedTensorType>().getElementType() : reduceOp->getUsers().begin()->getResultTypes()[0];
+        auto init = rewriter.create<mlir::arith::ConstantOp>(forOp->getLoc(), elementType, rewriter.getZeroAttr(elementType));
+        auto initSplat = rewriter.create<mlir::triton::SplatOp>(forOp->getLoc(), reduceOp->getUsers().begin()->getResultTypes()[0], init);
+        basePtrs.push_back(initSplat);
+      }
+    //   COMET_ERRS << forOp;
+      
+
       // mlir::Triton::DotOp
-      dotOp.getCMutable().assign(initSplat);
-      basePtrs.push_back(initSplat);
+
       auto ret = forOp.replaceWithAdditionalIterOperands(rewriter, {basePtrs}, true); 
       ret->getOperation()->setAttr("loop_block_size", forOp->getAttr("loop_block_size"));
-      yieldPtrs.push_back(dotOp->getResult(0));
+      if(dotOp)
+      {
+        yieldPtrs.push_back(dotOp->getResult(0));
+      }
+      if(reduceOp)
+      {
+        yieldPtrs.push_back(reduceOp->getUsers().begin()->getResult(0));
+      }
+
       auto yieldOp = *mlir::cast<mlir::scf::ForOp>(ret->getOperation()).getOps<mlir::scf::YieldOp>().begin();
       for(mlir::OpOperand* operand: maintain)
       {
@@ -953,16 +1005,39 @@ public:
 
       yieldOp->setOperands(yieldPtrs);
     //   COMET_ERRS << ret;
-      auto dotOps = mlir::cast<mlir::scf::ForOp>(ret->getOperation()).getOps<mlir::triton::DotOp>();
-      for(auto dotOp: dotOps)
+
+      if(dotOp)
       {
-        for(auto u: dotOp->getUsers())
+        auto dotOps = mlir::cast<mlir::scf::ForOp>(ret->getOperation()).getOps<mlir::triton::DotOp>();
+        for(auto dotOp: dotOps)
         {
-          if (mlir::isa<mlir::triton::StoreOp>(u)) 
+          for(auto u: dotOp->getUsers())
           {
-            u->eraseOperand(1);
-            u->insertOperands(1, ret->getLoopResults()->back());
-            u->moveAfter(ret->getOperation());
+            if (mlir::isa<mlir::triton::StoreOp>(u)) 
+            {
+              u->eraseOperand(1);
+              u->insertOperands(1, ret->getLoopResults()->back());
+              u->moveAfter(ret->getOperation());
+            }
+          }
+        }
+      }
+      if(reduceOp)
+      {
+        auto reduceOps = mlir::cast<mlir::scf::ForOp>(ret->getOperation()).getOps<mlir::triton::ReduceOp>();
+        assert(!reduceOps.empty());
+        for(auto reduceOp: reduceOps)
+        {
+          assert(!reduceOp->getUsers().begin()->getUsers().empty());
+          for(auto u: reduceOp->getUsers().begin()->getUsers())
+          {
+            // u->dump();
+            if (mlir::isa<mlir::triton::StoreOp>(u)) 
+            {
+              u->eraseOperand(1);
+              u->insertOperands(1, ret->getLoopResults()->back());
+              u->moveAfter(ret->getOperation());
+            }
           }
         }
       }
@@ -1047,18 +1122,55 @@ public:
       auto addOp = cast<arith::AddFOp>(*op->getUsers().begin());
       auto loadRes = addOp.getLhs() == op ? addOp.getRhs() : addOp.getLhs();
       rewriter.setInsertionPointAfter(addOp);
-      auto dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes, rewriter.getBoolAttr(true), rewriter.getI32IntegerAttr(0));
+      auto lhsTensor = op->getOperand(0).getType().cast<RankedTensorType>();
+      auto rhsTensor = op->getOperand(1).getType().cast<RankedTensorType>();
+      mlir::Operation* dotOp;
+      if (lhsTensor.getRank() == 2 && (rhsTensor.getRank() == 1 || (rhsTensor.getRank() == 2 && (rhsTensor.getDimSize(0) == 1 || rhsTensor.getDimSize(1) == 1)) ))
+      {
+        if (rhsTensor.getRank() == 1)
+        {
+          // auto expandOp = rewriter.create<triton::ExpandDimsOp>(op.getLoc(), op->getOperand(1), 0);
+          // auto bcastOp = rewriter.create<triton::BroadcastOp>(op.getLoc(), RankedTensorType::get({lhsTensor.getDimSize(0),rhsTensor.getDimSize(1)}  , lhsTensor.getElementType()), expandOp);
+          auto lhs = op->getOperand(0);
+          auto rhs = op->getOperand(1);
+          makeShapesEqual(op, lhs, rhs, rewriter);
+          auto mulOp = rewriter.create<arith::MulFOp>(op.getLoc(), op->getOperand(0), rhs);
+          auto sumOp = rewriter.create<triton::ReduceOp>(op->getLoc(), ValueRange(mulOp), 1);
+          std::vector<Type> arg_types = {lhsTensor.getElementType(), lhsTensor.getElementType()};
+          std::vector locs = {op->getOperand(0).getLoc(), op->getOperand(1).getLoc()};
+          auto type_range = ArrayRef(arg_types);
+          sumOp.getBodyRegion().emplaceBlock().addArguments(TypeRange(type_range), locs);
+          rewriter.setInsertionPointToStart(sumOp.getBody(0));
+          auto res = rewriter.create<arith::AddFOp>(sumOp->getLoc(), sumOp.getBody(0)->getArgument(0), sumOp.getBody(0)->getArgument(1));
+          rewriter.create<triton::ReduceReturnOp>(res->getLoc(), ValueRange(res));
+          rewriter.setInsertionPointAfter(sumOp);
+          auto expandOp = rewriter.create<triton::ExpandDimsOp>(op.getLoc(), sumOp->getResult(0), 1);
+
+          dotOp = expandOp;
+          
+        }
+        else {
+          return failure();
+        }
+      }
+      else {
+        dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes, rewriter.getBoolAttr(true), rewriter.getI32IntegerAttr(1));
+      }
+      // if(op->getOperand(1).getType().cast<RankedTensorType>().)
+
       // addOp->replaceAllUsesWith(dotOp);
-      rewriter.replaceAllUsesWith(addOp, dotOp);
+      rewriter.replaceAllUsesWith(addOp, dotOp->getResult(0));
 
       for(auto& u: dotOp->getUses())
       {
         if(dyn_cast<triton::SplatOp>(u.getOwner()))
         {
-          rewriter.replaceAllUsesWith(u.getOwner()->getResult(0), dotOp);
+          rewriter.replaceAllUsesWith(u.getOwner()->getResult(0), dotOp->getResult(0));
           rewriter.eraseOp(u.getOwner());
         }
       }
+      
+      // op->getParentOfType<ModuleOp>().dump();
       rewriter.eraseOp(addOp);
       rewriter.eraseOp(op);
 
@@ -1582,6 +1694,8 @@ public:
       // COMET_ERRS << "Failed to Lower STCOutputLowering2\n";
       return signalPassFailure();
     }
+
+
     PassManager pm(op.getContext());
 
 
