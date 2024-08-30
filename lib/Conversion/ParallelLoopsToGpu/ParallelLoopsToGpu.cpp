@@ -234,7 +234,7 @@ public:
         auto map = rewriter.getDimIdentityMap();
         mlir::gpu::ParallelLoopDimMappingAttr newAttr;
 
-        bool no_inner_parallel = parOp.getBody()->getOps<mlir::scf::ParallelOp>().empty();
+        // bool no_inner_parallel = parOp.getBody()->getOps<mlir::scf::ParallelOp>().empty();
 
         if(parOp.getLowerBound().size() > 2)
         {
