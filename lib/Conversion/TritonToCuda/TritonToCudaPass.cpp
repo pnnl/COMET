@@ -1,8 +1,10 @@
 
+#include <cstddef>
 #include <list>
 #include <memory>
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
 
+#include "mlir/IR/Value.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
@@ -322,13 +324,23 @@ public:
     {
       MemRefType allocType = alloc.getType().cast<MemRefType>();
       mlir::gpu::AllocOp gpuAlloc;
+      if(auto defOp = alloc.getDefiningOp())
+      {
+        builder.setInsertionPointAfter(defOp);
+      }
+      else if(alloc.isa<BlockArgument>())
+      {
+        builder.setInsertionPointToStart(alloc.getParentBlock());
+      }
+      else {
+        assert(false && "Value has not defining Op and is not a block argument.");
+      }
+
       if(allocType.hasStaticShape())
       {
-        builder.setInsertionPointAfter(alloc.getDefiningOp());
         gpuAlloc = builder.create<mlir::gpu::AllocOp>(alloc.getLoc(), allocType, ValueRange(), ValueRange(), ValueRange());
       }
       else {
-        builder.setInsertionPointAfter(alloc.getDefiningOp());
         std::vector<Value> dynDims;
         for(size_t i = 0; i < allocType.getShape().size(); i++)
         {
@@ -340,8 +352,8 @@ public:
         gpuAlloc = builder.create<mlir::gpu::AllocOp>(alloc.getLoc(), allocType, ValueRange(), dynDims, ValueRange());
       }
       
-      
-      for(auto& use: llvm::make_early_inc_range(alloc.getDefiningOp()->getUses()))
+      auto op = alloc.getDefiningOp() != NULL ? alloc.getDefiningOp()->getResult(0) : alloc;
+      for(auto& use: llvm::make_early_inc_range(op.getUses()))
       {
         if(mlir::gpu::LaunchFuncOp launchOp = dyn_cast<mlir::gpu::LaunchFuncOp>(use.getOwner()))
         {
@@ -406,7 +418,7 @@ public:
       auto hToD = builder.create<arith::ConstantIndexOp>(cpy->getLoc(), 0); 
       auto dToH = builder.create<arith::ConstantIndexOp>(cpy->getLoc(), 1);
 
-      if((isa<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()) && cast<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()).getCallee().starts_with("cudaMalloc") ))
+      if(cpy.getOperand(0).getDefiningOp() && (isa<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()) && cast<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()).getCallee().starts_with("cudaMalloc") ))
       {
         auto cast = builder.create<mlir::memref::CastOp>(cpy->getLoc(), MemRefType::get({ShapedType::kDynamic}, cpy.getSrc().getType().getElementType()), cpy.getSrc());
         if(IntegerType intType = cpy.getOperand(1).getType().cast<MemRefType>().getElementType().dyn_cast<IntegerType>())
@@ -420,7 +432,7 @@ public:
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyF"+std::to_string(width), TypeRange(), ValueRange({cpy.getOperand(0), cast, hToD}));
         }
       }
-      else if((isa<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()) && cast<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()).getCallee().starts_with("cudaMalloc") ))
+      else if(cpy.getOperand(1).getDefiningOp() && (isa<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()) && cast<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()).getCallee().starts_with("cudaMalloc") ))
       {
         auto cast = builder.create<mlir::memref::CastOp>(cpy->getLoc(), MemRefType::get({ShapedType::kDynamic}, cpy.getDst().getType().getElementType()), cpy.getDst());
 
