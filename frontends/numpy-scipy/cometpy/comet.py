@@ -843,8 +843,9 @@ class NewVisitor(ast.NodeVisitor):
             lops = "".join(ret)
             return tid
 
+
 #Wrapper function. The input function (in the form of an object) is passed an arguement to this function.
-def compile(flags, with_jit=True):
+def compile(flags, target:str = "cpu", with_jit=True):
     def innerfunc(func):
 
         def wrapper(*pos_args, **kwargs):
@@ -927,7 +928,7 @@ def compile(flags, with_jit=True):
                     new_flags = ' --opt-comp-workspace'
             code = irb.compile()
             # start = time.time()
-            lowering_result = lowering.lower_dialect_with_jit(code,None, new_flags,func_def.name, arg_vals, outputs)
+            lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags,func_def.name, arg_vals, outputs)
             # end = time.time()
             # print("Time for JIT", end-start)
             return lowering_result
