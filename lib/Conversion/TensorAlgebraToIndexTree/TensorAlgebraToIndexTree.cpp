@@ -316,7 +316,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree, TargetDevice 
     }
     break;
   }
-  tree->setSizeOfIteratorTypes(allIndices.size()); // Set the total number of iterators
+  // tree->setSizeOfIteratorTypes(allIndices.size()); // Set the total number of iterators
 
   auto lhsIndices = A->getIndices();
 
@@ -347,8 +347,8 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree, TargetDevice 
     /// Set the iterator type of the node
     tree->setIteratorTypeByIndex(index, std::move(iteratorType));
     node->setIteratorType(tree->getIteratorTypeByIndex(index));
-    comet_debug() << "tree: " << tree->getIteratorTypeByIndex(index)->dump() << "\n";
-    comet_debug() << "node: " << node->getIteratorType()->dump() << "\n";
+    comet_debug() << "tree: " << tree->getIteratorTypeByIndex(index)->dump() << " ptr: " << tree->getIteratorTypeByIndex(index) <<  "\n";
+    comet_debug() << "node: " << node->getIteratorType()->dump() << " ptr: " << node->getIteratorType() << "\n";
 
     parent = node;
   }
@@ -398,7 +398,7 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
 
   /// RHS and LHS indices must be the same for elementwise multiplication
   IndicesType allIndices = tree->getIndices(rhs1_labels);
-  tree->setSizeOfIteratorTypes(allIndices.size()); // Set the total number of iterators
+  // tree->setSizeOfIteratorTypes(allIndices.size()); // Set the total number of iterators
 
   auto lhsIndices = A->getIndices();
   TreeNode *parent = tree->getRoot();
@@ -408,18 +408,21 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
     auto &idomain = inputDomains.at(index);
 
     auto node = tree->addIndexNode(index, parent, idomain);
+    unique_ptr<IteratorType> iteratorType(new IteratorType);
 
     /// If this index appears on the lhs too, set output domain for the index node
     if (std::find(lhsIndices.begin(), lhsIndices.end(), index) != lhsIndices.end())
     {
       auto &odomain = outputDomains.at(index);
       node->setOutputDomain(odomain);
+      iteratorType->setType("parallel");
     }
 
     /// Set iterator type. Currently "default" for all elementwise operations.
-    unique_ptr<IteratorType> iteratorType(new IteratorType);
     tree->setIteratorTypeByIndex(index, std::move(iteratorType));
     node->setIteratorType(tree->getIteratorTypeByIndex(index));
+    comet_debug() << "tree: " << tree->getIteratorTypeByIndex(index)->dump() << " ptr: " << tree->getIteratorTypeByIndex(index) <<  "\n";
+    comet_debug() << "node: " << node->getIteratorType()->dump() << " ptr: " << node->getIteratorType() << "\n";
     parent = node;
   }
   tree->addComputeNode(std::move(e), parent);
