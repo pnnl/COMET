@@ -107,7 +107,7 @@ void collapseMemrefAndUsers(mlir::Value val, mlir::OpBuilder& builder)
         return;
     }
 
-    llvm::SmallVector<llvm::SmallVector<int64_t,2>,2> indices;
+    llvm::SmallVector<llvm::SmallVector<int64_t,2>,1> indices;
     indices.push_back(llvm::SmallVector<int64_t,2>());
     for(int64_t i = 0; i < memref.getRank(); i++)
     {
@@ -478,11 +478,11 @@ public:
 
         /// First, Memrefs which are function arguments
         mlir::OpBuilder builder(funcOp);
-        builder.setInsertionPointToStart(&funcOp.getBody().getBlocks().front());
         for(auto arg: funcOp.getArguments())
         {
             if(arg.getType().isa<mlir::MemRefType>())
             {
+                builder.setInsertionPointToStart(&funcOp.getBody().getBlocks().front());
                 collapseMemrefAndUsers(arg, builder);
             }
         }  

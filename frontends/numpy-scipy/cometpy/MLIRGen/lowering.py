@@ -542,7 +542,6 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     # 2. Call mlir-translate to convert llvm to llvmir 
     # 3. Call clang to generate library
     p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | ' + gcc_command , input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-
     if(p.returncode != 0):
         cleanup()
         raise AssertionError("gcc failed with error code: {}. Error: {}".format(p.returncode, p.stderr))
@@ -694,10 +693,10 @@ def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
     return result
 
 
-def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_name, args_vals, outputs):
+def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_flags,func_name, args_vals, outputs):
 
     mlir_lower_flags = " "
-
+        
     if compile_with_flags != None:
         if "--convert-tc-to-ttgt" not in compile_with_flags:
             mlir_lower_flags += "  --convert-ta-to-it "
@@ -712,7 +711,15 @@ def lower_dialect_with_jit(ta_dialect_rep, out_dims, compile_with_flags,func_nam
         mlir_lower_flags = "  --convert-ta-to-it --convert-to-loops "
     # scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
     scf_lower_flags =  " --convert-to-llvm "
-
+    
+    if target != "cpu":
+        if target.startswith("sm_") or target.startswith("compute_") or target.startswith("lto_"):
+            scf_lower_flags += " " + " --convert-to-triton --target=GPU --gpu-compute-capability="+target.split("_")[1]
+            mlir_lower_flags += " " + "--target=GPU"
+        else :
+            raise "Expected target formats:\
+                    cpu, compute_<version>, sm_<version>, lto_<version>"
+    
     if("-emit-ta" in mlir_lower_flags):
         print(ta_dialect_rep)
         return
