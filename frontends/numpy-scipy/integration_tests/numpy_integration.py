@@ -29,6 +29,7 @@ if __name__ == '__main__':
 
     for c in categories:
         files = files + glob.glob("./"+c+"/test_*.py")
+        files = files + glob.glob("./"+c+"/gpu/test_*.py")
 
 
     print("\nFound" , len(files), "test cases")

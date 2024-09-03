@@ -26,7 +26,12 @@ void initCudaCtx()
     {
         CU_CHECK(cuInit(0));
         CU_CHECK(cuCtxCreate(&cuContext, 0, 0));
-        CU_CHECK(cuModuleLoadData(&cuModule, moduleImg));
+    }
+
+    if(!cuModule && moduleImg)
+    {
+        // printf("PTX: \n %s\n", moduleImg);
+        CU_CHECK(cuModuleLoadData(&cuModule, moduleImg));       
     }
 }
 
@@ -43,8 +48,11 @@ int64_t cudaMalloc(int64_t size) {
 
 extern "C" __attribute__((visibility("default"))) void cudaSetModuleImage(char* ptx)
 {
+    // printf("Called cudaSetModuleImage");
+
     if (moduleImg == NULL) 
     {
+        // printf("Setting PTX");
         moduleImg = ptx;
     }
 }
