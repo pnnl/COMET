@@ -142,6 +142,109 @@ mlir::comet::GpuConversionTarget2::GpuConversionTarget2(
       return true;
     });
 
+  addDynamicallyLegalOp<arith::CmpFOp>([](arith::CmpFOp op) -> bool 
+    {
+      Type prev = NULL;
+      for(auto opr: op->getOperands())
+      {
+        if(prev == NULL)
+        {
+          prev = opr.getType();
+        }
+        else if (prev != opr.getType())
+        {
+          return false;
+        }
+      }
+      if(prev != op.getType())
+      {
+        if(!prev.isa<RankedTensorType>() && !op.getType().isa<RankedTensorType>())
+        {
+          return true;
+        }
+        else if(prev.isa<RankedTensorType>() && op.getType().isa<RankedTensorType>())
+        {
+          if(prev.cast<RankedTensorType>().getShape() == op.getType().cast<RankedTensorType>().getShape())
+          {
+            return true;
+          }
+          else 
+          {
+            return false;
+          }
+        }
+
+        return false;
+      }
+
+      return true;
+    });
+
+  addDynamicallyLegalOp<arith::CmpIOp>([](arith::CmpIOp op) -> bool 
+    {
+      Type prev = NULL;
+      for(auto opr: op->getOperands())
+      {
+        if(prev == NULL)
+        {
+          prev = opr.getType();
+        }
+        else if (prev != opr.getType())
+        {
+          return false;
+        }
+      }
+      if(prev != op.getType())
+      {
+        if(!prev.isa<RankedTensorType>() && !op.getType().isa<RankedTensorType>())
+        {
+          return true;
+        }
+        else if(prev.isa<RankedTensorType>() && op.getType().isa<RankedTensorType>())
+        {
+          if(prev.cast<RankedTensorType>().getShape() == op.getType().cast<RankedTensorType>().getShape())
+          {
+            return true;
+          }
+          else 
+          {
+            return false;
+          }
+        }
+
+        return false;
+      }
+
+      return true;
+    });
+    
+  addDynamicallyLegalOp<arith::SelectOp>([](arith::SelectOp op) -> bool 
+    {
+      if(op.getTrueValue().getType() == op.getResult().getType() && op.getFalseValue().getType() == op.getTrueValue().getType())
+      {
+        if(op.getCondition().getType().isa<RankedTensorType>() && !op.getFalseValue().getType().isa<RankedTensorType>())
+        {
+          return false;
+        }
+        else if(!op.getCondition().getType().isa<RankedTensorType>() && op.getFalseValue().getType().isa<RankedTensorType>())
+        {
+          return false;
+        }
+        else if(op.getCondition().getType().isa<RankedTensorType>() && op.getFalseValue().getType().isa<RankedTensorType>())
+        {
+          if(op.getCondition().getType().cast<RankedTensorType>().getShape() == op.getFalseValue().getType().cast<RankedTensorType>().getShape())
+          {
+            return true;
+          }
+          else 
+          {
+            return false;
+          }
+        }
+      }
+
+      return false;
+    });
   // addDynamicallyLegalOp<affine::AffineApplyOp>([](affine::AffineApplyOp op) -> bool 
   //   {
 
