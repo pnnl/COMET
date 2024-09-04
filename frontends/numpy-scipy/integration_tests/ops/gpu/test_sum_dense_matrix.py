@@ -8,7 +8,7 @@ def run_numpy(A):
 
 	return var
 
-@comet.compile(flags=None, target="sm_70")
+@comet.compile(flags=None, target="gpu")
 def run_comet_with_jit(A):
 	var = A.sum()
 

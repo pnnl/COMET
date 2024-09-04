@@ -1,5 +1,5 @@
-# RUN: comet-opt  --target=GPU --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm  %s &> mult_dense_matrix.llvm
-# RUN: mlir-cpu-runner mult_dense_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: comet-opt --target=GPU --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm %s &> mm_SemiringPlusTimes_DensexDense_oDense.llvm
+# RUN: mlir-cpu-runner mm_SemiringPlusTimes_DensexDense_oDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 
 def main() {
@@ -18,7 +18,7 @@ def main() {
 	B[j, k] = 3.4;
 	C[i, k] = 0.0;
 
-	C[i, k] = A[i, j] * B[j, k];
+	C[i, k] = A[i, j] @(+,*) B[j, k];
 	print(C);
 }
 

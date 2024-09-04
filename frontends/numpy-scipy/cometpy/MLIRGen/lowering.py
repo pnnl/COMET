@@ -716,6 +716,9 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
         if target.startswith("sm_") or target.startswith("compute_") or target.startswith("lto_"):
             scf_lower_flags += " " + " --convert-to-triton --target=GPU --gpu-compute-capability="+target.split("_")[1]
             mlir_lower_flags += " " + "--target=GPU"
+        elif target == "gpu":
+            scf_lower_flags += " " + " --convert-to-triton --target=GPU"
+            mlir_lower_flags += " " + "--target=GPU"
         else :
             raise "Expected target formats:\
                     cpu, compute_<version>, sm_<version>, lto_<version>"

@@ -1,7 +1,7 @@
 # This example demostrates that the compiler can generate code for arbitrary tensor operations
 # No assumption that contraction indices should disapper in the output tensor. 
 
-# RUN: comet-opt --target=GPU --gpu-compute-capability=70 --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm %s &> mult_dense_ij-ikj-kj.llvm
+# RUN: comet-opt --target=GPU --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm %s &> mult_dense_ij-ikj-kj.llvm
 # RUN: mlir-cpu-runner mult_dense_ij-ikj-kj.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 def main() {
@@ -28,3 +28,4 @@ def main() {
 # Print the result for verification.
 # CHECK: data = 
 # CHECK-NEXT: 21.76,21.76,21.76,21.76,21.76,21.76,21.76,21.76,21.76,21.76,21.76,21.76,21.76,21.76,21.76,21.76,
+# REQUIRES: gpu_target_enabled

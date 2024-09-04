@@ -8,7 +8,7 @@ def run_numpy(A,B):
 
 	return C
 
-@comet.compile(flags=None, target="sm_70")
+@comet.compile(flags=None, target="gpu")
 def run_comet_with_jit(A,B):
 	C = comet.einsum('ij,j->i', A,B)
 

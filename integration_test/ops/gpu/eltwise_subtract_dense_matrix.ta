@@ -1,4 +1,4 @@
-# RUN: comet-opt --target=GPU --gpu-compute-capability=70 --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm %s &> eltwise_sub_dense_matrix.llvm
+# RUN: comet-opt --target=GPU --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm %s &> eltwise_sub_dense_matrix.llvm
 # RUN: mlir-cpu-runner eltwise_sub_dense_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 
@@ -24,3 +24,4 @@ def main() {
 # Print the result for verification.
 # CHECK: data = 
 # CHECK-NEXT: 1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,
+# REQUIRES: gpu_target_enabled

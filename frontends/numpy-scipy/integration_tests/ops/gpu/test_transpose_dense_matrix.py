@@ -8,7 +8,7 @@ def run_numpy(A):
 
 	return B
 
-@comet.compile(flags=None, target="sm_70")
+@comet.compile(flags=None, target="gpu")
 def run_comet_with_jit(A):
 	B = A.transpose()
 
