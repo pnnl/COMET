@@ -4,6 +4,9 @@
 #include "comet/Conversion/GpuToTriton/GpuToTritonPass.h"
 #include "comet/Conversion/GpuToTriton/GpuToTritonConversion.h"
 
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
@@ -658,6 +661,142 @@ LogicalResult ExpandScalarTensorArithOp(T op, ConversionPatternRewriter &rewrite
 
   return failure();
 }
+LogicalResult ExpandScalarTensorSelectOp(arith::SelectOp& op, ConversionPatternRewriter &rewriter)
+{
+  mlir::Value cond = op.getOperand(0);
+  mlir::Value lhs = op.getOperand(1);
+  mlir::Value rhs = op.getOperand(2);
+  mlir::Value res = op.getResult();
+  mlir::Type cond_type = cond.getType();
+  mlir::Type lhs_type = lhs.getType();
+  mlir::Type rhs_type = rhs.getType();  
+  mlir::Type res_type = res.getType();  
+
+  Operation* expandedOp = NULL;
+  if(lhs_type != rhs_type)
+  {
+    if(auto lhs_tensor_type = lhs_type.dyn_cast_or_null<RankedTensorType>())
+    {
+      if(!cond_type.isa<RankedTensorType>())
+      {
+        auto expandedCond = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(lhs_tensor_type.getShape(), cond.getType()), cond);
+        cond = expandedCond.getResult();
+      }
+      if(!rhs_type.isa<RankedTensorType>()  && lhs_tensor_type.getElementType() == rhs_type)
+      {
+        auto scalarExpanded = rewriter.create<triton::SplatOp>(op->getLoc(), lhs.getType(), rhs);
+        expandedOp = rewriter.create<arith::SelectOp>(op->getLoc(), cond, lhs, scalarExpanded);
+      }
+    }
+    else if(auto rhs_tensor_type = rhs_type.dyn_cast_or_null<RankedTensorType>())
+    {
+      if(!cond_type.isa<RankedTensorType>())
+      {
+        auto expandedCond = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(rhs_tensor_type.getShape(), cond.getType()), cond);
+        cond = expandedCond.getResult();
+      }
+      if(rhs_tensor_type.getElementType() == lhs_type)
+      {
+        auto scalarExpanded = rewriter.create<triton::SplatOp>(op->getLoc(), rhs.getType(), lhs);
+        expandedOp = rewriter.create<arith::SelectOp>(op->getLoc(), cond, scalarExpanded, rhs);
+      }          
+    }
+  }
+  else if (lhs_type != res_type)
+  {
+    auto rhs_tensor_type = rhs_type.dyn_cast_or_null<RankedTensorType>();
+    if(rhs_tensor_type && !cond_type.isa<RankedTensorType>())
+    {
+      auto expandedCond = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(rhs_tensor_type.getShape(), cond.getType()), cond);
+      cond = expandedCond.getResult();
+    }
+    expandedOp = rewriter.create<arith::SelectOp>(op->getLoc(), cond, lhs, rhs);
+  }
+  else if (!cond_type.isa<RankedTensorType>() && rhs_type.isa<RankedTensorType>())
+  {
+    auto rhs_tensor_type = rhs_type.cast<RankedTensorType>();
+    auto expandedCond = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(rhs_tensor_type.getShape(), cond.getType()), cond);
+    cond = expandedCond.getResult();
+    expandedOp = rewriter.create<arith::SelectOp>(op->getLoc(), cond, lhs, rhs);
+  }
+
+
+  if(expandedOp)
+  {
+    // rewriter.replaceAllUsesWith(op, expandedOp);
+    op->replaceAllUsesWith(expandedOp);
+
+    for(auto& u: expandedOp->getUses())
+    {
+      if(dyn_cast<triton::SplatOp>(u.getOwner()))
+      {
+        rewriter.replaceAllUsesWith(u.getOwner()->getResult(0), expandedOp->getResult(0));
+        rewriter.eraseOp(u.getOwner());
+      }
+    }
+    rewriter.eraseOp(op);
+
+    return success();
+  }
+
+  return failure();
+}
+
+template<typename T, typename TAttr>
+LogicalResult ExpandScalarTensorArithCmpOp(T op, ConversionPatternRewriter &rewriter)
+{
+  mlir::Value lhs = op.getOperand(0);
+  mlir::Value rhs = op.getOperand(1);
+  mlir::Value res = op.getResult();
+  mlir::Type lhs_type = lhs.getType();
+  mlir::Type rhs_type = rhs.getType();  
+  mlir::Type res_type = res.getType();  
+
+  Operation* expandedOp = NULL;
+  if(lhs_type != rhs_type)
+  {
+    if(auto lhs_tensor_type = lhs_type.dyn_cast_or_null<RankedTensorType>())
+    {
+      if(!rhs_type.isa<RankedTensorType>()  && lhs_tensor_type.getElementType() == rhs_type)
+      {
+        auto scalarExpanded = rewriter.create<triton::SplatOp>(op->getLoc(), lhs.getType(), rhs);
+        expandedOp = rewriter.create<T>(op->getLoc(), op->template getAttrOfType<TAttr>("predicate"), lhs, scalarExpanded);
+      }
+    }
+    else if(auto rhs_tensor_type = rhs_type.dyn_cast_or_null<RankedTensorType>())
+    {
+      if(rhs_tensor_type.getElementType() == lhs_type)
+      {
+        auto scalarExpanded = rewriter.create<triton::SplatOp>(op->getLoc(), rhs.getType(), lhs);
+        expandedOp = rewriter.create<T>(op->getLoc(), op->template getAttrOfType<TAttr>("predicate"), scalarExpanded, rhs);
+      }          
+    }
+  }
+  else if (lhs_type != res_type)
+  {
+    expandedOp = rewriter.create<T>(op->getLoc(), op->template getAttrOfType<TAttr>("predicate"), op->getOperand(0), op->getOperand(1));
+  }
+
+  if(expandedOp)
+  {
+    // rewriter.replaceAllUsesWith(op, expandedOp);
+    op->replaceAllUsesWith(expandedOp);
+
+    for(auto& u: expandedOp->getUses())
+    {
+      if(dyn_cast<triton::SplatOp>(u.getOwner()))
+      {
+        rewriter.replaceAllUsesWith(u.getOwner()->getResult(0), expandedOp->getResult(0));
+        rewriter.eraseOp(u.getOwner());
+      }
+    }
+    rewriter.eraseOp(op);
+
+    return success();
+  }
+
+  return failure();
+}
 
 void iterateOperations(Operation *op, PatternRewriter& rewriter) {
   // Handle each operation
@@ -1098,6 +1237,28 @@ public:
   }
 };
 
+
+template <typename T, typename TAttr>
+class ArithCmpOpPattern : public OpConversionPattern<T> {
+public:
+  using OpConversionPattern<T>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(T op, typename T::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    return ExpandScalarTensorArithCmpOp<T, TAttr>(op, rewriter);
+  }
+};
+class ArithSelectPattrn : public OpConversionPattern<arith::SelectOp> {
+public:
+  using OpConversionPattern<arith::SelectOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(arith::SelectOp op, typename arith::SelectOp::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    return ExpandScalarTensorSelectOp(op, rewriter);
+  }
+};
+
 template <typename T>
 class ArithOpPattern : public OpConversionPattern<T> {
 public:
@@ -1108,6 +1269,7 @@ public:
     return ExpandScalarTensorArithOp(op, rewriter);
   }
 };
+
 
 template <>
 class ArithOpPattern<arith::MulFOp> : public OpConversionPattern<arith::MulFOp> {
@@ -1658,7 +1820,7 @@ public:
     patterns.insert<GpuFuncOpToTritonFuncOp>(typeConverter, context, kernel_names);
     patterns.insert<MemrefLoadOpToTriton, MemrefStoreOpToTriton>(context);
     patterns.insert<SimplifyAffineApply>(context);
-    patterns.insert<ArithOpPattern<arith::AddFOp>, ArithOpPattern<arith::MulFOp>, ArithOpPattern<arith::SubFOp>, ArithOpPattern<arith::SubIOp>>(context);
+    patterns.insert<ArithOpPattern<arith::AddFOp>, ArithOpPattern<arith::MulFOp>, ArithOpPattern<arith::SubFOp>, ArithOpPattern<arith::SubIOp>, ArithCmpOpPattern<arith::CmpFOp, arith::CmpFPredicateAttr>, ArithSelectPattrn, ArithCmpOpPattern<arith::CmpIOp, arith::CmpIPredicateAttr>>(context);
     mlir::arith::populateArithExpandOpsPatterns(patterns);
 
     std::vector<Operation*>  gpuModuleOps;
@@ -1687,7 +1849,7 @@ public:
     mlir::comet::GpuConversionTarget2 target2(getContext(), typeConverter2);
 
     patterns2.insert<FinalizeTritonFuncOp>(context);
-    patterns2.insert<ArithOpPattern<arith::AddFOp>, ArithOpPattern<arith::MulFOp>, ArithOpPattern<arith::SubFOp>, ArithOpPattern<arith::SubIOp>>(context);
+    patterns2.insert<ArithOpPattern<arith::AddFOp>, ArithOpPattern<arith::MulFOp>, ArithOpPattern<arith::SubFOp>, ArithOpPattern<arith::SubIOp>, ArithCmpOpPattern<arith::CmpFOp, arith::CmpFPredicateAttr>, ArithSelectPattrn, ArithCmpOpPattern<arith::CmpIOp, arith::CmpIPredicateAttr>>(context);
 
     if (failed(applyPartialConversion(op, target2, std::move(patterns2))))
     {
