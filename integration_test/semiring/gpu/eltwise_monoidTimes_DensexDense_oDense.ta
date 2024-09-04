@@ -1,5 +1,5 @@
-# RUN: comet-opt --target=GPU --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm %s &> eltwise_DensexDense_oDense.llvm
-# RUN: mlir-cpu-runner eltwise_DensexDense_oDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: comet-opt --target=GPU --convert-ta-to-it --convert-to-loops --convert-to-triton --convert-to-llvm %s &> eltwise_monoidTimes_DensexDense_oDense.llvm
+# RUN: mlir-cpu-runner eltwise_monoidTimes_DensexDense_oDense.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 
 def main() {
@@ -20,7 +20,7 @@ def main() {
 	C[a, b] = 0.0;
 
 	#Tensor Contraction
-	C[a, b] = A[a, b] .* B[a, b];
+	C[a, b] = A[a, b] @(*) B[a, b];
 	
 	print(C);
 }
