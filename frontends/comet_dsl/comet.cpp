@@ -32,9 +32,12 @@
 #include "comet/Dialect/IndexTree/Passes.h"
 
 #include "comet/Conversion/Passes.h"
-
+#include "comet/Analysis/Passes.h"
 #include "MLIRGen.h"
 #include "Parser.h"
+
+#include "mlir/Tools/mlir-opt/MlirOptMain.h"
+#include <cstdlib>
 
 #include "mlir/Support/TypeID.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -53,12 +56,10 @@
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
 #include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
 #include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVMPass.h"
-// #include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
-// #include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
 #include "mlir/Conversion/VectorToSCF/VectorToSCF.h"
 
 #include "mlir/IR/Verifier.h"
@@ -67,6 +68,8 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/InitAllDialects.h"
+#include "mlir/InitAllExtensions.h"
+#include "mlir/InitAllPasses.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
@@ -126,6 +129,7 @@ mlir::OwningOpRef<mlir::ModuleOp> createModuleFromString(mlir::MLIRContext &cont
     return module;
 }
 
+using namespace std;
 using namespace mlir::tensorAlgebra;
 using namespace mlir::indexTree;
 
@@ -231,6 +235,13 @@ static cl::opt<bool> OptKernelFusion("opt-fusion", cl::init(false),
                                      cl::desc("Output IT dialect after redundancy-aware fusion"));
 static cl::opt<bool> OptDimensionReduction("opt-dimension-reduction", cl::init(false),
                                      cl::desc("Reduce intermediate tensors' dimension after kernel fusion"));
+
+
+///  =============================================================================
+///  Memory access pattern analysis
+///  =============================================================================
+static cl::opt<bool> AnalysisMemAccessFrequency("mem-access-frequency-analysis", cl::init(false),
+                                     cl::desc("memory access frequency analysis"));
 
 /// =============================================================================
 /// TTGT reformulation for tensor contraction operations
@@ -501,8 +512,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     ///  =============================================================================
   }
 
-
-
   // /// =============================================================================
   // /// Late lowering passes
   // /// =============================================================================
@@ -540,6 +549,11 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   }
 #endif
+
+  if (AnalysisMemAccessFrequency){
+    optPM.addPass(mlir::comet::createMemoryAccessFrequencyAnalysisPass());
+  }
+
   pm.addPass(mlir::createCanonicalizerPass());
 
   /// =============================================================================
@@ -609,8 +623,29 @@ int dumpAST()
   return 0;
 }
 
+
 int main(int argc, char **argv)
 {
+  // mlir::registerAllPasses();
+
+  // mlir::MLIRContext context;
+
+  // mlir::DialectRegistry registry;
+  // mlir::registerAllDialects(registry);
+
+  // // DialectRegistry registry;
+  // // registerAllDialects(registry);
+  // mlir::registerAllExtensions(registry);
+  // mlir::comet::registerAliasAnalysisPass();
+
+  // // mlir::registerAllExtensions(registry);
+
+  // // mlir::registerAllDialects(context);
+
+  // // // Register the memory access pattern analysis pass
+  // // mlir::registerPass([]() -> std::unique_ptr<::mlir::Pass> {
+  // //   return std::make_unique<mlir::comet::MemoryAccessPatternAnalysisPass>();
+  // // });
 
   mlir::MLIRContext context;
   mlir::registerAllDialects(context);
@@ -650,5 +685,12 @@ int main(int argc, char **argv)
 
   /// If we aren't exporting to non-mlir, then we are done.
   module->dump();
+
+  // Delegate to the MLIR utility for parsing and pass management.
+  // return mlir::MlirOptMain(argc, argv, "COMET optimizer", registry)
+  //                .succeeded()
+  //            ? EXIT_SUCCESS
+  //            : EXIT_FAILURE;
+
   return 0;
 }
