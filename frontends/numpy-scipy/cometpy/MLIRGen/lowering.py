@@ -714,9 +714,15 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
     
     if target != "cpu":
         if target.startswith("sm_") or target.startswith("compute_") or target.startswith("lto_"):
+            if not cfg.gpu_target_enabled:
+                raise "COMET gpu target is not enabled"
+            
             scf_lower_flags += " " + " --convert-to-triton --target=GPU --gpu-compute-capability="+target.split("_")[1]
             mlir_lower_flags += " " + "--target=GPU"
         elif target == "gpu":
+            if not cfg.gpu_target_enabled:
+                raise "COMET gpu target is not enabled"
+        
             scf_lower_flags += " " + " --convert-to-triton --target=GPU"
             mlir_lower_flags += " " + "--target=GPU"
         else :
