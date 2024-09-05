@@ -82,6 +82,10 @@ public:
       // ttFunc->erase();
     }
 
+    if(TTFuncs.empty())
+    {
+      return signalPassFailure();
+    }
     
     PassManager pm(tempMod.getContext());
 
