@@ -766,7 +766,7 @@ namespace mlir
       std::vector<std::string> format = allFormats[tensor_id];
       std::vector<std::string> block = allBlocks[tensor_id];
 
-      if (format.size() == 1 && format[0].compare("Dense") == 0)
+      if (format.size() == 1 && format[0].compare("D") == 0)
         format_ret = "Dense";
       else if (format.size() == 2 && (format[0].compare("D") == 0 && format[1].compare("D") == 0))
         format_ret = "Dense";
@@ -814,6 +814,17 @@ namespace mlir
         format_ret = "ModeGeneric";
       else if (format.size() == 3 && (format[0].compare("CN") == 0 && format[1].compare("S") == 0 && format[2].compare("S") == 0))
         format_ret = "ModeGeneric";
+      else if(format.size() > 3)
+      {
+        for(auto f: format)
+        {
+          if(f != "D")
+          {
+            return "";
+          }
+        }
+        format_ret = "D";
+      }
       else
       {
         llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Unsupported formats\n";

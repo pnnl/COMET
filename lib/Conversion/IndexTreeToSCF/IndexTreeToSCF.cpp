@@ -727,7 +727,8 @@ namespace
                          llvm::StringRef &iteratorType,
                         //  scf::ForOp &forLoop /* output */,
                          AbstractLoopOp &forLoop /* output */,
-                         Value &accessIndex /* output */)
+                         Value &accessIndex /* output */,
+                         bool isBCSR = false)
   {
     /// Generate for(int m = pos[0]; m < pos[1]; m++){int i = crd[m];}
     /// if i = 0, index is [0,1]
@@ -771,7 +772,7 @@ namespace
           comet_debug() << " child upperBound alloc\n";
           comet_vdump(alloc_child_bounds);
 
-          if (alloc_child_bounds == alloc_parent_bounds) /// m is the nearest loop induction variable
+          if (isBCSR && (alloc_child_bounds == alloc_parent_bounds)) /// m is the nearest loop induction variable
           {
             comet_debug() << " THESAME: Parent and Child has the same alloc\n";
             if (parent_inductionVar != nullptr)
@@ -1279,7 +1280,8 @@ namespace
                           parent_inductionVar,
                           iteratorType,
                           forLoop /* output */,
-                          accessIndex /* output */);
+                          accessIndex /* output */,
+                          block == "D");
         
         if (block == "D") {
           builder.setInsertionPoint(forLoop.getBody()->getTerminator());
