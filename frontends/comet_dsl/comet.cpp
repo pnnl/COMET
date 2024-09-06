@@ -271,6 +271,15 @@ static cl::opt<bool> OptKernelFusion("opt-fusion", cl::init(false),
 static cl::opt<bool> OptDimensionReduction("opt-dimension-reduction", cl::init(false),
                                      cl::desc("Reduce intermediate tensors' dimension after kernel fusion"));
 
+///  =============================================================================
+///  Memory access analysis
+///  =============================================================================
+static cl::opt<bool> AnalysisMemAccessFrequency("mem-access-frequency-analysis", cl::init(false),
+                                                cl::desc("memory access frequency analysis"));
+
+static cl::opt<bool> AnalysisMemAccessPattern("mem-access-pattern-analysis", cl::init(false),
+                                              cl::desc("memory access pattern analysis"));
+
 /// =============================================================================
 /// TTGT reformulation for tensor contraction operations
 /// =============================================================================
@@ -667,6 +676,14 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   }
 #endif
+  if (AnalysisMemAccessFrequency)
+  {
+    optPM.addPass(mlir::comet::createMemoryAccessFrequencyAnalysisPass());
+  }
+  if (AnalysisMemAccessPattern)
+  {
+    optPM.addPass(mlir::comet::createMemoryAccessPatternAnalysisPass());
+  }
 
   pm.addPass(mlir::createCanonicalizerPass());
 

@@ -25,6 +25,8 @@
 #define COMET_DIALECT_TENSORALGEBRA_PATTERNS_H
 
 #include "mlir/Transforms/DialectConversion.h"
+#include "comet/Analysis/MemoryAliasAnalysis.h"
+#include "comet/Analysis/MemoryAccessAnalysis.h"
 
 namespace mlir
 {
