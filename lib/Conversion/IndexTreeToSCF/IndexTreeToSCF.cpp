@@ -1332,24 +1332,6 @@ namespace
                           iteratorType,
                           forLoop /* output */,
                           accessIndex /* output */);
-        
-
-        
-      }
-      else if (format.compare(0, 2, "CN") == 0)
-      {
-        /// Generate for(int m = pos[0]; m < pos[1]; m++){int i = crd[m];}
-        AbstractLoopOp forLoop;
-        Value accessIndex;
-        genForOpFormat_CN(builder,
-                          loc,
-                          tensor,
-                          id,
-                          i,
-                          allAllocs,
-                          iteratorType,
-                          forLoop /* output */,
-                          accessIndex /* output */);
         opstree->forOps.push_back(forLoop);
         opstree->accessIdx.push_back(accessIndex);
         
