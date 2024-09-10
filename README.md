@@ -94,12 +94,14 @@ $ git apply ${COMET_SRC}/triton.patch
 $ cd $COMET_SRC
 $ mkdir build
 $ cd build
-# Omit -DENABLE_GPU_TARGET=ON and  -DTRITON_PATH=$PWD/../triton/
+# Omit -DENABLE_GPU_TARGET, -DCUDA_COMPUTE_CAPABILITY and -DTRITON_PATH
 # if only targetting CPUs
+# In -DCUDA_COMPUTE_CAPABILITY=70 replace 70 with the desired value
 $ cmake -G Ninja .. \
     -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
     -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
     -DENABLE_GPU_TARGET=ON \
+    -DCUDA_COMPUTE_CAPABILITY=70 \
     -DTRITON_PATH=$PWD/../triton/ \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=Release
