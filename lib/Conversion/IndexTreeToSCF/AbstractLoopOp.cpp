@@ -72,31 +72,31 @@ void AbstractLoopOp::setLowerBound(mlir::Value &lowerBound)
   }
 }
 
-mlir::Value AbstractLoopOp::getUpperBound(mlir::Value &upperBound)
+mlir::Value AbstractLoopOp::getUpperBound()
 {
   if (iteratorType == "parallel")
   {
     auto handle = mlir::dyn_cast<scf::ParallelOp>(op);
-    handle.getUpperBound();
+    return handle.getUpperBound()[0];
   }
   else
   {
     auto handle = mlir::dyn_cast<scf::ForOp>(op);
-    handle.getUpperBound();
+    return handle.getUpperBound();
   }
 }
 
-mlir::Value AbstractLoopOp::getLowerBound(mlir::Value &lowerBound)
+mlir::Value AbstractLoopOp::getLowerBound()
 {
   if (iteratorType == "parallel")
   {
     auto handle = mlir::dyn_cast<scf::ParallelOp>(op);
-    handle.getLowerBound();
+    return handle.getLowerBound()[0];
   }
   else
   {
     auto handle = mlir::dyn_cast<scf::ForOp>(op);
-    handle.getLowerBound();
+    return handle.getLowerBound();
   }
 }
 
