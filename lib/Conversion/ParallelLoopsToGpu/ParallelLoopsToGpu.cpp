@@ -1,6 +1,8 @@
 
 #include <iostream>
 #include <memory>
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -417,7 +419,6 @@ struct DetectReduction
         bool reduction = is_reduction(forOp);
         if (mlir::scf::ParallelOp parent = llvm::dyn_cast_or_null<mlir::scf::ParallelOp>(forOp->getParentOp()); parent && parent->hasAttr("parallelDim") && no_inner_loops && reduction)
         {
-            
             // assert(parent && parent->getAttrOfType<mlir::StringAttr>("parallelDim").getValue().equals("dimX_block") && !forOp->hasAttr("reduceDim"));
 
             auto block_size_r = rewriter.create<mlir::arith::ConstantIndexOp>(forOp->getLoc(), blockR );
@@ -510,6 +511,33 @@ public:
         {
             return signalPassFailure();
         }
+
+        funcOp->walk([](mlir::scf::ParallelOp par_for) {
+            mlir::OpBuilder builder(par_for);
+            auto map = builder.getDimIdentityMap();
+            mlir::gpu::ParallelLoopDimMappingAttr newAttr;
+            if(par_for->hasAttr("parallelDim") && !par_for->hasAttr("mapping"))
+            {
+                if(par_for->getAttrOfType<mlir::StringAttr>("parallelDim").str() == "dimY_grid")
+                {
+                    newAttr = mlir::gpu::ParallelLoopDimMappingAttr::get(builder.getContext(), ::mlir::gpu::Processor::BlockY, map, map);
+                }
+                else if(par_for->getAttrOfType<mlir::StringAttr>("parallelDim").str() == "dimX_grid")
+                {
+                    newAttr = mlir::gpu::ParallelLoopDimMappingAttr::get(builder.getContext(), ::mlir::gpu::Processor::BlockX, map, map);
+                }
+                else if(par_for->getAttrOfType<mlir::StringAttr>("parallelDim").str() == "dimX_block")
+                {
+                    newAttr = mlir::gpu::ParallelLoopDimMappingAttr::get(builder.getContext(), ::mlir::gpu::Processor::ThreadX, map, map);
+                }
+                else if(par_for->getAttrOfType<mlir::StringAttr>("parallelDim").str() == "dimY_block")
+                {
+                    newAttr = mlir::gpu::ParallelLoopDimMappingAttr::get(builder.getContext(), ::mlir::gpu::Processor::ThreadY, map, map);
+                }
+                assert(newAttr);
+                par_for->setAttr("mapping", mlir::ArrayAttr::get(par_for->getContext(),  newAttr) );
+            }
+        });
 
         mlir::RewritePatternSet patterns2(context);
         mlir::ConversionTarget target2(*context);

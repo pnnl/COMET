@@ -245,11 +245,14 @@ static cl::opt<bool> IsLoweringtoIndexTree("convert-ta-to-it", /// Lower sparse/
 static cl::opt<bool> IsLoweringtoSCF("convert-to-loops",
                                      cl::desc("Output SCF dialect after lowering all operations"));
 
+#ifdef ENABLE_GPU_TARGET
+
 /// =============================================================================
 /// Lowering loops to Triton
 /// =============================================================================
 static cl::opt<bool> IsLoweringtoTriton("convert-to-triton",
                                      cl::desc("Output Triton dialect after lowering all operations"));
+#endif
 
 /// =============================================================================
 /// Lowering to LLVM
@@ -490,7 +493,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   optPM.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   optPM.addPass(mlir::comet::createLateLoweringPass());
-  pm.addPass(mlir::createCanonicalizerPass());
+  // pm.addPass(mlir::createCanonicalizerPass());
   optPM.addPass(mlir::createCSEPass());
 
 #ifdef ENABLE_GPU_TARGET
@@ -512,6 +515,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   }
 #endif
+  pm.addPass(mlir::createCanonicalizerPass());
+
   /// =============================================================================
 
   if (isLoweringToLLVM || emitLLVM)
