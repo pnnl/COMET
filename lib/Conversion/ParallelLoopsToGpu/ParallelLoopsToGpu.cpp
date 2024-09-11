@@ -1,6 +1,7 @@
 
 #include <iostream>
 #include <memory>
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/Pass/Pass.h"
@@ -424,21 +425,25 @@ struct DetectReduction
             auto block_size_r = rewriter.create<mlir::arith::ConstantIndexOp>(forOp->getLoc(), blockR );
             auto c1 = rewriter.create<mlir::arith::ConstantIndexOp>(forOp->getLoc(), 1);
             // auto upperBound0 = rewriter.create<mlir::arith::CeilDivUIOp>(forOp->getLoc(), forOp.getUpperBound(), block_size_y);
-            auto upperBound1 = rewriter.create<mlir::arith::CeilDivUIOp>(forOp->getLoc(), forOp.getUpperBound(), block_size_r);
+            auto outer_lower_bound = rewriter.create<mlir::arith::ConstantIndexOp>(forOp->getLoc(), 0);
+            auto outer_upper_bound = rewriter.create<mlir::arith::CeilDivUIOp>(forOp->getLoc(), rewriter.create<mlir::arith::SubIOp>(forOp->getLoc(), forOp.getUpperBound(), forOp.getLowerBound()), block_size_r);
+
+            // auto upperBound1 = rewriter.create<mlir::arith::CeilDivUIOp>(forOp->getLoc(), forOp.getUpperBound(), block_size_r);
             // auto y_loop_grid = rewriter.create<mlir::scf::ParallelOp>(forOp->getLoc(), forOp.getLowerBound(), upperBound0->getResult(0), c1->getResult(0));
-            auto r_loop_grid = rewriter.create<mlir::scf::ForOp>(forOp->getLoc(), forOp.getLowerBound(), upperBound1->getResult(0), c1->getResult(0));
+            auto r_loop_grid = rewriter.create<mlir::scf::ForOp>(forOp->getLoc(), outer_lower_bound, outer_upper_bound->getResult(0), c1.getResult());
             r_loop_grid->setAttr("reduceDim", rewriter.getAttr<mlir::StringAttr>("dimR_grid"));
 
             rewriter.setInsertionPointToStart(r_loop_grid.getBody());
+            auto inner_lower_bound = outer_lower_bound;
             // auto y_loop_block = rewriter.create<mlir::scf::ParallelOp>(forOp->getLoc(), forOp.getLowerBound(), block_size_y->getResult(0), c1->getResult(0));
-            auto r_loop_block = rewriter.create<mlir::scf::ForOp>(forOp->getLoc(), forOp.getLowerBound(), block_size_r->getResult(0), c1->getResult(0));
+            auto r_loop_block = rewriter.create<mlir::scf::ForOp>(forOp->getLoc(), inner_lower_bound.getResult(), block_size_r->getResult(0), c1.getResult());
             r_loop_block->setAttr("reduceDim", rewriter.getAttr<mlir::StringAttr>("dimR_block"));
             
             rewriter.setInsertionPointToStart(r_loop_block.getBody());
             
-            auto res = mlir::getAffineDimExpr(0, forOp->getContext()) * mlir::getAffineSymbolExpr(0, forOp->getContext())  + mlir::getAffineSymbolExpr(1, forOp->getContext());
-            auto affineIndex = mlir::AffineMap::get(1, 2, {res}, forOp->getContext());
-            std::vector<mlir::Value> range = { r_loop_grid.getBody()->getArgument(0), block_size_r->getResult(0),  r_loop_block.getBody()->getArgument(0)};
+            auto res = mlir::getAffineDimExpr(0, forOp->getContext()) * mlir::getAffineSymbolExpr(0, forOp->getContext())  + mlir::getAffineSymbolExpr(1, forOp->getContext()) + mlir::getAffineSymbolExpr(2, forOp->getContext());
+            auto affineIndex = mlir::AffineMap::get(1, 3, {res}, forOp->getContext());
+            std::vector<mlir::Value> range = { r_loop_grid.getBody()->getArgument(0), block_size_r->getResult(0),  r_loop_block.getBody()->getArgument(0), forOp.getLowerBound()};
             // auto newIndexX = rewriter.create<mlir::affine::AffineApplyOp>(forOp->getLoc(), affineIndex, range);
             auto newIndexX = rewriter.create<mlir::arith::MinUIOp>(forOp->getLoc(), rewriter.create<mlir::affine::AffineApplyOp>(forOp->getLoc(), affineIndex, range), forOp.getUpperBound());
             newIndexX->setAttr("GuardR", rewriter.getUnitAttr());
