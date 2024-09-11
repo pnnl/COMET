@@ -21,6 +21,7 @@
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
 
 #include "triton/Dialect/Triton/IR/Dialect.h"
+#include "llvm/Support/Casting.h"
 
 #include <map>
 #include <set>
@@ -238,8 +239,8 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
   mlir::Value memMask;
   for(size_t i = index_offset; i < op->getNumOperands(); i++)
   {
-    auto affineOp = llvm::dyn_cast<affine::AffineApplyOp>(op->getOperand(i).getDefiningOp());
-    auto minOp = llvm::dyn_cast<arith::MinUIOp>(op->getOperand(i).getDefiningOp());
+    auto affineOp = llvm::dyn_cast_if_present<affine::AffineApplyOp>(op->getOperand(i).getDefiningOp());
+    auto minOp = llvm::dyn_cast_if_present<arith::MinUIOp>(op->getOperand(i).getDefiningOp());
     if(affineOp || (minOp && (minOp->hasAttr("GuardX") || minOp->hasAttr("GuardY") || minOp->hasAttr("GuardR"))))
     {
       // int pidXIndex = -1;
@@ -313,7 +314,10 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
               if(map.find(exp.getAsOpaquePointer()) == map.end())
               {
                 map[exp.getAsOpaquePointer()] = rewriter.create<triton::GetProgramIdOp>(op->getLoc(), rewriter.getI32Type(), mlir::triton::ProgramIDDimAttr::get(op->getContext(), mlir::triton::ProgramIDDim::X));
-                mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(op->getLoc(), 0, 32);
+                if(guardX)
+                {
+                  mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(op->getLoc(), 0, 32);
+                }
               }
             
               bidX = map[exp.getAsOpaquePointer()];
@@ -323,7 +327,10 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
               if(map.find(exp.getAsOpaquePointer()) == map.end())
               {
                 map[exp.getAsOpaquePointer()] = rewriter.create<triton::GetProgramIdOp>(op->getLoc(), rewriter.getI32Type(), mlir::triton::ProgramIDDimAttr::get(op->getContext(), mlir::triton::ProgramIDDim::Y));
-                mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(op->getLoc(), 0, 32);
+                if(guardY)
+                {
+                  mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(op->getLoc(), 0, 32);
+                }
               }
               
               bidY = map[exp.getAsOpaquePointer()];
@@ -338,7 +345,10 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
                 int blockX = op->getParentOfType<triton::FuncOp>()->getAttrOfType<IntegerAttr>("block_size_x").getInt();
                 auto range = rewriter.create<mlir::triton::MakeRangeOp>(op->getLoc(), RankedTensorType::get({blockX} , rewriter.getI32Type()), 0, blockX)->getResult(0);
                 map[exp.getAsOpaquePointer()] = rewriter.create<triton::ExpandDimsOp>(op->getLoc(), RankedTensorType::get({1, blockX}, rewriter.getI32Type()), range, 0); 
-                mapGuard[exp.getAsOpaquePointer()] = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get({1, blockX}, rewriter.getI32Type()), guardX );
+                if(guardX)
+                {
+                  mapGuard[exp.getAsOpaquePointer()] = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get({1, blockX}, rewriter.getI32Type()), guardX );
+                }
               }
               tidX = map[exp.getAsOpaquePointer()];
             }
@@ -349,7 +359,10 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
                 int blockY = op->getParentOfType<triton::FuncOp>()->getAttrOfType<IntegerAttr>("block_size_y").getInt();
                 auto range = rewriter.create<mlir::triton::MakeRangeOp>(op->getLoc(), RankedTensorType::get({blockY} , rewriter.getI32Type()), 0, blockY)->getResult(0);
                 map[exp.getAsOpaquePointer()] = rewriter.create<triton::ExpandDimsOp>(op->getLoc(), RankedTensorType::get({blockY, 1}, rewriter.getI32Type()), range, 1); 
-                mapGuard[exp.getAsOpaquePointer()] = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get({blockY, 1}, rewriter.getI32Type()), guardY );
+                if(guardY)
+                {
+                  mapGuard[exp.getAsOpaquePointer()] = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get({blockY, 1}, rewriter.getI32Type()), guardY );
+                }
 
               }
               tidY = map[exp.getAsOpaquePointer()];
@@ -368,14 +381,20 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
               {
                 auto loopBlockSize = blockArg.getOwner()->getParentOp()->getAttrOfType<IntegerAttr>("loop_block_size").getInt();
                 map[exp.getAsOpaquePointer()] = rewriter.createOrFold<triton::MakeRangeOp>(op->getLoc(), RankedTensorType::get({loopBlockSize}, rewriter.getI32Type()),  0, loopBlockSize);
-                mapGuard[exp.getAsOpaquePointer()] = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get({loopBlockSize}, rewriter.getI32Type()), guardR );
+                if(guardR)
+                {
+                  mapGuard[exp.getAsOpaquePointer()] = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get({loopBlockSize}, rewriter.getI32Type()), guardR );
+                }
 
               }
               else 
               {
                 // [TODO] map[exp.getAsOpaquePointer()] = redIdx.getIn();
                 map[exp.getAsOpaquePointer()] = redIdx;
-                mapGuard[exp.getAsOpaquePointer()] = guardR;
+                if(guardR)
+                {
+                  mapGuard[exp.getAsOpaquePointer()] = guardR;
+                }
               }
             }
           }
@@ -393,16 +412,25 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
                 {
                   if(!(barg.getOwner()->getParentOp()->hasAttr("programs_loop_x") || barg.getOwner()->getParentOp()->hasAttr("programs_loop_y")|| barg.getOwner()->getParentOp()->hasAttr("loop_block_size")))
                   {
-                    mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::IndexCastOp>(op->getLoc(), rewriter.getI32Type(), getSymOrDimOperand(aaffineop, exp))->getResult(0);
+                    if(guardR || guardX || guardY)
+                    {
+                      mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::IndexCastOp>(op->getLoc(), rewriter.getI32Type(), getSymOrDimOperand(aaffineop, exp))->getResult(0);
+                    }
                   }
                   else 
                   {
-                    mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(aaffineop->getLoc(), 0, 32);
+                    if(guardR || guardX || guardY)
+                    {
+                      mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(aaffineop->getLoc(), 0, 32);
+                    }
                   }
                 }
                 else 
                 {
-                  mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::IndexCastOp>(op->getLoc(), rewriter.getI32Type(), getSymOrDimOperand(aaffineop, exp))->getResult(0);
+                  if(guardR || guardX || guardY)
+                  {
+                    mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::IndexCastOp>(op->getLoc(), rewriter.getI32Type(), getSymOrDimOperand(aaffineop, exp))->getResult(0);
+                  }
                 }
               }
               else 
@@ -412,16 +440,25 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
                 {
                   if(!(barg.getOwner()->getParentOp()->hasAttr("programs_loop_x") || barg.getOwner()->getParentOp()->hasAttr("programs_loop_y" ) || barg.getOwner()->getParentOp()->hasAttr("loop_block_size")))
                   {
-                    mapGuard[exp.getAsOpaquePointer()] = getSymOrDimOperand(aaffineop, exp);
+                    if(guardR || guardX || guardY)
+                    {
+                      mapGuard[exp.getAsOpaquePointer()] = getSymOrDimOperand(aaffineop, exp);
+                    }
                   }
                   else 
                   {
-                    mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(aaffineop->getLoc(), 0, 32);
+                    if(guardR || guardX || guardY)
+                    {
+                      mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(aaffineop->getLoc(), 0, 32);
+                    }
                   }
                 }
                 else 
                 {
-                 mapGuard[exp.getAsOpaquePointer()] = getSymOrDimOperand(aaffineop, exp);
+                  if(guardR || guardX || guardY)
+                  {
+                    mapGuard[exp.getAsOpaquePointer()] = getSymOrDimOperand(aaffineop, exp);
+                  }
                 }
 
               }
@@ -436,7 +473,10 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
             auto cst = llvm::cast<mlir::AffineConstantExpr>(exp);
             
             map[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(aaffineop->getLoc(), cst.getValue(), 32);
-            mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(aaffineop->getLoc(), cst.getValue(), 32);
+            if(guardR || guardX || guardY)
+            {
+              mapGuard[exp.getAsOpaquePointer()] = rewriter.create<arith::ConstantIntOp>(aaffineop->getLoc(), cst.getValue(), 32);
+            }
           }
         }
         else
@@ -444,7 +484,10 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
           // auto binOp = llvm::cast<mlir::AffineBinaryOpExpr>(exp);
           // for(auto m: {map /*mapGuard*/})
           handleBinaryExpr(op, map, exp, rewriter);
-          handleBinaryExpr(op, mapGuard, exp, rewriter);
+          if(!mapGuard.empty())
+          {
+            handleBinaryExpr(op, mapGuard, exp, rewriter);
+          }
         }
       };};
 
@@ -514,7 +557,6 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
         // map[cast<affine::AffineApplyOp>(guardRExpr.getDefiningOp()).getAffineMap().getResult(0).getAsOpaquePointer()].dump();
         guardR =  map[cast<affine::AffineApplyOp>(guardRExpr.getDefiningOp()).getAffineMap().getResult(0).getAsOpaquePointer()];
         guardRExpr.replaceUsesWithIf(guardR, [](OpOperand& oper){return !isa<arith::MinUIOp>(oper.getOwner());});
-
       }
 
       map.clear();
