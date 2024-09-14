@@ -4,6 +4,7 @@
 #include <memory>
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
 
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -35,6 +36,7 @@
 #include "mlir/Target/LLVMIR/Export.h"
 
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -227,6 +229,7 @@ public:
     auto memrefI32 = MemRefType::get({ShapedType::kDynamic}, builder.getIntegerType(32));
     auto memrefF32 = MemRefType::get({ShapedType::kDynamic}, builder.getF32Type());
     auto memrefI64 = MemRefType::get({ShapedType::kDynamic}, builder.getIntegerType(64));
+    auto memrefIndex = MemRefType::get({ShapedType::kDynamic}, builder.getIndexType());
     auto memrefF64 = MemRefType::get({ShapedType::kDynamic}, builder.getF64Type());
 
     auto mallocI32Type = builder.getFunctionType({builder.getIndexType()} , builder.getIndexType());
@@ -258,6 +261,11 @@ public:
     auto cudaMemcpyI64 = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(), "cudaMemcpyI64", cudaMemcpyI64Type);
     cudaMemcpyI64.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(cudaMemcpyI64);
+
+    auto cudaMemcpyIndexType = builder.getFunctionType({builder.getIndexType(), memrefIndex, builder.getIndexType()}, {});
+    auto cudaMemcpyIndex = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(), "cudaMemcpyIndex", cudaMemcpyIndexType);
+    cudaMemcpyIndex.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(cudaMemcpyIndex);
 
     auto cudaMemcpyF32Type = builder.getFunctionType({builder.getIndexType(), memrefF32, builder.getIndexType()}, {});
     auto cudaMemcpyF32 = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(), "cudaMemcpyF32", cudaMemcpyF32Type);
@@ -376,6 +384,7 @@ public:
       gpuAllocs.push_back(gpuAllocOp);
     });
 
+
     for(auto gpuAlloc: gpuAllocs)
     {
       builder.setInsertionPoint(gpuAlloc->getBlock()->getTerminator());
@@ -405,6 +414,11 @@ public:
         auto cudaOp = builder.create<mlir::func::CallOp>(gpuAlloc->getLoc(), "cudaMallocI"+std::to_string(width), TypeRange(builder.getIndexType()), ValueRange(allocSize));
         gpuAlloc->replaceAllUsesWith(cudaOp);
       }
+      else if(IndexType intType = gpuAlloc.getMemref().getType().getElementType().dyn_cast<IndexType>())
+      {
+        auto cudaOp = builder.create<mlir::func::CallOp>(gpuAlloc->getLoc(), "cudaMallocI"+std::to_string(64), TypeRange(builder.getIndexType()), ValueRange(allocSize));
+        gpuAlloc->replaceAllUsesWith(cudaOp);
+      }
       gpuAlloc->erase();
     }
 
@@ -425,6 +439,7 @@ public:
       if(cpy.getOperand(0).getDefiningOp() && (isa<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()) && cast<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()).getCallee().starts_with("cudaMalloc") ))
       {
         auto cast = builder.create<mlir::memref::CastOp>(cpy->getLoc(), MemRefType::get({ShapedType::kDynamic}, cpy.getSrc().getType().getElementType()), cpy.getSrc());
+
         if(IntegerType intType = cpy.getOperand(1).getType().cast<MemRefType>().getElementType().dyn_cast<IntegerType>())
         {
           int width = intType.getWidth();
@@ -434,6 +449,10 @@ public:
         {
           int width = floatType.getWidth();
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyF"+std::to_string(width), TypeRange(), ValueRange({cpy.getOperand(0), cast, hToD}));
+        }
+        else if(IndexType indexType = cpy.getOperand(1).getType().cast<MemRefType>().getElementType().dyn_cast<IndexType>())
+        {
+          builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyIndex", TypeRange(), ValueRange({cpy.getOperand(0), cast, hToD}));
         }
       }
       else if(cpy.getOperand(1).getDefiningOp() && (isa<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()) && cast<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()).getCallee().starts_with("cudaMalloc") ))
@@ -445,10 +464,14 @@ public:
           int width = intType.getWidth();
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyI"+std::to_string(width), TypeRange(), ValueRange({cpy.getOperand(1), cast, dToH}));
         }
-        else if(FloatType floatType = cast.getType().cast<MemRefType>().getElementType().dyn_cast<FloatType>())
+        else if(FloatType floatType = cpy.getOperand(0).getType().cast<MemRefType>().getElementType().dyn_cast<FloatType>())
         {
           int width = floatType.getWidth();
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyF"+std::to_string(width), TypeRange(), ValueRange({cpy.getOperand(1), cast, dToH}));
+        }
+        else if(IndexType indexType = cpy.getOperand(0).getType().cast<MemRefType>().getElementType().dyn_cast<IndexType>())
+        {
+          builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyIndex", TypeRange(), ValueRange({cpy.getOperand(1), cast, dToH}));
         }
       }
 

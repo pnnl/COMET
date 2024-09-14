@@ -104,6 +104,10 @@ void cudaMemcpy(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, in
 }
 
 
+extern "C" __attribute__((visibility("default"))) void cudaMemcpyIndex(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
+    cudaMemcpy<int64_t>(device, ptr, aligned_ptr, offset, size, stride, direction);
+}
+
 extern "C" __attribute__((visibility("default"))) void cudaMemcpyI64(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
     cudaMemcpy<int64_t>(device, ptr, aligned_ptr, offset, size, stride, direction);
 }
