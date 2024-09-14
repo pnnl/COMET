@@ -185,9 +185,10 @@ namespace
                   comet_debug() <<  " is_comp_worksp_opt: " << is_comp_worksp_opt << " semiring: " << semiring << "\n";
 
                   std::vector<std::vector<std::string>> opFormats;
+                  std::vector<std::vector<std::string>> opBlocks;
                   std::vector<std::vector<int>> opPerms;
                   std::vector<std::vector<bool> > inputOutputMapping;
-                  getFormatsPermsOfComputeOp(computeOp, opFormats, opPerms, inputOutputMapping);
+                  getFormatsPermsOfComputeOp(computeOp, opFormats, opBlocks, opPerms, inputOutputMapping);
                   /// opFormats
                   comet_debug() << "[";
                   for (auto strings: opFormats) {
@@ -440,8 +441,10 @@ mlir::Value IndexTreeKernelFusionPass::createReducedComputeLHS(
   mlir::indexTree::IndexTreeComputeLHSOp it_compute_lhs_op = llvm::dyn_cast<mlir::indexTree::IndexTreeComputeLHSOp>(
       lhs_op);
   ArrayAttr op_formats_ArrayAttr = it_compute_lhs_op.getAllFormats();
+  ArrayAttr op_blocks_ArrayAttr = it_compute_lhs_op.getAllBlocks();
   ArrayAttr op_perms_ArrayAttr = it_compute_lhs_op.getAllPerms();
   std::vector<std::vector<std::string>> old_formats_strs = convertArrayAttrStrTo2DVector(op_formats_ArrayAttr);
+  std::vector<std::vector<std::string>> old_blocks_strs = convertArrayAttrStrTo2DVector(op_blocks_ArrayAttr);
   std::vector<std::vector<int>> old_perms_ints = convertArrayAttrIntTo2DVector(op_perms_ArrayAttr);
 
   /// Create the new formats
@@ -450,6 +453,13 @@ mlir::Value IndexTreeKernelFusionPass::createReducedComputeLHS(
   SmallVector<StringRef, 8> formats;
   formats.insert(formats.end(), old_formats_strs[0].begin() + rank_base, old_formats_strs[0].end());
   new_formats.push_back(builder.getStrArrayAttr(formats));
+  
+  /// Create the new blocks
+  /// i.g., convert [["D", "D"]] to [["D"]]
+  SmallVector<Attribute, 8> new_blocks;
+  SmallVector<StringRef, 8> blocks;
+  blocks.insert(blocks.end(), old_blocks_strs[0].begin() + rank_base, old_blocks_strs[0].end());
+  new_blocks.push_back(builder.getStrArrayAttr(blocks));
 
   /// Create the new perms
   /// i.g., convert [[1, 0]] to [[0]]
@@ -466,7 +476,8 @@ mlir::Value IndexTreeKernelFusionPass::createReducedComputeLHS(
       mlir::UnrankedTensorType::get(builder.getF64Type()),
       tensors,
       builder.getArrayAttr(new_perms),
-      builder.getArrayAttr(new_formats));
+      builder.getArrayAttr(new_formats),
+      builder.getArrayAttr(new_blocks));
 
   return new_lhs_op;
 }
@@ -485,8 +496,10 @@ mlir::Value IndexTreeKernelFusionPass::createReducedComputeRHS(
   mlir::indexTree::IndexTreeComputeRHSOp it_compute_rhs_op = llvm::dyn_cast<mlir::indexTree::IndexTreeComputeRHSOp>(
       rhs_op);
   ArrayAttr op_formats_ArrayAttr = it_compute_rhs_op.getAllFormats();
+  ArrayAttr op_blocks_ArrayAttr = it_compute_rhs_op.getAllBlocks();
   ArrayAttr op_perms_ArrayAttr = it_compute_rhs_op.getAllPerms();
   std::vector<std::vector<std::string>> old_formats_strs = convertArrayAttrStrTo2DVector(op_formats_ArrayAttr);
+  std::vector<std::vector<std::string>> old_blocks_strs = convertArrayAttrStrTo2DVector(op_blocks_ArrayAttr);
   std::vector<std::vector<int>> old_perms_ints = convertArrayAttrIntTo2DVector(op_perms_ArrayAttr);
 
   /// Locate the operand to be reduced
@@ -515,6 +528,23 @@ mlir::Value IndexTreeKernelFusionPass::createReducedComputeRHS(
       formats.insert(formats.end(), old_formats_strs[f_i].begin(), old_formats_strs[f_i].end());
     }
     new_formats.push_back(builder.getStrArrayAttr(formats));
+  }
+  
+  /// Create the new blocks
+  /// Basically same algorithm as the formats
+  SmallVector<Attribute, 8> new_blocks;
+  for (uint32_t b_i = 0; b_i < old_blocks_strs.size(); ++b_i)
+  {
+    SmallVector<StringRef, 8> blocks;
+    if (b_i == tensor_id)
+    { /// for the new reduced tensor
+      blocks.insert(blocks.end(), old_blocks_strs[b_i].begin() + rank_base, old_blocks_strs[b_i].end());
+    }
+    else
+    { /// for other remaining old operands
+      blocks.insert(blocks.end(), old_blocks_strs[b_i].begin(), old_blocks_strs[b_i].end());
+    }
+    new_blocks.push_back(builder.getStrArrayAttr(blocks));
   }
 
   /// Create the new perms
@@ -554,7 +584,8 @@ mlir::Value IndexTreeKernelFusionPass::createReducedComputeRHS(
       mlir::UnrankedTensorType::get(builder.getF64Type()),
       tensors,
       builder.getArrayAttr(new_perms),
-      builder.getArrayAttr(new_formats));
+      builder.getArrayAttr(new_formats),
+      builder.getArrayAttr(new_blocks));
 
   return new_rhs_op;
 }
@@ -729,6 +760,10 @@ mlir::Value IndexTreeKernelFusionPass::createResetComputeRHS(
   SmallVector<Attribute, 1> formats_rhs;
   SmallVector<StringRef, 1> empty_format;
   formats_rhs.push_back(builder.getStrArrayAttr(empty_format));
+  
+  SmallVector<Attribute, 1> blocks_rhs;
+  SmallVector<StringRef, 1> empty_block;
+  blocks_rhs.push_back(builder.getStrArrayAttr(empty_block));
 
   /// TODO(zpeng): What if the type is not F64?
   mlir::Value compute_rhs = builder.create<indexTree::IndexTreeComputeRHSOp>(
@@ -736,7 +771,8 @@ mlir::Value IndexTreeKernelFusionPass::createResetComputeRHS(
       mlir::UnrankedTensorType::get(builder.getF64Type()),
       tensors_rhs,
       builder.getArrayAttr(indices_rhs),
-      builder.getArrayAttr(formats_rhs));
+      builder.getArrayAttr(formats_rhs),
+      builder.getArrayAttr(blocks_rhs));
 
   return compute_rhs;
 }
@@ -770,13 +806,19 @@ mlir::Value IndexTreeKernelFusionPass::createResetComputeLHS(
   SmallVector<Attribute, 1> formats_lhs;
   SmallVector<StringRef, 1> one_format(rank, "D");
   formats_lhs.push_back(builder.getStrArrayAttr(one_format));
+  
+  /// Get blocks [["UNK"]]
+  SmallVector<Attribute, 1> blocks_lhs;
+  SmallVector<StringRef, 1> one_block(rank, "UNK");
+  blocks_lhs.push_back(builder.getStrArrayAttr(one_block));
 
   mlir::Value compute_lhs = builder.create<indexTree::IndexTreeComputeLHSOp>(
       loc,
       mlir::UnrankedTensorType::get(builder.getF64Type()),
       tensors_lhs,
       builder.getArrayAttr(indices_lhs),
-      builder.getArrayAttr(formats_lhs));
+      builder.getArrayAttr(formats_lhs),
+      builder.getArrayAttr(blocks_lhs));
 
   return compute_lhs;
 }

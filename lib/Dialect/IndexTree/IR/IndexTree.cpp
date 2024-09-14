@@ -117,12 +117,12 @@ IndicesType Index_Tree::getIndices(std::vector<mlir::Value> &lbls)
   return indices;
 }
 
-Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, std::vector<mlir::Value> &allIndexLabels, FormatsType &formats)
+Tensor *Index_Tree::getOrCreateTensor(mlir::Value v, std::vector<mlir::Value> &allIndexLabels, FormatsType &formats, BlocksType &blocks)
 {
   IndicesType indices = getIndices(allIndexLabels);
   comet_debug() << "Num Indices: " << indices.size() << ", Num formats " << formats.size() << "\n";
 
-  return new Tensor(v, indices, formats);
+  return new Tensor(v, indices, formats, blocks);
 }
 
 TreeNode *Index_Tree::addComputeNode(unique_ptr<UnitExpression> expr, TreeNode *parent)

@@ -213,6 +213,7 @@ namespace
     // std::vector<scf::ForOp> forOps;         /// The (nested) for loops
     std::vector<AbstractLoopOp> forOps;         /// The (nested) for loops
     std::vector<Value> accessIdx;           /// The coordinate of accessing that dimension
+    std::vector<Value> inductionVars;
     // std::vector<scf::ForOp> symbolicForOps; /// For-loops in symbolic phase (if necessary)
     std::vector<AbstractLoopOp> symbolicForOps; /// For-loops in symbolic phase (if necessary)
     std::vector<Value> symbolicAccessIdx;   /// The accessing index for that for-loop in symbolic phase (if necessary)
@@ -464,35 +465,35 @@ namespace
     return ret;
   }
 
-  // Value findCorrespondingAlloc(Value &iOp)
-  // {
-  //   comet_debug() << "findCorrespondingAlloc for loop upper bound\n";
-  //   comet_vdump(iOp);
-  //   auto init_alloc = iOp.getDefiningOp()->getOperand(0);
-  //   comet_vdump(init_alloc);
+  Value findCorrespondingAlloc(Value &iOp)
+  {
+    comet_debug() << "findCorrespondingAlloc for loop upper bound\n";
+    comet_vdump(iOp);
+    auto init_alloc = iOp.getDefiningOp()->getOperand(0);
+    comet_vdump(init_alloc);
 
-  //   while (true)
-  //   {
-  //     if (isa<memref::AllocOp>(init_alloc.getDefiningOp()))
-  //     {
-  //       if (init_alloc.getType().dyn_cast<MemRefType>().getDimSize(0) != ShapedType::kDynamic)
-  //       {
-  //         return init_alloc;
-  //       }
-  //     }
-  //     if (init_alloc.getDefiningOp()->getNumOperands() > 0)
-  //     {
-  //       init_alloc = init_alloc.getDefiningOp()->getOperand(0);
-  //     }
-  //     else
-  //     {
-  //       /// Alloc related to another sparse tensor construct such as coming from sparse transpose
-  //       comet_debug() << "Return alloc op - comes from sptensor_construct\n";
-  //       comet_vdump(init_alloc);
-  //       return init_alloc;
-  //     }
-  //   }
-  // }
+    while (true)
+    {
+      if (isa<memref::AllocOp>(init_alloc.getDefiningOp()))
+      {
+        if (init_alloc.getType().dyn_cast<MemRefType>().getDimSize(0) != ShapedType::kDynamic)
+        {
+          return init_alloc;
+        }
+      }
+      if (init_alloc.getDefiningOp()->getNumOperands() > 0)
+      {
+        init_alloc = init_alloc.getDefiningOp()->getOperand(0);
+      }
+      else
+      {
+        /// Alloc related to another sparse tensor construct such as coming from sparse transpose
+        comet_debug() << "Return alloc op - comes from sptensor_construct\n";
+        comet_vdump(init_alloc);
+        return init_alloc;
+      }
+    }
+  }
 
   /// Get allocs for a tensor (sparse or dense)
   std::vector<Value> getAllocs(Value &tensor)
@@ -635,6 +636,7 @@ namespace
                         Value &tensor,
                         unsigned int id,
                         unsigned int i,
+                        bool is_block,
                         std::vector<std::vector<Value>> &allAllocs,
                         llvm::StringRef &iteratorType,
                         // scf::ForOp &forLoop /* output */,
@@ -686,10 +688,12 @@ namespace
     {
       comet_debug() << "cur_idx is in tensor " << i << "\n";
 
+      unsigned int alloc_pos = 4 * id;
+      if (is_block) alloc_pos += 2;
       auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
       std::vector<Value> upper_indices = {index_0};
-      Value upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id], upper_indices);
-      comet_vdump(allAllocs[i][4 * id]);
+      Value upperBound = builder.create<memref::LoadOp>(loc, allAllocs[i][alloc_pos], upper_indices);
+      comet_vdump(allAllocs[i][alloc_pos]);
       // auto loop = builder.create<scf::ForOp>(loc, lowerBound, upperBound, step);
       forLoop.buildLoopOp(iteratorType.str(),
                           builder,
@@ -719,10 +723,12 @@ namespace
                         //  scf::ForOp &parent_forop,
                          AbstractLoopOp &parent_forop,
                          Value &parent_accessIdx,
+                         Value &parent_inductionVar,
                          llvm::StringRef &iteratorType,
                         //  scf::ForOp &forLoop /* output */,
                          AbstractLoopOp &forLoop /* output */,
-                         Value &accessIndex /* output */)
+                         Value &accessIndex /* output */,
+                         bool isBCSR = false)
   {
     /// Generate for(int m = pos[0]; m < pos[1]; m++){int i = crd[m];}
     /// if i = 0, index is [0,1]
@@ -754,25 +760,27 @@ namespace
 
           /// TODO (PT) Not sure why this (now commented out) code was needed but it breaks spgemm for cases like C = A * A
           ///  check if parent's and child's upper bounds come from the same sparse tensor
-          /// auto parent_UpperBound = parent_forop.getUpperBound();
-          /// comet_debug() << " parent upperBound:\n";
-          /// comet_vdump(parent_UpperBound);
-          /// auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
-          /// comet_debug() << " parent upperBound alloc\n";
-          /// comet_vdump(alloc_parent_bounds);
+          auto parent_UpperBound = parent_forop.getUpperBound();
+          comet_debug() << " parent upperBound:\n";
+          comet_vdump(parent_UpperBound);
+          auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
+          comet_debug() << " parent upperBound alloc\n";
+          comet_vdump(alloc_parent_bounds);          
+          comet_debug() << " child upperBound:\n";
+          comet_vdump(allAllocs[i][4 * id]);
+          auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
+          comet_debug() << " child upperBound alloc\n";
+          comet_vdump(alloc_child_bounds);
 
-          /// comet_debug() << " child upperBound:\n";
-          /// comet_vdump(allAllocs[i][4 * id]);
-          /// auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
-          /// comet_debug() << " child upperBound alloc\n";
-          /// comet_vdump(alloc_child_bounds);
-
-          // if (alloc_child_bounds == alloc_parent_bounds) /// m is the nearest loop induction variable
-          // {
-          //   comet_debug() << " THESAME: Parent and Child has the same alloc\n";
-          //   index_lower = parent_forop.getInductionVar();
-          // }
-          // else
+          if (isBCSR && (alloc_child_bounds == alloc_parent_bounds)) /// m is the nearest loop induction variable
+          {
+            comet_debug() << " THESAME: Parent and Child has the same alloc\n";
+            if (parent_inductionVar != nullptr)
+              index_lower = parent_inductionVar;
+            else
+              index_lower = parent_forop.getInductionVar();
+          }
+          else
           { /// m comes from the load
             comet_debug() << " DIFFERENT:Parent and Child has the different alloc\n";
             // comet_vdump(alloc_parent_bounds);
@@ -879,6 +887,8 @@ namespace
                         std::vector<std::vector<Value>> &allAllocs,
                         std::vector<AbstractLoopOp> &opstree_forops,
                         AbstractLoopOp &parent_forop,
+                        Value &parent_accessIndex,
+                        //bool has_block,
                         llvm::StringRef &iteratorType,
                         AbstractLoopOp &forLoop /* output */,
                         Value &accessIndex /* output */)
@@ -902,7 +912,11 @@ namespace
           last_forop = parent_forop;
       }
 
-      std::vector<Value> crd_indices = {last_forop.getInductionVar()};
+      std::vector<Value> crd_indices;
+      if (parent_accessIndex == nullptr)
+        crd_indices = {last_forop.getInductionVar()};
+      else
+        crd_indices = {parent_accessIndex};
       auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
 
       /// Adding one iteration loop to provide consistency with the corresponding index tree.
@@ -1059,6 +1073,7 @@ namespace
   void genForOps(std::vector<Value> &tensors,
                  std::vector<unsigned int> &ids,
                  std::vector<std::string> &formats,
+                 std::vector<std::string> &blocks,
                  indexTree::IndexTreeOp rootOp,
                  OpBuilder &builder,
                  OpsTree *opstree,
@@ -1105,9 +1120,11 @@ namespace
 
       Value &tensor = tensors[i];
       std::string format = formats[i];
+      std::string block = blocks[i];
       unsigned int id = ids[i];
 
       comet_debug() << " current index format: " << format << "\n";
+      comet_debug() << " current index block: " << block << "\n";
       if (format.compare(0, 1, "D") == 0)
       {
         /// Symbolic Phase
@@ -1128,10 +1145,12 @@ namespace
                            tensor,
                            id,
                            i,
+                           false,
                            allAllocs,
                            iteratorType,
                            forLoop /* output */,
                            accessIndex /* output */);
+          
           opstree->symbolicForOps.push_back(forLoop);
           opstree->symbolicAccessIdx.push_back(accessIndex);
 
@@ -1148,12 +1167,44 @@ namespace
                          tensor,
                          id,
                          i,
+                         false,
                          allAllocs,
                          iteratorType,
                          forLoop /* output */,
                          accessIndex /* output */);
-        opstree->forOps.push_back(forLoop);
-        opstree->accessIdx.push_back(accessIndex);
+        
+        if (block == "D") {
+          builder.setInsertionPoint(forLoop.getBody()->getTerminator());
+          AbstractLoopOp forLoop2;
+          Value accessIndex2;
+          genForOpFormat_D(builder,
+                           loc,
+                           tensor,
+                           id,
+                           i,
+                           true,
+                           allAllocs,
+                           iteratorType,
+                           forLoop2 /* output */,
+                           accessIndex2 /* output */);
+          opstree->forOps.push_back(forLoop2);
+          opstree->inductionVars.push_back(forLoop.getInductionVar());
+          builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
+          
+          // Insert the index calculations
+          // i = n1 * A1_block_pos + bi
+          Value c0 = builder.create<ConstantIndexOp>(loc, 0);
+          std::vector<Value> indices = {c0};
+          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][2], indices);
+          Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
+          Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+          opstree->accessIdx.push_back(add1);
+
+        } else if (block == "UNK") {
+          opstree->forOps.push_back(forLoop);
+          opstree->accessIdx.push_back(accessIndex);
+          opstree->inductionVars.push_back(forLoop.getInductionVar());
+        }
       }
       /// mix sparse dense tensor contraction, only one sparse tensor
       else if (format.compare(0, 2, "CU") == 0)
@@ -1173,6 +1224,7 @@ namespace
           Value accessIndex;
           AbstractLoopOp parent_forop;
           Value parent_accessIdx;
+          Value parent_inductionVar;
           if (nullptr != opstree->parent)
           {
             parent_forop = opstree->parent->symbolicForOps.back();
@@ -1187,9 +1239,11 @@ namespace
                             allAllocs,
                             parent_forop,
                             parent_accessIdx,
+                            parent_inductionVar,
                             iteratorType,
                             forLoop /* output */,
                             accessIndex /* output */);
+          
           opstree->symbolicForOps.push_back(forLoop);
           opstree->symbolicAccessIdx.push_back(accessIndex);
 
@@ -1207,10 +1261,12 @@ namespace
         Value accessIndex;
         AbstractLoopOp parent_forop;
         Value parent_accessIdx;
+        Value parent_inductionVar;
         if (nullptr != opstree->parent)
         {
           parent_forop = opstree->parent->forOps.back();
           parent_accessIdx = opstree->parent->accessIdx.back();
+          parent_inductionVar = opstree->parent->inductionVars.back();
         }
         genForOpFormat_CU(builder,
                           loc,
@@ -1221,11 +1277,46 @@ namespace
                           allAllocs,
                           parent_forop,
                           parent_accessIdx,
+                          parent_inductionVar,
                           iteratorType,
                           forLoop /* output */,
-                          accessIndex /* output */);
-        opstree->forOps.push_back(forLoop);
-        opstree->accessIdx.push_back(accessIndex);
+                          accessIndex /* output */,
+                          block == "D");
+        
+        if (block == "D") {
+          builder.setInsertionPoint(forLoop.getBody()->getTerminator());
+          AbstractLoopOp forLoop2;
+          Value accessIndex2;
+          genForOpFormat_D(builder,
+                           loc,
+                           tensor,
+                           id,
+                           i,
+                           true,
+                           allAllocs,
+                           iteratorType,
+                           forLoop2 /* output */,
+                           accessIndex2 /* output */);
+          opstree->forOps.push_back(forLoop2);
+          opstree->inductionVars.push_back(forLoop.getInductionVar());
+          
+          builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
+          
+          // Index calculations
+          // j = A2_crd[n2] * A2_block_pos + bj
+          Value c0 = builder.create<ConstantIndexOp>(loc, 1);
+          std::vector<Value> indices = {c0};
+          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][6], indices);
+          Value mul1 = builder.create<MulIOp>(loc, accessIndex, column);
+          Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+          opstree->accessIdx.push_back(add1);
+          
+        } else if (block == "UNK") {
+          opstree->forOps.push_back(forLoop);
+          opstree->accessIdx.push_back(accessIndex);
+          opstree->inductionVars.push_back(forLoop.getInductionVar());
+        }
+        
       }
       else if (format.compare(0, 2, "CN") == 0)
       {
@@ -1243,6 +1334,8 @@ namespace
                           accessIndex /* output */);
         opstree->forOps.push_back(forLoop);
         opstree->accessIdx.push_back(accessIndex);
+        
+        
       }
       else if (format.compare(0, 1, "S") == 0)
       {
@@ -1253,10 +1346,42 @@ namespace
         Value accessIndex;
         std::vector<AbstractLoopOp> &opstree_forops = opstree->forOps;
         AbstractLoopOp parent_forop;
+        Value parent_accessIndex = nullptr;
         if (nullptr != opstree->parent)
         {
           parent_forop = opstree->parent->forOps.back();
         }
+        
+        /// If we have a block-dense loop, we need to generate that first
+        if (block == "D") {
+          AbstractLoopOp forLoop2;
+          Value accessIndex2;
+          genForOpFormat_D(builder,
+                           loc,
+                           tensor,
+                           id,
+                           i,
+                           true,
+                           allAllocs,
+                           iteratorType,
+                           forLoop2 /* output */,
+                           accessIndex2 /* output */);
+          builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
+          
+          // Insert the index calculations
+          // i = n * A1_pos + i
+          Value c0 = builder.create<ConstantIndexOp>(loc, 0);
+          std::vector<Value> indices = {c0};
+          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][0], indices);
+          Value mul1 = builder.create<MulIOp>(loc, forLoop2.getInductionVar(), column);
+          Value add1 = builder.create<AddIOp>(loc, mul1, parent_forop.getInductionVar());
+          parent_accessIndex = add1;
+          opstree->inductionVars.push_back(add1);
+          
+          parent_forop = forLoop2;
+        }
+        
+        /// Generate: int j = A2crd[m];
         genForOpFormat_S(builder,
                          loc,
                          opstree,
@@ -1266,6 +1391,7 @@ namespace
                          allAllocs,
                          opstree_forops,
                          parent_forop,
+                         parent_accessIndex,
                          iteratorType,
                          forLoop /* output */,
                          accessIndex /* output */);
@@ -1832,6 +1958,7 @@ namespace
                             std::vector<std::vector<Value>> &allAccessIdx,
                             std::vector<AbstractLoopOp> &forLoops /* numeric for-loop statements, from innermost to outermost*/,
                             std::vector<Value> &numeric_nested_forLoop_AccessIdx,
+                            std::vector<Value> &nested_InductionVars,
                             std::vector<AbstractLoopOp> &symbolic_nested_forops /* symbolic for-loops from innermost to outermost */,
                             std::vector<std::vector<int>> &rhsPerms,
                             SymbolicInfo &symbolicInfo,
@@ -1842,6 +1969,12 @@ namespace
     getRHSFormatsOfComputeOp(cur_op.getOperation()->getResult(0), rhsFormats);
     std::vector<std::vector<std::string>> lhsFormats;
     getLHSFormatsOfComputeOp(cur_op.getOperation()->getResult(0), lhsFormats);
+    
+    std::vector<std::vector<std::string>> rhsBlocks;
+    getRHSBlocksOfComputeOp(cur_op.getOperation()->getResult(0), rhsBlocks);
+    std::vector<std::vector<std::string>> lhsBlocks;
+    getLHSBlocksOfComputeOp(cur_op.getOperation()->getResult(0), lhsBlocks);
+    
     bool isMixedMode = checkIsMixedMode(rhsFormats);
     bool isElementwise = checkIsElementwise(rhsPerms);
     comet_debug() << " isElementwise:" << isElementwise << " isMixedMode: " << isMixedMode << "\n";
@@ -1948,8 +2081,50 @@ namespace
       std::vector<Value> allLoads(main_tensor_nums);
       for (auto m = 0; m < main_tensor_nums; m++)
       {
-        Value load_op = builder.create<memref::LoadOp>(loc,
-                                                       main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
+        Value load_op;
+        std::string sparse_format = getTensorFormat(rhsFormats, rhsBlocks, 0);
+        
+        /// TODO: This is very, very likely incorrect.
+        ///       We are just using this for testing
+        if (m == 0 && sparse_format == "BCSR") {
+          /// Generate: index = n2*(A1_block_pos*A2_block_pos) + bi * A2_block_pos + bj
+          auto bj = allValueAccessIdx[0][0];
+          
+          auto last = forLoops.size() - 1;
+          auto bi = forLoops[last].getInductionVar();
+          
+          Value c0 = builder.create<ConstantIndexOp>(loc, 0);
+          std::vector<Value> indices = {c0};
+          
+          // A1_block_pos * A2_block_pos
+          Value A1_block_pos = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[0][2], indices);
+          Value A2_block_pos = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[0][6], indices);
+          Value mul1 = builder.create<MulIOp>(loc, A1_block_pos, A2_block_pos);
+          
+          // mul2 = *n2
+          last = nested_InductionVars.size() - 2;
+          auto n2 = nested_InductionVars[last]; // 1 for SpMM, 0 for SpMV
+          Value mul2 = builder.create<MulIOp>(loc, n2, mul1);
+          
+          // mul3 = bi * A2_block_pos
+          auto mul3 = builder.create<MulIOp>(loc, bi, A2_block_pos);
+          
+          // add1 = mul2 + mul3
+          auto add1 = builder.create<AddIOp>(loc, mul2, mul3);
+          auto add2 = builder.create<AddIOp>(loc, add1, bj);
+          Value final_idx = add2;
+          
+          load_op = builder.create<memref::LoadOp>(loc,
+                                                 main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], final_idx);
+        } else if (m == 0 && sparse_format == "ELL") {
+          auto last = nested_InductionVars.size() - 2;  // was 1 below
+          load_op = builder.create<memref::LoadOp>(loc,
+                                                   main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], nested_InductionVars[last]);
+        } else {
+          load_op = builder.create<memref::LoadOp>(loc,
+                                                   main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
+        }
+        
         allLoads[m] = load_op;
         comet_debug() << " ";
         comet_vdump(load_op);
@@ -1971,7 +2146,7 @@ namespace
         }
 
         int sparse_inputtensor_id = dense_inputtensor_id ? 0 : 1;
-        std::string sparse_format = getTensorFormat(rhsFormats, sparse_inputtensor_id);
+        std::string sparse_format = getTensorFormat(rhsFormats, rhsBlocks, sparse_inputtensor_id);
 
         auto last_insertionPoint = builder.saveInsertionPoint();
 
@@ -2358,22 +2533,30 @@ namespace
                                           std::vector<OpsTree *> &ancestorsOps,
                                           std::vector<AbstractLoopOp> &nested_forops /* output */,
                                           std::vector<Value> &nested_AccessIdx /* output */,
+                                          std::vector<Value> &nested_InductionVars /* output */,
                                           std::vector<int64_t> &nested_forops_indices /* output */)
   {
 
-    for (unsigned int i = 0; i < ancestorsOps.size(); i++)
+    for (size_t i = 0; i < ancestorsOps.size(); i++)
     {
       comet_debug() << " ancestorsOps[" << i << "]->forOps.size(): " << ancestorsOps[i]->forOps.size()
                     << ", ancestorsOps->id: "
                     << ancestorsOps[i]->id << "\n";
       if (!ancestorsOps[i]->forOps.empty())
       { /// for loops OpsTree node
-        for (int j = ancestorsOps[i]->forOps.size() - 1; j >= 0; j--)
+        for (long int j = ancestorsOps[i]->forOps.size() - 1; j >= 0; j--)
         {
           comet_debug() << " j: " << j << "\n";
           nested_forops.push_back(ancestorsOps[i]->forOps[j]);
           comet_debug() << "AccessIdx: " << ancestorsOps[i]->accessIdx[j] << "\n";
           nested_AccessIdx.push_back(ancestorsOps[i]->accessIdx[j]);
+          if (ancestorsOps[i]->inductionVars.size() > j && ancestorsOps[i]->inductionVars[j]) {
+            comet_debug() << "InductionVars: " << ancestorsOps[i]->inductionVars[j] << "\n";
+            nested_InductionVars.push_back(ancestorsOps[i]->inductionVars[j]);
+          } else {
+            comet_debug() << "InductionVars: <nullptr>\n";
+            nested_InductionVars.push_back(nullptr);
+          }
         }
       }
     }
@@ -2408,6 +2591,7 @@ namespace
                          std::vector<std::vector<Value>> &tensors_lhs_Allocs /* output */,
                          std::vector<std::vector<Value>> &tensors_rhs_Allocs /* output */,
                          std::vector<std::vector<std::string>> &allFormats /*output*/,
+                         std::vector<std::vector<std::string>> &allBlocks /*output*/,
                          std::vector<std::vector<int>> &allPerms /* output */,
                          std::vector<std::vector<int>> &allPerms_rhs /* output */,
                          std::vector<Value> &main_tensors_all /* output */,
@@ -2477,6 +2661,18 @@ namespace
       }
       comet_debug() << "\n";
     }
+    
+    getBlocksOfComputeOp(cur_op.getOperation()->getResult(0), allBlocks);
+    comet_debug() << " allBlocks: \n";
+    for (auto m : allBlocks)
+    {
+      comet_debug() << " ";
+      for (auto n : m)
+      {
+        comet_debug() << n << " ";
+      }
+      comet_debug() << "\n";
+    }
 
     comet_debug() << " ";
     comet_vdump(cur_op);
@@ -2535,6 +2731,7 @@ namespace
                                  int main_tensor_nums,
                                  std::vector<std::vector<int>> &allPerms,
                                  std::vector<std::vector<std::string>> &allFormats,
+                                 std::vector<std::vector<std::string>> &allBlocks,
                                  std::vector<Value> &main_tensors_all,
                                  std::vector<AbstractLoopOp> &nested_forops,
                                  std::vector<Value> &nested_AccessIdx,
@@ -2554,6 +2751,7 @@ namespace
         comet_debug() << " index_loc " << index_loc << "\n";
         comet_debug() << " Perm: " << allPerms[i][j] << "\n";
         comet_debug() << " Format: " << allFormats[i][j] << "\n";
+        comet_debug() << " Block: " << allBlocks[i][j] << "\n";
         assert(index_loc < nested_forops.size() &&
                "index_loc < nested_forops.size(), i.e. the index not exist in nested for loop\n");
         allLoopsArg[i].push_back(nested_forops[index_loc].getInductionVar());
@@ -2583,6 +2781,7 @@ namespace
           }
         }
         /// Calculate for ModeGeneric style format: [CN, S, D (, ... ) ]
+        if (lastSparseIndexLoc == allPerms[i].size()) lastSparseIndexLoc -= 1;
         auto valueAccessIdx_part = allLoopsArg[i][lastSparseIndexLoc];
         if (lastSparseIndexLoc < allPerms[i].size() - 1)
         { /// There is dense index after the sparse index
@@ -3700,13 +3899,15 @@ namespace
     /// 1. get the nested loops, from innermost to outermost order
     std::vector<AbstractLoopOp> nested_forops;
     std::vector<Value> nested_AccessIdx;
+    std::vector<Value> nested_InductionVars;
     std::vector<int64_t> nested_forops_indices; /// Each nested indexOp's index value (e.g., indices=[0])
     getNumericNestedForOpsAndAccessIdx(ancestorsWps,
                                        ancestorsOps,
                                        nested_forops /* output */,
                                        nested_AccessIdx /* output */,
+                                       nested_InductionVars /* output */,
                                        nested_forops_indices /* output */);
-
+    
     comet_debug() << " nested_forops_indices.size(): " << nested_forops_indices.size() << "\n";
     assert(
         nested_forops.size() == nested_forops_indices.size() && "nested_forops.size() != nested_forops_indices.size()");
@@ -3730,6 +3931,7 @@ namespace
     std::vector<std::vector<Value>> tensors_lhs_Allocs;
     std::vector<std::vector<Value>> tensors_rhs_Allocs;
     std::vector<std::vector<std::string>> allFormats;
+    std::vector<std::vector<std::string>> allBlocks;
     std::vector<std::vector<int>> allPerms;
     std::vector<std::vector<int>> allPerms_rhs;
     std::vector<Value> main_tensors_all; /// main_tensors_all has first RHS tensors then LHS tensors
@@ -3739,6 +3941,7 @@ namespace
                       tensors_lhs_Allocs /* output */,
                       tensors_rhs_Allocs /* output */,
                       allFormats /* output */,
+                      allBlocks /* output */,
                       allPerms /* output */,
                       allPerms_rhs /* output */,
                       main_tensors_all /* output */,
@@ -3768,6 +3971,7 @@ namespace
                               main_tensor_nums,
                               allPerms,
                               allFormats,
+                              allBlocks,
                               main_tensors_all,
                               nested_forops,
                               nested_AccessIdx,
@@ -3801,6 +4005,7 @@ namespace
                                 main_tensor_nums,
                                 allPerms,
                                 allFormats,
+                                allBlocks,
                                 main_tensors_all,
                                 symbolic_nested_forops,
                                 symbolic_nested_AccessIdx,
@@ -4068,6 +4273,7 @@ namespace
                            allAccessIdx,
                            nested_forops,
                            nested_AccessIdx,
+                           nested_InductionVars,
                            symbolic_nested_forops,
                            allPerms_rhs,
                            symbolicInfo,
@@ -4161,6 +4367,7 @@ namespace
                              allAccessIdx,
                              nested_forops,
                              nested_AccessIdx,
+                             nested_InductionVars,
                              symbolic_nested_forops,
                              allPerms_rhs,
                              symbolicInfo,
@@ -4416,6 +4623,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       std::vector<Value> tensors;
       std::vector<unsigned int> ids;
       std::vector<std::string> formats;
+      std::vector<std::string> blocks;
 
       comet_vdump(cur_op);
 
@@ -4424,18 +4632,22 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
                      leafs,
                      tensors /* output */,
                      ids /* output */,
-                     formats /* output */);
+                     formats /* output */,
+                     blocks /* output */);
       llvm::StringRef iteratorType = cur_op.getIteratorType();
 
       comet_debug() << " indices.size(): " << indices.size() << " tensors.size(): " << tensors.size() << "\n";
       for ([[maybe_unused]] unsigned int m = 0; m < tensors.size(); m++)
       {
-        comet_debug() << " Formats:" << formats[m] << " " << ids[m] << " ";
+        comet_debug() << " Formats:" << formats[m] << " " << ids[m] << " \n";
+        comet_debug() << " Blocks:" << blocks[m] << " " << ids[m] << " \n";
         comet_vdump(tensors[m]);
+        comet_debug() << "\n";
       }
+      comet_debug() << "---------------\n";
 
       comet_debug() << " call genForOps, i = " << i << "\n";
-      genForOps(tensors, ids, formats, rootOp, builder, opstree_vec[i], symbolicInfo, iteratorType);
+      genForOps(tensors, ids, formats, blocks, rootOp, builder, opstree_vec[i], symbolicInfo, iteratorType);
       {
         comet_pdump(rootOp->getParentOfType<ModuleOp>());
       }

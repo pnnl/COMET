@@ -140,11 +140,12 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody(Location loc, OpBuilder &bui
   {
     indexTree::IndexTreeComputeRHSOp it_compute_rhs_op = llvm::dyn_cast<indexTree::IndexTreeComputeRHSOp>(op);
     ArrayAttr op_formats_ArrayAttr = it_compute_rhs_op.getAllFormats();
+    ArrayAttr op_blocks_ArrayAttr = it_compute_rhs_op.getAllBlocks();
     ArrayAttr op_perms_ArrayAttr = it_compute_rhs_op.getAllPerms();
 
     rhs = builder.create<indexTree::IndexTreeComputeRHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()),
                                                            it_compute_rhs_op->getOperands(), // tensors
-                                                           op_perms_ArrayAttr, op_formats_ArrayAttr);
+                                                           op_perms_ArrayAttr, op_formats_ArrayAttr, op_blocks_ArrayAttr);
   }
 
   // create IndexTreeComputeLHSOp, no dependency to earlier replications
@@ -152,11 +153,12 @@ void PCToLoopsLoweringPass::replicateOpsForLoopBody(Location loc, OpBuilder &bui
   {
     indexTree::IndexTreeComputeLHSOp it_compute_lhs_op = llvm::dyn_cast<indexTree::IndexTreeComputeLHSOp>(op);
     ArrayAttr op_formats_ArrayAttr = it_compute_lhs_op.getAllFormats();
+    ArrayAttr op_blocks_ArrayAttr = it_compute_lhs_op.getAllBlocks();
     ArrayAttr op_perms_ArrayAttr = it_compute_lhs_op.getAllPerms();
 
     lhs = builder.create<indexTree::IndexTreeComputeLHSOp>(loc, mlir::UnrankedTensorType::get(builder.getF64Type()),
                                                            it_compute_lhs_op->getOperands(), /// tensors
-                                                           op_perms_ArrayAttr, op_formats_ArrayAttr);
+                                                           op_perms_ArrayAttr, op_formats_ArrayAttr, op_blocks_ArrayAttr);
   }
 
   /// create IndexTreeComputeOp only if rhs and lhs are ready

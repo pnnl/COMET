@@ -118,6 +118,7 @@ namespace mlir
 
     // Tensor algebra dialect
     std::string getTensorFormat(std::vector<std::vector<std::string>> allFormats,
+                                std::vector<std::vector<std::string>> allBlocks,
                                 unsigned tensor_id);
     std::string getFormat(std::vector<unsigned> allLocs,
                           std::vector<std::vector<unsigned>> allPerms,
@@ -126,6 +127,7 @@ namespace mlir
     std::vector<unsigned> getSumIndices(std::vector<unsigned> rhs_perm, std::vector<unsigned> rhs_perm_free);
     std::vector<unsigned> getIndexIterateOrder(std::vector<unsigned> rhs1_perm, std::vector<unsigned> rhs2_perm);
     std::vector<std::vector<std::string>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms);
+    std::vector<std::vector<std::string>> getAllBlocks(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms);
     bool checkIsElementwise(std::vector<std::vector<int>> allPerms);
     bool checkIsMixedMode(std::vector<std::vector<std::string>> formats);
     bool checkIsDense(std::vector<std::string> format);
@@ -207,9 +209,15 @@ namespace mlir
     void getFormatsOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
     void getRHSFormatsOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
     void getLHSFormatsOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
+    
+    /// TODO(patrick): Do we want to merge these with the getFormat functions above?
+    void getBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
+    void getRHSBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
+    void getLHSBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opFormats);
 
     void getFormatsPermsOfComputeOp(Value computeOp,
                                     std::vector<std::vector<std::string>> &opFormats,
+                                    std::vector<std::vector<std::string>> &opBlocks,
                                     std::vector<std::vector<int>> &opPerms,
                                     std::vector<std::vector<bool>> &inputOutputMapping);
 
@@ -218,7 +226,8 @@ namespace mlir
                         std::vector<Value> &leafs,
                         std::vector<Value> &tensors,
                         std::vector<unsigned int> &ids,
-                        std::vector<std::string> &formats);
+                        std::vector<std::string> &formats,
+                        std::vector<std::string> &blocks);
 
     void replaceOperands(Operation *itComputeOp, std::vector<Value> newComputeOps);
 

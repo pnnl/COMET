@@ -566,22 +566,17 @@ namespace mlir
         else if (formats_str.compare("ELL") == 0)
         {
           allFormats[i].push_back("D");
-          allFormats[i].push_back("D");
           allFormats[i].push_back("S");
         }
         else if (formats_str.compare("BCSR") == 0)
         {
           allFormats[i].push_back("D");
-          allFormats[i].push_back("CN");
-          allFormats[i].push_back("D");
-          allFormats[i].push_back("D");
+          allFormats[i].push_back("CU");
         }
         else if (formats_str.compare("CSB") == 0)
         {
           allFormats[i].push_back("D");
-          allFormats[i].push_back("D");
           allFormats[i].push_back("CU");
-          allFormats[i].push_back("S");
         }
         else if (formats_str.compare("COO") == 0)
         {
@@ -624,6 +619,100 @@ namespace mlir
         }
       }
       return allFormats;
+    }
+    
+    ///
+    /// Returns the block attributes for each format
+    ///
+    std::vector<std::vector<std::string>> getAllBlocks(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms)
+    {
+      std::vector<std::vector<std::string>> allBlocks(allPerms.size());
+      /// block format with each input matrix: ["CSR", "D", "D"] SpMM
+      for (unsigned int i = 0; i < opFormatsArrayAttr.size(); i++)
+      {
+        std::string formats_str(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+        unsigned int tensorDims = allPerms[i].size();
+
+        comet_debug() << "format_str: " << formats_str << ", tensorDims: " << tensorDims << "\n";
+
+        if (formats_str.compare("CSR") == 0)
+        {
+          assert(tensorDims == 2 && "formst is CSR, should be a 2D tensor.\n");
+          allBlocks[i].push_back("UNK");
+          allBlocks[i].push_back("UNK");
+        }
+        else if (formats_str.compare("ModeGeneric") == 0)
+        {
+          /// Currently only support modegeneric on 3 D tensor
+          assert(tensorDims == 3 && "formst is ModeGeneric, should be a 3D tensor.\n");
+          allBlocks[i].push_back("UNK");
+          allBlocks[i].push_back("UNK");
+          allBlocks[i].push_back("UNK");
+        }
+        else if (formats_str.compare("DCSR") == 0 || formats_str.compare("CSF") == 0)
+        {
+          assert(tensorDims > 1 && "formst is DCSR or CSF, should be more than 1D.\n");
+          for (unsigned int d = 0; d < tensorDims; d++)
+          {
+            allBlocks[i].push_back("UNK");
+          }
+        }
+        else if (formats_str.compare("ELL") == 0)
+        {
+          allBlocks[i].push_back("UNK");
+          allBlocks[i].push_back("D");
+        }
+        else if (formats_str.compare("BCSR") == 0)
+        {
+          allBlocks[i].push_back("D");
+          allBlocks[i].push_back("D");
+        }
+        else if (formats_str.compare("CSB") == 0)
+        {
+          allBlocks[i].push_back("UNK");
+          allBlocks[i].push_back("UNK");
+        }
+        else if (formats_str.compare("COO") == 0)
+        {
+          assert(tensorDims > 1 && "formst is COO, should be more than 1D.\n");
+          for (unsigned int d = 0; d < tensorDims; d++)
+          {
+            if (d == 0)
+            {
+              allBlocks[i].push_back("UNK");
+              comet_debug() << "UNK\n";
+            }
+            else
+            {
+              allBlocks[i].push_back("UNK");
+              comet_debug() << "UNK\n";
+            }
+          }
+        }
+        else if (formats_str.compare("Dense") == 0)
+        {
+          for (unsigned int d = 0; d < tensorDims; d++)
+          {
+            allBlocks[i].push_back("UNK");
+          }
+        }
+        else if (formats_str.find("D") != std::string::npos || formats_str.find("CU") != std::string::npos || formats_str.find("CN") != std::string::npos || formats_str.find("S") != std::string::npos)
+        {
+          allBlocks[i] = stringSplit(formats_str, ", ");
+        }
+        else
+        {
+          llvm::errs() << "Unsupported formats: " << formats_str << " (tensor dimes: " << tensorDims << ") \n";
+        }
+
+        comet_debug() << "allBlocks[" << i << "].size(): " << allBlocks[i].size() << "\n";
+        for (auto n : allBlocks[i])
+        {
+          comet_debug() << "block: " << n << "\n";
+          LLVM_DEBUG(llvm::dbgs() << "block: " << n << "\n");
+        }
+      }
+      return allBlocks;
     }
 
     std::vector<std::vector<std::string>> getAllFormatsWorkspace(ArrayAttr opFormatsArrayAttr)
@@ -668,21 +757,26 @@ namespace mlir
     }
 
     /// Get the format of the tensor
-    std::string getTensorFormat(std::vector<std::vector<std::string>> allFormats, unsigned int tensor_id)
+    std::string getTensorFormat(std::vector<std::vector<std::string>> allFormats,
+                                std::vector<std::vector<std::string>> allBlocks,
+                                unsigned int tensor_id)
     {
       assert(tensor_id < allFormats.size() && "illegal tensor_id\n");
       std::string format_ret = "";
       std::vector<std::string> format = allFormats[tensor_id];
+      std::vector<std::string> block = allBlocks[tensor_id];
 
-      if (format.size() == 1 && format[0].compare("Dense") == 0)
+      if (format.size() == 1 && format[0].compare("D") == 0)
         format_ret = "Dense";
       else if (format.size() == 2 && (format[0].compare("D") == 0 && format[1].compare("D") == 0))
         format_ret = "Dense";
 
       else if (format.size() == 1 && format[0].compare("CSR") == 0)
         format_ret = "CSR";
-      else if (format.size() == 2 && (format[0].compare("D") == 0 && format[1].compare("CU") == 0))
-        format_ret = "CSR";
+      else if (format.size() == 2 && (format[0].compare("D") == 0 && format[1].compare("CU") == 0)) {
+        if (block.size() == 2 && (block[0].compare("D") == 0 && block[1].compare("D") == 0)) format_ret = "BCSR";
+        else format_ret = "CSR";
+      }
 
       else if (format.size() == 1 && format[0].compare("COO") == 0)
         format_ret = "COO";
@@ -696,7 +790,9 @@ namespace mlir
 
       else if (format.size() == 1 && format[0].compare("ELL") == 0)
         format_ret = "ELL";
-      /// TODO(gkestor): Individual attributes
+      else if (format.size() == 2 && (format[0].compare("D") == 0 && format[1].compare("S") == 0
+                && block[0].compare("UNK") == 0 && block[1].compare("D") == 0))
+        format_ret = "ELL";
 
       else if (format.size() == 1 && format[0].compare("BCSR") == 0)
         format_ret = "BCSR";
@@ -718,6 +814,17 @@ namespace mlir
         format_ret = "ModeGeneric";
       else if (format.size() == 3 && (format[0].compare("CN") == 0 && format[1].compare("S") == 0 && format[2].compare("S") == 0))
         format_ret = "ModeGeneric";
+      else if(format.size() > 3)
+      {
+        for(auto f: format)
+        {
+          if(f != "D")
+          {
+            return "";
+          }
+        }
+        format_ret = "D";
+      }
       else
       {
         llvm::errs() << __FILE__ << ":" << __LINE__ << "ERROR: Unsupported formats\n";
@@ -846,7 +953,14 @@ namespace mlir
       { /// 2D
         comet_debug() << " 2D\n";
         /// Value dim0_format, dim1_format;
-        if (formats_str.compare(0, 3, "CSR") == 0)
+        if (formats_str.compare(0, 4, "BCSR") == 0)
+        { /// BCSR
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_dense);
+          dim_format.push_back(format_compressed);
+          dim_format.push_back(format_dense);
+        }
+        else if (formats_str.compare(0, 3, "CSR") == 0)
         {
           dim_format.push_back(format_dense);
           dim_format.push_back(format_unk);
@@ -870,15 +984,8 @@ namespace mlir
         else if (formats_str.compare(0, 3, "ELL") == 0)
         { /// ELL
           dim_format.push_back(format_dense);
-          dim_format.push_back(format_dense);
-          dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
-        }
-        else if (formats_str.compare(0, 4, "BCSR") == 0)
-        { /// BCSR
-          dim_format.push_back(format_dense);
-          dim_format.push_back(format_compressednonunique);
-          dim_format.push_back(format_dense);
+          dim_format.push_back(format_singleton);
           dim_format.push_back(format_dense);
         }
         else if (formats_str.compare(0, 3, "CSB") == 0)
@@ -1033,15 +1140,15 @@ namespace mlir
         else if (formats_str.compare(0, 3, "ELL") == 0)
         { /// ELL
           dim_format.push_back(format_dense);
-          dim_format.push_back(format_dense);
-          dim_format.push_back(format_singleton);
           dim_format.push_back(format_unk);
+          dim_format.push_back(format_singleton);
+          dim_format.push_back(format_dense);
         }
         else if (formats_str.compare(0, 4, "BCSR") == 0)
         { /// BCSR
           dim_format.push_back(format_dense);
-          dim_format.push_back(format_compressed);
           dim_format.push_back(format_dense);
+          dim_format.push_back(format_compressed);
           dim_format.push_back(format_dense);
         }
         else if (formats_str.compare(0, 3, "CSB") == 0)
@@ -1382,15 +1489,19 @@ namespace mlir
     /// Get the perms and formats of the itCompute op
     void getFormatsPermsOfComputeOp(Value computeOp,
                                     std::vector<std::vector<std::string>> &opFormats,
+                                    std::vector<std::vector<std::string>> &opBlocks,
                                     std::vector<std::vector<int>> &opPerms,
                                     std::vector<std::vector<bool>> &inputOutputMapping)
     {
       indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
       ArrayAttr opFormatsArrayAttr_rhs = itComputeOp_rhs.getAllFormats();
+      ArrayAttr opBlocksArrayAttr_rhs = itComputeOp_rhs.getAllBlocks();
       ArrayAttr opPermsArrayAttr_rhs = itComputeOp_rhs.getAllPerms();
       indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
       ArrayAttr opFormatsArrayAttr_lhs = itComputeOp_lhs.getAllFormats();
+      ArrayAttr opBlocksArrayAttr_lhs = itComputeOp_lhs.getAllBlocks();
       ArrayAttr opPermsArrayAttr_lhs = itComputeOp_lhs.getAllPerms();
+      ///TODO(patrick) We should probably verify the block sizes
       assert(opFormatsArrayAttr_rhs.size() == opPermsArrayAttr_rhs.size() && "not equal RHS formats size with perms size\n");
       assert(opFormatsArrayAttr_lhs.size() == opPermsArrayAttr_lhs.size() && "not equal LHS formats size with perms size\n");
 
@@ -1399,17 +1510,25 @@ namespace mlir
       comet_debug() << "Start printing opFormats_rhs\n";
       std::vector<std::vector<std::string>> opFormats_rhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_rhs);
       comet_debug() << "End printing opFormats_rhs\n";
+      comet_debug() << "Start printing opBlocks_rhs\n";
+      std::vector<std::vector<std::string>> opBlocks_rhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_rhs);
+      comet_debug() << "End printing opBlocks_rhs\n";
       std::vector<std::vector<int>> opPerms_rhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_rhs);
       std::vector<std::vector<bool>> inputMapping = createInputOutputMapping(opPermsArrayAttr_rhs, true);
 
       comet_debug() << "Start printing opFormats_lhs\n";
       std::vector<std::vector<std::string>> opFormats_lhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_lhs);
       comet_debug() << "End printing opFormats_lhs\n";
+      comet_debug() << "Start printing opBlocks_lhs\n";
+      std::vector<std::vector<std::string>> opBlocks_lhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_lhs);
+      comet_debug() << "End printing opBlocks_lhs\n";
       std::vector<std::vector<int>> opPerms_lhs = convertArrayAttrIntTo2DVector(opPermsArrayAttr_lhs);
       std::vector<std::vector<bool>> outputMapping = createInputOutputMapping(opPermsArrayAttr_lhs, false);
 
       opFormats = opFormats_rhs;
       opFormats.insert(opFormats.end(), opFormats_lhs.begin(), opFormats_lhs.end());
+      opBlocks = opBlocks_rhs;
+      opBlocks.insert(opBlocks.end(), opBlocks_lhs.begin(), opBlocks_lhs.end());
       opPerms = opPerms_rhs;
       opPerms.insert(opPerms.end(), opPerms_lhs.begin(), opPerms_lhs.end());
       inputOutputMapping = inputMapping;
@@ -1454,6 +1573,45 @@ namespace mlir
       std::vector<std::vector<std::string>> opFormats_lhs = convertArrayAttrStrTo2DVector(opFormatsArrayAttr_lhs);
       opFormats = opFormats_lhs;
     }
+    
+    /// Get the formats of the itCompute op
+    void getBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opBlocks)
+    {
+      indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
+      ArrayAttr opBlocksArrayAttr_rhs = itComputeOp_rhs.getAllBlocks();
+      indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
+      ArrayAttr opBlocksArrayAttr_lhs = itComputeOp_lhs.getAllBlocks();
+
+      /// Get output block, vector of vector
+      /// Convert ArrayAttr into
+      std::vector<std::vector<std::string>> opBlocks_rhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_rhs);
+      std::vector<std::vector<std::string>> opBlocks_lhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_lhs);
+
+      opBlocks = opBlocks_rhs;
+      opBlocks.insert(opBlocks.end(), opBlocks_lhs.begin(), opBlocks_lhs.end());
+    }
+
+    /// Get the rhs formats of the itCompute op
+    void getRHSBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opBlocks)
+    {
+      indexTree::IndexTreeComputeRHSOp itComputeOp_rhs = dyn_cast<indexTree::IndexTreeComputeRHSOp>(computeOp.getDefiningOp()->getOperand(0).getDefiningOp());
+      ArrayAttr opBlocksArrayAttr_rhs = itComputeOp_rhs.getAllBlocks();
+
+      /// Get output block, vector of vector
+      /// Convert ArrayAttr into
+      std::vector<std::vector<std::string>> opBlocks_rhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_rhs);
+
+      opBlocks = opBlocks_rhs;
+    }
+
+    /// Get the LHS formats of the itCompute op
+    void getLHSBlocksOfComputeOp(Value computeOp, std::vector<std::vector<std::string>> &opBlocks)
+    {
+      indexTree::IndexTreeComputeLHSOp itComputeOp_lhs = dyn_cast<indexTree::IndexTreeComputeLHSOp>(computeOp.getDefiningOp()->getOperand(1).getDefiningOp());
+      ArrayAttr opBlocksArrayAttr_lhs = itComputeOp_lhs.getAllBlocks();
+      std::vector<std::vector<std::string>> opBlocks_lhs = convertArrayAttrStrTo2DVector(opBlocksArrayAttr_lhs);
+      opBlocks = opBlocks_lhs;
+    }
 
     /// Get the input tensors of the itCompute op
     void getInputTensorsOfComputeOp(Value computeOp, std::vector<Value> &inputTensors /* output */)
@@ -1486,7 +1644,8 @@ namespace mlir
                         std::vector<Value> &leafs,
                         std::vector<Value> &tensors /* output */,
                         std::vector<unsigned int> &ids /* output */,
-                        std::vector<std::string> &formats /* output */)
+                        std::vector<std::string> &formats /* output */,
+                        std::vector<std::string> &blocks /* output */)
     {
       /// For each indices, find in each leaf, which tensor, the corresponding format
       /// If in all tensors, the formats of the index are D, then D
@@ -1499,11 +1658,13 @@ namespace mlir
         comet_debug() << " getFormatsInfo:indices[" << i << "]: " << indices[i] << "\n";
         /// Info for each index
         std::string format;
+        std::string block;
         Value tensor;
         unsigned int id;
         bool isSet = false;
 
         std::vector<std::string> formats_leafs;
+        std::vector<std::string> blocks_leafs;
         std::vector<Value> tensors_leafs;
         std::vector<unsigned int> ids_leafs;
 
@@ -1513,6 +1674,7 @@ namespace mlir
           comet_debug() << " getFormatsInfo:LeafOp: ";
           comet_vdump(leafs[j]);
           std::string format_in_leaf;
+          std::string block_in_leaf;
           Value tensor_in_leaf;
           unsigned int id_in_leaf;
           bool isSetInLeaf = false;
@@ -1522,10 +1684,11 @@ namespace mlir
           {
             comet_debug() << " getFormatsInfo:leafs[" << j << "] is computeOp\n";
             std::vector<std::vector<std::string>> allFormats;
+            std::vector<std::vector<std::string>> allBlocks;
             std::vector<std::vector<int>> allPerms;
             std::vector<std::vector<bool>> inputOutputMapping;
             OpBuilder builder(leafop);
-            getFormatsPermsOfComputeOp(leafop, allFormats, allPerms, inputOutputMapping);
+            getFormatsPermsOfComputeOp(leafop, allFormats, allBlocks, allPerms, inputOutputMapping);
 
             comet_debug() << " getFormatsInfo:Allformats allFormats.size(): " << allFormats.size() << "\n";
             for (auto m : allFormats)
@@ -1559,6 +1722,7 @@ namespace mlir
             /// Check if this index is in this leaf's perms
 
             std::vector<std::string> formats_local;
+            std::vector<std::string> blocks_local;
             std::vector<Value> tensors_local;
             std::vector<unsigned int> ids_local;
             std::vector<bool> rhs_vs_lhs;
@@ -1576,6 +1740,7 @@ namespace mlir
                 comet_debug() << " getFormatsInfo:AddingLocalFormat[" << k << "][" << idx << "]: " << allFormats[k][idx] << " ";
                 comet_vdump(leafop_tensors[k]);
                 formats_local.push_back(allFormats[k][idx]);
+                blocks_local.push_back(allBlocks[k][idx]);
                 tensors_local.push_back(leafop_tensors[k]);
                 ids_local.push_back(idx);
                 rhs_vs_lhs.push_back(inputOutputMapping[k][idx]);
@@ -1594,6 +1759,7 @@ namespace mlir
             {
               isSetInLeaf = true;
               format_in_leaf = formats_local[0];
+              block_in_leaf = blocks_local[0];
               tensor_in_leaf = tensors_local[0];
               id_in_leaf = ids_local[0];
 
@@ -1608,6 +1774,7 @@ namespace mlir
                 /// index format information stores in formats_local
                 {
                   format_in_leaf = formats_local[k];
+                  block_in_leaf = blocks_local[k];
                   tensor_in_leaf = tensors_local[k];
                   id_in_leaf = ids_local[k];
                   break; /// Get the first sparse case
@@ -1622,6 +1789,7 @@ namespace mlir
             comet_debug() << " getFormatsInfo:isSetInLeaf: " << isSetInLeaf << ", format_in_leaf: " << format_in_leaf << ", id_in_leaf: " << id_in_leaf << ", tensor: ";
             comet_vdump(tensor_in_leaf);
             formats_leafs.push_back(format_in_leaf);
+            blocks_leafs.push_back(block_in_leaf);
             tensors_leafs.push_back(tensor_in_leaf);
             ids_leafs.push_back(id_in_leaf);
           }
@@ -1640,6 +1808,7 @@ namespace mlir
           if (j == 0)
           {
             format = formats_leafs[j];
+            block = blocks_leafs[j];
             tensor = tensors_leafs[j];
             id = ids_leafs[j];
             isSet = true;
@@ -1649,6 +1818,7 @@ namespace mlir
             if (formats_leafs[j].compare(0, 1, "D") != 0)
             { /// not D
               format = formats_leafs[j];
+              block = blocks_leafs[j];
               tensor = tensors_leafs[j];
               id = ids_leafs[j];
               isSet = true;
@@ -1663,6 +1833,7 @@ namespace mlir
           comet_vdump(tensor);
 
           formats.push_back(format);
+          blocks.push_back(block);
           tensors.push_back(tensor);
           ids.push_back(id);
         }

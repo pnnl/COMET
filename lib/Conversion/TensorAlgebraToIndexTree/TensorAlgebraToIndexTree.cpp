@@ -264,6 +264,8 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree, TargetDevice 
 // comet_debug() << allPerms;
 #endif
 
+
+  auto allBlocks = getAllBlocks(op.getFormatsAttr(), allPerms);
   auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
   auto SemiringOp = op.getSemiringAttr();
   auto MaskingTypeAttr = op.getMaskTypeAttr();
@@ -271,9 +273,11 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree, TargetDevice 
   /// If the operation is one of the chosen operations, then record output indices as parallel interators.
   bool is_chosen_operations = check_chosen_operations(allPerms, allFormats);
 
-  auto B = tree->getOrCreateTensor(rhs1_tensor, rhs1_labels, allFormats[0]);
-  auto C = tree->getOrCreateTensor(rhs2_tensor, rhs2_labels, allFormats[1]);
-  auto A = tree->getOrCreateTensor(lhs_tensor, lhs_labels, allFormats[2]);
+
+
+  auto B = tree->getOrCreateTensor(rhs1_tensor, rhs1_labels, allFormats[0], allBlocks[0]);
+  auto C = tree->getOrCreateTensor(rhs2_tensor, rhs2_labels, allFormats[1], allBlocks[1]);
+  auto A = tree->getOrCreateTensor(lhs_tensor, lhs_labels, allFormats[2], allBlocks[2]);
 
   Tensor *M;
   std::unique_ptr<UnitExpression> e;
@@ -281,7 +285,7 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree, TargetDevice 
   if (mask_tensor != nullptr) /// mask is an optional input
   {
     comet_debug() << "mask input provided by user\n";
-    M = tree->getOrCreateTensor(mask_tensor, empty, allFormats[2]); /// We don't need indexlabel info for the mask
+    M = tree->getOrCreateTensor(mask_tensor, empty, allFormats[2], allBlocks[2]); /// We don't need indexlabel info for the mask
     e = make_unique<UnitExpression>(A, B, C, M, "*");
   }
   else
@@ -377,14 +381,15 @@ void doElementWiseOp(T op, unique_ptr<Index_Tree> &tree)
 
   auto allPerms = getAllPerms(op.getIndexingMaps());
   auto allFormats = getAllFormats(op.getFormatsAttr(), allPerms);
+  auto allBlocks = getAllBlocks(op.getFormatsAttr(), allPerms);
   auto SemiringOp = op.getSemiringAttr();
   auto maskAttr = "none";
 
   assert(allPerms.size() == 3);
 
-  auto B = tree->getOrCreateTensor(rhs1_tensor, rhs1_labels, allFormats[0]);
-  auto C = tree->getOrCreateTensor(rhs2_tensor, rhs2_labels, allFormats[1]);
-  auto A = tree->getOrCreateTensor(lhs_tensor, lhs_labels, allFormats[2]);
+  auto B = tree->getOrCreateTensor(rhs1_tensor, rhs1_labels, allFormats[0], allBlocks[0]);
+  auto C = tree->getOrCreateTensor(rhs2_tensor, rhs2_labels, allFormats[1], allBlocks[1]);
+  auto A = tree->getOrCreateTensor(lhs_tensor, lhs_labels, allFormats[2], allBlocks[2]);
 
   auto e = make_unique<UnitExpression>(A, B, C, "*");
 
@@ -498,6 +503,27 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
     }
     allFormats_lhs.push_back(builder.getStrArrayAttr(formats));
   }
+  
+  SmallVector<Attribute, 8> allBlocks_rhs;
+  for (auto t : expr->getOperands())
+  {
+    SmallVector<StringRef, 8> blocks;
+    for (auto &b : t->getBlocks())
+    {
+      blocks.push_back(b);
+    }
+    allBlocks_rhs.push_back(builder.getStrArrayAttr(blocks));
+  }
+  SmallVector<Attribute, 8> allBlocks_lhs;
+  for (auto t : expr->getResults())
+  {
+    SmallVector<StringRef, 8> blocks;
+    for (auto &b : t->getBlocks())
+    {
+      blocks.push_back(b);
+    }
+    allBlocks_lhs.push_back(builder.getStrArrayAttr(blocks));
+  }
 
   std::vector<Value> t_rhs;
   Value t_lhs = expr->getLHS()->getValue();
@@ -516,12 +542,14 @@ IndexTreeComputeOp createComputeNodeOp(OpBuilder &builder, TreeNode *node, Locat
   Value leafop_rhs = builder.create<indexTree::IndexTreeComputeRHSOp>(loc,
                                                                       mlir::UnrankedTensorType::get(builder.getF64Type()), t_rhs,
                                                                       builder.getArrayAttr(allIndices_rhs),
-                                                                      builder.getArrayAttr(allFormats_rhs));
+                                                                      builder.getArrayAttr(allFormats_rhs),
+                                                                      builder.getArrayAttr(allBlocks_rhs));
   comet_vdump(leafop_rhs);
   Value leafop_lhs = builder.create<indexTree::IndexTreeComputeLHSOp>(loc,
                                                                       mlir::UnrankedTensorType::get(builder.getF64Type()), t_lhs,
                                                                       builder.getArrayAttr(allIndices_lhs),
-                                                                      builder.getArrayAttr(allFormats_lhs));
+                                                                      builder.getArrayAttr(allFormats_lhs),
+                                                                      builder.getArrayAttr(allBlocks_lhs));
   comet_vdump(leafop_lhs);
 
   bool comp_worksp_opt = false; /// non-compressed workspace, this is a place-holder and it is updated in workspace transform pass.
