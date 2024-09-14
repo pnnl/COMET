@@ -66,6 +66,13 @@ mlir::comet::GpuConversionTarget::GpuConversionTarget(
         {
           return false;
         }
+        // else if(auto minuIop = llvm::dyn_cast_if_present<mlir::arith::MinUIOp>(oper.getDefiningOp()))
+        // {
+        //   if(minuIop->hasAttr("GuardX") || minuIop->hasAttr("GuardY") || minuIop->hasAttr("GuardR"))
+        //   {
+        //     return false;
+        //   }
+        // }
       }
 
       return true;
@@ -286,8 +293,49 @@ mlir::comet::GpuConversionTarget2::GpuConversionTarget2(
 
       return true;
     });
+  addDynamicallyLegalOp<arith::AddIOp>([](arith::AddIOp op) -> bool 
+    {
+      for(auto opr: op->getOperands())
+      {
+        bool eq = op.getType() == opr.getType();
+        if (!eq)
+        {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+  addDynamicallyLegalOp<arith::CeilDivUIOp>([](arith::CeilDivUIOp op) -> bool 
+    {
+      for(auto opr: op->getOperands())
+      {
+        bool eq = op.getType() == opr.getType();
+        if (!eq)
+        {
+          return false;
+        }
+      }
+
+      return true;
+    });
 
   addDynamicallyLegalOp<arith::MulFOp>([](arith::MulFOp op) -> bool 
+    {
+      for(auto opr: op->getOperands())
+      {
+        bool eq = op.getType() == opr.getType();
+        if (!eq)
+        {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+  addDynamicallyLegalOp<arith::MulIOp>([](arith::MulIOp op) -> bool 
     {
       for(auto opr: op->getOperands())
       {
