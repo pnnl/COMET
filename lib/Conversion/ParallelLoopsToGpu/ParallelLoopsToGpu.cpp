@@ -10,6 +10,7 @@
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Support/LogicalResult.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Pass/PassManager.h"
@@ -20,6 +21,7 @@
 #include "comet/Conversion/ParallelLoopsToGpu/Passes.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 
 #define GEN_PASS_CLASSES
@@ -230,6 +232,57 @@ public:
     matchAndRewrite(mlir::scf::ParallelOp parOp, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
 
+        // if(parOp->getAttrOfType<mlir::StringAttr>("parallelDim"))
+        // {
+        //     rewriter.startRootUpdate(parOp);
+
+        //     bool changed = false;
+        //     for(auto iter_arg: llvm::zip(parOp.getBody()->getArguments(), parOp.getUpperBound()))
+        //     {
+
+        //         for(auto u: std::get<0>(iter_arg).getUsers())
+        //         {
+        //             bool needsChange = false;
+        //             if(!llvm::dyn_cast<mlir::arith::MinUIOp>(u))
+        //             {
+        //                 for(auto uu: u->getUsers())
+        //                 {
+        //                     if(!llvm::dyn_cast<mlir::arith::MinUIOp>(uu))
+        //                     {
+        //                         needsChange = true;
+        //                     }
+        //                 }
+
+        //                 if(needsChange)
+        //                 {
+        //                     rewriter.setInsertionPointToStart(parOp.getBody());
+        //                     auto minOp = rewriter.create<mlir::arith::MinUIOp>(std::get<0>(iter_arg).getLoc(), std::get<0>(iter_arg), std::get<1>(iter_arg));
+        //                     if(parOp->getAttrOfType<mlir::StringAttr>("parallelDim").strref() == "dimY_grid" || parOp->getAttrOfType<mlir::StringAttr>("parallelDim").strref() == "dimY_block")
+        //                     {
+        //                         minOp->setAttr("GuardY", rewriter.getUnitAttr());
+        //                     }
+        //                     else 
+        //                     {
+        //                         minOp->setAttr("GuardX", rewriter.getUnitAttr());
+        //                     }
+        //                     changed = true;
+        //                     std::get<0>(iter_arg).replaceAllUsesExcept(minOp, minOp);
+        //                     break;
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     if(changed)
+        //     {
+        //         rewriter.finalizeRootUpdate(parOp);
+        //     }
+        //     else 
+        //     {
+        //         rewriter.cancelRootUpdate(parOp);
+        //     }
+
+        //     return mlir::success(changed);
+        // }
         if(parOp->getAttrOfType<mlir::StringAttr>("parallelDim") || parOp->getAttr("mapping"))
         {
             return mlir::failure();
@@ -561,7 +614,35 @@ public:
         target.addLegalDialect<mlir::memref::MemRefDialect, mlir::arith::ArithDialect,  mlir::affine::AffineDialect, mlir::scf::SCFDialect>();
         target.addLegalOp<mlir::scf::ReduceOp>();
         target.addDynamicallyLegalOp<mlir::scf::ParallelOp>([](mlir::scf::ParallelOp op) -> bool {
-            return op->hasAttr("parallelDim");
+            if(op->hasAttr("parallelDim"))
+            {
+                // for(auto iter_arg: llvm::zip(op.getBody()->getArguments(), op.getUpperBound()))
+                // {
+                //     for(auto u: std::get<0>(iter_arg).getUsers())
+                //     {
+                //         if(!llvm::dyn_cast<mlir::arith::MinUIOp>(u))
+                //         {
+                //             if(u->getUsers().empty())
+                //             {
+                //                 return false;
+                //             }
+                //             for(auto uu: u->getUsers())
+                //             {
+                //                 if(!llvm::dyn_cast<mlir::arith::MinUIOp>(uu))
+                //                 {
+                //                     return false;
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
+
+                return true;
+            }
+            else 
+            {
+                return false;
+            }
         });
 
 

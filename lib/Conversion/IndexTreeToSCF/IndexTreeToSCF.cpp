@@ -30,6 +30,7 @@
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Conversion/IndexTreeToSCF/AbstractLoopOp.h"
 
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -37,6 +38,9 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/Operation.h"
+#include "mlir/IR/Value.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/IR/Dominance.h"
@@ -728,7 +732,8 @@ namespace
                         //  scf::ForOp &forLoop /* output */,
                          AbstractLoopOp &forLoop /* output */,
                          Value &accessIndex /* output */,
-                         bool isBCSR = false)
+                         bool isBCSR,
+                         mlir::tensorAlgebra::TargetDevice device)
   {
     /// Generate for(int m = pos[0]; m < pos[1]; m++){int i = crd[m];}
     /// if i = 0, index is [0,1]
@@ -760,19 +765,19 @@ namespace
 
           /// TODO (PT) Not sure why this (now commented out) code was needed but it breaks spgemm for cases like C = A * A
           ///  check if parent's and child's upper bounds come from the same sparse tensor
-          auto parent_UpperBound = parent_forop.getUpperBound();
-          comet_debug() << " parent upperBound:\n";
-          comet_vdump(parent_UpperBound);
-          auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
-          comet_debug() << " parent upperBound alloc\n";
-          comet_vdump(alloc_parent_bounds);          
-          comet_debug() << " child upperBound:\n";
-          comet_vdump(allAllocs[i][4 * id]);
-          auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
-          comet_debug() << " child upperBound alloc\n";
-          comet_vdump(alloc_child_bounds);
+          // auto parent_UpperBound = parent_forop.getUpperBound();
+          // comet_debug() << " parent upperBound:\n";
+          // comet_vdump(parent_UpperBound);
+          // auto alloc_parent_bounds = findCorrespondingAlloc(parent_UpperBound);
+          // comet_debug() << " parent upperBound alloc\n";
+          // comet_vdump(alloc_parent_bounds);          
+          // comet_debug() << " child upperBound:\n";
+          // comet_vdump(allAllocs[i][4 * id]);
+          // auto alloc_child_bounds = findCorrespondingAlloc(allAllocs[i][4 * id]);
+          // comet_debug() << " child upperBound alloc\n";
+          // comet_vdump(alloc_child_bounds);
 
-          if (isBCSR && (alloc_child_bounds == alloc_parent_bounds)) /// m is the nearest loop induction variable
+          if (isBCSR) /// m is the nearest loop induction variable
           {
             comet_debug() << " THESAME: Parent and Child has the same alloc\n";
             if (parent_inductionVar != nullptr)
@@ -796,7 +801,28 @@ namespace
       comet_vdump(index_lower);
       Value const_index_1 = builder.create<ConstantIndexOp>(loc, 1);
       comet_vdump(const_index_1);
-      index_upper = builder.create<AddIOp>(loc, index_lower, const_index_1);
+      if(device == TargetDevice::GPU)
+      {
+        auto res = mlir::getAffineSymbolExpr(0, index_lower.getContext()) + mlir::getAffineSymbolExpr(1, index_lower.getContext());
+        mlir::arith::MinUIOp minY;
+        if(isBCSR)
+        {
+          minY = builder.create<arith::MinUIOp>(loc, index_lower, parent_forop.getOp()->getParentOfType<mlir::scf::ParallelOp>().getUpperBound()[0]);
+        }
+        // else
+        // {
+        //   minY = builder.create<arith::MinUIOp>(loc, index_lower, cast<mlir::scf::ParallelOp>(parent_forop.getOp())getUpperBound()[0]);
+        // }
+        minY->setAttr("GuardY", builder.getUnitAttr());
+        auto affineIndex = mlir::AffineMap::get(0, 2, {res}, index_lower.getContext());
+        std::vector<mlir::Value> range = {minY,  const_index_1};
+        index_upper = builder.create<mlir::affine::AffineApplyOp>(index_lower.getLoc(), affineIndex, range); 
+        index_lower = minY; 
+      }
+      else
+      {
+        index_upper = builder.create<AddIOp>(loc, index_lower, const_index_1);
+      }
       comet_debug() << " AddIOps (index_upper):";
       comet_vdump(index_upper);
 
@@ -820,12 +846,24 @@ namespace
       builder.setInsertionPoint(forLoop.getBody()->getTerminator());
 
       std::vector<Value> crd_indices = {forLoop.getInductionVar()};
-      auto get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
-
+      mlir::Operation* get_index = builder.create<memref::LoadOp>(loc, allAllocs[i][4 * id + 1], crd_indices);
+      if(device == TargetDevice::GPU)
+      {
+        get_index = builder.create<mlir::arith::MinUIOp>(get_index->getLoc(), get_index->getResult(0), parent_forop.getUpperBound());
+        get_index->setAttr("GuardY", builder.getUnitAttr());
+        if(isBCSR)
+        {
+          parent_forop.getOp()->getParentOfType<mlir::scf::ParallelOp>()->setAttr("parallelDim", builder.getStringAttr("dimY_grid"));
+        }
+        else
+        {
+          parent_forop.getOp()->setAttr("parallelDim", builder.getStringAttr("dimY_grid"));
+        }
+      }
       comet_debug() << "CU loop generated\n";
       comet_vdump(forLoop);
       // forLoop = loop;
-      accessIndex = get_index;
+      accessIndex = get_index->getResult(0);
     }
   }
 
@@ -1078,7 +1116,10 @@ namespace
                  OpBuilder &builder,
                  OpsTree *opstree,
                  SymbolicInfo &symbolicInfo,
-                 llvm::StringRef &iteratorType)
+                 llvm::StringRef &iteratorType,
+                 mlir::tensorAlgebra::TargetDevice device,
+                 size_t triton_bsize_x,
+                 size_t triton_bsize_y)
   {
     comet_debug() << " genForOps indexTreeOp\n";
     comet_vdump(rootOp);
@@ -1196,11 +1237,45 @@ namespace
           Value c0 = builder.create<ConstantIndexOp>(loc, 0);
           std::vector<Value> indices = {c0};
           Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][2], indices);
-          Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
-          Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
-          opstree->accessIdx.push_back(add1);
+
+
+          if(device == TargetDevice::GPU)
+          {
+            builder.setInsertionPoint(forLoop2.getOp());
+            auto bsize_y = builder.create<arith::ConstantIndexOp>(forLoop2.getOp()->getLoc(), triton_bsize_y);
+            cast<scf::ParallelOp>(forLoop2.getOp()).getUpperBoundMutable()[0].set(bsize_y);
+            forLoop2.getOp()->setAttr("parallelDim", builder.getAttr<StringAttr>("dimY_block"));
+            builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
+            auto res = mlir::getAffineDimExpr(0, builder.getContext()) * mlir::getAffineSymbolExpr(0, builder.getContext()) + mlir::getAffineSymbolExpr(1, builder.getContext());
+            auto affineIndex = mlir::AffineMap::get(1, 2, {res}, builder.getContext());
+            std::vector<mlir::Value> range = {forLoop.getInductionVar(),  bsize_y, forLoop2.getInductionVar()};
+            auto new_index = builder.create<mlir::affine::AffineApplyOp>(forLoop.getOp()->getLoc(), affineIndex, range);  
+            auto minOp = builder.create<arith::MinUIOp>(new_index->getLoc(), new_index, cast<scf::ParallelOp>(forLoop2.getOp()->getParentOp()).getUpperBound()[0]);
+            minOp->setAttr("GuardY", builder.getUnitAttr());
+            opstree->accessIdx.push_back(minOp);
+          }
+          else 
+          {
+            Value mul1 = builder.create<MulIOp>(loc, forLoop.getInductionVar(), column);
+            Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+            opstree->accessIdx.push_back(add1);
+          }
 
         } else if (block == "UNK") {
+          if(device == TargetDevice::GPU)
+          {
+            if(forLoop.getIteratorType() == "parallel" && forLoop.getOp()->getParentOfType<scf::ParallelOp>() && forLoop.getOp()->getParentOfType<scf::ParallelOp>()->hasAttr("parallelDim"))
+            {
+              if(forLoop.getOp()->getParentOfType<scf::ParallelOp>()->getAttrOfType<StringAttr>("parallelDim").strref() == "dimY_block")
+              {
+                forLoop.getOp()->setAttr("parallelDim", builder.getStringAttr("dimX_grid"));
+              }
+              // else if(forLoop.getOp()->getParentOfType<scf::ParallelOp>()->getAttrOfType<StringAttr>("parallelDim").strref() == "dimY_block")
+              // {
+              //   forLoop.getOp()->setAttr("parallelDim", builder.getStringAttr("dimY_grid"));
+              // }
+            }
+          }
           opstree->forOps.push_back(forLoop);
           opstree->accessIdx.push_back(accessIndex);
           opstree->inductionVars.push_back(forLoop.getInductionVar());
@@ -1227,8 +1302,16 @@ namespace
           Value parent_inductionVar;
           if (nullptr != opstree->parent)
           {
-            parent_forop = opstree->parent->symbolicForOps.back();
-            parent_accessIdx = opstree->parent->symbolicAccessIdx.back();
+            if(device == TargetDevice::GPU)
+            {
+              parent_forop = opstree->parent->parent->symbolicForOps.back();
+              parent_accessIdx = opstree->parent->parent->symbolicAccessIdx.back();
+            }
+            else 
+            {
+              parent_forop = opstree->parent->symbolicForOps.back();
+              parent_accessIdx = opstree->parent->symbolicAccessIdx.back();
+            }
           }
           genForOpFormat_CU(builder,
                             loc,
@@ -1242,7 +1325,9 @@ namespace
                             parent_inductionVar,
                             iteratorType,
                             forLoop /* output */,
-                            accessIndex /* output */);
+                            accessIndex /* output */,
+                            false,
+                            device);
           
           opstree->symbolicForOps.push_back(forLoop);
           opstree->symbolicAccessIdx.push_back(accessIndex);
@@ -1264,57 +1349,191 @@ namespace
         Value parent_inductionVar;
         if (nullptr != opstree->parent)
         {
-          parent_forop = opstree->parent->forOps.back();
-          parent_accessIdx = opstree->parent->accessIdx.back();
-          parent_inductionVar = opstree->parent->inductionVars.back();
+            if(device == TargetDevice::GPU)
+            {
+              parent_forop = opstree->parent->parent->forOps.back();
+              parent_accessIdx = opstree->parent->parent->accessIdx.back();
+              parent_inductionVar = opstree->parent->parent->inductionVars.back();
+            }
+            else 
+            {
+              parent_forop = opstree->parent->forOps.back();
+              parent_accessIdx = opstree->parent->accessIdx.back();
+              parent_inductionVar = opstree->parent->inductionVars.back();
+            }
         }
-        genForOpFormat_CU(builder,
-                          loc,
-                          opstree,
-                          tensor,
-                          id,
-                          i,
-                          allAllocs,
-                          parent_forop,
-                          parent_accessIdx,
-                          parent_inductionVar,
-                          iteratorType,
-                          forLoop /* output */,
-                          accessIndex /* output */,
-                          block == "D");
-        
-        if (block == "D") {
-          builder.setInsertionPoint(forLoop.getBody()->getTerminator());
+
+        if(device == TargetDevice::GPU)
+        {
           AbstractLoopOp forLoop2;
-          Value accessIndex2;
-          genForOpFormat_D(builder,
-                           loc,
-                           tensor,
-                           id,
-                           i,
-                           true,
-                           allAllocs,
-                           iteratorType,
-                           forLoop2 /* output */,
-                           accessIndex2 /* output */);
-          opstree->forOps.push_back(forLoop2);
-          opstree->inductionVars.push_back(forLoop.getInductionVar());
-          
-          builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
-          
-          // Index calculations
-          // j = A2_crd[n2] * A2_block_pos + bj
-          Value c0 = builder.create<ConstantIndexOp>(loc, 1);
-          std::vector<Value> indices = {c0};
-          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][6], indices);
-          Value mul1 = builder.create<MulIOp>(loc, accessIndex, column);
-          Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
-          opstree->accessIdx.push_back(add1);
-          
-        } else if (block == "UNK") {
+          if (block == "D") 
+          {
+            
+            auto iteratorType = StringRef("parallel");
+            Value accessIndex2;
+            genForOpFormat_D(builder,
+                            loc,
+                            tensor,
+                            id,
+                            i,
+                            true,
+                            allAllocs,
+                            iteratorType,
+                            forLoop2 /* output */,
+                            accessIndex2 /* output */);
+            // opstree->inductionVars.push_back(forLoop.getInductionVar());
+            
+            builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
+          } 
+
+          genForOpFormat_CU(builder,
+                  loc,
+                  opstree,
+                  tensor,
+                  id,
+                  i,
+                  allAllocs,
+                  parent_forop,
+                  parent_accessIdx,
+                  parent_inductionVar,
+                  iteratorType,
+                  forLoop /* output */,
+                  accessIndex /* output */,
+                  block == "D",
+                  device);
           opstree->forOps.push_back(forLoop);
-          opstree->accessIdx.push_back(accessIndex);
+
           opstree->inductionVars.push_back(forLoop.getInductionVar());
+
+          if(forLoop2)
+          {
+            builder.setInsertionPoint(forLoop.getBody()->getTerminator());
+            Value c0 = builder.create<ConstantIndexOp>(loc, 1);
+            std::vector<Value> indices = {c0};
+            Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][6], indices);
+            // Index calculations
+            // j = A2_crd[n2] * A2_block_pos + bj
+            auto res = mlir::getAffineDimExpr(0, builder.getContext()) * mlir::getAffineSymbolExpr(0, builder.getContext()) + mlir::getAffineSymbolExpr(1, builder.getContext());
+
+            auto affineIndex = mlir::AffineMap::get(1, 2, {res}, builder.getContext());
+            auto minX = builder.create<arith::MinUIOp>(forLoop.getOp()->getLoc(), forLoop2.getInductionVar(), column);
+            minX->setAttr("GuardX", builder.getUnitAttr());
+            std::vector<mlir::Value> range = {accessIndex,  column, minX};
+            auto new_index = builder.create<mlir::affine::AffineApplyOp>(forLoop.getOp()->getLoc(), affineIndex, range);  
+            // Value mul1 = builder.create<MulIOp>(loc, accessIndex, column);
+            // Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+            opstree->accessIdx.push_back(new_index);
+            forLoop2.getOp()->setAttr("parallelDim", builder.getStringAttr("dimX_block"));
+            auto parOp = cast<scf::ParallelOp>(forLoop2.getOp()->getParentOp());
+            builder.setInsertionPoint(parOp);
+            auto c1 = builder.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), 1);
+            
+            // // TODO: REMOVE these 2 lines
+            // forLoop2.getUpperBound().getDefiningOp()->getOperand(1).getDefiningOp()->moveBefore(parOp);
+            // forLoop2.getUpperBound().getDefiningOp()->moveBefore(parOp);
+            auto old_upper_boud = parOp.getUpperBound()[0];
+            auto block_size_x = builder.create<arith::ConstantIndexOp>(forLoop2.getOp()->getLoc(), triton_bsize_x).getResult();
+            cast<scf::ParallelOp>(forLoop2.getOp()).getUpperBoundMutable()[0].set(block_size_x);
+            auto upper_bound_for_ceil = builder.create<mlir::arith::AddIOp>(parOp->getLoc(), parOp.getUpperBound()[0], builder.create<mlir::arith::SubIOp>(parOp->getLoc(), forLoop2.getUpperBound(), c1.getResult()).getResult());
+            auto new_upper_bound = builder.create<mlir::arith::DivSIOp>(parOp->getLoc(), upper_bound_for_ceil, forLoop2.getUpperBound());
+
+            parOp.getUpperBoundMutable()[0].set(new_upper_bound.getResult());
+            auto affineRes = mlir::getAffineDimExpr(0, parOp->getContext()) * mlir::getAffineSymbolExpr(0, parOp->getContext())  + mlir::getAffineDimExpr(1, parOp->getContext());
+            // auto res = mlir::getAffineDimExpr(0, forOp->getContext());
+            // auto res1 = mlir::getAffineDimExpr(1, forOp->getContext());
+            auto newAffineIndex = mlir::AffineMap::get(2, 1, {affineRes}, parOp->getContext());
+            std::vector<mlir::Value> operands = {parOp.getInductionVars()[0], forLoop2.getInductionVar(), forLoop2.getUpperBound()};
+            // builder.setInsertionPoint(forLoop2.getBody());
+            builder.setInsertionPointToStart(forLoop2.getBody());
+            auto affineOp = builder.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), newAffineIndex, operands);
+            auto newIndexX = builder.create<mlir::arith::MinUIOp>(parOp->getLoc(), affineOp, old_upper_boud);
+            newIndexX->setAttr("GuardX", builder.getUnitAttr());
+            parOp.getInductionVars()[0].replaceAllUsesExcept(newIndexX, affineOp);
+            // for(size_t i = 0; i < opstree->parent->forOps.size(); i++)
+            // {
+            //   parOp.dump();
+            //   opstree->parent->forOps[i].dump();
+            //   if(opstree->parent->forOps[i] == parOp)
+            //   {
+            //     llvm::errs() << "FOUND \n";
+            //   }
+            // }
+            for(size_t i = 0; i < opstree->parent->accessIdx.size(); i++)
+            {
+              if(opstree->parent->accessIdx[i] == parOp.getInductionVars()[0])
+              {
+                opstree->parent->accessIdx[i] = newIndexX;
+              }
+            }
+            for(size_t i = 0; i < opstree->parent->inductionVars.size(); i++)
+            {
+              if(opstree->parent->inductionVars[i] == parOp.getInductionVars()[0])
+              {
+                opstree->parent->inductionVars[i] = newIndexX.getResult();
+              }
+            }
+          //             opstree->forOps.push_back(forLoop);
+          // opstree->accessIdx.push_back(accessIndex);
+          // opstree->inductionVars.push_back(forLoop.getInductionVar());
+            builder.setInsertionPoint(forLoop.getBody()->getTerminator());
+            // forLoop2.dump();
+          }
+          if (block == "UNK") {
+            opstree->forOps.push_back(forLoop);
+            opstree->accessIdx.push_back(accessIndex);
+          }
+        }
+        else
+        {
+          genForOpFormat_CU(builder,
+                            loc,
+                            opstree,
+                            tensor,
+                            id,
+                            i,
+                            allAllocs,
+                            parent_forop,
+                            parent_accessIdx,
+                            parent_inductionVar,
+                            iteratorType,
+                            forLoop /* output */,
+                            accessIndex /* output */,
+                            block == "D",
+                            device);
+          
+          if (block == "D") {
+            builder.setInsertionPoint(forLoop.getBody()->getTerminator());
+            AbstractLoopOp forLoop2;
+            Value accessIndex2;
+            genForOpFormat_D(builder,
+                            loc,
+                            tensor,
+                            id,
+                            i,
+                            true,
+                            allAllocs,
+                            iteratorType,
+                            forLoop2 /* output */,
+                            accessIndex2 /* output */);
+            opstree->forOps.push_back(forLoop2);
+            opstree->inductionVars.push_back(forLoop.getInductionVar());
+            
+            builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
+            
+            // Index calculations
+            // j = A2_crd[n2] * A2_block_pos + bj
+            Value c0 = builder.create<ConstantIndexOp>(loc, 1);
+            std::vector<Value> indices = {c0};
+            Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][6], indices);
+            Value mul1 = builder.create<MulIOp>(loc, accessIndex, column);
+            Value add1 = builder.create<AddIOp>(loc, mul1, forLoop2.getInductionVar());
+            opstree->accessIdx.push_back(add1);
+            
+          } else if (block == "UNK") {
+            opstree->forOps.push_back(forLoop);
+            opstree->accessIdx.push_back(accessIndex);
+            opstree->inductionVars.push_back(forLoop.getInductionVar());
+          }
         }
         
       }
@@ -1963,7 +2182,8 @@ namespace
                             std::vector<std::vector<int>> &rhsPerms,
                             SymbolicInfo &symbolicInfo,
                             NumericInfo &numericInfo,
-                            MaskingInfo &maskingInfo)
+                            MaskingInfo &maskingInfo,
+                            TargetDevice device)
   {
     std::vector<std::vector<std::string>> rhsFormats;
     getRHSFormatsOfComputeOp(cur_op.getOperation()->getResult(0), rhsFormats);
@@ -2079,10 +2299,10 @@ namespace
     else
     { /// general dense or mixed mode computation, no need workspace transformations
       std::vector<Value> allLoads(main_tensor_nums);
+      std::string sparse_format = getTensorFormat(rhsFormats, rhsBlocks, 0);
       for (auto m = 0; m < main_tensor_nums; m++)
       {
         Value load_op;
-        std::string sparse_format = getTensorFormat(rhsFormats, rhsBlocks, 0);
         
         /// TODO: This is very, very likely incorrect.
         ///       We are just using this for testing
@@ -2092,27 +2312,68 @@ namespace
           
           auto last = forLoops.size() - 1;
           auto bi = forLoops[last].getInductionVar();
-          
+          last = nested_InductionVars.size() - 2;
+          auto n2 = nested_InductionVars[last]; // 1 for SpMM, 0 for SpMV
           Value c0 = builder.create<ConstantIndexOp>(loc, 0);
           std::vector<Value> indices = {c0};
           
           // A1_block_pos * A2_block_pos
           Value A1_block_pos = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[0][2], indices);
           Value A2_block_pos = builder.create<memref::LoadOp>(loc, main_tensors_all_Allocs[0][6], indices);
-          Value mul1 = builder.create<MulIOp>(loc, A1_block_pos, A2_block_pos);
-          
-          // mul2 = *n2
-          last = nested_InductionVars.size() - 2;
-          auto n2 = nested_InductionVars[last]; // 1 for SpMM, 0 for SpMV
-          Value mul2 = builder.create<MulIOp>(loc, n2, mul1);
-          
-          // mul3 = bi * A2_block_pos
-          auto mul3 = builder.create<MulIOp>(loc, bi, A2_block_pos);
-          
-          // add1 = mul2 + mul3
-          auto add1 = builder.create<AddIOp>(loc, mul2, mul3);
-          auto add2 = builder.create<AddIOp>(loc, add1, bj);
-          Value final_idx = add2;
+           Value final_idx ;
+          if(device == TargetDevice::CPU)
+          {
+            Value mul1 = builder.create<MulIOp>(loc, A1_block_pos, A2_block_pos);
+
+            // mul2 = *n2
+            Value mul2 = builder.create<MulIOp>(loc, n2, mul1);
+                      
+            // mul3 = bi * A2_block_pos
+            auto mul3 = builder.create<MulIOp>(loc, bi, A2_block_pos);
+                      
+            // add1 = mul2 + mul3
+            auto add1 = builder.create<AddIOp>(loc, mul2, mul3);
+            auto add2 = builder.create<AddIOp>(loc, add1, bj);
+            final_idx = add2;
+
+          }
+          else if(device == TargetDevice::GPU)
+          {
+            bj = cast<scf::ParallelOp>(forLoops[0].getOp()->getParentOp()).getInductionVars()[0];
+            // for(auto loop: forLoops)
+            // {
+            //   loop.dump();
+            // }
+            // for(auto loop: nested_InductionVars)
+            // {
+            //   loop.getParentBlock()->dump();
+            // }
+            bi = forLoops[forLoops.size() - 1].getInductionVar();
+            n2 = allValueAccessIdx[0][0];
+            // allValueAccessIdx[1][0].dump();
+            // for(auto access: allValueAccessIdx)
+            // {
+            //   for(auto accesss: access)
+            //   {
+
+            //     accesss.getParentBlock()->dump();
+            //   }
+            // }
+            // allValueAccessIdx[1][0].dump();
+            // bj = nested_InductionVars[1];
+            // forLoops[0].dump();
+            // bj.dump();
+            auto minX = builder.create<arith::MinUIOp>(loc, bj, A2_block_pos);
+            minX->setAttr("GuardX", builder.getUnitAttr());
+            auto minY = builder.create<arith::MinUIOp>(loc, bi, A1_block_pos);
+            minY->setAttr("GuardY", builder.getUnitAttr());
+            auto res = mlir::getAffineSymbolExpr(0, builder.getContext()) * mlir::getAffineSymbolExpr(1, builder.getContext())  * mlir::getAffineDimExpr(0, builder.getContext()) + (mlir::getAffineDimExpr(1, builder.getContext()) * mlir::getAffineSymbolExpr(2, builder.getContext())) +  mlir::getAffineDimExpr(2, builder.getContext());
+            auto affineIndex = mlir::AffineMap::get(3, 3, {res}, builder.getContext());
+            // std::vector<mlir::Value> range = {A1_block_pos,  A2_block_pos, n2, bi, A2_block_pos, bj};
+            
+            std::vector<mlir::Value> range = {n2, minY, minX, A1_block_pos,  A2_block_pos, A2_block_pos};
+            final_idx = builder.create<mlir::affine::AffineApplyOp>(A2_block_pos.getLoc(), affineIndex, range);  
+          }
           
           load_op = builder.create<memref::LoadOp>(loc,
                                                  main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], final_idx);
@@ -2121,8 +2382,16 @@ namespace
           load_op = builder.create<memref::LoadOp>(loc,
                                                    main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], nested_InductionVars[last]);
         } else {
+          if(sparse_format == "BCSR" && device == TargetDevice::GPU)
+          {          load_op = builder.create<memref::LoadOp>(loc,
+                                                   main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
+          }
+          else 
+          {
           load_op = builder.create<memref::LoadOp>(loc,
                                                    main_tensors_all_Allocs[m][main_tensors_all_Allocs[m].size() - 1], allValueAccessIdx[m]);
+          
+          }
         }
         
         allLoads[m] = load_op;
@@ -3871,7 +4140,8 @@ namespace
                   std::vector<Value> &ancestorsWps,
                   std::vector<Value> &wp_ops,
                   SymbolicInfo &symbolicInfo,
-                  NumericInfo &numericInfo)
+                  NumericInfo &numericInfo,
+                  TargetDevice device)
   {
     comet_debug() << " calling genCmptOps\n";
     Location loc = rootOp.getLoc();
@@ -4278,7 +4548,8 @@ namespace
                            allPerms_rhs,
                            symbolicInfo,
                            numericInfo,
-                           maskingInfo);
+                           maskingInfo,
+                           device);
     }
     else if (main_tensors_rhs.size() == 3)
     { /// Generate " a<m> = b * c" binary op with masking
@@ -4372,7 +4643,8 @@ namespace
                              allPerms_rhs,
                              symbolicInfo,
                              numericInfo,
-                             maskingInfo);
+                             maskingInfo,
+                             device);
         break;
       }
       case PULL_BASED_MASKING: /// Use pull-based masking
@@ -4439,10 +4711,13 @@ namespace
       : public PassWrapper<LowerIndexTreeToSCFPass, OperationPass<func::FuncOp>>
   {
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerIndexTreeToSCFPass)
+    LowerIndexTreeToSCFPass(mlir::tensorAlgebra::TargetDevice device, size_t tt_bsizeX, size_t tt_bsizeY) : device(device), tt_bsizeY(tt_bsizeY), tt_bsizeX(tt_bsizeX) {}
     void runOnOperation() override;
 
     void doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &rootOp,
                                   OpBuilder &builder);
+    mlir::tensorAlgebra::TargetDevice device;
+    size_t tt_bsizeY, tt_bsizeX;
   };
 
 } /// end anonymous namespace.
@@ -4647,7 +4922,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       comet_debug() << "---------------\n";
 
       comet_debug() << " call genForOps, i = " << i << "\n";
-      genForOps(tensors, ids, formats, blocks, rootOp, builder, opstree_vec[i], symbolicInfo, iteratorType);
+      genForOps(tensors, ids, formats, blocks, rootOp, builder, opstree_vec[i], symbolicInfo, iteratorType, this->device, this->tt_bsizeY, this->tt_bsizeX);
       {
         comet_pdump(rootOp->getParentOfType<ModuleOp>());
       }
@@ -4671,7 +4946,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       comet_debug() << " call genCmptOps, i = " << i << "\n";
       /// ancestors_wp can give all the indices of the nested loops
       genCmptOps(cur_op, rootOp, builder, opstree_vec[i], ancestors_wp,
-                 wp_ops, symbolicInfo, numericInfo);
+                 wp_ops, symbolicInfo, numericInfo, this->device);
       {
         comet_pdump(rootOp->getParentOfType<ModuleOp>());
       }
@@ -4757,7 +5032,7 @@ void LowerIndexTreeToSCFPass::runOnOperation()
 }
 
 /// Lower sparse tensor algebra operation to loops
-std::unique_ptr<Pass> mlir::comet::createLowerIndexTreeToSCFPass()
+std::unique_ptr<Pass> mlir::comet::createLowerIndexTreeToSCFPass(mlir::tensorAlgebra::TargetDevice device, size_t triton_bsize_y, size_t triton_bsize_x)
 {
-  return std::make_unique<LowerIndexTreeToSCFPass>();
+  return std::make_unique<LowerIndexTreeToSCFPass>(device, triton_bsize_y, triton_bsize_x);
 }

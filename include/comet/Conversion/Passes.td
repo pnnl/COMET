@@ -30,18 +30,18 @@ include "mlir/Pass/PassBase.td"
 /// IndexTreeToSCF
 ///===----------------------------------------------------------------------===//
 
-def ConvertIndexTreeToSCF : Pass<"convert-it-to-scf"> {
-  let summary = " "
-                "";
-  let description = [{
+// def ConvertIndexTreeToSCF : Pass<"convert-it-to-scf"> {
+//   let summary = " "
+//                 "";
+//   let description = [{
 
-      }];
-  let constructor = "comet::createLowerIndexTreeToSCFPass()";
-  let dependentDialects = [
-    "memref::MemRefDialect",
-    "scf::SCFDialect"
-  ];
-}
+//       }];
+//   let constructor = "comet::createLowerIndexTreeToSCFPass(mlir::tensorAlgebra::TargetDevice device)";
+//   let dependentDialects = [
+//     "memref::MemRefDialect",
+//     "scf::SCFDialect"
+//   ];
+// }
 
 //===----------------------------------------------------------------------===//
 // TensorAlgebraToIndexTree

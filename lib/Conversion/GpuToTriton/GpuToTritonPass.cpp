@@ -27,6 +27,7 @@
 
 #include <map>
 #include <set>
+#include <deque>
 
 #define GEN_PASS_CLASSES
 #include "comet/Conversion/GpuToTriton/Passes.h.inc"
@@ -251,7 +252,7 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
       // int pidYIndex = -1;
       // int dim = -1;
       Value guardX = NULL, guardY = NULL, guardR = NULL;
-      Value guardXExpr = NULL, guardYExpr = NULL, guardRExpr = NULL;
+      std::deque<Value> guardXExpr, guardYExpr, guardRExpr;
       std::map<const void*, mlir::Value> map, mapGuard;
       mlir::Value bidX, bidY, tidX, tidY;
       if (affineOp)
@@ -265,14 +266,14 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
             if(defOp->hasAttr("GuardX"))
             {
               guardX = defOp.getRhs();
-              guardXExpr = defOp.getLhs();
+              guardXExpr.push_back(defOp.getLhs());
               op_to_prev[i] = oper.get(); 
               oper.set(defOp.getLhs());
             }
             else if (defOp->hasAttr("GuardY"))
             {
               guardY = defOp.getRhs();
-              guardYExpr = defOp.getLhs();
+              guardYExpr.push_back(defOp.getLhs());
               op_to_prev[i] = oper.get(); 
 
               oper.set(defOp.getLhs());
@@ -280,7 +281,7 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
             else if (defOp->hasAttr("GuardR"))
             {
               guardR = defOp.getRhs();
-              guardRExpr = defOp.getLhs();
+              guardRExpr.push_back(defOp.getLhs());
               op_to_prev[i] = oper.get(); 
 
               oper.set(defOp.getLhs());
@@ -294,17 +295,17 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
         if(minOp->hasAttr("GuardX"))
         {
           guardX = minOp.getRhs();
-          guardXExpr = minOp.getLhs();
+          guardXExpr.push_back(minOp.getLhs());
         }
         else if (minOp->hasAttr("GuardY"))
         {
           guardY = minOp.getRhs();
-          guardYExpr = minOp.getLhs();
+          guardYExpr.push_back(minOp.getLhs());
         }
         else if (minOp->hasAttr("GuardR"))
         {
           guardR = minOp.getRhs();
-          guardRExpr = minOp.getLhs();
+          guardRExpr.push_back(minOp.getLhs());
         }
         affineOp = cast<affine::AffineApplyOp>(minOp.getLhs().getDefiningOp());
       }
@@ -318,10 +319,10 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
         if(exp.getKind() == mlir::AffineExprKind::DimId || exp.getKind() == mlir::AffineExprKind::SymbolId)
         {
           mlir::Value affineOperand = getSymOrDimOperand(aaffineop, exp);
-          if(auto minOp = mlir::dyn_cast_if_present<arith::MinUIOp>(affineOperand.getDefiningOp()))
-          {
-            affineOperand = minOp.getLhs();
-          }
+          // if(auto minOp = mlir::dyn_cast_if_present<arith::MinUIOp>(affineOperand.getDefiningOp()))
+          // {
+          //   affineOperand = minOp.getLhs();
+          // }
           if(auto bId = mlir::dyn_cast_or_null<mlir::gpu::BlockIdOp>(affineOperand.getDefiningOp()))
           {
             if(bId.getDimension() == mlir::gpu::Dimension::x)
@@ -533,7 +534,7 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
       };};
 
       Value resultGuard = NULL;
-      if(guardXExpr)
+      for(auto guardXExpr: guardXExpr)
       {
         map.clear();
         mapGuard.clear();
@@ -561,7 +562,7 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
         
         resultGuard = rewriter.create<arith::CmpIOp>(op->getLoc(), arith::CmpIPredicate::slt, map[cast<affine::AffineApplyOp>(guardXExpr.getDefiningOp()).getAffineMap().getResult(0).getAsOpaquePointer()], mapGuard[cast<affine::AffineApplyOp>(guardXExpr.getDefiningOp()).getAffineMap().getResult(0).getAsOpaquePointer()]);
       }
-      if(guardYExpr)
+      for(auto guardYExpr: guardYExpr)
       {
         // llvm::errs() << "guardYExpr: " << guardYExpr << "\n";
         // llvm::errs() << "guardYExpr Defining Op: \n" ;
@@ -606,7 +607,7 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
         // guardYExpr.replaceUsesWithIf(guardY, [](OpOperand& oper){return !isa<arith::MinUIOp>(oper.getOwner());});
 
       }
-      if(guardRExpr)
+      for(auto guardRExpr: guardRExpr)
       {
         // llvm::errs() << "guardRExpr: " << guardRExpr << "\n";
         // llvm::errs() << "guardRExpr Defining Op: \n" ;
@@ -666,24 +667,27 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
       op->setOperand(i, res);
       memMask = resultGuard;
     }
-    else if (isa<scf::ForOp>(op->getParentOp()) && isa<BlockArgument>(op->getOperand(i)))
+    else if ( isa<BlockArgument>(op->getOperand(i)))
     {
-      assert(false);
+      // assert(false);
       auto res = rewriter.create<arith::IndexCastOp>(op->getLoc(), rewriter.getI32Type(), op->getOperand(i));
-      rewriter.replaceAllUsesExcept(op->getOperand(i), res, res);
+      op->getOpOperand(i).set(res);
+      // rewriter.replaceAllUsesExcept(op->getOperand(i), res, res);
     }
 
 
-    
-    if(affineOp->getUsers().empty())
+    if(affineOp)
     {
-      affineOp.erase();
-    }
-    else 
-    {
-      for(auto m: op_to_prev)
+      if(affineOp->getUsers().empty())
       {
-        affineOp->setOperand(m.first, m.second);
+        affineOp.erase();
+      }
+      else 
+      {
+        for(auto m: op_to_prev)
+        {
+          affineOp->setOperand(m.first, m.second);
+        }
       }
     }
 
@@ -720,7 +724,7 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
 
   if (mlir::isa<memref::LoadOp>(op))
   {
-    mlir::triton::LoadOp loadVal;
+    mlir::Value loadVal;
     if(memMask)
     {
       loadVal = rewriter.create<triton::LoadOp>(op->getLoc(), final_ptr_array,  memMask, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL, false);
@@ -730,6 +734,14 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
       loadVal = rewriter.create<triton::LoadOp>(op->getLoc(), final_ptr_array, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL, false);
     }
 
+    // if(op->getResult(0).getType().isa<IndexType>() && loadVal.getType().isa<IntegerType>())
+    // {
+      // loadVal = rewriter.create<arith::IndexCastOp>(op->getLoc(), rewriter.getIndexType(), loadVal);
+    // }
+    // op->getParentOfType<ModuleOp>()->dump();
+    // llvm::errs() << "Erasing ";
+    // op->dump();
+    // llvm::errs() << "With " << loadVal << "\n";
     rewriter.replaceAllUsesWith(op->getResult(0), loadVal);
     rewriter.eraseOp(op);
   }
@@ -2011,6 +2023,7 @@ public:
       return signalPassFailure();
     }
 
+    // op->dump();
 
     auto ttfuncOps  = op.getOps<mlir::triton::FuncOp>();
 
@@ -2101,6 +2114,8 @@ public:
       }
     }
 
+
+
     // Add the LoopInvariantCodeMotion pass to the pass manager
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
     pm.addPass(mlir::createCanonicalizerPass());
@@ -2114,6 +2129,18 @@ public:
       return;
 
     }
+
+    for(auto ttfunc: ttfuncOps)
+    {
+      ttfunc->walk([](triton::SplatOp op){
+        if(op.getResult().getType() == op.getSrc().getType())
+        {
+          op.getResult().replaceAllUsesWith(op.getSrc());
+          op->erase();
+        }
+      });
+    }
+
   }
 };
 
