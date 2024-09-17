@@ -24,6 +24,7 @@
 #ifndef COMET_CONVERSION_INDEXTREETOSCF_H
 #define COMET_CONVERSION_INDEXTREETOSCF_H
 
+#include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Support/LLVM.h"
 
 namespace mlir
@@ -43,7 +44,7 @@ namespace mlir
         /// Lowers indexTree operations (e.g., IndexTreeComputeLHSOp, IndexTreeComputeRHSOp and IndexTreeComputeOp)
         /// to equivalent scf constructs including basic blocks and arithmetic
         /// primitives).
-        std::unique_ptr<Pass> createLowerIndexTreeToSCFPass();
+        std::unique_ptr<Pass> createLowerIndexTreeToSCFPass(mlir::tensorAlgebra::TargetDevice device, size_t triton_bsize_y, size_t triton_bsize_x);
     }
 } // namespace mlir
 
