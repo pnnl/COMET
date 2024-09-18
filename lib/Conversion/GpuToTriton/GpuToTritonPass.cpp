@@ -1976,8 +1976,8 @@ public:
 
       for(auto k_op : llvm::enumerate(launchOp.getKernelOperands()))
       {
-        if(arith::ConstantIndexOp k = llvm::dyn_cast_if_present<arith::ConstantIndexOp>(k_op.value().getDefiningOp()))
-        {
+        // if(arith::ConstantIndexOp k = llvm::dyn_cast_if_present<arith::ConstantIndexOp>(k_op.value().getDefiningOp()))
+        // {
           // if(k.value() == 0 || k.value() == 1)
           // {
           //   bitvector.set(k_op.index());
@@ -1994,7 +1994,7 @@ public:
     //     else
     //     {
     //       break;
-        }
+        // }
       }
     
       launchOp->setAttr("checked", builder.getUnitAttr());
