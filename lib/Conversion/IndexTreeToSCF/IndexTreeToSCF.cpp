@@ -804,16 +804,20 @@ namespace
       if(device == TargetDevice::GPU)
       {
         auto res = mlir::getAffineSymbolExpr(0, index_lower.getContext()) + mlir::getAffineSymbolExpr(1, index_lower.getContext());
-        mlir::arith::MinUIOp minY;
+        mlir::Value minY;
         if(isBCSR)
         {
-          minY = builder.create<arith::MinUIOp>(loc, index_lower, parent_forop.getOp()->getParentOfType<mlir::scf::ParallelOp>().getUpperBound()[0]);
+          auto minYOp = builder.create<arith::MinUIOp>(loc, index_lower, parent_forop.getOp()->getParentOfType<mlir::scf::ParallelOp>().getUpperBound()[0]);
+          minYOp->setAttr("GuardY", builder.getUnitAttr());
+          minY = minYOp->getResult(0);
         }
-        // else
-        // {
-        //   minY = builder.create<arith::MinUIOp>(loc, index_lower, cast<mlir::scf::ParallelOp>(parent_forop.getOp())getUpperBound()[0]);
-        // }
-        minY->setAttr("GuardY", builder.getUnitAttr());
+        else
+        {
+          minY = index_lower;
+          // auto minYOp = builder.create<arith::MinUIOp>(loc, index_lower, cast<mlir::scf::ParallelOp>(parent_forop.getOp()).getUpperBound()[0]);
+          // minYOp->setAttr("GuardY", builder.getUnitAttr());
+          // minY = minYOp.getResult();
+        }
         auto affineIndex = mlir::AffineMap::get(0, 2, {res}, index_lower.getContext());
         std::vector<mlir::Value> range = {minY,  const_index_1};
         index_upper = builder.create<mlir::affine::AffineApplyOp>(index_lower.getLoc(), affineIndex, range); 
@@ -1302,7 +1306,7 @@ namespace
           Value parent_inductionVar;
           if (nullptr != opstree->parent)
           {
-            if(device == TargetDevice::GPU)
+            if(block == "D"  && device == TargetDevice::GPU)
             {
               parent_forop = opstree->parent->parent->symbolicForOps.back();
               parent_accessIdx = opstree->parent->parent->symbolicAccessIdx.back();
@@ -1401,12 +1405,13 @@ namespace
                   accessIndex /* output */,
                   block == "D",
                   device);
-          opstree->forOps.push_back(forLoop);
 
-          opstree->inductionVars.push_back(forLoop.getInductionVar());
 
           if(forLoop2)
           {
+            opstree->forOps.push_back(forLoop);
+
+            opstree->inductionVars.push_back(forLoop.getInductionVar());
             builder.setInsertionPoint(forLoop.getBody()->getTerminator());
             Value c0 = builder.create<ConstantIndexOp>(loc, 1);
             std::vector<Value> indices = {c0};
@@ -1481,6 +1486,7 @@ namespace
           if (block == "UNK") {
             opstree->forOps.push_back(forLoop);
             opstree->accessIdx.push_back(accessIndex);
+            opstree->inductionVars.push_back(forLoop.getInductionVar());
           }
         }
         else
