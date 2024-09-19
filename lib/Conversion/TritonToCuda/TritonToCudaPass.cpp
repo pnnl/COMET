@@ -180,10 +180,10 @@ public:
       // auto fileType = isObject ? llvm::CodeGenFileType::ObjectFile
       //                         : llvm::CodeGenFileType::AssemblyFile;
       auto fileType = llvm::CodeGenFileType::AssemblyFile;
-      machine->addPassesToEmitFile(pass, pstream, nullptr, fileType);
+      assert(!machine->addPassesToEmitFile(pass, pstream, nullptr, fileType));
       pass.run(*llvmModule);
     }
-
+    result.append("\n");
     auto funcOp = *modOp.getOps<mlir::func::FuncOp>().begin();
     builder.setInsertionPointToStart(&funcOp.getFunctionBody().front());
     LLVM::createGlobalString(modOp->getLoc(), builder, "ptx", result, LLVM::linkage::Linkage::Private );
