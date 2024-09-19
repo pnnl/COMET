@@ -32,6 +32,7 @@
 std::unordered_set<std::string> AbstractLoopOp::supported_types = {"default",
                                                                    "serial",
                                                                    "parallel",
+                                                                   "omp.parallel",
                                                                    "reduction",
                                                                    "window"};
 
@@ -59,11 +60,21 @@ void AbstractLoopOp::setOp(scf::ParallelOp parallelOp, std::string iterator_type
   op = parallelOp;
 }
 
+void AbstractLoopOp::setOp(omp::WsLoopOp parallelOp, std::string iterator_type)
+{
+  setIteratorType(iterator_type);
+  op = parallelOp;
+}
+
 void AbstractLoopOp::setLowerBound(mlir::Value &lowerBound)
 {
   if (iteratorType == "parallel")
   {
-    llvm::errs() << "scf::ParallelOp does not support setLowerBound.\n";
+    llvm::errs() << "Error: scf::ParallelOp does not support setLowerBound.\n";
+  }
+  else if ("omp.parallel" == iteratorType)
+  {
+    llvm::errs() << "Error: omp::WsLoopOp does not support setLowerBound.\n";
   }
   else
   {
@@ -104,7 +115,11 @@ void AbstractLoopOp::setUpperBound(mlir::Value &upperBound)
 {
   if (iteratorType == "parallel")
   {
-    llvm::errs() << "scf::ParallelOp does not support setUpperBound.\n";
+    llvm::errs() << "Error: scf::ParallelOp does not support setUpperBound.\n";
+  }
+  else if ("omp.parallel" == iteratorType)
+  {
+    llvm::errs() << "Error: omp::WsLoopOp does not support setUpperBound.\n";
   }
   else
   {
@@ -120,6 +135,11 @@ mlir::Block *AbstractLoopOp::getBody()
     auto handle = mlir::dyn_cast<scf::ParallelOp>(op);
     return handle.getBody();
   }
+  else if ("omp.parallel" == iteratorType)
+  {
+    auto handle = mlir::dyn_cast<omp::WsLoopOp>(op);
+    return &handle.getRegion().getBlocks().front();
+  }
   else
   {
     auto handle = mlir::dyn_cast<scf::ForOp>(op);
@@ -133,6 +153,11 @@ mlir::Value AbstractLoopOp::getInductionVar()
   {
     auto handle = mlir::dyn_cast<scf::ParallelOp>(op);
     return handle.getInductionVars()[0];
+  }
+  else if ("omp.parallel" == iteratorType)
+  {
+    auto handle = mlir::dyn_cast<omp::WsLoopOp>(op);
+    return handle.getRegion().getArguments().front();
   }
   else
   {
@@ -149,10 +174,21 @@ void AbstractLoopOp::buildLoopOp(const std::string &type,
                                  const mlir::Value &step)
 {
   setIteratorType(type);
-  if (type.compare("parallel") == 0)
+  if ("parallel" == type)
   {
     // Is parallel for loop
     auto tmp = builder.create<scf::ParallelOp>(loc, lowerBound, upperBound, step);
+    setOp(tmp, type);
+  }
+  else if ("omp.parallel" == type)
+  {
+    auto tmp = builder.create<omp::WsLoopOp>(loc,
+                                             ValueRange{lowerBound},
+                                             ValueRange{upperBound},
+                                             ValueRange{step});
+    OpBuilder::InsertionGuard guard(builder);  /// RAII guard to reset the insertion point of the builder when destroyed.
+    builder.createBlock(&tmp.getRegion(), {}, {builder.getIndexType()}, {tmp.getLoc()});  /// NOTE: this changed the insertion point automatically.
+    omp_wsloop_yield_op = builder.create<omp::YieldOp>(loc, ValueRange());
     setOp(tmp, type);
   }
   else
@@ -168,6 +204,11 @@ void AbstractLoopOp::dump()
   if (iteratorType == "parallel")
   {
     auto handle = mlir::dyn_cast<scf::ParallelOp>(op);
+    handle.dump();
+  }
+  else if ("omp.parallel" == iteratorType)
+  {
+    auto handle = mlir::dyn_cast<omp::WsLoopOp>(op);
     handle.dump();
   }
   else
