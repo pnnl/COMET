@@ -460,7 +460,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     /// Finally lowering index tree to SCF dialect
     #ifdef ENABLE_GPU_TARGET
-      optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, GPUBlockSizeY, GPUBlockSizeX));
+      optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, GPUBlockSizeY, GPUBlockSizeX, GPUBlockSizeR));
     #else
       optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, 0, 0));
     #endif
