@@ -209,7 +209,8 @@ class Index_Tree
   std::map<UnitExpression *, TreeNode *> exprToNode;
   std::map<void *, unique_ptr<Tensor>> valueToTensor;
   std::map<void *, int> indexLabelToId;
-  std::map<size_t, unique_ptr<IteratorType>> iteratorTypes; /// Iterator types of all iterators, referred by the indices
+//  std::vector<unique_ptr<IteratorType>> iteratorTypes; /// Iterator types of all iterators, referred by the indices
+  std::unordered_map<int, unique_ptr<IteratorType>> iteratorTypes; /// Iterator types of all iterators, referred by the indices
   unsigned int indexID = 0;
 
 public:
@@ -308,10 +309,7 @@ public:
     return nodes[id].get();
   }
 
-  // void setSizeOfIteratorTypes(size_t size)
-  // {
-  //   // iteratorTypes.resize(size);
-  // }
+  void setSizeOfIteratorTypesByIndices(IndicesType allIndices);
 
   void setIteratorTypeByIndex(size_t index, unique_ptr<IteratorType> type)
   {
