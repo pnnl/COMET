@@ -1926,7 +1926,7 @@ public:
   void runOnOperation() override {
     MLIRContext *context = &getContext();
     ModuleOp op = getOperation();
-    
+    // op->dump();
     mlir::comet::GpuTypeConverter typeConverter(context);
     // typeConverter.blockX = blockX.getValue();
     // typeConverter.blockY = blockY.getValue();

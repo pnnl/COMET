@@ -232,57 +232,57 @@ public:
     matchAndRewrite(mlir::scf::ParallelOp parOp, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
 
-        if(parOp->getAttrOfType<mlir::StringAttr>("parallelDim"))
-        {
-            rewriter.startRootUpdate(parOp);
+        // if(parOp->getAttrOfType<mlir::StringAttr>("parallelDim"))
+        // {
+        //     rewriter.startRootUpdate(parOp);
 
-            bool changed = false;
-            for(auto iter_arg: llvm::zip(parOp.getBody()->getArguments(), parOp.getUpperBound()))
-            {
+        //     bool changed = false;
+        //     for(auto iter_arg: llvm::zip(parOp.getBody()->getArguments(), parOp.getUpperBound()))
+        //     {
 
-                for(auto u: std::get<0>(iter_arg).getUsers())
-                {
-                    bool needsChange = false;
-                    if(!llvm::dyn_cast<mlir::arith::MinUIOp>(u))
-                    {
-                        for(auto uu: u->getUsers())
-                        {
-                            if(!llvm::dyn_cast<mlir::arith::MinUIOp>(uu))
-                            {
-                                needsChange = true;
-                            }
-                        }
+        //         for(auto u: std::get<0>(iter_arg).getUsers())
+        //         {
+        //             bool needsChange = false;
+        //             if(!llvm::dyn_cast<mlir::arith::MinUIOp>(u))
+        //             {
+        //                 for(auto uu: u->getUsers())
+        //                 {
+        //                     if(!llvm::dyn_cast<mlir::arith::MinUIOp>(uu))
+        //                     {
+        //                         needsChange = true;
+        //                     }
+        //                 }
 
-                        if(needsChange)
-                        {
-                            rewriter.setInsertionPointToStart(parOp.getBody());
-                            auto minOp = rewriter.create<mlir::arith::MinUIOp>(std::get<0>(iter_arg).getLoc(), std::get<0>(iter_arg), std::get<1>(iter_arg));
-                            if(parOp->getAttrOfType<mlir::StringAttr>("parallelDim").strref() == "dimY_grid" || parOp->getAttrOfType<mlir::StringAttr>("parallelDim").strref() == "dimY_block")
-                            {
-                                minOp->setAttr("GuardY", rewriter.getUnitAttr());
-                            }
-                            else 
-                            {
-                                minOp->setAttr("GuardX", rewriter.getUnitAttr());
-                            }
-                            changed = true;
-                            std::get<0>(iter_arg).replaceAllUsesExcept(minOp, minOp);
-                            break;
-                        }
-                    }
-                }
-            }
-            if(changed)
-            {
-                rewriter.finalizeRootUpdate(parOp);
-            }
-            else 
-            {
-                rewriter.cancelRootUpdate(parOp);
-            }
+        //                 if(needsChange)
+        //                 {
+        //                     rewriter.setInsertionPointToStart(parOp.getBody());
+        //                     auto minOp = rewriter.create<mlir::arith::MinUIOp>(std::get<0>(iter_arg).getLoc(), std::get<0>(iter_arg), std::get<1>(iter_arg));
+        //                     if(parOp->getAttrOfType<mlir::StringAttr>("parallelDim").strref() == "dimY_grid" || parOp->getAttrOfType<mlir::StringAttr>("parallelDim").strref() == "dimY_block")
+        //                     {
+        //                         minOp->setAttr("GuardY", rewriter.getUnitAttr());
+        //                     }
+        //                     else 
+        //                     {
+        //                         minOp->setAttr("GuardX", rewriter.getUnitAttr());
+        //                     }
+        //                     changed = true;
+        //                     std::get<0>(iter_arg).replaceAllUsesExcept(minOp, minOp);
+        //                     break;
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     if(changed)
+        //     {
+        //         rewriter.finalizeRootUpdate(parOp);
+        //     }
+        //     else 
+        //     {
+        //         rewriter.cancelRootUpdate(parOp);
+        //     }
 
-            return mlir::success(changed);
-        }
+        //     return mlir::success(changed);
+        // }
         if(parOp->getAttrOfType<mlir::StringAttr>("parallelDim") || parOp->getAttr("mapping"))
         {
             return mlir::failure();
@@ -616,26 +616,26 @@ public:
         target.addDynamicallyLegalOp<mlir::scf::ParallelOp>([](mlir::scf::ParallelOp op) -> bool {
             if(op->hasAttr("parallelDim"))
             {
-                for(auto iter_arg: llvm::zip(op.getBody()->getArguments(), op.getUpperBound()))
-                {
-                    for(auto u: std::get<0>(iter_arg).getUsers())
-                    {
-                        if(!llvm::dyn_cast<mlir::arith::MinUIOp>(u))
-                        {
-                            if(u->getUsers().empty())
-                            {
-                                return false;
-                            }
-                            for(auto uu: u->getUsers())
-                            {
-                                if(!llvm::dyn_cast<mlir::arith::MinUIOp>(uu))
-                                {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-                }
+                // for(auto iter_arg: llvm::zip(op.getBody()->getArguments(), op.getUpperBound()))
+                // {
+                //     for(auto u: std::get<0>(iter_arg).getUsers())
+                //     {
+                //         if(!llvm::dyn_cast<mlir::arith::MinUIOp>(u))
+                //         {
+                //             if(u->getUsers().empty())
+                //             {
+                //                 return false;
+                //             }
+                //             for(auto uu: u->getUsers())
+                //             {
+                //                 if(!llvm::dyn_cast<mlir::arith::MinUIOp>(uu))
+                //                 {
+                //                     return false;
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
 
                 return true;
             }
