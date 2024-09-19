@@ -1225,6 +1225,15 @@ namespace
                          accessIndex /* output */);
         
         if (block == "D") {
+          builder.setInsertionPoint(forLoop);
+
+          // Insert the index calculations
+          // i = n1 * A1_block_pos + bi
+          Value c0 = builder.create<ConstantIndexOp>(loc, 0);
+          std::vector<Value> indices = {c0};
+          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][2], indices);
+
+
           builder.setInsertionPoint(forLoop.getBody()->getTerminator());
           AbstractLoopOp forLoop2;
           Value accessIndex2;
@@ -1242,12 +1251,6 @@ namespace
           opstree->inductionVars.push_back(forLoop.getInductionVar());
           builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
           
-          // Insert the index calculations
-          // i = n1 * A1_block_pos + bi
-          Value c0 = builder.create<ConstantIndexOp>(loc, 0);
-          std::vector<Value> indices = {c0};
-          Value column = builder.create<memref::LoadOp>(loc, allAllocs[i][2], indices);
-
 
           if(device == TargetDevice::GPU)
           {
@@ -1258,9 +1261,9 @@ namespace
             builder.setInsertionPoint(forLoop2.getBody()->getTerminator());
             auto res = mlir::getAffineDimExpr(0, builder.getContext()) * mlir::getAffineSymbolExpr(0, builder.getContext()) + mlir::getAffineSymbolExpr(1, builder.getContext());
             auto affineIndex = mlir::AffineMap::get(1, 2, {res}, builder.getContext());
-            auto minOp = builder.create<arith::MinUIOp>(forLoop2.getOp()->getLoc(), forLoop2.getInductionVar(), cast<scf::ParallelOp>(forLoop2.getOp()->getParentOp()).getUpperBound()[0]);
+            auto minOp = builder.create<arith::MinUIOp>(forLoop2.getOp()->getLoc(), forLoop2.getInductionVar(), column);
             minOp->setAttr("GuardY", builder.getUnitAttr());
-            std::vector<mlir::Value> range = {forLoop.getInductionVar(),  bsize_y, minOp};
+            std::vector<mlir::Value> range = {forLoop.getInductionVar(),  column, minOp};
             auto new_index = builder.create<mlir::affine::AffineApplyOp>(forLoop.getOp()->getLoc(), affineIndex, range);  
             opstree->accessIdx.push_back(new_index);
           }
@@ -1555,7 +1558,7 @@ namespace
 
               auto affineRes = mlir::getAffineDimExpr(0, forLoop2.getOp()->getContext()) * mlir::getAffineSymbolExpr(0, forLoop2.getOp()->getContext())  + mlir::getAffineDimExpr(1, forLoop2.getOp()->getContext());
               auto newAffineIndex = mlir::AffineMap::get(2, 1, {affineRes}, forLoop2.getOp()->getContext());
-              std::vector<mlir::Value> operands = {accessIndex, forLoop2.getInductionVar(), forLoop2.getUpperBound()};
+              std::vector<mlir::Value> operands = {accessIndex, forLoop2.getInductionVar(), minR};
         //     // builder.setInsertionPoint(forLoop2.getBody());
         //     builder.setInsertionPointToStart(forLoop2.getBody());
               auto guardR = builder.create<arith::MinUIOp>(forLoop2.getOp()->getLoc(),  builder.create<mlir::affine::AffineApplyOp>(forLoop2.getOp()->getLoc(), newAffineIndex, operands), minR);
