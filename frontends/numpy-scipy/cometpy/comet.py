@@ -655,7 +655,7 @@ class NewVisitor(ast.NodeVisitor):
                 "operands": [obj]
             })
 
-    def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, beta, no_assign):
+    def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, beta, no_assign, lbls_to_ilbls = {}):
 
         ops = llabels.split('->')[0].split(',')
         res = list(llabels.split('->')[1])
@@ -670,12 +670,12 @@ class NewVisitor(ast.NodeVisitor):
                     all_dims.append(self.tsemantics[operands[1]]['shape'][i])
         
         lbls_to_dims = {}
-        lbls_to_ilbls = {}
         ilbls_seen = set()
 
         for d,l in zip(all_dims, all_lbls):
             lbls_to_dims[l] = d
-            lbls_to_ilbls[l] = self.get_next_indexlabel_with_val(d)
+            if l not in lbls_to_ilbls:
+                lbls_to_ilbls[l] = self.get_next_indexlabel_with_val(d)
         
         for d,l in zip(all_dims, all_lbls):
             self.reset_indexlabel_with_val(d)
@@ -853,6 +853,7 @@ class NewVisitor(ast.NodeVisitor):
             lops = ops[0]
             saved_no_assign = no_assign
             no_assign = True
+            lbls_to_ilbls = {}
             for i in range(1, len(operands)):
                 all_lbls = list(lops)
                 for l in list(ops[i]):
