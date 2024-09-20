@@ -880,7 +880,7 @@ class NewVisitor(ast.NodeVisitor):
                 if i == len(operands) -1 :
                     ret = res
                     no_assign = saved_no_assign
-                tid = self.visit_Bin_Einsum_Call([loperand,operands[i]], lops+","+ops[i]+"->"+"".join(ret), mask, semiring, saved_no_assign, no_assign)
+                tid = self.visit_Bin_Einsum_Call([loperand,operands[i]], lops+","+ops[i]+"->"+"".join(ret), mask, semiring, saved_no_assign, no_assign, lbls_to_ilbls)
                 loperand = tid
                 lops = "".join(ret)
             return tid
