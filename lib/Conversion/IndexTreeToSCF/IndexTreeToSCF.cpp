@@ -5081,7 +5081,7 @@ void LowerIndexTreeToSCFPass::runOnOperation()
 }
 
 /// Lower sparse tensor algebra operation to loops
-std::unique_ptr<Pass> mlir::comet::createLowerIndexTreeToSCFPass(mlir::tensorAlgebra::TargetDevice device, size_t triton_bsize_y, size_t triton_bsize_x, size_t triton_bsize_r)
+std::unique_ptr<Pass> mlir::comet::createLowerIndexTreeToSCFPass(mlir::tensorAlgebra::TargetDevice device, size_t triton_bsize_y=0, size_t triton_bsize_x=0, size_t triton_bsize_r=0)
 {
   return std::make_unique<LowerIndexTreeToSCFPass>(device, triton_bsize_y, triton_bsize_x, triton_bsize_r);
 }

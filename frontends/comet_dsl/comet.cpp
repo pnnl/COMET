@@ -475,7 +475,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     #ifdef ENABLE_GPU_TARGET
       optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, GPUBlockSizeY, GPUBlockSizeX, GPUBlockSizeR));
     #else
-      optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, 0, 0));
+      optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, 0, 0, 0));
     #endif
     optPM.addPass(mlir::tensor::createTensorBufferizePass());
     pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
@@ -553,9 +553,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
 #endif
 
-  if (IsLoweringHostToLLVM|| isLoweringToLLVM || emitLLVM)
-  {
+#ifdef ENABLE_GPU_TARGET
 
+  if (IsLoweringHostToLLVM|| isLoweringToLLVM || emitLLVM)
+#else
+  if (isLoweringToLLVM || emitLLVM)
+#endif
+  {
 
     // pm.addPass(mlir::createCanonicalizerPass());
     /// Blanket-convert any remaining high-level vector ops to loops if any remain.
