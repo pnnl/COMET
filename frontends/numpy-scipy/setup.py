@@ -2,6 +2,9 @@ import setuptools
 import os
 import subprocess
 
+# Optionally, specify the location of site.cfg
+site_cfg_path = os.path.join(os.path.dirname(__file__), 'site.cfg')
+
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 with open("cometpy/cfg.py", "w") as cfg:
@@ -57,6 +60,9 @@ setuptools.setup(
         'jinja2',
         'numpy',
         'scipy>=1.14'
+    ],
+    setup_requires=[
+        'numpy',
     ],
     python_requires=">=3.8",
 )

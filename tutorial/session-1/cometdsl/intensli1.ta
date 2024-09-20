@@ -1,0 +1,23 @@
+
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [a, b, d] = [312];
+	IndexLabel [c] = [296];
+
+	#Tensor Declarations
+	Tensor<double> v([d, c, a], {Dense});
+	Tensor<double> t2([b, d], {Dense});
+	Tensor<double> i0([a, b, c], {Dense});
+
+	#Tensor Fill Operation
+	v[d, c, a] = 2.3;
+	t2[b, d] = 3.4;
+	i0[a, b, c] = 0.0;
+
+	#Tensor Contraction
+    var time0 = getTime();
+	i0[a, b, c] = v[d, c, a] * t2[b, d];
+    var time1 = getTime();
+	printElapsedTime(time0, time1);
+}

@@ -25,22 +25,33 @@ More information about the COMET compiler can be found at:
 
 
 # Installation and Testing:
+1) **Steps to Configure NumPy to Use OpenBLAS:**
+    * Install OpenBLAS on your system. On macOS and Linux, you can use Homebrew or your package manager. For example, using Homebrew: ```brew install openblas```
 
-1) **COMET's python package instalation:** 
+    * Set environment variables to ensure that NumPy picks up OpenBLAS during installation
+ 
+        ```
+        export LDFLAGS="-L$PATH_TO_OPENBLAS/lib"         #/opt/homebrew/opt/openblas/lib  
+        export CPPFLAGS="-I$PATH_TO_OPENBLAS/include"    #/opt/homebrew/opt/openblas/
+        ```
+
+    * Adjusting the paths in ```site.cfg``` based on where OpenBLAS is installed on the system
+
+2) **COMET's python package instalation:** 
     * Install [COMET Domain Specific Compiler](../../README.md) instructions
 
     * Set environmental variables for paths to COMET and LLVM:
     
-    ```
-    export COMETPY_COMET_PATH=$COMET_SRC/build/ 
-    export COMETPY_LLVM_PATH=$COMET_SRC/llvm/build 
-    ```
+        ```
+        export COMETPY_COMET_PATH=$COMET_SRC/build/ 
+        export COMETPY_LLVM_PATH=$COMET_SRC/llvm/build 
+        ```
     
     * In directory `frontends/numpy-scipy` run the following comment. It will also install the package dependencies if not already installed.
     
-    ```
-    python3 -m pip install .
-    ```
+        ```
+        python3 -m pip install .
+        ```
 
 2) **Testing:**  Run the integration tests to make sure the installation was successfull
     

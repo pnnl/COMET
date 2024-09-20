@@ -417,6 +417,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
     /// Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
     optPM.addPass(mlir::comet::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
+    if (mlir::failed(pm.run(*module)))
+        return 4;
+      return 0;
   }
 
   /// =============================================================================
@@ -471,6 +474,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       /// HPTT: A High-Performance Tensor Transposition C++ Library
       /// https://arxiv.org/abs/1704.04374
       optPM.addPass(mlir::comet::createOptDenseTransposePass());
+      // optPM.addPass(mlir::affine::createAffineLoopNormalizePass());
+      // optPM.addPass(mlir::affine::createLoopFusionPass());
     }
 
     /// Dump scf dialect.
