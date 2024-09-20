@@ -417,9 +417,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
     /// Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
     optPM.addPass(mlir::comet::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
-    if (mlir::failed(pm.run(*module)))
-        return 4;
-      return 0;
   }
 
   /// =============================================================================
