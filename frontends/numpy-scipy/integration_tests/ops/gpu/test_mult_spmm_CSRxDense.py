@@ -2,22 +2,25 @@ import time
 import numpy as np
 import scipy as sp
 from cometpy import comet
+
 def run_numpy(A,B):
-	C = np.einsum('ij,jk->ik', A,B)
+	C = A @ B 
 
 	return C
 
-@comet.compile(flags=None, target="gpu")
+@comet.compile(flags=None, target='gpu')
 def run_comet_with_jit(A,B):
-	C = comet.einsum('ij,jk->ik', A,B)
+	C = A @ B 
 
 	return C
 
-A = np.full([1024, 768], 2.2,  dtype=float)
-B = np.full([768, 512], 3.4,  dtype=float)
-C = np.full([1024, 512], 0.0,  dtype=float)
+A = sp.sparse.bsr_array(np.random.rand(2048,4099))
+B = np.full([A.shape[1], 4], 1.7,  dtype=float)
+C = np.full([A.shape[0], 4], 0.0,  dtype=float)
 expected_result = run_numpy(A,B)
+print(expected_result)
 result_with_jit = run_comet_with_jit(A,B)
+print(result_with_jit)
 if sp.sparse.issparse(expected_result):
 	expected_result = expected_result.todense()
 	result_with_jit = result_with_jit.todense()

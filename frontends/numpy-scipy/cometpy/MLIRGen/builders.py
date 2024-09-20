@@ -276,7 +276,7 @@ class ScalarOp_Builder:
         )    
 
 class ArithOp_Builder:
-    formats_str = ['Dense', 'CSR', 'COO', 'CSC']
+    formats_str = ['Dense', 'CSR', 'COO', 'CSC', 'BCSR']
     indentation_size = 4
     beta_val = 0.0
 
@@ -542,7 +542,7 @@ class ArithOp_Builder:
     
 
 class Tensor_Decl_Builder:
-    formats = ['Dense', 'CSR', 'COO', 'CSC']
+    formats = ['Dense', 'CSR', 'COO', 'CSC', 'BCSR']
     indentation_size = 4
 
     tensor_decl_wrapper_text = jinja2.Template(   

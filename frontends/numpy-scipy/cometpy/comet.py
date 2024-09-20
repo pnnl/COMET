@@ -49,6 +49,8 @@ def get_format(A):
         return COO
     elif A.format == 'csc':
         return CSC
+    elif A.format == 'bsr':
+        return BCSR
     else:
         raise RuntimeError('Unsupported sparse format')
 
@@ -79,6 +81,12 @@ class NewVisitor(ast.NodeVisitor):
 
         # Output formats when multiply matrices of different formats
         self.sp_matmult_conversions = {
+            BCSR: {
+                # CSR : CSR,
+                # COO : CSR,
+                DENSE : DENSE,
+            },
+
             CSR: {
                 CSR : CSR,
                 COO : CSR,
@@ -90,6 +98,7 @@ class NewVisitor(ast.NodeVisitor):
                 DENSE : DENSE
             },
             DENSE: {
+                BCSR : DENSE,
                 CSR : DENSE,
                 COO : DENSE,
                 DENSE : DENSE,
@@ -106,7 +115,8 @@ class NewVisitor(ast.NodeVisitor):
         self.sp_mattr_conversions = {
             CSR : CSR,
             COO : COO,
-            DENSE : DENSE
+            DENSE : DENSE,
+            BCSR : BCSR
         }
 
         # Output formats when elwise mult matrices of different formats
@@ -133,6 +143,11 @@ class NewVisitor(ast.NodeVisitor):
                 COO : CSR,
                 DENSE : DENSE,
             },
+            BCSR: {
+                BCSR : BCSR,
+                COO : CSR,
+                DENSE : DENSE,
+            },
             COO: {
                 CSR : CSR,
                 COO : CSR,
@@ -140,6 +155,7 @@ class NewVisitor(ast.NodeVisitor):
             },
             DENSE: {
                 CSR : DENSE,
+                BCSR : DENSE,
                 COO : DENSE,
                 DENSE : DENSE,
             }

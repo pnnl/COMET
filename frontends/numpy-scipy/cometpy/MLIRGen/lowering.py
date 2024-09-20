@@ -32,6 +32,7 @@ import cometpy.cfg as cfg
 import atexit
 import uuid
 import scipy as scp
+import re
 debug = False
 temp_dir = '.cometpy/'
 
@@ -65,6 +66,9 @@ atexit.register(cleanup)
 
 class memref_i64(Structure):
     _fields_ = [ ('mem_aligned', POINTER(c_longlong)), ('mem', POINTER(c_longlong)), ('offset', c_longlong), ('dim', c_longlong), ('stride', c_longlong)]
+
+class memref_i32(Structure):
+    _fields_ = [ ('mem_aligned', POINTER(c_int32)), ('mem', POINTER(c_int32)), ('offset', c_longlong), ('dim', c_longlong), ('stride', c_longlong)]
 
 class memref_f64(Structure):
     _fields_ = [ ('mem_aligned', POINTER(c_double)), ('mem', POINTER(c_double)), ('offset', c_longlong), ('dim', c_longlong), ('stride', c_longlong)]
@@ -347,7 +351,58 @@ def comment_unneeded_sparse(input_, arg_vals):
             output += line +"\n"
     return output
 
-def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
+def remove_index(input_):
+    input = input_.splitlines() 
+    mapping = {}
+
+    for i in range(len(input)):
+        line = input[i]
+        if "memref.load" in input[i]:
+            if "xindex>" in input[i]:
+                ssa = input[i].split("=")[0].rstrip().lstrip()
+                input.insert(i+1, '%casted_'+ssa[1:] +" = arith.index_cast "+ssa +": i32 to index")
+                mapping[ssa] = '%casted_'+ssa[1:]
+    output = ""
+    second_output = ""
+    second_part = False
+    for line in input:
+        if line:
+            if second_part:
+                second_output += line +"\n"
+            elif not "func.func private" in line:
+                output += line +"\n"
+            else:
+                second_output += line +"\n"
+                # output += line +"\n"
+                second_part = True
+    output = output.replace("xindex", "xi32")
+
+    
+    for key in mapping:
+        start = 0
+        pos = 0
+        for _ in range(2):
+            while True:
+                pos = pos + output[pos:].find(key)
+                if len(output) > pos+len(key) and (output[pos+len(key)].isalnum() or output[pos+len(key)] == '_'):
+                    pos = pos + output[pos+1:].find(key)
+                else:
+                    start = pos
+                    break
+
+            start = start + output[start:].find(key) 
+            start += len(key)
+            pos = start
+
+        if output[start:].find(key) > 0:
+            start =  start + output[start:].find(key)
+            output = output[:start] + re.sub(r"%s(\W)" % key, r'%s\1'%mapping[key], output[start:])
+
+    output += second_output
+    
+    return output
+
+def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s, target):
 
     path_to_comet = cfg.comet_path+"/bin/comet-opt -x mlir "
     command = path_to_comet + mlir_lower_flags
@@ -370,6 +425,16 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
 
     scf_out = comment_unneeded_sparse(scf_out, arg_vals)
     scf_out = comment_unneeded_dense(scf_out, arg_vals)
+    if(target != 'cpu'): # Thus GPU
+        path_to_comet = cfg.comet_path+"/bin/comet-opt -x mlir "
+        command = path_to_comet + '--target=GPU --convert-to-triton --convert-triton-to-llvm '
+        p = subprocess.run(shlex.split(command), input = scf_out.encode('utf-8') , stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,close_fds=False)
+        if p.returncode != 0:
+            cleanup()
+            raise AssertionError("comet-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
+        
+        scf_out  = remove_index(p.stderr.decode())
+
     # f.write(scf_out)
     # f.close()
 
@@ -420,10 +485,23 @@ def lower_scf_to_llvm(scf_in, scf_lower_flags, uuid_s):
         
 #     return result
 
-def generate_llvm_args_from_ndarrays(num_in, *ndargs):
+def generate_llvm_args_from_ndarrays(num_in, *ndargs, target):
     llvm_args = []
     llvm_args_types = []
     all_outputs = []
+
+    as_type = 'int64'
+    np_type = np.int64
+    c_type = c_longlong
+    memref_type_i = memref_i64
+
+    if target != 'cpu':
+        as_type = 'int32'
+        np_type = np.int32
+        c_type = c_int32
+        memref_type_i = memref_i32
+
+
     for i, ndarray in enumerate(ndargs):
         # Ndarray is dense
         if not scp.sparse.issparse(ndarray):
@@ -446,14 +524,14 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
         else:
             # Working on the output matrix
             if i >= num_in:
-                A1pos = memref_i64()
-                A1crd = memref_i64()
-                A1tile_pos = memref_i64()
-                A1tile_crd = memref_i64()
-                A2pos = memref_i64()
-                A2crd = memref_i64()
-                A2tile_pos = memref_i64()
-                A2tile_crd = memref_i64()
+                A1pos = memref_type_i()
+                A1crd = memref_type_i()
+                A1tile_pos = memref_type_i()
+                A1tile_crd = memref_type_i()
+                A2pos = memref_type_i()
+                A2crd = memref_type_i()
+                A2tile_pos = memref_type_i()
+                A2tile_crd = memref_type_i()
                 Aval = memref_f64()
 
                 # llvm_args += [*expand_memref_ptr(A1pos), *expand_memref_ptr(A1crd), *expand_memref_ptr(A2pos), *expand_memref_ptr(A2crd), *expand_memref_ptr(Aval)]
@@ -462,52 +540,66 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                 
                 # With tiles
                 llvm_args += [*expand_memref_ptr(A1pos), *expand_memref_ptr(A1crd), *expand_memref_ptr(A1tile_pos), *expand_memref_ptr(A1tile_crd), *expand_memref_ptr(A2pos), *expand_memref_ptr(A2crd), *expand_memref_ptr(A2tile_pos), *expand_memref_ptr(A2tile_crd), *expand_memref_ptr(Aval)]
-                llvm_args_types += [POINTER(memref_i64), POINTER(memref_i64), c_longlong, c_longlong, c_longlong] * 8 + [POINTER(memref_f64), POINTER(memref_f64), c_longlong, c_longlong, c_longlong]
+                llvm_args_types += [POINTER(memref_type_i), POINTER(memref_type_i), c_longlong, c_longlong, c_longlong] * 8 + [POINTER(memref_f64), POINTER(memref_f64), c_longlong, c_longlong, c_longlong]
                 all_outputs.append((A1pos, A1crd, A1tile_pos, A1tile_crd, A2pos, A2crd, A2tile_pos, A2tile_crd, Aval))
             else:
                 # [TODO] The arrays used as inputs for the comet generated code need to be updated to take into account the extra tile component
-                A1tile_pos = np.array([-1], dtype=np.int64)
-                A1tile_crd = np.array([-1], dtype=np.int64)
-                A2tile_pos = np.array([-1], dtype=np.int64)
-                A2tile_crd = np.array([-1], dtype=np.int64)
+                A1tile_pos = np.array([-1], dtype=np_type)
+                A1tile_crd = np.array([-1], dtype=np_type)
+                A2tile_pos = np.array([-1], dtype=np_type)
+                A2tile_crd = np.array([-1], dtype=np_type)
                 # CSR
                 if ndarray.format == 'csr':
-                    A1pos = np.array([ndarray.shape[0]], dtype=np.int64)
-                    A1crd = np.array([-1], dtype=np.int64)
-                    A2pos = ndarray.indptr.astype('int64')
-                    A2crd = ndarray.indices.astype('int64')
+                    A1pos = np.array([ndarray.shape[0]], dtype=np_type)
+                    A1crd = np.array([-1], dtype=np_type)
+                    A2pos = ndarray.indptr.astype(as_type)
+                    A2crd = ndarray.indices.astype(as_type)
 
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                 
-                    # llvm_args += [*np_array_to_memref(np.array([1, 1, ndarray.shape[0] + 1, ndarray.nnz, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
+                    # llvm_args += [*np_array_to_memref(np.array([1, 1, ndarray.shape[0] + 1, ndarray.nnz, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype=as_type))]
                     # With tiles
-                    llvm_args += [*np_array_to_memref(np.array([1, 1, 0, 0, ndarray.shape[0] + 1, ndarray.nnz, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
+                    llvm_args += [*np_array_to_memref(np.array([1, 1, 0, 0, ndarray.shape[0] + 1, ndarray.nnz, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype=as_type))]
+                
+                elif ndarray.format == 'bsr':
+                    A1pos = np.array([ndarray.shape[0]/ndarray.blocksize[0]], dtype=np_type)
+                    A1crd = np.array([-1], dtype=np_type)
+                    A2pos = ndarray.indptr.astype(as_type)
+                    A2crd = ndarray.indices.astype(as_type)
+                    A1tile_pos = np.array([ndarray.blocksize[0]], dtype=np_type)
+                    A1tile_crd = np.array([-1], dtype=np_type)
+                    A2tile_pos = np.array([ndarray.blocksize[1]], dtype=np_type)
+                    A2tile_crd = np.array([-1], dtype=np_type)
+
+                    llvm_args += [*np_array_to_memref(np.array([1, 1, 1, 1, ndarray.indptr.shape[0], ndarray.indices.shape[0], 1, 1, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype=as_type))]
+
                 # COO
                 elif ndarray.format == 'coo':
-                    A1pos = np.array([0, ndarray.nnz], dtype=np.int64)
-                    A1crd = ndarray.row.astype('int64')
-                    A2pos = np.array([-1], dtype=np.int64)
-                    A2crd = ndarray.col.astype('int64')
+                    A1pos = np.array([0, ndarray.nnz], dtype=np_type)
+                    A1crd = ndarray.row.astype(as_type)
+                    A2pos = np.array([-1], dtype=np_type)
+                    A2crd = ndarray.col.astype(as_type)
 
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                 
                     # llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 1, ndarray.nnz, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
                     # With tiles
-                    llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 0, 0, 1, ndarray.nnz, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
+                    llvm_args += [*np_array_to_memref(np.array([2, ndarray.nnz, 0, 0, 1, ndarray.nnz, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype=as_type))]
                 
                 # CSC
                 elif ndarray.format == 'csc':
-                    A1pos = ndarray.indptr.astype('int64')
-                    A1crd = ndarray.indices.astype('int64')
-                    A2pos = np.array([ndarray.shape[1]], dtype=np.int64)
+                    A1pos = ndarray.indptr.astype(as_type)
+                    A1crd = ndarray.indices.astype(as_type)
+                    A2pos = np.array([ndarray.shape[1]], dtype=np_type)
                     
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                 
-                    # llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 1, 1, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
+                    # llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 1, 1, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype=as_type))]
                     # With tiles
-                    llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 0, 0, 1, 1, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
+                    llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 0, 0, 1, 1, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype=as_type))]
                 
-                Aval = ndarray.data.astype('float64')
+
+                Aval = ndarray.data.reshape(-1).astype('float64')
                 # Based on the  desc_A1pos/crd, desc_A2pos/crd, desc_Aval arrays in SparseUtils.cpp: read_input_2D
                 # Expand to memrefs llvmir implementation
                 
@@ -520,12 +612,12 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                 
                 # llvm_args_types += [ctypes.POINTER(c_longlong), ctypes.POINTER(c_longlong), c_longlong, c_longlong, c_longlong] * 5  + [ctypes.POINTER(c_double), ctypes.POINTER(c_double), c_longlong, c_longlong, c_longlong]
                 # With tiles
-                llvm_args_types += [ctypes.POINTER(c_longlong), ctypes.POINTER(c_longlong), c_longlong, c_longlong, c_longlong] * 9  + [ctypes.POINTER(c_double), ctypes.POINTER(c_double), c_longlong, c_longlong, c_longlong]
+                llvm_args_types += [ctypes.POINTER(c_type), ctypes.POINTER(c_type), c_longlong, c_longlong, c_longlong] * 9  + [ctypes.POINTER(c_double), ctypes.POINTER(c_double), c_longlong, c_longlong, c_longlong]
 
     return llvm_args, llvm_args_types, all_outputs
 
 #Translating llvm dialect to llvm IR using mlir-translate and then executing the IR using lli
-def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs, outputs, uuid_s):
+def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs, outputs, uuid_s, target):
 
 
     llvmir_file = uuid_s+'.ll'
@@ -552,7 +644,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     func = lib.__getattr__(func_name)
 
     # Get the inputs, input types and the output containers
-    args, arg_types, all_output = generate_llvm_args_from_ndarrays(len(inputs),*(inputs), *(outputs))
+    args, arg_types, all_output = generate_llvm_args_from_ndarrays(len(inputs),*(inputs), *(outputs), target=target)
     func.argtypes = arg_types
 
     # Uncomment to measure execution time without the compilation process
@@ -710,20 +802,23 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
     else:
         mlir_lower_flags = "  --convert-ta-to-it --convert-to-loops "
     # scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
-    scf_lower_flags =  " --convert-to-llvm "
-    
+    if target == "cpu":
+        scf_lower_flags =  " --convert-to-llvm "
+        
     if target != "cpu":
+        scf_lower_flags =  "  --convert-host-to-llvm "
+        
         if target.startswith("sm_") or target.startswith("compute_") or target.startswith("lto_"):
             if not cfg.gpu_target_enabled:
                 raise "COMET gpu target is not enabled"
             
-            scf_lower_flags += " " + " --convert-to-triton --target=GPU --gpu-compute-capability="+target.split("_")[1]
+            scf_lower_flags += " " + " --target=GPU --gpu-compute-capability="+target.split("_")[1]
             mlir_lower_flags += " " + "--target=GPU"
         elif target == "gpu":
             if not cfg.gpu_target_enabled:
                 raise "COMET gpu target is not enabled"
         
-            scf_lower_flags += " " + " --convert-to-triton --target=GPU"
+            scf_lower_flags += " " + " --target=GPU"
             mlir_lower_flags += " " + "--target=GPU"
         else :
             raise "Expected target formats:\
@@ -746,9 +841,9 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
 
     # Convert TA to SCF
     # scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals, uuid_s)
-    scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_rep, mlir_lower_flags, args_vals, uuid_s)
+    scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_rep, mlir_lower_flags, args_vals, uuid_s, target)
 
     #lower the SCF dialect to LLVMIR and execute
-    result,llvmir_file = translate_and_exec_llvm_with_jit(scf_out_file, scf_lower_flags, func_name, args_vals, outputs, uuid_s)
+    result,llvmir_file = translate_and_exec_llvm_with_jit(scf_out_file, scf_lower_flags, func_name, args_vals, outputs, uuid_s, target)
 
     return result
