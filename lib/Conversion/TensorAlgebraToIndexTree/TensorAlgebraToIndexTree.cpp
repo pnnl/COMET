@@ -314,6 +314,10 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree, TargetDevice 
   /// If the operation is one of the chosen operations, then record output indices as parallel interators.
   bool is_chosen_dense_mixed_operations = checkChosenDenseMixedOperations(allPerms, allFormats);
   bool is_chosen_spgemm_operation = checkChosenSpGEMMOperation(allPerms, allFormats);
+  if (mask_tensor != nullptr)
+  {
+    is_chosen_spgemm_operation = false; /// currently omp.parallel not support masking
+  }
 
 
 
