@@ -252,6 +252,19 @@ static cl::opt<bool> IsLoweringtoSCF("convert-to-loops",
 /// =============================================================================
 static cl::opt<bool> IsLoweringtoTriton("convert-to-triton",
                                      cl::desc("Output Triton dialect after lowering all operations"));
+
+/// =============================================================================
+/// Lowering Triton to CUDA/LLVM
+/// =============================================================================
+static cl::opt<bool> IsLoweringDeviceToLLVM("convert-triton-to-llvm",
+                                     cl::desc("Output Triton dialect after lowering all operations"));
+
+
+/// =============================================================================
+/// Lowering GPU-host Triton to CUDA/LLVM
+/// =============================================================================
+static cl::opt<bool> IsLoweringHostToLLVM("convert-host-to-llvm",
+                                     cl::desc("Output Triton dialect after lowering all operations"));
 #endif
 
 /// =============================================================================
@@ -503,7 +516,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // optPM.addPass(mlir::createCSEPass());
 
 #ifdef ENABLE_GPU_TARGET
-  if (CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringtoTriton))
+  if (CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringtoTriton || IsLoweringDeviceToLLVM))
   {
     pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
@@ -527,16 +540,22 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // pm.addPass(mlir::createCanonicalizerPass());
 
   /// =============================================================================
-
-  if (isLoweringToLLVM || emitLLVM)
-  {
 #ifdef ENABLE_GPU_TARGET
-    if (CodegenTarget == TargetDevice::GPU )
-    {
-      pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability));
-      pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
-    }
+  if((isLoweringToLLVM || emitLLVM || IsLoweringDeviceToLLVM) && CodegenTarget == TargetDevice::GPU )
+  {
+    pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability));
+  }
+
+  if((isLoweringToLLVM || emitLLVM || IsLoweringHostToLLVM) && CodegenTarget == TargetDevice::GPU )
+  {
+    pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
+  }
+
 #endif
+
+  if (IsLoweringHostToLLVM|| isLoweringToLLVM || emitLLVM)
+  {
+
 
     // pm.addPass(mlir::createCanonicalizerPass());
     /// Blanket-convert any remaining high-level vector ops to loops if any remain.

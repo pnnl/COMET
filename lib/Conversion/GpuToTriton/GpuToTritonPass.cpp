@@ -2023,7 +2023,6 @@ public:
       return signalPassFailure();
     }
 
-    // op->dump();
 
     auto ttfuncOps  = op.getOps<mlir::triton::FuncOp>();
 
@@ -2104,9 +2103,11 @@ public:
     });
     
     patterns3.insert<RewriteReduction>(context);
-    for(auto ttfuncOp: op.getOps<triton::FuncOp>())
+    std::vector<Operation*> allttfuncOps;
+    op->walk([&allttfuncOps](triton::FuncOp gMod) {allttfuncOps.push_back(gMod); });
+    // for(auto ttfuncOp: op.getOps<triton::FuncOp>())
     {
-      if (failed(applyPartialConversion(ttfuncOp, target3, std::move(patterns3))))
+      if (failed(applyPartialConversion(allttfuncOps, target3, std::move(patterns3))))
       {
         // COMET_ERRS << "Failed to Lower STCOutputLowering2\n";
         signalPassFailure();
