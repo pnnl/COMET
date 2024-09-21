@@ -434,7 +434,17 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s, targe
             raise AssertionError("comet-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
         
         scf_out  = remove_index(p.stderr.decode())
-
+    elif 'opt-comp-workspace' in mlir_lower_flags:
+        to_llvm = ' --convert-linalg-to-loops --lower-affine --convert-scf-to-openmp --finalize-memref-to-llvm --convert-scf-to-cf --convert-cf-to-llvm --convert-func-to-llvm --convert-index-to-llvm --convert-openmp-to-llvm --convert-vector-to-llvm --canonicalize --convert-to-llvm'
+        path_to_mlir_opt = cfg.llvm_path+"/bin/mlir-opt "
+        command = path_to_mlir_opt + to_llvm
+        p = subprocess.run(shlex.split(command), input = scf_out.encode('utf-8') , stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,close_fds=False)
+        if p.returncode != 0:
+            cleanup()
+            raise AssertionError("mlir-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
+        
+        scf_out  = p.stdout.decode()
+        
     # f.write(scf_out)
     # f.close()
 
@@ -627,7 +637,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     to_llvm_command = path_to_cometopt + scf_lower_flags #+ llvm_in
     translate_mlir_command = cfg.llvm_path+"/bin/mlir-translate --mlir-to-llvmir -- " 
     libname =   "./lib"+llvmir_file+func_name+".so"
-    gcc_command = cfg.llvm_path+"/bin/clang -march=native -mtune=native -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L {0}/lib/ -Wl,-rpath,{0}/lib/ -lcomet_runner_utils -".format(cfg.comet_path)
+    gcc_command = cfg.llvm_path+"/bin/clang -march=native -mtune=native -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L {0}/lib/ -Wl,-rpath,{0}/lib/ -lcomet_runner_utils  -L {1}/lib/ -Wl,-rpath,{1}/lib/ -fopenmp=libomp -".format(cfg.comet_path, cfg.llvm_path)
 
     # We merge all several calls in a single call to the shell in order to only pay the overhead of process creation once.
     # 1. Call comet to lower scf code to llvm
