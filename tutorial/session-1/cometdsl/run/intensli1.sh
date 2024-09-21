@@ -31,37 +31,4 @@ $MLIR_BIN_DIR/mlir-cpu-runner ../IRs/$fname-opt.llvm \
     -shared-libs=$COMET_LIB_DIR/libcomet_runner_utils$sharedlib_ext
 
 
-
-# # -test-lower-to-llvm \
-# $MLIR_BIN_DIR/mlir-opt \
-# --linalg-bufferize \
-# --allow-unregistered-dialect \
-# -convert-linalg-to-affine-loops \
-# --affine-loop-tile="tile-sizes=32,32" \
-# --affine-loop-fusion \
-# --affine-scalrep \
-# -allow-unregistered-dialect \
-# -test-lower-to-llvm \
-# ../IRs/$fname-opt.mlir &> ../IRs/$fname-opt-opt.llvm
-
-#   --linalg-bufferize \
-#   --convert-linalg-to-affine-loops \
-#   --affine-loop-fusion \
-#   --affine-loop-tile="tile-sizes=32,32" \
-#   --affine-scalrep \
-#   --linalg-bufferize \
-#  --convert-vector-to-scf \
-#  --convert-scf-to-cf \
-#  -convert-cf-to-llvm \
-#  --convert-vector-to-llvm \
-#  --lower-affine \
-#  -finalize-memref-to-llvm \
-#  -arith-expand  \
-#  -memref-expand \
-#  -convert-func-to-llvm \
-#  -expand-strided-metadata \
-#   -allow-unregistered-dialect \
-#   -expand-strided-metadata -lower-affine -convert-arith-to-llvm -convert-scf-to-cf --finalize-memref-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts \
-#   --convert-arith-to-llvm 
-#   ../IRs/$fname-opt.mlir &> ../IRs/$fname-opt-opt.llvm
  

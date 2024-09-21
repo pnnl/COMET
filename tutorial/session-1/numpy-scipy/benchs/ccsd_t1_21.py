@@ -12,12 +12,15 @@ for lib in info:
     print(lib)
 	
 # Run the function 10 times and calculate the average time
-num_runs = 10
+num_runs = 5
 total_time_numpy_no_opt = 0
 total_time_comet_no_opt = 0
 
 total_time_numpy_opt = 0
 total_time_comet_opt = 0
+
+max_size_small = 64
+max_size_large = 128
 
 ############# NumPy ##########
 def run_numpy_no_opt(v,t2):
@@ -34,20 +37,33 @@ def run_comet_no_opt(v,t2):
 	i0 = comet.einsum('icmn,mnca->ia', v,t2)
 	return i0
 
+@comet.compile(flags="--convert-tc-to-ttgt") #opt1
+def run_comet_opt1(v,t2):
+	i0 = comet.einsum('icmn,mnca->ia', v,t2)
+	return i0
+
+
+@comet.compile(flags="--opt-matmul-tiling --convert-tc-to-ttgt") #opt2
+def run_comet_opt2(v,t2):
+	i0 = comet.einsum('icmn,mnca->ia', v,t2)
+	return i0
+
 # @comet.compile(flags="--convert-tc-to-ttgt") #opt1
 # @comet.compile(flags="--opt-matmul-tiling --convert-tc-to-ttgt") #opt2
 @comet.compile(flags="--opt-bestperm-ttgt --opt-matmul-tiling  --opt-matmul-mkernel  --opt-dense-transpose --convert-tc-to-ttgt") #opt3
-def run_comet_opt(v,t2):
+def run_comet_opt3(v,t2):
 	i0 = comet.einsum('icmn,mnca->ia', v,t2)
 	return i0
 
 #Inputs
-v = np.full([32, 32, 64, 64], 2.3,  dtype=float)
-t2 = np.full([64, 64, 32, 64], 3.4,  dtype=float)
-i0 = np.full([32, 64], 0.0,  dtype=float)
+v = np.full([max_size_small, max_size_small, max_size_large, max_size_large], 2.3,  dtype=float)
+t2 = np.full([max_size_large, max_size_large, max_size_small, max_size_large], 3.4,  dtype=float)
+i0 = np.full([max_size_small, max_size_large], 0.0,  dtype=float)
 
-
-# Measure the execution time without optimizations
+############################################################
+############# NumPy and COMET NON OPTIMIZED CODE ##########
+############################################################
+#Measure the execution time without optimizations
 for _ in range(num_runs):
 	start_time = perf_counter()        # Start the timer	
 	expected_result = run_numpy_no_opt(v,t2)  # Call the function
@@ -66,9 +82,12 @@ for _ in range(num_runs):
 	total_time_comet_no_opt += end_time - start_time  # Accumulate the execution time
 
 average_time_comet = total_time_comet_no_opt / num_runs
-print(f"Average Execution Time for COMET *WITHOUT* Optimizations: {average_time_comet:.6f} seconds")
+print(f"Average Execution Time for COMET *WITHOUT* Optimizations: {average_time_comet:.6f} seconds\n")
 
 
+############################################################
+############# NumPy and COMET OPTIMIZED CODE ##########
+############################################################
 # Measure the execution time with optimizations enabled
 for _ in range(num_runs):
 	start_time = perf_counter()            # Start the timer	
@@ -82,14 +101,33 @@ print(f"Average Execution Time for Numpy *WITH* Optimizations: {average_time_num
 
 for _ in range(num_runs):
 	start_time = perf_counter()        			# Start the timer
-	result_with_jit = run_comet_opt(v,t2)
+	result_with_jit = run_comet_opt1(v,t2)
 	end_time = perf_counter()		            # End the timer
 
 	total_time_comet_opt += end_time - start_time  # Accumulate the execution time
 
 average_time_comet = total_time_comet_opt / num_runs
-print(f"Average Execution Time for COMET *WITH* Optimizations: {average_time_comet:.6f} seconds")
+print(f"Average Execution Time for COMET Partial Optimization *LEVEL 1*: {average_time_comet:.6f} seconds")
 
+for _ in range(num_runs):
+	start_time = perf_counter()        			# Start the timer
+	result_with_jit = run_comet_opt2(v,t2)
+	end_time = perf_counter()		            # End the timer
+
+	total_time_comet_opt += end_time - start_time  # Accumulate the execution time
+
+average_time_comet = total_time_comet_opt / num_runs
+print(f"Average Execution Time for COMET Partial Optimization *LEVEL 2*: {average_time_comet:.6f} seconds")
+
+for _ in range(num_runs):
+	start_time = perf_counter()        			# Start the timer
+	result_with_jit = run_comet_opt3(v,t2)
+	end_time = perf_counter()		            # End the timer
+
+	total_time_comet_opt += end_time - start_time  # Accumulate the execution time
+
+average_time_comet = total_time_comet_opt / num_runs
+print(f"Average Execution Time for COMET with *ALL* Optimization: {average_time_comet:.6f} seconds")
 
 # if sp.sparse.issparse(expected_result):
 # 	expected_result = expected_result.todense()

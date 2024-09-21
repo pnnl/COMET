@@ -2,8 +2,8 @@
 
 def main() {
 	#IndexLabel Declarations
-	IndexLabel [a, b, d] = [312];
-	IndexLabel [c] = [296];
+	IndexLabel [a, b, d] = [1024];
+	IndexLabel [c] = [512];
 
 	#Tensor Declarations
 	Tensor<double> v([d, c, a], {Dense});

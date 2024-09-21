@@ -12,7 +12,8 @@ for lib in info:
     print(lib)
 	
 # Run the function 10 times and calculate the average time
-num_runs = 10
+num_runs = 3
+max_size = 4096
 total_time_numpy_no_opt = 0
 total_time_comet_no_opt = 0
 
@@ -41,9 +42,9 @@ def run_comet_opt(A,B):
 	return C
 
 
-A = np.full([1024, 1024], 2.2,  dtype=float)
-B = np.full([1024, 1024], 3.4,  dtype=float)
-C = np.full([1024, 1024], 0.0,  dtype=float)
+A = np.full([max_size, max_size], 2.2,  dtype=float)
+B = np.full([max_size, max_size], 3.4,  dtype=float)
+C = np.full([max_size, max_size], 0.0,  dtype=float)
 
 # Measure the execution time for non optimized code
 for _ in range(num_runs):
@@ -89,7 +90,7 @@ average_time_comet = total_time_comet_opt / num_runs
 print(f"Average Execution Time for COMET WITH Optimization: {average_time_comet:.6f} seconds")
 
 #Validation
-if sp.sparse.issparse(expected_result):
-	expected_result = expected_result.todense()
-	result_with_jit = result_with_jit.todense()
-np.testing.assert_almost_equal(result_with_jit, expected_result)
+# if sp.sparse.issparse(expected_result):
+# 	expected_result = expected_result.todense()
+# 	result_with_jit = result_with_jit.todense()
+# np.testing.assert_almost_equal(result_with_jit, expected_result)

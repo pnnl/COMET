@@ -3,7 +3,6 @@
 # List of testcases to run 
 testcases=(
         # "mult_dense_matrix" 
-        # "ccsd_t1_11" 
         # "ccsd_t1_21" 
         # "intensli1"
         "spmm_coo"

@@ -2,9 +2,9 @@
 
 def main() {
 	#IndexLabel Declarations
-	IndexLabel [i] = [1024];
-	IndexLabel [j] = [1024];  
-	IndexLabel [k] = [1024];           
+	IndexLabel [i] = [4096];
+	IndexLabel [j] = [4096];  
+	IndexLabel [k] = [4096];           
 
 	#Tensor Declarations
 	Tensor<double> A([i, j], {Dense});	  
