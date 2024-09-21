@@ -5105,7 +5105,8 @@ namespace
         std::vector<std::vector<std::string>> allFormats;
         std::vector<std::vector<int>> allPerms;
         std::vector<std::vector<bool>> inputOutputMapping;
-        getFormatsPermsOfComputeOp(cur_op, allFormats, allPerms, inputOutputMapping);
+        std::vector<std::vector<std::string>> allBlocks;
+        getFormatsPermsOfComputeOp(cur_op, allFormats, allBlocks, allPerms, inputOutputMapping);
 
         if (3 == allPerms.size())
         {
