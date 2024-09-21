@@ -603,7 +603,7 @@ class NewVisitor(ast.NodeVisitor):
             elif len(op1['shape']) == 1 and len(op2['shape']) == 2:
                 indices = 'j,jk->k'
             
-            return self.visit_Bin_Einsum_Call(operands, indices, mask, None, 0, False)
+            return self.visit_Bin_Einsum_Call(operands, indices, mask, None, 0, False, {})
 
         self.tcurr +=1
         return self.tcurr-1
@@ -772,7 +772,7 @@ class NewVisitor(ast.NodeVisitor):
                     "operands": [obj]
                 })
 
-    def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, beta, no_assign, lbls_to_ilbls = {}):
+    def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, beta, no_assign, lbls_to_ilbls):
 
         ops = llabels.split('->')[0].split(',')
         res = list(llabels.split('->')[1])
@@ -1026,7 +1026,7 @@ class NewVisitor(ast.NodeVisitor):
             loperand = operands[0]
             lops = ops[0]
             ret = res
-            tid = self.visit_Bin_Einsum_Call([loperand], lops+"->"+"".join(ret), mask, semiring, no_assign, no_assign)
+            tid = self.visit_Bin_Einsum_Call([loperand], lops+"->"+"".join(ret), mask, semiring, no_assign, no_assign, {})
             lops = "".join(ret)
             return tid
 
