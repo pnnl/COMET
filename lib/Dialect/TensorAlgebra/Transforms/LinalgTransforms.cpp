@@ -652,7 +652,7 @@ namespace
   {
   public:
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(OptDenseTransposePass)
-    OptDenseTransposePass(uint64_t tile_size, bool seperate_tiles) : tile_size(tile_size), seperate_tiles(seperate_tiles){};
+    OptDenseTransposePass(uint64_t tile_size, bool seperate_tiles) : tile_size(tile_size), seperate_tiles(seperate_tiles) {};
     void runOnOperation() override
     {
       comet_debug() << "OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, FunctionPass>\n";
@@ -675,6 +675,7 @@ namespace
     bool seperate_tiles;
   };
 } /// end anonymous namespace
+
 
 /// Create a pass to optimize LinAlg Matmul Op with tiling
 std::unique_ptr<mlir::Pass> mlir::comet::createLinAlgMatmulTilingPass()

@@ -13,3 +13,5 @@ export COMET_BIN_DIR=$COMETPY_COMET_PATH/bin       #${COMET_SRC}/build/bin
 export COMET_LIB_DIR=$COMETPY_COMET_PATH/lib       #${COMET_SRC}/build/lib
 export MLIR_BIN_DIR=$COMETPY_LLVM_PATH/bin   #${COMET_SRC}/llvm/bin
 export MLIR_LIB_DIR=$COMETPY_LLVM_PATH/lib   #${COMET_SRC}/llvm/lib
+
+export OMP_NUM_THREADS=1

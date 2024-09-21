@@ -1,0 +1,4 @@
+Execution Time for COMET *WITHOUT* Optimization:
+ELAPSED_TIME = 21.708533
+Execution Time for COMET *WITH* Optimization:
+ELAPSED_TIME = 0.391163

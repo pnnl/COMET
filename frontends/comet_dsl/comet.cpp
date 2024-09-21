@@ -102,26 +102,29 @@
 #include <cstdlib>
 #include <string>
 
-int exec(const char* cmd, std::string& result) {
-    char buffer[128];
-    result = "";
-    FILE* pipe = popen(cmd, "r");
-    while (fgets(buffer, sizeof buffer, pipe) != NULL) {
-        result += buffer;
-    }
-    return pclose(pipe);
+int exec(const char *cmd, std::string &result)
+{
+  char buffer[128];
+  result = "";
+  FILE *pipe = popen(cmd, "r");
+  while (fgets(buffer, sizeof buffer, pipe) != NULL)
+  {
+    result += buffer;
+  }
+  return pclose(pipe);
 }
 
-mlir::OwningOpRef<mlir::ModuleOp> createModuleFromString(mlir::MLIRContext &context, const std::string &moduleStr) {
-    llvm::SourceMgr sourceMgr;
-    sourceMgr.AddNewSourceBuffer(
-        llvm::MemoryBuffer::getMemBuffer(moduleStr), llvm::SMLoc());
-    
-    mlir::OwningOpRef<mlir::ModuleOp> module = mlir::parseSourceFile<mlir::ModuleOp>(sourceMgr, &context);
-    if (!module)
-        llvm::errs() << "Error: failed to parse module from string.\n";
-    
-    return module;
+mlir::OwningOpRef<mlir::ModuleOp> createModuleFromString(mlir::MLIRContext &context, const std::string &moduleStr)
+{
+  llvm::SourceMgr sourceMgr;
+  sourceMgr.AddNewSourceBuffer(
+      llvm::MemoryBuffer::getMemBuffer(moduleStr), llvm::SMLoc());
+
+  mlir::OwningOpRef<mlir::ModuleOp> module = mlir::parseSourceFile<mlir::ModuleOp>(sourceMgr, &context);
+  if (!module)
+    llvm::errs() << "Error: failed to parse module from string.\n";
+
+  return module;
 }
 
 using namespace mlir::tensorAlgebra;
@@ -167,15 +170,14 @@ static cl::opt<bool> emitLLVM("emit-llvm", cl::desc("output the LLVM dialect dum
 /// Godegen Target
 /// =============================================================================
 
-static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Code generation target"), 
-    cl::values(
-      clEnumVal(CPU, "Codegen target is CPU")
-      #ifdef ENABLE_GPU_TARGET
-      , 
-      clEnumVal(GPU, "Codegen target is GPU")
-      #endif
-    )
-  );
+static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Code generation target"),
+                                           cl::values(
+                                               clEnumVal(CPU, "Codegen target is CPU")
+#ifdef ENABLE_GPU_TARGET
+                                                   ,
+                                               clEnumVal(GPU, "Codegen target is GPU")
+#endif
+                                                   ));
 
 #ifdef ENABLE_GPU_TARGET
 static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::init(32), cl::desc("GPU Block size in X direction"));
@@ -446,10 +448,19 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createLinAlgMatmulMicroKernelPass());
   }
 
+  if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
+  {
+    /// If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.transpose, then
+    /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
+    /// HPTT: A High-Performance Tensor Transposition C++ Library
+    /// https://arxiv.org/abs/1704.04374
+    // optPM.addPass(mlir::comet::createOptDenseTransposePass());
+  }
+
   /// =============================================================================
   /// Lowering all the operations to loops
   /// =============================================================================
-  if (IsLoweringtoSCF || emitLoops || emitTriton_ ||  emitLLVM )
+  if (IsLoweringtoSCF || emitLoops || emitTriton_ || emitLLVM)
   {
 
     /// Workspace transformations will create new dense tensor declarations, so we need to call createDenseTensorDeclLoweringPass
@@ -480,18 +491,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     #endif
     optPM.addPass(mlir::tensor::createTensorBufferizePass());
     pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
-    pm.addPass(mlir::createConvertLinalgToLoopsPass());
 
-    if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
-    {
-      /// If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.transpose, then
-      /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
-      /// HPTT: A High-Performance Tensor Transposition C++ Library
-      /// https://arxiv.org/abs/1704.04374
-      optPM.addPass(mlir::comet::createOptDenseTransposePass());
-      // optPM.addPass(mlir::affine::createAffineLoopNormalizePass());
-      // optPM.addPass(mlir::affine::createLoopFusionPass());
-    }
+    //The last step before lowering linalg operations to affine loop
+    pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
 
     /// Dump scf dialect.
     if (emitLoops)
@@ -504,8 +506,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     }
     ///  =============================================================================
   }
-
-
 
   /// =============================================================================
   /// Late lowering passes
@@ -535,7 +535,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
         return 4;
       return 0;
     }
-
   }
 #endif
   // pm.addPass(mlir::createCanonicalizerPass());
@@ -629,8 +628,8 @@ int main(int argc, char **argv)
   if (emitAST)
     return dumpAST();
 
-  /// If we aren't dumping the AST, then we are compiling with/to MLIR.
-  /// Register our Dialect with MLIR.
+    /// If we aren't dumping the AST, then we are compiling with/to MLIR.
+    /// Register our Dialect with MLIR.
 #ifdef ENABLE_GPU_TARGET
   context.loadDialect<mlir::triton::TritonDialect>();
   registerLLVMDialectTranslation(context);

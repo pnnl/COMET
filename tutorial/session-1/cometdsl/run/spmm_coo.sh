@@ -1,0 +1,15 @@
+fname="spmm_COO.ta"
+
+sharedlib_ext=".dylib"
+export SPARSE_FILE_NAME0=../../../data/shipsec1.mtx
+
+$COMET_BIN_DIR/comet-opt   \
+    --convert-ta-to-it \
+    --convert-to-loops \
+    --convert-to-llvm \
+    ../$fname &> ../IRs/$fname-opt.llvm
+
+echo "Execution Time for COMET *WITH* Optimization:"
+$MLIR_BIN_DIR/mlir-cpu-runner ../IRs/$fname-opt.llvm \
+    -O3 -e main -entry-point-result=void \
+    -shared-libs=$COMET_LIB_DIR/libcomet_runner_utils$sharedlib_ext

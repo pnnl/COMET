@@ -1,9 +1,27 @@
 import setuptools
 import os
 import subprocess
+import sys
+
 
 # Optionally, specify the location of site.cfg
 site_cfg_path = os.path.join(os.path.dirname(__file__), 'site.cfg')
+
+# # Get the virtual environment pip path
+# venv_pip = os.path.join(sys.prefix, 'bin', 'pip')
+# print(venv_pip)
+
+
+# # Function to install numpy from source using the correct pip
+# def install_numpy_from_source():
+#     try:
+#         subprocess.check_call([venv_pip, "install", "numpy", "--no-binary", ":all:"])
+#     except subprocess.CalledProcessError as e:
+#         print("Failed to install Numpy from source.")
+#         sys.exit(1)
+
+# # Ensure numpy is installed from source before continuing
+# install_numpy_from_source()
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -59,10 +77,11 @@ setuptools.setup(
     install_requires=[
         'jinja2',
         'numpy',
+        'threadpoolctl',
         'scipy>=1.14'
     ],
-    setup_requires=[
-        'numpy',
-    ],
+    # setup_requires=[
+    #     'numpy',
+    # ],
     python_requires=">=3.8",
 )

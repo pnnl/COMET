@@ -19,12 +19,6 @@ These commands can be used to setup COMET project:
 * [Git (1.8.4 or later)](https://www.git-scm.com/)
 * [pkg-config (0.29.2 or later)](https://www.freedesktop.org/wiki/Software/pkg-config/)
 
-   1.a **[Optional but recommended] Create a new python environment**
-   ```bash
-   $ export PYTHON_EXECUTABLE=$(which python3.x) # Replace 3.x with your version
-   $ ${PYTHON_EXECUTABLE} -m venv "comet"
-   $ source comet/bin/activate
-   ```
 
 2) **Get submodules required for COMET.**  COMET contains LLVM and blis as a git
 submodule.  The LLVM repo here includes staged changes to MLIR which

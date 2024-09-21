@@ -25,14 +25,17 @@ More information about the COMET compiler can be found at:
 
 
 # Installation and Testing:
-1) **Steps to Configure NumPy to Use OpenBLAS:**
-    * Install OpenBLAS on your system. On macOS and Linux, you can use Homebrew or your package manager. For example, using Homebrew: ```brew install openblas```
+1) **Configure NumPy to Use OpenBLAS:**
+    * To be able to provide fine-grained controls for multithreading in NumPy.
+    Install OpenBLAS on your system. On macOS and Linux, you can use Homebrew or your package manager. 
+    For example, using Homebrew: ```brew install openblas```
 
     * Set environment variables to ensure that NumPy picks up OpenBLAS during installation
  
-        ```
-        export LDFLAGS="-L$PATH_TO_OPENBLAS/lib"         #/opt/homebrew/opt/openblas/lib  
-        export CPPFLAGS="-I$PATH_TO_OPENBLAS/include"    #/opt/homebrew/opt/openblas/
+        ```bash
+        $ export LDFLAGS="-L$PATH_TO_OPENBLAS/lib"              #/opt/homebrew/opt/openblas/lib  
+        $ export CPPFLAGS="-I$PATH_TO_OPENBLAS/include"         #/opt/homebrew/opt/openblas/include
+        $ export PKG_CONFIG_PATH="$PATH_TO_OPENBLAS/lib/pkgconfig" #/opt/homebrew/opt/openblas/lib/pkgconfig
         ```
 
     * Adjusting the paths in ```site.cfg``` based on where OpenBLAS is installed on the system
@@ -42,22 +45,26 @@ More information about the COMET compiler can be found at:
 
     * Set environmental variables for paths to COMET and LLVM:
     
-        ```
-        export COMETPY_COMET_PATH=$COMET_SRC/build/ 
-        export COMETPY_LLVM_PATH=$COMET_SRC/llvm/build 
+        ```bash
+        $ export COMETPY_COMET_PATH=$COMET_SRC/build/ 
+        $ export COMETPY_LLVM_PATH=$COMET_SRC/llvm/build 
         ```
     
     * In directory `frontends/numpy-scipy` run the following comment. It will also install the package dependencies if not already installed.
     
-        ```
-        python3 -m pip install .
+        ```bash
+        $ export PYTHON_EXECUTABLE=$(which python3.x) # Replace 3.x with your version. Skip if already run while installing COMET
+        $ ${PYTHON_EXECUTABLE} -m venv "comet-venv"
+        $ source comet-venv/bin/activate
+        $ pip install numpy --no-binary :all:         # Install Numpy from source, linked with OpenBLAS
+        $ python3 -m pip install .
         ```
 
 2) **Testing:**  Run the integration tests to make sure the installation was successfull
     
-    ```
-    cd integration_tests
-    python3 numpy_integration.py -v
+    ```bash
+    $ cd integration_tests
+    $ python3 numpy_integration.py -v
     ```
 
 # How to use cometpy in a program:

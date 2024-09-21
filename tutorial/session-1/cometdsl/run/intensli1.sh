@@ -8,6 +8,7 @@ $COMET_BIN_DIR/comet-opt   \
     --convert-to-llvm  \
     ../$fname &> ../IRs/$fname-opt.llvm
 
+
 echo "Execution Time for COMET *WITHOUT* Optimization:"
 $MLIR_BIN_DIR/mlir-cpu-runner ../IRs/$fname-opt.llvm \
     -O3 -e main -entry-point-result=void \
@@ -20,6 +21,7 @@ $COMET_BIN_DIR/comet-opt   \
     -opt-matmul-mkernel  \
     -opt-dense-transpose \
     --convert-tc-to-ttgt \
+    --convert-to-loops \
     --convert-to-llvm    \
     ../$fname &> ../IRs/$fname-opt.llvm
 
@@ -27,3 +29,39 @@ echo "Execution Time for COMET *WITH* Optimization:"
 $MLIR_BIN_DIR/mlir-cpu-runner ../IRs/$fname-opt.llvm \
     -O3 -e main -entry-point-result=void \
     -shared-libs=$COMET_LIB_DIR/libcomet_runner_utils$sharedlib_ext
+
+
+
+# # -test-lower-to-llvm \
+# $MLIR_BIN_DIR/mlir-opt \
+# --linalg-bufferize \
+# --allow-unregistered-dialect \
+# -convert-linalg-to-affine-loops \
+# --affine-loop-tile="tile-sizes=32,32" \
+# --affine-loop-fusion \
+# --affine-scalrep \
+# -allow-unregistered-dialect \
+# -test-lower-to-llvm \
+# ../IRs/$fname-opt.mlir &> ../IRs/$fname-opt-opt.llvm
+
+#   --linalg-bufferize \
+#   --convert-linalg-to-affine-loops \
+#   --affine-loop-fusion \
+#   --affine-loop-tile="tile-sizes=32,32" \
+#   --affine-scalrep \
+#   --linalg-bufferize \
+#  --convert-vector-to-scf \
+#  --convert-scf-to-cf \
+#  -convert-cf-to-llvm \
+#  --convert-vector-to-llvm \
+#  --lower-affine \
+#  -finalize-memref-to-llvm \
+#  -arith-expand  \
+#  -memref-expand \
+#  -convert-func-to-llvm \
+#  -expand-strided-metadata \
+#   -allow-unregistered-dialect \
+#   -expand-strided-metadata -lower-affine -convert-arith-to-llvm -convert-scf-to-cf --finalize-memref-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts \
+#   --convert-arith-to-llvm 
+#   ../IRs/$fname-opt.mlir &> ../IRs/$fname-opt-opt.llvm
+ 

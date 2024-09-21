@@ -72,6 +72,7 @@ namespace
     void runOnOperation() override;
   };
 
+
   struct STCRemoveDeadOpsPass
       : public PassWrapper<STCRemoveDeadOpsPass, OperationPass<func::FuncOp>>
   {
