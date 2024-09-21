@@ -254,20 +254,19 @@ static cl::opt<bool> IsLoweringtoSCF("convert-to-loops",
 /// Lowering loops to Triton
 /// =============================================================================
 static cl::opt<bool> IsLoweringtoTriton("convert-to-triton",
-                                     cl::desc("Output Triton dialect after lowering all operations"));
+                                        cl::desc("Output Triton dialect after lowering all operations"));
 
 /// =============================================================================
 /// Lowering Triton to CUDA/LLVM
 /// =============================================================================
 static cl::opt<bool> IsLoweringDeviceToLLVM("convert-triton-to-llvm",
-                                     cl::desc("Output Triton dialect after lowering all operations"));
-
+                                            cl::desc("Output Triton dialect after lowering all operations"));
 
 /// =============================================================================
 /// Lowering GPU-host Triton to CUDA/LLVM
 /// =============================================================================
 static cl::opt<bool> IsLoweringHostToLLVM("convert-host-to-llvm",
-                                     cl::desc("Output Triton dialect after lowering all operations"));
+                                          cl::desc("Output Triton dialect after lowering all operations"));
 #endif
 
 /// =============================================================================
@@ -448,15 +447,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createLinAlgMatmulMicroKernelPass());
   }
 
-  if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
-  {
-    /// If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.transpose, then
-    /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
-    /// HPTT: A High-Performance Tensor Transposition C++ Library
-    /// https://arxiv.org/abs/1704.04374
-    // optPM.addPass(mlir::comet::createOptDenseTransposePass());
-  }
-
   /// =============================================================================
   /// Lowering all the operations to loops
   /// =============================================================================
@@ -483,17 +473,28 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
     optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
 
-    /// Finally lowering index tree to SCF dialect
-    #ifdef ENABLE_GPU_TARGET
-      optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, GPUBlockSizeY, GPUBlockSizeX, GPUBlockSizeR));
-    #else
-      optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, 0, 0, 0));
-    #endif
+/// Finally lowering index tree to SCF dialect
+#ifdef ENABLE_GPU_TARGET
+    optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, GPUBlockSizeY, GPUBlockSizeX, GPUBlockSizeR));
+#else
+    optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, 0, 0, 0));
+#endif
     optPM.addPass(mlir::tensor::createTensorBufferizePass());
     pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
 
-    //The last step before lowering linalg operations to affine loop
-    pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
+    pm.addPass(mlir::createConvertLinalgToLoopsPass());
+
+    if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
+    {
+      /// If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.transpose, then
+      /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
+      /// HPTT: A High-Performance Tensor Transposition C++ Library
+      /// https://arxiv.org/abs/1704.04374
+      optPM.addPass(mlir::comet::createOptDenseTransposePass());
+    }
+
+    // //The last step before lowering linalg operations to affine loop
+    // pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
 
     /// Dump scf dialect.
     if (emitLoops)
@@ -541,12 +542,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   /// =============================================================================
 #ifdef ENABLE_GPU_TARGET
-  if((isLoweringToLLVM || emitLLVM || IsLoweringDeviceToLLVM) && CodegenTarget == TargetDevice::GPU )
+  if ((isLoweringToLLVM || emitLLVM || IsLoweringDeviceToLLVM) && CodegenTarget == TargetDevice::GPU)
   {
     pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability));
   }
 
-  if((isLoweringToLLVM || emitLLVM || IsLoweringHostToLLVM) && CodegenTarget == TargetDevice::GPU )
+  if ((isLoweringToLLVM || emitLLVM || IsLoweringHostToLLVM) && CodegenTarget == TargetDevice::GPU)
   {
     pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
   }
@@ -555,7 +556,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
 #ifdef ENABLE_GPU_TARGET
 
-  if (IsLoweringHostToLLVM|| isLoweringToLLVM || emitLLVM)
+  if (IsLoweringHostToLLVM || isLoweringToLLVM || emitLLVM)
 #else
   if (isLoweringToLLVM || emitLLVM)
 #endif

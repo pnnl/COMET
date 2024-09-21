@@ -56,7 +56,7 @@ More information about the COMET compiler can be found at:
         $ export PYTHON_EXECUTABLE=$(which python3.x) # Replace 3.x with your version. Skip if already run while installing COMET
         $ ${PYTHON_EXECUTABLE} -m venv "comet-venv"
         $ source comet-venv/bin/activate
-        $ pip install numpy --no-binary :all:         # Install Numpy from source, linked with OpenBLAS
+        $ pip install numpy --no-binary :all:         # Install Numpy from source, linked with OpenBlas
         $ python3 -m pip install .
         ```
 
