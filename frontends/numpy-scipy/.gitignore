@@ -1,3 +1,4 @@
 build/*
 cometpy.egg-info/*
 cometpy/cfg.py
+comet-env/*
