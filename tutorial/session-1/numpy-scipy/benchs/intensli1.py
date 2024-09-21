@@ -90,7 +90,7 @@ for _ in range(num_runs):
 average_time_comet = total_time_comet_opt / num_runs
 print(f"Average Execution Time for COMET *WITH* Optimizations: {average_time_comet:.6f} seconds")
 
-
+#Validation
 # if sp.sparse.issparse(expected_result):
 # 	expected_result = expected_result.todense()
 # 	result_with_jit = result_with_jit.todense()
