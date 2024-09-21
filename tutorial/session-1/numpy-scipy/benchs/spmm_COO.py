@@ -16,11 +16,13 @@ total_time_comet_opt = 0
 
 def run_numpy(A,B):
 	C = A @ B 
+
 	return C
 
 @comet.compile(flags=None)
 def run_comet(A,B):
 	C = A @ B 
+
 	return C
 
 B = sp.sparse.coo_array(sp.io.mmread("../../../data/shipsec1.mtx"))
@@ -28,20 +30,29 @@ A = np.full([4, B.shape[0]], 1.7,  dtype=float)
 C = np.full([4, B.shape[1]], 0.0,  dtype=float)
 
 # Measure the execution time
-start_time = perf_counter()            # Start the timer	
-expected_result = run_numpy(A,B)
-end_time = perf_counter()		       # End the timer
-print(f"Execution Time for Numpy: {end_time-start_time:.6f} seconds")
+for _ in range(num_runs):
+	start_time = perf_counter()            # Start the timer	
+	expected_result = run_numpy(A,B)
+	end_time = perf_counter()		       # End the timer
+
+	total_time_numpy_opt += end_time - start_time  # Accumulate the execution time
+
+average_time_numpy = total_time_numpy_opt / num_runs
+print(f"Average Execution Time for Numpy *WITH* Optimizations: {average_time_numpy:.6f} seconds")
 
 
+for _ in range(num_runs):
+	start_time = perf_counter()        			# Start the timer
+	result_comet = run_comet(A,B)
+	end_time = perf_counter()		            # End the timer
 
-start_time = perf_counter()        			# Start the timer
-result_with_jit = run_comet(A,B)
-end_time = perf_counter()		            # End the timer
-print(f"Execution Time for COMET: {end_time-start_time:.6f} seconds")
+	total_time_comet_opt += end_time - start_time  # Accumulate the execution time
+
+average_time_comet = total_time_comet_opt / num_runs
+print(f"Average Execution Time for COMET *WITH* Optimizations: {average_time_comet:.6f} seconds")
 
 
 if sp.sparse.issparse(expected_result):
 	expected_result = expected_result.todense()
-	result_with_jit = result_with_jit.todense()
-np.testing.assert_almost_equal(result_with_jit, expected_result,2)
+	result_with_jit = result_comet.todense()
+np.testing.assert_almost_equal(result_comet, expected_result,2)
