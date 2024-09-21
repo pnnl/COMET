@@ -252,10 +252,10 @@ vector<mlir::Operation *> Index_Tree::getContainingTAOps()
 
 void Index_Tree::setSizeOfIteratorTypesByIndices(IndicesType allIndices)
 {
-  for (int index : allIndices)
-  {
-    iteratorTypes[index] = nullptr;
-  }
+  // for (int index : allIndices)
+  // {
+  //   iteratorTypes[index] = nullptr;
+  // }
 }
 
 std::unordered_set<std::string> IteratorType::supported_types = {"default",
