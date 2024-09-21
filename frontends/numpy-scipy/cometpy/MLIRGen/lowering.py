@@ -425,6 +425,7 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s, targe
 
     scf_out = comment_unneeded_sparse(scf_out, arg_vals)
     scf_out = comment_unneeded_dense(scf_out, arg_vals)
+
     if(target != 'cpu'): # Thus GPU
         path_to_comet = cfg.comet_path+"/bin/comet-opt -x mlir "
         command = path_to_comet + '--target=GPU --convert-to-triton --convert-triton-to-llvm '
@@ -444,7 +445,6 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s, targe
             raise AssertionError("mlir-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
         
         scf_out  = p.stdout.decode()
-        
     # f.write(scf_out)
     # f.close()
 
