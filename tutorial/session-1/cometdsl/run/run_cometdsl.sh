@@ -4,16 +4,17 @@
 dense_testcases=(
         # "mult_dense_matrix" 
         # "ccsd_t1_21" 
-        "intensli1"
+        # "intensli1"
         )
 
 sparse_testcases=(
-        # "spmm_coo"
-        # "spmm_csr"
-        # "spgemm_csr"
+        # "spmm_COO"
+        # "spmm_CSR"
+        # "spgemm_CSR"
+        "semiring_PlusPair"
         )
 
-output_dir="../outputs/09.22-dense/"
+output_dir="../outputs/09.22-semiring/"
 
 sparse_inputs=(
          "bcsstk17"

@@ -2,17 +2,18 @@
 
 # List of testcases to run 
 dense_testcases=(
-        "mult_dense_matrix" 
-        "ccsd_t1_21" 
-        "intensli1"
+        # "mult_dense_matrix" 
+        # "ccsd_t1_21" 
+        # "intensli1"
         )
 
 sparse_testcases=(
-        # "spmm_coo"
-        # "spmm_csr"
+        # "spmm_COO"
+        # "spmm_CSR"
+        "spgemm_CSR"
         )
 
-output_dir="../outputs/09.22-dense/"
+output_dir="../outputs/09.22-spgemm/"
 
 sparse_inputs=(
          "bcsstk17"
@@ -59,6 +60,7 @@ do
     for sinput in "${sparse_inputs[@]}"
     do
         export SPARSE_FILE_NAME0=/Users/kest268/projects/COMET/COMET/tutorial/data/$sinput".mtx"
+        export SPARSE_FILE_NAME1=/Users/kest268/projects/COMET/COMET/tutorial/data/$sinput".mtx"
         echo $SPARSE_FILE_NAME0
         # Execute the command with the current input
         $command_to_run ../benchs/"$sparse_testcase".py &> "$output_dir"/"$sparse_testcase"-"$sinput".out
