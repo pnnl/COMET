@@ -1,14 +1,30 @@
 #!/bin/bash
 
 # List of testcases to run 
-testcases=(
+dense_testcases=(
         # "mult_dense_matrix" 
         # "ccsd_t1_21" 
-        # "intensli1"
-        "spmm_coo"
-        "spmm_csr")
+        "intensli1"
+        )
 
-output_dir="../outputs/09.20.6/"
+sparse_testcases=(
+        # "spmm_coo"
+        # "spmm_csr"
+        # "spgemm_csr"
+        )
+
+output_dir="../outputs/09.22-dense/"
+
+sparse_inputs=(
+         "bcsstk17"
+        "cant"
+        "consph"
+        "cop20k_A"
+        "pdb1HYS"
+        "rma10"
+        "scircuit"
+        "shipsec1"
+        )
 
 # Check if the directory exists
 if [ ! -d "$output_dir" ]; then
@@ -24,18 +40,25 @@ else
     echo "Directory $output_dir already exists."
 fi
 
-# Loop over each testcases and run them
-for testcase in "${testcases[@]}"
+# Loop over dense testcases and run them
+for dense_testcase in "${dense_testcases[@]}"
 do
-    echo "Running the testcases: $testcase"
+    echo "Running the sparse testcases: $dense_testcase"
+    bash ./"$dense_testcase".sh &> "$output_dir"/"$dense_testcase".out
+done
+
+# Loop over sparse testcases and run them
+for sparse_testcase in "${sparse_testcases[@]}"
+do
+    echo "Running the sparse testcases: $sparse_testcase"
     
-    # Execute the command with the current input
-    bash ./"$testcase".sh &> "$output_dir"/"$testcase".out
+    for sinput in "${sparse_inputs[@]}"
+    do
+        export SPARSE_FILE_NAME0=/Users/kest268/projects/COMET/COMET/tutorial/data/$sinput".mtx"
+        export SPARSE_FILE_NAME1=/Users/kest268/projects/COMET/COMET/tutorial/data/$sinput".mtx"
+        echo $SPARSE_FILE_NAME0
+        # Execute the command with the current input
+        bash ./"$sparse_testcase".sh &> "$output_dir"/"$sparse_testcase"-"$sinput".out
+    done
     
-    # Check if the command was successful
-    if [ $? -ne 0 ]; then
-        echo "Command failed with input: $testcase"
-    else
-        echo "Command succeeded with input: $testcase"
-    fi
 done

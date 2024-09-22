@@ -560,20 +560,21 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 #else
   if (isLoweringToLLVM || emitLLVM)
 #endif
-  {
-
-    // pm.addPass(mlir::createCanonicalizerPass());
-    /// Blanket-convert any remaining high-level vector ops to loops if any remain.
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
+  {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
     /// Blanket-convert any remaining linalg ops to loops if any remain.
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
     /// Blanket-convert any remaining affine ops if any remain.
     pm.addPass(mlir::createLowerAffinePass());
+    /// Convert SCF parallel loop to OpenMP parallel
+    pm.addPass(mlir::createConvertSCFToOpenMPPass());
+    /// Convert MemRef to LLVM (always needed).
+    pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
     /// Convert SCF to CF (always needed).
     pm.addPass(mlir::createConvertSCFToCFPass());
     /// Sprinkle some cleanups.
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());
+    pm.addPass(mlir::createConvertControlFlowToLLVMPass());
     /// Convert vector to LLVM (always needed).
     pm.addPass(mlir::createConvertVectorToLLVMPass()); // TODO: add more options on a per-need basis.
     //// Convert Math to LLVM (always needed).
@@ -588,8 +589,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(mlir::createConvertFuncToLLVMPass());
     /// Convert Index to LLVM (always needed).
     pm.addPass(mlir::createConvertIndexToLLVMPass());
+    // Convert the OpenMP ops to OpenMP ops with LLVM dialect
+    pm.addPass(mlir::createConvertOpenMPToLLVMPass());
     /// Convert remaining unrealized_casts (always needed).
     pm.addPass(mlir::createReconcileUnrealizedCastsPass());
+    // pm.addPass(mlir::createCanonicalizerPass());
+    // pm.addPass(mlir::createCSEPass());
+    // pm.addPass(mlir::createConvertToLLVMPass());
 
     if (mlir::failed(pm.run(*module)))
       return 4;

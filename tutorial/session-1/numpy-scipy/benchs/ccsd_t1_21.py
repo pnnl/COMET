@@ -12,7 +12,7 @@ for lib in info:
     print(lib)
 	
 # Run the function 10 times and calculate the average time
-num_runs = 5
+num_runs = 10
 total_time_numpy_no_opt = 0
 total_time_comet_no_opt = 0
 
