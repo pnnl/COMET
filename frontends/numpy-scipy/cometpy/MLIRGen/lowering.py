@@ -435,16 +435,6 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s, targe
             raise AssertionError("comet-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
         
         scf_out  = remove_index(p.stderr.decode())
-    elif 'opt-comp-workspace' in mlir_lower_flags:
-        to_llvm = ' --convert-linalg-to-loops --lower-affine --convert-scf-to-openmp --finalize-memref-to-llvm --convert-scf-to-cf --convert-cf-to-llvm --convert-func-to-llvm --convert-index-to-llvm --convert-openmp-to-llvm --convert-vector-to-llvm --canonicalize --convert-to-llvm'
-        path_to_mlir_opt = cfg.llvm_path+"/bin/mlir-opt "
-        command = path_to_mlir_opt + to_llvm
-        p = subprocess.run(shlex.split(command), input = scf_out.encode('utf-8') , stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,close_fds=False)
-        if p.returncode != 0:
-            cleanup()
-            raise AssertionError("mlir-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
-        
-        scf_out  = p.stdout.decode()
     # f.write(scf_out)
     # f.close()
 
