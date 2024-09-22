@@ -1,5 +1,5 @@
 # RUN: comet-opt --convert-ta-to-it --convert-to-loops  --convert-to-llvm %s &> dTranspose_eltwise_Dense.llvm
-# RUN: mlir-cpu-runner dTranspose_eltwise_Dense.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner dTranspose_eltwise_Dense.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
 
 #TODO(gkestor): read dense input from file
 

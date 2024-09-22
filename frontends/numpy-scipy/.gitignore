@@ -2,3 +2,4 @@ build/*
 cometpy.egg-info/*
 cometpy/cfg.py
 comet-venv*/*
+integration_tests/comet-venv*/*

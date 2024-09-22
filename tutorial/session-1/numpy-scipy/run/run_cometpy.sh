@@ -8,12 +8,12 @@ dense_testcases=(
         )
 
 sparse_testcases=(
-        # "spmm_COO"
-        # "spmm_CSR"
-        "spgemm_CSR"
+        "spmm_COO"
+        "spmm_CSR"
+        # "spgemm_CSR"
         )
 
-output_dir="../outputs/09.22-spgemm/"
+output_dir="../outputs/09.22-sparse/"
 
 sparse_inputs=(
          "bcsstk17"

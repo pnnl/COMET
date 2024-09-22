@@ -3,7 +3,7 @@
 # RUN: comet-opt --opt-comp-workspace --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> eltwise_sub_CSRxCSR_oCSR_sameSpPattern.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
 # RUN: export SPARSE_FILE_NAME1=%comet_integration_test_data_dir/test_rank2_transpose.mtx
-# RUN: mlir-cpu-runner eltwise_sub_CSRxCSR_oCSR_sameSpPattern.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner eltwise_sub_CSRxCSR_oCSR_sameSpPattern.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
 
 
 def main() {

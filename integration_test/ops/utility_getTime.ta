@@ -1,5 +1,5 @@
 # RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> utility_gettime.llvm
-# RUN: mlir-cpu-runner utility_gettime.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner utility_gettime.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
 
 
 def main() {
