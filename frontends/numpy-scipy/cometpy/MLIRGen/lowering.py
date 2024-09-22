@@ -286,8 +286,8 @@ def comment_unneeded_sparse(input_, arg_vals):
                             for l in lines[:-1]:
                                 # input[l] = "// from sparse new " + input[l]
                                 input[l] = ""
-            input[i] = '// from sparse' + input[i]
-            # input[i] = ""
+            # input[i] = '// from sparse' + input[i]
+            input[i] = ""
         elif "call @comet_print_memref_i64" in input[i] or "call @comet_print_memref_f64" in input[i]:
             cast = input[i][input[i].find("(") + 1 : input[i].find(")")]
             for j in range(len(input[:i])):
@@ -451,7 +451,10 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s, targe
             cleanup()
             raise AssertionError("comet-opt failed with error code: {}. Error: {}".format(p.returncode, p.stderr.decode()))
         
-        scf_out  = remove_index(p.stderr.decode())
+        scf_out  = p.stderr.decode()
+
+        
+    scf_out  = remove_index(scf_out)
     # f.write(scf_out)
     # f.close()
 
@@ -507,9 +510,9 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs, target):
     llvm_args_types = []
     all_outputs = []
 
-    as_type = 'int64'
-    np_type = np.int64
-    c_type = c_longlong
+    as_type = 'int32'
+    np_type = np.int32
+    c_type = c_int32
     memref_type_i = memref_i64
 
     if target != 'cpu':
@@ -569,8 +572,8 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs, target):
                 if ndarray.format == 'csr':
                     A1pos = np.array([ndarray.shape[0]], dtype=np_type)
                     A1crd = np.array([-1], dtype=np_type)
-                    A2pos = ndarray.indptr.astype(as_type)
-                    A2crd = ndarray.indices.astype(as_type)
+                    A2pos = ndarray.indptr
+                    A2crd = ndarray.indices
 
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                 
@@ -581,8 +584,8 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs, target):
                 elif ndarray.format == 'bsr':
                     A1pos = np.array([ndarray.shape[0]/ndarray.blocksize[0]], dtype=np_type)
                     A1crd = np.array([-1], dtype=np_type)
-                    A2pos = ndarray.indptr.astype(as_type)
-                    A2crd = ndarray.indices.astype(as_type)
+                    A2pos = ndarray.indptr
+                    A2crd = ndarray.indices
                     A1tile_pos = np.array([ndarray.blocksize[0]], dtype=np_type)
                     A1tile_crd = np.array([-1], dtype=np_type)
                     A2tile_pos = np.array([ndarray.blocksize[1]], dtype=np_type)
@@ -593,9 +596,9 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs, target):
                 # COO
                 elif ndarray.format == 'coo':
                     A1pos = np.array([0, ndarray.nnz], dtype=np_type)
-                    A1crd = ndarray.row.astype(as_type)
+                    A1crd = ndarray.row
                     A2pos = np.array([-1], dtype=np_type)
-                    A2crd = ndarray.col.astype(as_type)
+                    A2crd = ndarray.col
 
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
                 
@@ -605,8 +608,8 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs, target):
                 
                 # CSC
                 elif ndarray.format == 'csc':
-                    A1pos = ndarray.indptr.astype(as_type)
-                    A1crd = ndarray.indices.astype(as_type)
+                    A1pos = ndarray.indptr
+                    A1crd = ndarray.indices
                     A2pos = np.array([ndarray.shape[1]], dtype=np_type)
                     
                     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
