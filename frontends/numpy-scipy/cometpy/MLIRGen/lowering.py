@@ -429,6 +429,23 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s, targe
     if(target != 'cpu'): # Thus GPU
         path_to_comet = cfg.comet_path+"/bin/comet-opt -x mlir "
         command = path_to_comet + '--target=GPU --convert-to-triton --convert-triton-to-llvm '
+        temp_mlir_lower_flags  = mlir_lower_flags
+        while True:
+            flag_start = temp_mlir_lower_flags.find('--gpu') 
+            if flag_start >= 0:
+                # flag_start += 5
+                flag_end = temp_mlir_lower_flags[flag_start+2:].find('--')
+                if flag_end > 0:
+                    flag_end += 2
+                    flag = temp_mlir_lower_flags[flag_start:flag_start + flag_end]
+                    command += ' ' + flag
+                    temp_mlir_lower_flags = temp_mlir_lower_flags[flag_start + flag_end:]
+                else:
+                    flag = temp_mlir_lower_flags[flag_start:]
+
+                    temp_mlir_lower_flags = temp_mlir_lower_flags[flag_start:]
+            else:
+                break
         p = subprocess.run(shlex.split(command), input = scf_out.encode('utf-8') , stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,close_fds=False)
         if p.returncode != 0:
             cleanup()
