@@ -183,10 +183,17 @@ public:
       assert(!machine->addPassesToEmitFile(pass, pstream, nullptr, fileType));
       pass.run(*llvmModule);
     }
-    result.append("\n");
-    auto funcOp = *modOp.getOps<mlir::func::FuncOp>().begin();
-    builder.setInsertionPointToStart(&funcOp.getFunctionBody().front());
-    LLVM::createGlobalString(modOp->getLoc(), builder, "ptx", result, LLVM::linkage::Linkage::Private );
+
+    auto type = LLVM::LLVMArrayType::get(
+      IntegerType::get(builder.getContext(), 8), result.size());
+    // result.append("\n");
+    // auto funcOp = *modOp.getOps<mlir::func::FuncOp>().begin();
+    builder.setInsertionPointToStart(modOp.getBody());
+    builder.create<LLVM::GlobalOp>(loc, type, /*isConstant=*/false,
+                                              LLVM::Linkage::Internal, "ptx",
+                                              builder.getStringAttr(result),
+                                              /*alignment=*/32);
+    // LLVM::createGlobalString(modOp->getLoc(), builder, "ptx", result, LLVM::linkage::Linkage::Private );
     // modOp->setAttr("gpu.ptx", builder.getStringAttr(result));
     // std::cout << result << std::endl;
 
