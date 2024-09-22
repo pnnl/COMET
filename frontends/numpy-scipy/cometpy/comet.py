@@ -1072,8 +1072,12 @@ def compile(flags, target:str = "cpu", with_jit=True):
                 type = ret['value_type']
                 return_types.append(type)
 
+            if flags:
+                func_name = func_def.name + flags.replace('-','_').replace(' ','').replace('=','_')
+            else:
+                func_name = func_def.name
             irb = builders.MLIRFunctionBuilder(
-                func_def.name,
+                func_name,
                 input_types=in_types,
                 return_types=return_types,
             ) 
@@ -1160,7 +1164,7 @@ def compile(flags, target:str = "cpu", with_jit=True):
                     new_flags = ' --opt-comp-workspace'
             code = irb.compile()
             # start = time.time()
-            lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags,func_def.name, arg_vals, outputs)
+            lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags,func_name, arg_vals, outputs)
             # end = time.time()
             # print("Time for JIT", end-start)
             return lowering_result
