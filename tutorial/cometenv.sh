@@ -1,11 +1,13 @@
 #/bin/sh
 
-export LDFLAGS="-L/opt/homebrew/opt/openblas/lib"
-export CPPFLAGS="-I/opt/homebrew/opt/openblas/include"
-export PKG_CONFIG_PATH="/opt/homebrew/opt/openblas/lib/pkgconfig"
+export COMET_SRC=/Users/kest268/projects/COMET/COMET/
+$OPENBLAS="/opt/homebrew/opt/openblas/"
+
+export LDFLAGS="-L$OPENBLAS/lib"
+export CPPFLAGS="-I$OPENBLAS/include"
+export PKG_CONFIG_PATH="$OPENBLAS/lib/pkgconfig"
 
 export PYTHON_EXECUTABLE=$(which python3.12)
-export COMET_SRC=/Users/kest268/projects/COMET/COMET/
 export COMETPY_COMET_PATH=$COMET_SRC/build/ 
 export COMETPY_LLVM_PATH=$COMET_SRC/llvm/build
 

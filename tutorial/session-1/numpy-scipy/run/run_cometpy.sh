@@ -8,22 +8,27 @@ dense_testcases=(
         )
 
 sparse_testcases=(
-        "spmm_COO"
-        "spmm_CSR"
-        # "spgemm_CSR"
+        # "spmm_COO"
+        # "spmm_CSR"
+        "tc_SandiaLL"
         )
 
-output_dir="../outputs/09.22-sparse/"
+output_dir="../outputs/09.22-tc/"
 
 sparse_inputs=(
-         "bcsstk17"
-        "cant"
-        "consph"
-        "cop20k_A"
-        "pdb1HYS"
-        "rma10"
-        "scircuit"
-        "shipsec1"
+        #  "bcsstk17"
+        # "cant"
+        # "consph"
+        # "cop20k_A"
+        # "pdb1HYS"
+        # "rma10"
+        # "scircuit"
+        # "shipsec1"
+        "bcsstk17.unweighted"
+        "bcsstk29.unweighted"
+        "cant.unweighted"
+        "consph.unweighted"
+        "cop20k_A.unweighted"
         )
 
 command_to_run="python3"

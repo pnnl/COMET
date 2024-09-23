@@ -11,20 +11,28 @@ sparse_testcases=(
         # "spmm_COO"
         # "spmm_CSR"
         # "spgemm_CSR"
-        "semiring_PlusPair"
+        # "semiring_PlusPair"
+        # "gnn"
+        "tc_SandiaLL"
+        "tc_SandiaLL_wSemiring_wMasking"
         )
 
-output_dir="../outputs/09.22-semiring/"
+output_dir="../outputs/09.22-tc/"
 
 sparse_inputs=(
-         "bcsstk17"
-        "cant"
-        "consph"
-        "cop20k_A"
-        "pdb1HYS"
-        "rma10"
-        "scircuit"
-        "shipsec1"
+        # "bcsstk17"
+        # "cant"
+        # "consph"
+        # "cop20k_A"
+        # "pdb1HYS"
+        # "rma10"
+        # "scircuit"
+        # "shipsec1"
+        "bcsstk17.unweighted"
+        "bcsstk29.unweighted"
+        "cant.unweighted"
+        "consph.unweighted"
+        "cop20k_A.unweighted"
         )
 
 # Check if the directory exists
