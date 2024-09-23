@@ -1976,24 +1976,25 @@ public:
 
       for(auto k_op : llvm::enumerate(launchOp.getKernelOperands()))
       {
-        // if(arith::ConstantIndexOp k = llvm::dyn_cast_if_present<arith::ConstantIndexOp>(k_op.value().getDefiningOp()))
+        if(arith::ConstantIndexOp k = llvm::dyn_cast_if_present<arith::ConstantIndexOp>(k_op.value().getDefiningOp()))
+        {
+          if(k.value() == 0 || k.value() == 1)
+          {
+            bitvector.set(k_op.index());
+            builder.setInsertionPointToStart(&gpufuncOp.getFunctionBody().getBlocks().front());
+            gpufuncOp.getFunctionBody().getArgument(k_op.index()).replaceAllUsesWith(builder.create<arith::ConstantIndexOp>(gpufuncOp->getLoc(), k.value()));
+          }
+          else if(k.value() == b_size_x || k.value() == b_size_y)
+          {
+            bitvector.set(k_op.index());
+            builder.setInsertionPointToStart(&gpufuncOp.getFunctionBody().getBlocks().front());
+            auto k_val = (k.value() == b_size_x) ? b_size_x : b_size_y;
+            gpufuncOp.getFunctionBody().getArgument(k_op.index()).replaceAllUsesWith(builder.create<arith::ConstantIndexOp>(funcOp->getLoc(), k_val));
+          }
+        }
+        // else
         // {
-          // if(k.value() == 0 || k.value() == 1)
-          // {
-          //   bitvector.set(k_op.index());
-          //   builder.setInsertionPointToStart(&gpufuncOp.getFunctionBody().getBlocks().front());
-          //   gpufuncOp.getFunctionBody().getArgument(k_op.index()).replaceAllUsesWith(builder.create<arith::ConstantIndexOp>(gpufuncOp->getLoc(), k.value()));
-          // }
-          // else if(k.value() == b_size_x || k.value() == b_size_y)
-          // {
-          //   bitvector.set(k_op.index());
-          //   builder.setInsertionPointToStart(&funcOp.getFunctionBody().getBlocks().front());
-          //   auto k_val = (k.value() == b_size_x) ? b_size_x : b_size_y;
-          //   funcOp.getFunctionBody().getArgument(k_op.index()).replaceAllUsesWith(builder.create<arith::ConstantIndexOp>(funcOp->getLoc(), k_val));
-          // }
-    //     else
-    //     {
-    //       break;
+        //   break;
         // }
       }
     
