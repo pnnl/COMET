@@ -160,7 +160,7 @@ extern "C" __attribute__((visibility("default"))) void cudaLaunchKernel(int64_t 
     CUfunction cuFunction = NULL;
     unsigned blocksPerGridX = std::min(realblocksX, MAX_NUM_BLOCKS_X);
     unsigned blocksPerGridY = std::min(realblocksY, MAX_NUM_BLOCKS_Y);
-    unsigned blocksPerGridZ = std::min(realblocksZ, MAX_NUM_BLOCKS_Y);
+    unsigned blocksPerGridZ = std::min(realblocksZ, MAX_NUM_BLOCKS_Z);
     char* name_with_suffix = (char*)malloc(kernel_name_size+1);
     memcpy(name_with_suffix, kernel, kernel_name_size);
     name_with_suffix[kernel_name_size] = '\0';
