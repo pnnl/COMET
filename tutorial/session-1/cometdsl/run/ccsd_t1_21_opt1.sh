@@ -1,6 +1,25 @@
 fname="ccsd_t1_21.ta"
 
-sharedlib_ext=".dylib"
+# Detect the operating system
+get_shared_lib_extension() {
+    case "$(uname -s)" in
+        Linux*)
+            echo ".so"
+            ;;
+        Darwin*)
+            echo ".dylib"
+            ;;
+        CYGWIN*|MINGW32*|MSYS*|MINGW*)
+            echo ".dll"
+            ;;
+        *)
+            echo "Unknown OS"
+            ;;
+    esac
+}
+
+# Call the function and store the result in a variable
+sharedlib_ext=$(get_shared_lib_extension)
 
 # Number of iterations
 iterations=10
@@ -48,10 +67,6 @@ echo "Average Execution Time for COMET *WITHOUT* Optimization: $average_value"
 total_time=0.0
 
 $COMET_BIN_DIR/comet-opt   \
-    -opt-bestperm-ttgt   \
-    -opt-matmul-tiling   \
-    -opt-matmul-mkernel  \
-    -opt-dense-transpose \
     --convert-tc-to-ttgt \
     --convert-to-llvm    \
     ../benchs/$fname &> ../IRs/$fname-opt.llvm
@@ -79,4 +94,4 @@ done
 
 # # Calculate the average value
 average_value=$(echo "$total_time / $iterations" | bc -l)
-echo "Average Execution Time for COMET *WITH* Optimization: $average_value"
+echo "Average Execution Time for COMET *WITH* Optimization *LEVEL 1*: $average_value"

@@ -1,6 +1,26 @@
 fname="spgemm_CSR.ta"
 
-sharedlib_ext=".dylib"
+# Detect the operating system
+get_shared_lib_extension() {
+    case "$(uname -s)" in
+        Linux*)
+            echo ".so"
+            ;;
+        Darwin*)
+            echo ".dylib"
+            ;;
+        CYGWIN*|MINGW32*|MSYS*|MINGW*)
+            echo ".dll"
+            ;;
+        *)
+            echo "Unknown OS"
+            ;;
+    esac
+}
+
+# Call the function and store the result in a variable
+sharedlib_ext=$(get_shared_lib_extension)
+
 # export SPARSE_FILE_NAME0=../../../data/shipsec1.mtx
 # export SPARSE_FILE_NAME1=../../../data/shipsec1.mtx
 

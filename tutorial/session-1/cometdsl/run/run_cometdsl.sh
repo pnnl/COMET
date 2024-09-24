@@ -2,8 +2,10 @@
 
 # List of testcases to run 
 dense_testcases=(
-        # "mult_dense_matrix" 
-        # "ccsd_t1_21" 
+        "mult_dense_matrix" 
+        # "ccsd_t1_21_opt1" 
+        # "ccsd_t1_21_opt2" 
+        # "ccsd_t1_21_opt3" 
         # "intensli1"
         )
 
@@ -13,11 +15,11 @@ sparse_testcases=(
         # "spgemm_CSR"
         # "semiring_PlusPair"
         # "gnn"
-        "tc_SandiaLL"
-        "tc_SandiaLL_wSemiring_wMasking"
+        # "tc_SandiaLL"
+        # "tc_SandiaLL_wSemiring_wMasking"
         )
 
-output_dir="../outputs/09.22-tc/"
+output_dir="../tutorial-acs-outputs/matmul/"
 
 sparse_inputs=(
         # "bcsstk17"
@@ -28,11 +30,11 @@ sparse_inputs=(
         # "rma10"
         # "scircuit"
         # "shipsec1"
-        "bcsstk17.unweighted"
-        "bcsstk29.unweighted"
-        "cant.unweighted"
-        "consph.unweighted"
-        "cop20k_A.unweighted"
+        # "bcsstk17.unweighted"
+        # "bcsstk29.unweighted"
+        # "cant.unweighted"
+        # "consph.unweighted"
+        # "cop20k_A.unweighted"
         )
 
 # Check if the directory exists

@@ -1,6 +1,25 @@
 fname="mult_dense_matrix.ta"
 
-sharedlib_ext=".dylib"
+# Detect the operating system
+get_shared_lib_extension() {
+    case "$(uname -s)" in
+        Linux*)
+            echo ".so"
+            ;;
+        Darwin*)
+            echo ".dylib"
+            ;;
+        CYGWIN*|MINGW32*|MSYS*|MINGW*)
+            echo ".dll"
+            ;;
+        *)
+            echo "Unknown OS"
+            ;;
+    esac
+}
+
+# Call the function and store the result in a variable
+sharedlib_ext=$(get_shared_lib_extension)
 
 # Number of iterations
 iterations=10

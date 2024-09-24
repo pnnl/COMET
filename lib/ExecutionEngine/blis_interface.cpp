@@ -46,7 +46,7 @@ void bli_dgemm_x86_ukr(
 {
   /// get the micro - arch
   const char *arch = bli_arch_string(bli_cpuid_query_id());
-  // printf("arch: %s\n", arch);
+  //printf("arch: %s\n", arch);
 
   if ((strcmp("haswell", arch) == 0) ||
       (strcmp("zen", arch) == 0) ||

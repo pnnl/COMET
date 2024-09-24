@@ -2,18 +2,20 @@
 
 # List of testcases to run 
 dense_testcases=(
-        # "mult_dense_matrix" 
-        # "ccsd_t1_21" 
+        "mult_dense_matrix" 
+        # "ccsd_t1_21_opt1" 
+        # "ccsd_t1_21_opt2" 
+        # "ccsd_t1_21_opt3" 
         # "intensli1"
         )
 
 sparse_testcases=(
         # "spmm_COO"
         # "spmm_CSR"
-        "tc_SandiaLL"
+        # "tc_SandiaLL"
         )
 
-output_dir="../outputs/09.22-tc/"
+output_dir="../tutorial-acs-outputs/matmul/"
 
 sparse_inputs=(
         #  "bcsstk17"
@@ -24,11 +26,11 @@ sparse_inputs=(
         # "rma10"
         # "scircuit"
         # "shipsec1"
-        "bcsstk17.unweighted"
-        "bcsstk29.unweighted"
-        "cant.unweighted"
-        "consph.unweighted"
-        "cop20k_A.unweighted"
+        # "bcsstk17.unweighted"
+        # "bcsstk29.unweighted"
+        # "cant.unweighted"
+        # "consph.unweighted"
+        # "cop20k_A.unweighted"
         )
 
 command_to_run="python3"
