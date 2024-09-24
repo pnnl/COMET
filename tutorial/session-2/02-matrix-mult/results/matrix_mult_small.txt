@@ -1,0 +1,316 @@
+==258394== NVPROF is profiling process 258394, command: python3 ./matrix_mult_small.py 128
+==258394== Profiling application: python3 ./matrix_mult_small.py 128
+==258394== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   28.74%  100.41us        11  9.1270us  9.0230us  9.5670us  void dgemm_largek<bool=0, bool=0, int=5, int=5, int=4, int=4, int=4, int=32>(double*, double const *, double const *, int, int, int, int, int, int, double const *, double const *, double, double, int, int, int*, int*)
+                   24.88%  86.904us        10  8.6900us  8.4150us  10.655us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   24.43%  85.335us         6  14.222us  13.855us  15.070us  [CUDA memcpy HtoD]
+                   12.79%  44.667us         4  11.166us  10.847us  11.390us  [CUDA memcpy DtoH]
+                    4.79%  16.735us        11  1.5210us  1.4710us  1.9840us  void scal_kernel<double, double, int=1, bool=1, int=6, int=4, int=4, int=4>(cublasTransposeParams<double>, double const *, double*, double const *)
+                    4.37%  15.263us        11  1.3870us  1.3440us  1.6000us  [CUDA memset]
+      
+==258632== NVPROF is profiling process 258632, command: python3 ./matrix_mult_small.py 256
+==258632== Profiling application: python3 ./matrix_mult_small.py 256
+==258632== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   34.03%  299.75us         6  49.957us  49.339us  51.835us  [CUDA memcpy HtoD]
+                   24.67%  217.29us        11  19.753us  18.974us  23.774us  volta_dgemm_128x64_nn
+                   18.64%  164.14us         4  41.036us  40.828us  41.148us  [CUDA memcpy DtoH]
+                   18.18%  160.14us        10  16.014us  15.678us  18.109us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                    4.48%  39.484us        11  3.5890us  3.2630us  6.0150us  void cublasLt::splitKreduce_kernel<int=32, int=16, int, double, double, double, double, bool=1, bool=0, bool=0>(cublasLt::cublasSplitKParams<double>, double const *, double const *, double const **, cublasLt::cublasSplitKParams const *, cublasLt::cublasSplitKParams const , double const *, double const , cublasLt::cublasSplitKParams const **, void*, long, cublasLt::cublasSplitKParams*, int*)
+      
+==258837== NVPROF is profiling process 258837, command: python3 ./matrix_mult_small.py 384
+==258837== Profiling application: python3 ./matrix_mult_small.py 384
+==258837== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   35.14%  662.14us         6  110.36us  108.69us  111.86us  [CUDA memcpy HtoD]
+                   23.94%  451.16us        11  41.014us  40.540us  43.932us  volta_dgemm_128x64_nn
+                   21.30%  401.40us         4  100.35us  96.598us  110.39us  [CUDA memcpy DtoH]
+                   18.79%  354.14us        10  35.414us  34.269us  35.996us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                    0.83%  15.678us        11  1.4250us  1.3430us  2.0800us  [CUDA memset]
+      
+==259063== NVPROF is profiling process 259063, command: python3 ./matrix_mult_small.py 512
+==259063== Profiling application: python3 ./matrix_mult_small.py 512
+==259063== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   59.23%  3.4371ms         6  572.85us  191.15us  1.4397ms  [CUDA memcpy HtoD]
+                   14.70%  853.26us        11  77.568us  74.648us  79.384us  volta_dgemm_128x64_nn
+                   14.19%  823.66us        10  82.366us  79.833us  85.335us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   11.60%  673.12us         4  168.28us  167.89us  168.88us  [CUDA memcpy DtoH]
+                    0.27%  15.838us        11  1.4390us  1.3440us  1.7920us  [CUDA memset]
+      
+==259253== NVPROF is profiling process 259253, command: python3 ./matrix_mult_small.py 640
+==259253== Profiling application: python3 ./matrix_mult_small.py 640
+==259253== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   53.53%  6.4230ms         6  1.0705ms  298.34us  2.8133ms  [CUDA memcpy HtoD]
+                   24.96%  2.9952ms         4  748.80us  357.08us  1.5350ms  [CUDA memcpy DtoH]
+                   11.64%  1.3967ms        10  139.67us  124.63us  145.84us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                    9.74%  1.1693ms        11  106.30us  105.24us  107.89us  volta_dgemm_128x64_nn
+                    0.13%  15.677us        11  1.4250us  1.3430us  1.8870us  [CUDA memset]
+      
+==259495== NVPROF is profiling process 259495, command: python3 ./matrix_mult_small.py 768
+==259495== Profiling application: python3 ./matrix_mult_small.py 768
+==259495== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   42.76%  5.9174ms         6  986.23us  428.12us  2.9765ms  [CUDA memcpy HtoD]
+                   27.72%  3.8351ms         4  958.78us  588.26us  1.9879ms  [CUDA memcpy DtoH]
+                   16.74%  2.3166ms        10  231.66us  229.16us  235.18us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   12.78%  1.7680ms        11  160.72us  160.11us  165.10us  volta_dgemm_128x64_nn
+      
+==259752== NVPROF is profiling process 259752, command: python3 ./matrix_mult_small.py 896
+==259752== Profiling application: python3 ./matrix_mult_small.py 896
+==259752== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   32.46%  5.3393ms         4  1.3348ms  849.61us  2.6748ms  [CUDA memcpy DtoH]
+                   26.37%  4.3378ms         6  722.97us  582.79us  1.2386ms  [CUDA memcpy HtoD]
+                   21.36%  3.5141ms        10  351.41us  334.14us  362.78us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   19.71%  3.2415ms        11  294.68us  293.60us  295.91us  volta_dgemm_128x64_nn
+                    0.09%  15.614us        11  1.4190us  1.3760us  1.6000us  [CUDA memset]
+      
+==259943== NVPROF is profiling process 259943, command: python3 ./matrix_mult_small.py 1024
+==259943== Profiling application: python3 ./matrix_mult_small.py 1024
+==259943== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   27.44%  5.6648ms         4  1.4162ms  847.56us  2.8995ms  [CUDA memcpy DtoH]
+                   25.05%  5.1718ms        10  517.18us  509.87us  526.92us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   24.95%  5.1497ms         6  858.28us  757.17us  1.1008ms  [CUDA memcpy HtoD]
+                   22.48%  4.6409ms        11  421.90us  370.68us  435.86us  volta_dgemm_128x64_nn
+                    0.08%  15.611us        11  1.4190us  1.3750us  1.6310us  [CUDA memset]
+      
+==260176== NVPROF is profiling process 260176, command: python3 ./matrix_mult_small.py 1152
+==260176== Profiling application: python3 ./matrix_mult_small.py 1152
+==260176== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   27.81%  7.7362ms         4  1.9340ms  1.0107ms  4.3823ms  [CUDA memcpy DtoH]
+                   25.88%  7.1984ms        10  719.84us  713.24us  727.54us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   23.67%  6.5829ms         6  1.0971ms  955.78us  1.4107ms  [CUDA memcpy HtoD]
+                   22.58%  6.2802ms        11  570.93us  563.24us  606.69us  volta_dgemm_128x64_nn
+                    0.06%  16.125us        11  1.4650us  1.4070us  1.9520us  [CUDA memset]
+      
+==260364== NVPROF is profiling process 260364, command: python3 ./matrix_mult_small.py 1280
+==260364== Profiling application: python3 ./matrix_mult_small.py 1280
+==260364== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   27.94%  9.9740ms         4  2.4935ms  1.2792ms  5.6552ms  [CUDA memcpy DtoH]
+                   27.13%  9.6844ms        10  968.44us  964.48us  973.28us  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   23.75%  8.4772ms         6  1.4129ms  1.1816ms  2.0572ms  [CUDA memcpy HtoD]
+                   21.13%  7.5434ms        11  685.77us  683.80us  691.93us  volta_dgemm_128x64_nn
+                    0.04%  15.806us        11  1.4360us  1.4070us  1.6320us  [CUDA memset]
+      
+==260588== NVPROF is profiling process 260588, command: python3 ./matrix_mult_small.py 1408
+==260588== Profiling application: python3 ./matrix_mult_small.py 1408
+==260588== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   29.10%  13.288ms        10  1.3288ms  1.3219ms  1.3675ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   25.93%  11.841ms         4  2.9602ms  1.3931ms  6.9507ms  [CUDA memcpy DtoH]
+                   23.84%  10.889ms        11  989.91us  978.33us  993.34us  volta_dgemm_128x64_nn
+                   21.09%  9.6315ms         6  1.6053ms  1.4280ms  1.9939ms  [CUDA memcpy HtoD]
+                    0.04%  16.575us        11  1.5060us  1.4390us  1.9840us  [CUDA memset]
+      
+==260777== NVPROF is profiling process 260777, command: python3 ./matrix_mult_small.py 1536
+==260777== Profiling application: python3 ./matrix_mult_small.py 1536
+==260777== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   29.54%  16.525ms        10  1.6525ms  1.6498ms  1.6570ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   25.15%  14.069ms        11  1.2790ms  1.2742ms  1.2850ms  volta_dgemm_128x64_nn
+                   23.89%  13.364ms         4  3.3409ms  1.7295ms  7.3933ms  [CUDA memcpy DtoH]
+                   21.39%  11.966ms         6  1.9943ms  1.6988ms  2.6086ms  [CUDA memcpy HtoD]
+                    0.03%  16.125us        11  1.4650us  1.4390us  1.6000us  [CUDA memset]
+      
+==261015== NVPROF is profiling process 261015, command: python3 ./matrix_mult_small.py 1664
+==261015== Profiling application: python3 ./matrix_mult_small.py 1664
+==261015== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   31.14%  21.039ms        10  2.1039ms  2.1004ms  2.1125ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   24.52%  16.565ms        11  1.5059ms  1.5027ms  1.5098ms  volta_dgemm_128x64_nn
+                   23.86%  16.119ms         4  4.0298ms  1.8853ms  9.6874ms  [CUDA memcpy DtoH]
+                   20.46%  13.824ms         6  2.3040ms  1.9957ms  2.8900ms  [CUDA memcpy HtoD]
+                    0.02%  16.320us        11  1.4830us  1.4720us  1.6000us  [CUDA memset]
+      
+==261227== NVPROF is profiling process 261227, command: python3 ./matrix_mult_small.py 1792
+==261227== Profiling application: python3 ./matrix_mult_small.py 1792
+==261227== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   33.02%  26.658ms        10  2.6658ms  2.6316ms  2.6974ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   24.43%  19.730ms        11  1.7936ms  1.7917ms  1.7959ms  volta_dgemm_128x64_nn
+                   23.10%  18.653ms         4  4.6633ms  2.1924ms  11.432ms  [CUDA memcpy DtoH]
+                   19.43%  15.686ms         6  2.6144ms  2.3119ms  3.2431ms  [CUDA memcpy HtoD]
+                    0.02%  16.832us        11  1.5300us  1.5030us  1.6320us  [CUDA memset]
+      
+==261463== NVPROF is profiling process 261463, command: python3 ./matrix_mult_small.py 1920
+==261463== Profiling application: python3 ./matrix_mult_small.py 1920
+==261463== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   33.40%  32.302ms        10  3.2302ms  3.2167ms  3.2387ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   26.41%  25.548ms        11  2.3226ms  2.3181ms  2.3265ms  volta_dgemm_128x64_nn
+                   21.24%  20.547ms         4  5.1367ms  2.4620ms  12.501ms  [CUDA memcpy DtoH]
+                   18.93%  18.312ms         6  3.0520ms  2.6546ms  3.9846ms  [CUDA memcpy HtoD]
+                    0.02%  17.279us        11  1.5700us  1.5350us  1.8240us  [CUDA memset]
+      
+==261650== NVPROF is profiling process 261650, command: python3 ./matrix_mult_small.py 2048
+==261650== Profiling application: python3 ./matrix_mult_small.py 2048
+==261650== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   34.20%  39.419ms        10  3.9419ms  3.8963ms  3.9679ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   27.50%  31.693ms        11  2.8812ms  2.8760ms  2.8886ms  volta_dgemm_128x64_nn
+                   19.81%  22.832ms         4  5.7081ms  2.8337ms  13.532ms  [CUDA memcpy DtoH]
+                   18.48%  21.298ms         6  3.5496ms  3.0247ms  4.8153ms  [CUDA memcpy HtoD]
+                    0.02%  17.725us        11  1.6110us  1.5670us  1.8880us  [CUDA memset]
+      
+==261874== NVPROF is profiling process 261874, command: python3 ./matrix_mult_small.py 2176
+==261874== Profiling application: python3 ./matrix_mult_small.py 2176
+==261874== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   35.42%  46.943ms        10  4.6943ms  4.6882ms  4.6994ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   26.94%  35.701ms        11  3.2455ms  3.2427ms  3.2491ms  volta_dgemm_128x64_nn
+                   19.81%  26.254ms         4  6.5634ms  3.0988ms  16.045ms  [CUDA memcpy DtoH]
+                   17.81%  23.602ms         6  3.9336ms  3.4120ms  4.9431ms  [CUDA memcpy HtoD]
+                    0.01%  17.823us        11  1.6200us  1.5990us  1.6960us  [CUDA memset]
+      
+==262116== NVPROF is profiling process 262116, command: python3 ./matrix_mult_small.py 2304
+==262116== Profiling application: python3 ./matrix_mult_small.py 2304
+==262116== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   35.74%  55.428ms        10  5.5428ms  5.5283ms  5.5494ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   27.47%  42.597ms        11  3.8724ms  3.8643ms  3.8798ms  volta_dgemm_128x64_nn
+                   19.17%  29.732ms         4  7.4331ms  3.4718ms  18.022ms  [CUDA memcpy DtoH]
+                   17.60%  27.298ms         6  4.5497ms  3.8441ms  5.7559ms  [CUDA memcpy HtoD]
+                    0.01%  18.207us        11  1.6550us  1.6000us  1.8560us  [CUDA memset]
+      
+==262340== NVPROF is profiling process 262340, command: python3 ./matrix_mult_small.py 2432
+==262340== Profiling application: python3 ./matrix_mult_small.py 2432
+==262340== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   32.06%  58.466ms        10  5.8466ms  5.8334ms  5.8536ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   25.95%  47.326ms        11  4.3024ms  4.1699ms  4.3826ms  volta_dgemm_128x64_nn
+                   21.63%  39.453ms         4  9.8632ms  5.9665ms  20.320ms  [CUDA memcpy DtoH]
+                   20.36%  37.129ms         6  6.1881ms  4.2679ms  13.697ms  [CUDA memcpy HtoD]
+                    0.01%  17.537us        11  1.5940us  1.5350us  1.8880us  [CUDA memset]
+      
+==262541== NVPROF is profiling process 262541, command: python3 ./matrix_mult_small.py 2560
+==262541== Profiling application: python3 ./matrix_mult_small.py 2560
+==262541== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   31.72%  64.639ms        10  6.4639ms  6.4461ms  6.5243ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   23.95%  48.804ms        11  4.4367ms  4.4294ms  4.4434ms  volta_dgemm_128x64_nn
+                   23.47%  47.826ms         6  7.9710ms  4.7248ms  21.649ms  [CUDA memcpy HtoD]
+                   20.86%  42.512ms         4  10.628ms  6.5413ms  21.480ms  [CUDA memcpy DtoH]
+                    0.01%  17.050us        11  1.5500us  1.5350us  1.5680us  [CUDA memset]
+      
+==262784== NVPROF is profiling process 262784, command: python3 ./matrix_mult_small.py 2688
+==262784== Profiling application: python3 ./matrix_mult_small.py 2688
+==262784== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   35.57%  74.598ms        10  7.4598ms  7.4046ms  7.5824ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   27.74%  58.174ms        11  5.2886ms  5.2841ms  5.2936ms  volta_dgemm_128x64_nn
+                   18.96%  39.762ms         4  9.9406ms  4.7198ms  24.760ms  [CUDA memcpy DtoH]
+                   17.73%  37.195ms         6  6.1991ms  5.2085ms  8.3912ms  [CUDA memcpy HtoD]
+                    0.01%  17.439us        11  1.5850us  1.5680us  1.6000us  [CUDA memset]
+      
+==263013== NVPROF is profiling process 263013, command: python3 ./matrix_mult_small.py 2816
+==263013== Profiling application: python3 ./matrix_mult_small.py 2816
+==263013== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   32.68%  86.025ms        10  8.6025ms  8.5576ms  8.7342ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   25.37%  66.773ms         6  11.129ms  5.7114ms  27.531ms  [CUDA memcpy HtoD]
+                   25.26%  66.494ms        11  6.0449ms  6.0397ms  6.0534ms  volta_dgemm_128x64_nn
+                   16.68%  43.907ms         4  10.977ms  5.1798ms  27.056ms  [CUDA memcpy DtoH]
+                    0.01%  18.239us        11  1.6580us  1.6000us  1.7920us  [CUDA memset]
+      
+==263207== NVPROF is profiling process 263207, command: python3 ./matrix_mult_small.py 2944
+==263207== Profiling application: python3 ./matrix_mult_small.py 2944
+==263207== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   35.58%  98.641ms        10  9.8641ms  9.7829ms  9.9893ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   27.66%  76.684ms        11  6.9713ms  6.9662ms  6.9774ms  volta_dgemm_128x64_nn
+                   20.59%  57.078ms         4  14.269ms  8.8907ms  29.450ms  [CUDA memcpy DtoH]
+                   16.18%  44.850ms         6  7.4750ms  6.2695ms  9.3623ms  [CUDA memcpy HtoD]
+                    0.01%  19.261us        11  1.7510us  1.6640us  2.0150us  [CUDA memset]
+      
+==263447== NVPROF is profiling process 263447, command: python3 ./matrix_mult_small.py 3072
+==263447== Profiling application: python3 ./matrix_mult_small.py 3072
+==263447== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   36.31%  111.98ms        10  11.198ms  11.076ms  11.313ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   27.86%  85.903ms        11  7.8094ms  7.8059ms  7.8158ms  volta_dgemm_128x64_nn
+                   20.10%  61.982ms         4  15.496ms  9.4751ms  32.378ms  [CUDA memcpy DtoH]
+                   15.73%  48.508ms         6  8.0846ms  6.8277ms  10.111ms  [CUDA memcpy HtoD]
+                    0.01%  19.292us        11  1.7530us  1.6950us  1.9510us  [CUDA memset]
+      
+==263660== NVPROF is profiling process 263660, command: python3 ./matrix_mult_small.py 3200
+==263660== Profiling application: python3 ./matrix_mult_small.py 3200
+==263660== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   36.89%  126.17ms        10  12.617ms  12.396ms  12.794ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   28.07%  95.982ms        11  8.7256ms  8.6883ms  8.7445ms  volta_dgemm_128x64_nn
+                   19.55%  66.874ms         4  16.718ms  10.304ms  34.604ms  [CUDA memcpy DtoH]
+                   15.48%  52.946ms         6  8.8243ms  7.3812ms  11.176ms  [CUDA memcpy HtoD]
+                    0.01%  19.358us        11  1.7590us  1.6950us  2.0160us  [CUDA memset]
+      
+==263885== NVPROF is profiling process 263885, command: python3 ./matrix_mult_small.py 3328
+==263885== Profiling application: python3 ./matrix_mult_small.py 3328
+==263885== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   37.44%  142.41ms        10  14.241ms  13.977ms  14.435ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   28.11%  106.92ms        11  9.7204ms  9.5326ms  9.8054ms  volta_dgemm_128x64_nn
+                   19.12%  72.719ms         4  18.180ms  11.191ms  37.666ms  [CUDA memcpy DtoH]
+                   15.34%  58.340ms         6  9.7234ms  7.9835ms  12.158ms  [CUDA memcpy HtoD]
+                    0.01%  19.678us        11  1.7880us  1.7270us  2.0160us  [CUDA memset]
+      
+==264163== NVPROF is profiling process 264163, command: python3 ./matrix_mult_small.py 3456
+==264163== Profiling application: python3 ./matrix_mult_small.py 3456
+==264163== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   37.77%  159.33ms        10  15.933ms  15.608ms  16.104ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   28.89%  121.88ms        11  11.080ms  11.073ms  11.087ms  volta_dgemm_128x64_nn
+                   18.62%  78.528ms         4  19.632ms  12.091ms  40.781ms  [CUDA memcpy DtoH]
+                   14.72%  62.087ms         6  10.348ms  8.6076ms  12.624ms  [CUDA memcpy HtoD]
+                    0.00%  19.292us        11  1.7530us  1.6950us  1.9510us  [CUDA memset]
+      
+==264354== NVPROF is profiling process 264354, command: python3 ./matrix_mult_small.py 3584
+==264354== Profiling application: python3 ./matrix_mult_small.py 3584
+==264354== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   38.38%  178.38ms        10  17.838ms  17.466ms  18.023ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   29.56%  137.39ms        11  12.490ms  12.483ms  12.496ms  volta_dgemm_128x64_nn
+                   17.98%  83.574ms         4  20.893ms  12.919ms  43.248ms  [CUDA memcpy DtoH]
+                   14.08%  65.456ms         6  10.909ms  9.2575ms  13.006ms  [CUDA memcpy HtoD]
+                    0.00%  20.061us        11  1.8230us  1.7920us  2.0150us  [CUDA memset]
+      
+==264577== NVPROF is profiling process 264577, command: python3 ./matrix_mult_small.py 3712
+==264577== Profiling application: python3 ./matrix_mult_small.py 3712
+==264577== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   38.99%  198.81ms        10  19.881ms  19.343ms  20.168ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   29.50%  150.39ms        11  13.672ms  13.668ms  13.679ms  volta_dgemm_128x64_nn
+                   17.62%  89.846ms         4  22.462ms  13.833ms  46.927ms  [CUDA memcpy DtoH]
+                   13.89%  70.841ms         6  11.807ms  9.9324ms  14.319ms  [CUDA memcpy HtoD]
+      
+==264793== NVPROF is profiling process 264793, command: python3 ./matrix_mult_small.py 3840
+==264793== Profiling application: python3 ./matrix_mult_small.py 3840
+==264793== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   37.55%  218.18ms        10  21.818ms  21.314ms  22.066ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   29.63%  172.18ms        11  15.653ms  15.468ms  15.912ms  volta_dgemm_128x64_nn
+                   18.81%  109.30ms         6  18.217ms  10.626ms  42.916ms  [CUDA memcpy HtoD]
+                   14.01%  81.419ms         4  20.355ms  9.7813ms  51.033ms  [CUDA memcpy DtoH]
+      
+==265020== NVPROF is profiling process 265020, command: python3 ./matrix_mult_small.py 3968
+==265020== Profiling application: python3 ./matrix_mult_small.py 3968
+==265020== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   40.76%  242.18ms        10  24.218ms  23.665ms  24.406ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   31.24%  185.58ms        11  16.871ms  16.610ms  17.104ms  volta_dgemm_128x64_nn
+                   14.41%  85.602ms         4  21.401ms  10.370ms  53.486ms  [CUDA memcpy DtoH]
+                   13.60%  80.774ms         6  13.462ms  11.349ms  16.337ms  [CUDA memcpy HtoD]
+      
+==265262== NVPROF is profiling process 265262, command: python3 ./matrix_mult_small.py 4096
+==265262== Profiling application: python3 ./matrix_mult_small.py 4096
+==265262== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   41.34%  267.36ms        10  26.736ms  26.084ms  26.937ms  run_cometpy_small__gpu_block_y_size_32__gpu_block_r_size_32__gpu_block_x_size_32_kernel0
+                   31.28%  202.30ms        11  18.391ms  18.386ms  18.396ms  volta_dgemm_128x64_nn
+                   13.99%  90.466ms         4  22.616ms  11.022ms  56.369ms  [CUDA memcpy DtoH]
+                   13.39%  86.626ms         6  14.438ms  12.100ms  17.031ms  [CUDA memcpy HtoD]
+      
