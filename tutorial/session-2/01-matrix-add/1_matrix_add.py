@@ -21,17 +21,6 @@ def run_cometpy(A,B):
 
 	return C
 
-def add3_numpy(A, B, C):
-	D = A + B + C
-
-	return D
-
-@comet.compile(flags=None, target='gpu')
-def add3_cometpy(A,B,C):
-	D = A + B + C
-
-	return D
-
 size = int(sys.argv[1])
 
 A = np.full([size,size], 2.2,  dtype=np.float64)
@@ -52,12 +41,6 @@ res_cupy = res_cupy.get()
 
 expected_result = run_numpy(A,B)
 res_cometpy = run_cometpy(A,B)
-
-np.testing.assert_almost_equal(res_cometpy, expected_result)
-np.testing.assert_almost_equal(res_cupy, expected_result)
-
-expected_result = add3_numpy(A,B,C)
-res_cometpy = add3_cometpy(A,B,C)
 
 np.testing.assert_almost_equal(res_cometpy, expected_result)
 np.testing.assert_almost_equal(res_cupy, expected_result)
