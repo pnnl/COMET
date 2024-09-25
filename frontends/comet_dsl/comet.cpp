@@ -595,7 +595,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(mlir::createReconcileUnrealizedCastsPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());
-    pm.addPass(mlir::createConvertToLLVMPass());
+    // pm.addPass(mlir::createConvertToLLVMPass());
 
     if (mlir::failed(pm.run(*module)))
       return 4;
