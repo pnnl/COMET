@@ -38,10 +38,6 @@ def cometpy_spmm(A,B):
 	return C
 
 
-# A = sp.sparse.bsr_array(sp.io.mmread("../../data/cant.mtx"), dtype=float)
-# A = sp.sparse.bsr_array(sp.io.mmread("../../data/cop20k_A.mtx"), dtype=float)
-# A = sp.sparse.bsr_array(sp.io.mmread("../../data/pdb1HYS.mtx"), dtype=float)
-# A = sp.sparse.bsr_array(sp.io.mmread("../../data/scircuit.mtx"), dtype=float)
 B = np.random.rand(A.shape[1], 256)
 C = np.full([A.shape[0], B.shape[1]], 0, dtype=np.float64)
 expected_result = scipy_spmm(A,B)
