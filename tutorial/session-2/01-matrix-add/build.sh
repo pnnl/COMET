@@ -1,0 +1,1 @@
+pushd ../../../build/ && ninja && popd
