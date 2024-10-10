@@ -150,11 +150,11 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
           }
         }
         rewriter.restoreInsertionPoint(prev);
-
+        Value max = rewriter.create<tensorAlgebra::SpTensorGetDimSize>(loc, rewriter.getIndexType(), tensor, rewriter.getI32IntegerAttr(dim));
         new_domain = rewriter.create<IndexTreeSparseDomainOp>(
           loc, domain_type, tensor, domain_op.getDimAttr(), 
           TensorFormatEnumAttr::get(context, format), 
-          pos, crd, pos_size, crd_size, dim_size, parent);
+          pos, crd, pos_size, crd_size, dim_size, parent, rewriter.getBoolAttr(false), max);
       }
     } 
     else if(llvm::isa<tensorAlgebra::WorkspaceType>(tensor.getType())) {

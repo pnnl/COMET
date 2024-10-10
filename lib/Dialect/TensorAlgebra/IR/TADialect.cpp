@@ -378,7 +378,6 @@ void SparseTensorType::print(::mlir::AsmPrinter &odsPrinter) const {
   odsPrinter << ">";
 }
 
-
 //===----------------------------------------------------------------------===//
 /// TableGen'd type definitions
 //===----------------------------------------------------------------------===//
