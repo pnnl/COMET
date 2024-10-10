@@ -4,6 +4,7 @@
 #include <memory>
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
 
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Pass/Pass.h"
@@ -75,22 +76,23 @@ public:
       TTFuncs.push_back(op);
     });
 
+    std::vector<ModuleOp> tempMods;
     auto tempMod = ModuleOp::create(modOp.getLoc());
     OpBuilder builder(tempMod.getBodyRegion()); 
     
 
-    for(auto ttFunc: TTFuncs)
-    {
-      builder.clone(*ttFunc.getOperation());
-      // ttFunc->erase();
-    }
 
     if(TTFuncs.empty())
     {
       return signalPassFailure();
     }
-    
-    PassManager pm(tempMod.getContext());
+
+    for(auto ttFunc: TTFuncs)
+    {
+      auto tempMod = ModuleOp::create(modOp.getLoc());
+      OpBuilder builder(tempMod.getBodyRegion()); 
+      builder.clone(*ttFunc.getOperation());
+      PassManager pm(tempMod.getContext());
 
     pm.addPass(createCanonicalizerPass());
     pm.addPass(createCSEPass());
@@ -134,7 +136,18 @@ public:
       return;
     }
 
-    modOp->setAttrs(tempMod->getAttrs());
+    auto oldAttrs = ttFunc->getAttrs().vec();
+    oldAttrs.insert(oldAttrs.end(), tempMod->getAttrs().begin(), tempMod->getAttrs().end());
+    // ttFunc->setAttrs(tempMod->getAttrs());
+    ttFunc->setAttrs(oldAttrs);
+    tempMods.push_back(tempMod);
+    }
+
+    for(auto mod: tempMods)
+    {
+      builder.clone(mod.getBody()->front());
+    }
+    // modOp->setAttrs(tempMod->getAttrs());
     modOp->setAttr("gpu.container_module", builder.getUnitAttr());
     builder.setInsertionPointToEnd(&modOp.getRegion().getBlocks().back());
     // tempMod.getRegion().
@@ -231,7 +244,7 @@ public:
 
     modOp->walk([&gpu_to_triton_kernel](mlir::triton::FuncOp TTFuncOp) {
       gpu_to_triton_kernel[TTFuncOp->getAttrOfType<StringAttr>("origin").str()] = TTFuncOp.getName().str();
-      TTFuncOp.erase();
+      // TTFuncOp.erase();
     });
 
     auto memrefI32 = MemRefType::get({ShapedType::kDynamic}, builder.getIntegerType(32));
@@ -309,8 +322,12 @@ public:
 
     std::set<mlir::func::FuncOp> initFuncs;
     std::vector<Value> toAlloc;
+    auto symbols = SymbolTable(modOp);
+
     for(auto launchOp: launchOps)
     {
+      auto name = gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref()+"::"+launchOp.getKernelName().strref()).str()];
+
       if(initFuncs.find(launchOp->getParentOfType<mlir::func::FuncOp>()) == initFuncs.end())
       {
         builder.setInsertionPointToStart(&launchOp->getParentOfType<mlir::func::FuncOp>().getFunctionBody().front());
@@ -320,7 +337,8 @@ public:
         initFuncs.insert(launchOp->getParentOfType<mlir::func::FuncOp>());
       }
       builder.setInsertionPoint(launchOp);
-      Value sharedMem =  builder.create<arith::ConstantIntOp>(launchOp->getLoc(), modOp->getAttrOfType<IntegerAttr>("triton_gpu.shared").getInt(), 32);
+      auto ttFunc = symbols.lookup(name);
+      Value sharedMem =  builder.create<arith::ConstantIntOp>(launchOp->getLoc(), ttFunc->getAttrOfType<IntegerAttr>("triton_gpu.shared").getInt(), 32);
       launchOp.getDynamicSharedMemorySizeMutable().assign(sharedMem);
       for(auto& operand: launchOp->getOpOperands())
       {
@@ -526,8 +544,11 @@ public:
       {
         funcs[funcName] = LLVM::createGlobalString(modOp->getLoc(), builder, funcName+"_str", funcName, LLVM::linkage::Linkage::Private );
       }
-      Value numWarps = builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), modOp->getAttrOfType<IntegerAttr>("triton_gpu.num-warps").getInt());
-      Value threadsPerWarp = builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), modOp->getAttrOfType<IntegerAttr>("triton_gpu.threads-per-warp").getInt());
+
+      auto name = gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref()+"::"+launchOp.getKernelName().strref()).str()];
+      auto ttFunc = symbols.lookup(name);
+      Value numWarps = builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), ttFunc->getAttrOfType<IntegerAttr>("triton_gpu.num-warps").getInt());
+      Value threadsPerWarp = builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), ttFunc->getAttrOfType<IntegerAttr>("triton_gpu.threads-per-warp").getInt());
       builder.create<mlir::func::CallOp>(launchOp->getLoc(), "cudaLaunchKernel", TypeRange(), ValueRange({ launchOp.getGridSizeX(), launchOp.getGridSizeY(), launchOp.getGridSizeZ(), launchOp.getBlockSizeX(), launchOp.getBlockSizeY(), launchOp.getBlockSizeZ(), args_dynamic, funcs[funcName], builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), funcName.size()), launchOp.getDynamicSharedMemorySize(), numWarps, threadsPerWarp}));
       launchOp->erase();
     }
@@ -544,9 +565,12 @@ public:
       builder.create<mlir::func::CallOp>(dealloc->getLoc(), "cudaFree", TypeRange(), ValueRange(dealloc->getOperand(0)));
       dealloc.erase();
     }
-
+    modOp->walk([](mlir::triton::FuncOp TTFuncOp) {
+      TTFuncOp.erase();
+    });
     modOp->walk([](mlir::gpu::GPUModuleOp gpuMod) {gpuMod.erase();});
   }
+  
 };
 
 std::unique_ptr<OperationPass<mlir::ModuleOp>>
