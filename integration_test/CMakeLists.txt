@@ -21,17 +21,13 @@ message(STATUS "Using COMET_INTEGRATION_TEST_DATA_DIR: ${COMET_INTEGRATION_TEST_
 
 if(${ENABLE_GPU_TARGET} )
 find_package(CUDAToolkit)
-message(WARNING ${CUDAToolkit_FOUND})
   if(${CUDAToolkit_FOUND})
     set(COMET_ENABLE_GPU  True)
-    message(STATUS "Using COMET_ENABLE_GPU: ${COMET_ENABLE_GPU}")
   else()
     set(COMET_ENABLE_GPU  False)
-    message(STATUS "No CUDA Using COMET_ENABLE_GPU: ${COMET_ENABLE_GPU}")
   endif()
 else()
   set(COMET_ENABLE_GPU  False)
-  message(STATUS "Not lower to GPU Using COMET_ENABLE_GPU: ${COMET_ENABLE_GPU}")
 endif()
 
 
