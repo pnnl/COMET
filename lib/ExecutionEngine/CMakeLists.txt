@@ -1,7 +1,7 @@
 if(ENABLE_GPU_TARGET)
   find_package(CUDAToolkit)
   if(NOT ${CUDAToolkit_FOUND})
-    message(WARNING "CUDAToolkit not found. You can still lower to GPU code, but you will not be able to run it using COMET's execution engine")
+    message(WARNING "CUDAToolkit not found. You can still lower to GPU Assembly code (use --gpu-code-format=Assembly), but you will not be able to run it using COMET's execution engine")
   endif()
 endif()
 
