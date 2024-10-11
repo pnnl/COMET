@@ -68,6 +68,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/StringRef.h"
@@ -180,6 +181,12 @@ static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Co
                                                    ));
 
 #ifdef ENABLE_GPU_TARGET
+static cl::opt<GPUCompilationFormat> GPUTargetCompilationFormat("gpu-format", cl::init(Binary), cl::desc("GPU target code generation format"),
+                                            cl::values(
+                                              clEnumVal(Assembly, "GPU target format is assembly"),
+                                              clEnumVal(Binary, "GPU target format is binary"),
+                                              clEnumVal(Fatbin, "GPU target format is fat binary")
+                                            ));
 static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::init(32), cl::desc("GPU Block size in X direction"));
 static cl::opt<int> GPUBlockSizeY("gpu-block-y-size", cl::init(8), cl::desc("GPU Block size in Y direction"));
 static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::init(32), cl::desc("GPU Block size in R direction"));
@@ -544,7 +551,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 #ifdef ENABLE_GPU_TARGET
   if ((isLoweringToLLVM || emitLLVM || IsLoweringDeviceToLLVM) && CodegenTarget == TargetDevice::GPU)
   {
-    pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability));
+    pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
   }
 
   if ((isLoweringToLLVM || emitLLVM || IsLoweringHostToLLVM) && CodegenTarget == TargetDevice::GPU)
@@ -643,6 +650,7 @@ int main(int argc, char **argv)
   registerLLVMDialectTranslation(context);
   registerBuiltinDialectTranslation(context);
   registerNVVMDialectTranslation(context);
+  mlir::registerGPUDialectTranslation(context);
   LLVMInitializeNVPTXTargetInfo();
   LLVMInitializeNVPTXTarget();
   LLVMInitializeNVPTXTargetMC();

@@ -4,6 +4,9 @@
 #include <memory>
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
 
+#include "comet/Dialect/Utils/Utils.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Value.h"
@@ -59,13 +62,15 @@ public:
                             int threadsPerWarp,
                             int numCTAs,
                             int numStages,
-                            int computeCapability) {
+                            int computeCapability,
+                            mlir::tensorAlgebra::GPUCompilationFormat codeFormat) {
 
         this->numWarps = numWarps;
         this->threadsPerWarp = threadsPerWarp;
         this->numCTAs = numCTAs;
         this->numStages = numStages;
         this->computeCapability = computeCapability; 
+        this->codeFormat = codeFormat; 
     }
 
   void runOnOperation() override {
@@ -76,11 +81,13 @@ public:
       TTFuncs.push_back(op);
     });
 
+    // Triton expects one kernel per module so we create temporary modules
     std::vector<ModuleOp> tempMods;
-    auto tempMod = ModuleOp::create(modOp.getLoc());
-    OpBuilder builder(tempMod.getBodyRegion()); 
-    
-
+    OpBuilder builder(modOp); 
+    std::string chip = "sm_" + std::to_string(computeCapability.getValue());
+    // The pass that converts LLVM kernels to cubin expects all such kernels to be within gpu.module, so we create such a module to insert the 
+    // kernels lowered by Triton
+    auto tempMod = builder.create<mlir::gpu::GPUModuleOp>(modOp->getLoc(), "gpu_module", mlir::NVVM::NVVMTargetAttr::get(modOp->getContext(), 3, "nvptx64-nvidia-cuda", chip));
 
     if(TTFuncs.empty())
     {
@@ -94,125 +101,111 @@ public:
       builder.clone(*ttFunc.getOperation());
       PassManager pm(tempMod.getContext());
 
-    pm.addPass(createCanonicalizerPass());
-    pm.addPass(createCSEPass());
-    pm.addPass(createCSEPass());
-    pm.addPass(createSymbolDCEPass());
-    pm.addPass(createCanonicalizerPass());
-    pm.addPass(createLoopInvariantCodeMotionPass());
-    pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass(numWarps.getValue(), threadsPerWarp.getValue(), numCTAs.getValue(), computeCapability.getValue()));
-    pm.addPass(triton::gpu::createCoalescePass());
-    pm.addPass(createTritonNvidiaGPUPlanCTAPass());
-    pm.addPass(mlir::triton::createRewriteTensorPointerPass(computeCapability.getValue()));
-    pm.addPass(createTritonNvidiaGPUPlanCTAPass());
-    pm.addPass(triton::gpu::createRemoveLayoutConversionsPass());
-    pm.addPass(triton::gpu::createOptimizeThreadLocalityPass());
-    pm.addPass(triton::gpu::createAccelerateMatmulPass(computeCapability.getValue()));
-    pm.addPass(triton::gpu::createRemoveLayoutConversionsPass());
-    pm.addPass(triton::gpu::createOptimizeDotOperandsPass());
-    pm.addPass(createCSEPass());
-    pm.addPass(triton::gpu::createPipelinePass(numStages.getValue(),numWarps.getValue(),numCTAs.getValue(), computeCapability.getValue()));
-    pm.addPass(createTritonNvidiaGPUMaterializeLoadStorePass(numWarps.getValue(), computeCapability.getValue()));
-    pm.addPass(triton::gpu::createPrefetchPass());
-    pm.addPass(triton::gpu::createOptimizeDotOperandsPass());
-    pm.addPass(triton::gpu::createDecomposeConversionsPass());
-    pm.addPass(createTritonNvidiaGPUWSFixupMissingAttrs());
-    pm.addPass(triton::gpu::createReorderInstructionsPass());
-    pm.addPass(createCSEPass());
-    pm.addPass(createSymbolDCEPass());
-    pm.addPass(createTritonNvidiaGPUWSFixupMissingAttrs());
-    pm.addPass(createCanonicalizerPass());
-    pm.addPass(mlir::createConvertSCFToCFPass());
-    pm.addPass(createConvertIndexToLLVMPass());
-    pm.addPass(mlir::triton::createConvertTritonGPUToLLVMPass());
-    pm.addPass(mlir::triton::createConvertNVGPUToLLVMPass());
-    pm.addPass(createArithToLLVMConversionPass());
-    pm.addPass(createCanonicalizerPass());
-    pm.addPass(createCSEPass());
-    pm.addPass(createSymbolDCEPass());
+      pm.addPass(createCanonicalizerPass());
+      pm.addPass(createCSEPass());
+      pm.addPass(createCSEPass());
+      pm.addPass(createSymbolDCEPass());
+      pm.addPass(createCanonicalizerPass());
+      pm.addPass(createLoopInvariantCodeMotionPass());
+      pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass(numWarps.getValue(), threadsPerWarp.getValue(), numCTAs.getValue(), computeCapability.getValue()));
+      pm.addPass(triton::gpu::createCoalescePass());
+      pm.addPass(createTritonNvidiaGPUPlanCTAPass());
+      pm.addPass(mlir::triton::createRewriteTensorPointerPass(computeCapability.getValue()));
+      pm.addPass(createTritonNvidiaGPUPlanCTAPass());
+      pm.addPass(triton::gpu::createRemoveLayoutConversionsPass());
+      pm.addPass(triton::gpu::createOptimizeThreadLocalityPass());
+      pm.addPass(triton::gpu::createAccelerateMatmulPass(computeCapability.getValue()));
+      pm.addPass(triton::gpu::createRemoveLayoutConversionsPass());
+      pm.addPass(triton::gpu::createOptimizeDotOperandsPass());
+      pm.addPass(createCSEPass());
+      pm.addPass(triton::gpu::createPipelinePass(numStages.getValue(),numWarps.getValue(),numCTAs.getValue(), computeCapability.getValue()));
+      pm.addPass(createTritonNvidiaGPUMaterializeLoadStorePass(numWarps.getValue(), computeCapability.getValue()));
+      pm.addPass(triton::gpu::createPrefetchPass());
+      pm.addPass(triton::gpu::createOptimizeDotOperandsPass());
+      pm.addPass(triton::gpu::createDecomposeConversionsPass());
+      pm.addPass(createTritonNvidiaGPUWSFixupMissingAttrs());
+      pm.addPass(triton::gpu::createReorderInstructionsPass());
+      pm.addPass(createCSEPass());
+      pm.addPass(createSymbolDCEPass());
+      pm.addPass(createTritonNvidiaGPUWSFixupMissingAttrs());
+      pm.addPass(createCanonicalizerPass());
+      pm.addPass(mlir::createConvertSCFToCFPass());
+      pm.addPass(createConvertIndexToLLVMPass());
+      pm.addPass(mlir::triton::createConvertTritonGPUToLLVMPass());
+      pm.addPass(mlir::triton::createConvertNVGPUToLLVMPass());
+      pm.addPass(createArithToLLVMConversionPass());
+      pm.addPass(createCanonicalizerPass());
+      pm.addPass(createCSEPass());
+      pm.addPass(createSymbolDCEPass());
 
-    if (failed(pm.run(tempMod))) {
+      if (failed(pm.run(tempMod))) {
+        signalPassFailure();
+        return;
+      }
+
+      auto oldAttrs = ttFunc->getAttrs().vec();
+      // tempMod->dump();
+
+      oldAttrs.insert(oldAttrs.end(), tempMod->getAttrs().begin(), tempMod->getAttrs().end());
+      // ttFunc->setAttrs(tempMod->getAttrs());
+      ttFunc->setAttrs(oldAttrs);
+      tempMods.push_back(tempMod);
+    }
+
+    // We have lowered Triton kernels to LLVM, now we need to add them to the gpu.module
+    builder.setInsertionPointToStart(&tempMod.getBodyRegion().front());
+    for(auto mod: tempMods)
+    {
+      for(auto& op: *mod.getBody())
+      {
+        builder.clone(op);
+      }
+    }
+
+    // GPU dialect verifier expects this
+    modOp->setAttr("gpu.container_module", builder.getUnitAttr());
+
+    // The function transformGpuModulesToBinaries expects a module that contains gpu.module(s), so we create one with
+    // the kernels we want to convert to cubin
+    auto tempOuterMod = ModuleOp::create(modOp.getLoc());
+    OpBuilder gbuilder(tempOuterMod.getBodyRegion());
+    gbuilder.clone(*tempMod);
+    gpu::TargetOptions opts;
+    if (this->codeFormat == mlir::tensorAlgebra::GPUCompilationFormat::Assembly) {
+      opts = gpu::TargetOptions({}, {}, {}, gpu::CompilationTarget::Assembly);
+    }
+    else if(this->codeFormat == mlir::tensorAlgebra::GPUCompilationFormat::Binary) {
+      opts = gpu::TargetOptions({}, {}, {}, gpu::CompilationTarget::Binary);
+    }
+    else if(this->codeFormat == mlir::tensorAlgebra::GPUCompilationFormat::Fatbin) {
+      opts = gpu::TargetOptions({}, {}, {}, gpu::CompilationTarget::Fatbin);
+    }
+    else {
+      assert(false && "Unexpected gpu compilation code format");
+    }
+    auto res = mlir::gpu::transformGpuModulesToBinaries(tempOuterMod, nullptr, opts);
+    if(res.failed())
+    {
       signalPassFailure();
       return;
     }
-
-    auto oldAttrs = ttFunc->getAttrs().vec();
-    oldAttrs.insert(oldAttrs.end(), tempMod->getAttrs().begin(), tempMod->getAttrs().end());
-    // ttFunc->setAttrs(tempMod->getAttrs());
-    ttFunc->setAttrs(oldAttrs);
-    tempMods.push_back(tempMod);
-    }
-
-    for(auto mod: tempMods)
-    {
-      builder.clone(mod.getBody()->front());
-    }
-    // modOp->setAttrs(tempMod->getAttrs());
-    modOp->setAttr("gpu.container_module", builder.getUnitAttr());
-    builder.setInsertionPointToEnd(&modOp.getRegion().getBlocks().back());
-    // tempMod.getRegion().
-    // mlir::gpu::SerializeToBlobPass()
-    llvm::LLVMContext llvmContext;
-    auto llvmModule = translateModuleToLLVMIR(tempMod.getOperation(), llvmContext);
-    if (!llvmModule)
-    {
-      return signalPassFailure();
-    }
-    std::string TargetTriple = "nvptx64-nvidia-cuda";
-    llvmModule->setTargetTriple(TargetTriple);
-    Location loc = tempMod.getLoc();
-    std::string error;
-    const llvm::Target *target = llvm::TargetRegistry::lookupTarget(llvmModule->getTargetTriple(), error);
-    if (!target) {
-      emitError(loc, Twine("failed to lookup target: ") + error);
-      return signalPassFailure();
-    }
-    llvm::TargetOptions opt;
-    // if (enable_fp_fusion)
-    //   opt.AllowFPOpFusion = llvm::FPOpFusion::Fast;
-    opt.UnsafeFPMath = false;
-    opt.NoInfsFPMath = false;
-    opt.NoNaNsFPMath = true;
-    opt.TrapUnreachable = true;
-    llvm::TargetMachine *machine =
-        target->createTargetMachine(llvmModule->getTargetTriple(), "sm_"+std::to_string(computeCapability.getValue()), "", opt, llvm::Reloc::PIC_, std::nullopt, llvm::CodeGenOptLevel::Aggressive);
-
-    if (!machine) {
-      emitError(loc, "failed to create target machine");
-      return signalPassFailure();
-    }
-
-    llvmModule->setDataLayout(machine->createDataLayout());
-    std::string result;
-    {
-      llvm::raw_string_ostream stream(result);
-      llvm::buffer_ostream pstream(stream);
-      for (llvm::Function &f : llvmModule->functions())
-        f.addFnAttr(llvm::Attribute::AlwaysInline);
-      llvm::legacy::PassManager pass;
-      // emit
-      // auto fileType = isObject ? llvm::CodeGenFileType::ObjectFile
-      //                         : llvm::CodeGenFileType::AssemblyFile;
-      auto fileType = llvm::CodeGenFileType::AssemblyFile;
-      assert(!machine->addPassesToEmitFile(pass, pstream, nullptr, fileType));
-      pass.run(*llvmModule);
-    }
-
-    auto type = LLVM::LLVMArrayType::get(
-      IntegerType::get(builder.getContext(), 8), result.size());
-    // result.append("\n");
-    // auto funcOp = *modOp.getOps<mlir::func::FuncOp>().begin();
+    
     builder.setInsertionPointToStart(modOp.getBody());
-    builder.create<LLVM::GlobalOp>(loc, type, /*isConstant=*/false,
-                                              LLVM::Linkage::Internal, "ptx",
-                                              builder.getStringAttr(result),
-                                              /*alignment=*/32);
-    // LLVM::createGlobalString(modOp->getLoc(), builder, "ptx", result, LLVM::linkage::Linkage::Private );
-    // modOp->setAttr("gpu.ptx", builder.getStringAttr(result));
-    // std::cout << result << std::endl;
-
-
-    // builder.clone(*tempMod.getOperation());
+    
+    // GPU kernels are now converted to cubin, add them to the main module as global strings
+    for(auto& op: *tempOuterMod.getBody())
+    {
+      if(auto binOp = dyn_cast<mlir::gpu::BinaryOp>(op))
+      {
+        auto result = binOp.getObjects().begin()->cast<gpu::ObjectAttr>().getObject().str();
+        auto type = LLVM::LLVMArrayType::get(IntegerType::get(builder.getContext(), 8), result.size());
+        builder.setInsertionPointToStart(modOp.getBody());
+        builder.create<LLVM::GlobalOp>(modOp->getLoc(), type, /*isConstant=*/false,
+                                                  LLVM::Linkage::Internal, "gpu_code",
+                                                  builder.getStringAttr(result),
+                                                  /*alignment=*/32);
+      }
+    }
   }
 };
 
@@ -227,8 +220,9 @@ mlir::comet::createLowerTritonDeviceToCudaPass(int numWarps,
                                                 int threadsPerWarp,
                                                 int numCTAs,
                                                 int numStages,
-                                                int computeCapability) {
-  return std::make_unique<::LowerTritonDeviceToCuda>(numWarps, threadsPerWarp, numCTAs, numStages, computeCapability);
+                                                int computeCapability,
+                                                mlir::tensorAlgebra::GPUCompilationFormat format) {
+  return std::make_unique<::LowerTritonDeviceToCuda>(numWarps, threadsPerWarp, numCTAs, numStages, computeCapability, format);
 }
 
 class LowerGpuHostToCuda
@@ -331,8 +325,8 @@ public:
       if(initFuncs.find(launchOp->getParentOfType<mlir::func::FuncOp>()) == initFuncs.end())
       {
         builder.setInsertionPointToStart(&launchOp->getParentOfType<mlir::func::FuncOp>().getFunctionBody().front());
-        Value ptx = builder.create<mlir::LLVM::AddressOfOp>(launchOp->getLoc(), LLVM::LLVMPointerType::get(&getContext()) ,"ptx");
-        builder.create<mlir::func::CallOp>(launchOp.getLoc(), "cudaSetModuleImage", TypeRange(), ValueRange({ptx}));
+        Value gpu_code = builder.create<mlir::LLVM::AddressOfOp>(launchOp->getLoc(), LLVM::LLVMPointerType::get(&getContext()) ,"gpu_code");
+        builder.create<mlir::func::CallOp>(launchOp.getLoc(), "cudaSetModuleImage", TypeRange(), ValueRange({gpu_code}));
         
         initFuncs.insert(launchOp->getParentOfType<mlir::func::FuncOp>());
       }
@@ -542,7 +536,9 @@ public:
       std::string& funcName = gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref()+"::"+launchOp.getKernelName().strref()).str()];
       if(funcs.find(funcName) == funcs.end())
       {
-        funcs[funcName] = LLVM::createGlobalString(modOp->getLoc(), builder, funcName+"_str", funcName, LLVM::linkage::Linkage::Private );
+        // We need the global string to include the \0 character so that it is correctly read by the cuda lib
+        // Hence the StringRef(funcName.c_str(), funcName.size()+1)
+        funcs[funcName] = LLVM::createGlobalString(modOp->getLoc(), builder, funcName+"_str", StringRef(funcName.c_str(), funcName.size()+1), LLVM::linkage::Linkage::Private );
       }
 
       auto name = gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref()+"::"+launchOp.getKernelName().strref()).str()];
