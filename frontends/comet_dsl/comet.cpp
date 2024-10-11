@@ -181,7 +181,7 @@ static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Co
                                                    ));
 
 #ifdef ENABLE_GPU_TARGET
-static cl::opt<GPUCompilationFormat> GPUTargetCompilationFormat("gpu-format", cl::init(Binary), cl::desc("GPU target code generation format"),
+static cl::opt<GPUCompilationFormat> GPUTargetCompilationFormat("gpu-code-format", cl::init(Binary), cl::desc("GPU target code generation format"),
                                             cl::values(
                                               clEnumVal(Assembly, "GPU target format is assembly"),
                                               clEnumVal(Binary, "GPU target format is binary"),
