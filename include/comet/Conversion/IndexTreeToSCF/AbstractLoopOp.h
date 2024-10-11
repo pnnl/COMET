@@ -97,7 +97,7 @@ public:
 
   void setOp(scf::ParallelOp parallelOp, std::string iterator_type);
 
-  void setOp(omp::WsLoopOp parallelOp, std::string iterator_type);
+  void setOp(omp::LoopNestOp parallelOp, std::string iterator_type);
 
   void setLowerBound(mlir::Value &lowerBound);
 

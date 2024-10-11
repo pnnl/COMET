@@ -1904,12 +1904,12 @@ namespace
     else if (semiringSecond == "minxy")
     {
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OLT, Input0, Input1);
-      elementWiseResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
+      elementWiseResult = builder.create<mlir::arith::SelectOp>(loc, cmp, Input0, Input1);
     }
     else if (semiringSecond == "max")
     {
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OGT, Input0, Input1);
-      elementWiseResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
+      elementWiseResult = builder.create<mlir::arith::SelectOp>(loc, cmp, Input0, Input1);
     }
     else if (semiringSecond == "ne")
     {
@@ -1966,7 +1966,7 @@ namespace
         /// we should not proceed forward from this point to avoid in-correct results from generated code.
       }
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OLT, Input0, Input1);
-      reduceResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
+      reduceResult = builder.create<mlir::arith::SelectOp>(loc, cmp, Input0, Input1);
     }
     else if (semiringFirst == "max")
     {
@@ -1980,7 +1980,7 @@ namespace
         /// we should not proceed forward from this point to avoid in-correct results from generated code.
       }
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OGT, Input0, Input1);
-      reduceResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
+      reduceResult = builder.create<mlir::arith::SelectOp>(loc, cmp, Input0, Input1);
     }
     else if (semiringFirst == "land")
     {

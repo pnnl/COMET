@@ -27,6 +27,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "comet/Conversion/IndexTreeToSCF/AbstractLoopOp.h"
+#include "mlir/Dialect/OpenMP/OpenMPDialect.h"
 #include "mlir/IR/Value.h"
 
 std::unordered_set<std::string> AbstractLoopOp::supported_types = {"default",
@@ -60,7 +61,7 @@ void AbstractLoopOp::setOp(scf::ParallelOp parallelOp, std::string iterator_type
   op = parallelOp;
 }
 
-void AbstractLoopOp::setOp(omp::WsLoopOp parallelOp, std::string iterator_type)
+void AbstractLoopOp::setOp(omp::LoopNestOp parallelOp, std::string iterator_type)
 {
   setIteratorType(iterator_type);
   op = parallelOp;
@@ -74,7 +75,7 @@ void AbstractLoopOp::setLowerBound(mlir::Value &lowerBound)
   }
   else if ("omp.parallel" == iteratorType)
   {
-    llvm::errs() << "Error: omp::WsLoopOp does not support setLowerBound.\n";
+    llvm::errs() << "Error: omp::WsloopOp does not support setLowerBound.\n";
   }
   else
   {
@@ -119,7 +120,7 @@ void AbstractLoopOp::setUpperBound(mlir::Value &upperBound)
   }
   else if ("omp.parallel" == iteratorType)
   {
-    llvm::errs() << "Error: omp::WsLoopOp does not support setUpperBound.\n";
+    llvm::errs() << "Error: omp::WsloopOp does not support setUpperBound.\n";
   }
   else
   {
@@ -137,7 +138,7 @@ mlir::Block *AbstractLoopOp::getBody()
   }
   else if ("omp.parallel" == iteratorType)
   {
-    auto handle = mlir::dyn_cast<omp::WsLoopOp>(op);
+    auto handle = mlir::dyn_cast<omp::WsloopOp>(op);
     return &handle.getRegion().getBlocks().front();
   }
   else
@@ -156,7 +157,7 @@ mlir::Value AbstractLoopOp::getInductionVar()
   }
   else if ("omp.parallel" == iteratorType)
   {
-    auto handle = mlir::dyn_cast<omp::WsLoopOp>(op);
+    auto handle = mlir::dyn_cast<omp::WsloopOp>(op);
     return handle.getRegion().getArguments().front();
   }
   else
@@ -182,7 +183,7 @@ void AbstractLoopOp::buildLoopOp(const std::string &type,
   }
   else if ("omp.parallel" == type)
   {
-    auto tmp = builder.create<omp::WsLoopOp>(loc,
+    auto tmp = builder.create<omp::LoopNestOp>(loc,
                                              ValueRange{lowerBound},
                                              ValueRange{upperBound},
                                              ValueRange{step});
@@ -208,7 +209,7 @@ void AbstractLoopOp::dump()
   }
   else if ("omp.parallel" == iteratorType)
   {
-    auto handle = mlir::dyn_cast<omp::WsLoopOp>(op);
+    auto handle = mlir::dyn_cast<omp::WsloopOp>(op);
     handle.dump();
   }
   else

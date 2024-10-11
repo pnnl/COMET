@@ -486,7 +486,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 #else
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass(CodegenTarget, 0, 0, 0));
 #endif
-    optPM.addPass(mlir::tensor::createTensorBufferizePass());
+    // optPM.addPass(mlir::tensor::createT());
     pm.addPass(mlir::func::createFuncBufferizePass()); /// Needed for func
 
     pm.addPass(mlir::createConvertLinalgToLoopsPass());
