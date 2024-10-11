@@ -48,6 +48,7 @@ namespace mlir
   namespace tensorAlgebra
   {
     enum TargetDevice { CPU, GPU, FPGA};
+    enum GPUCompilationFormat { Binary, Assembly, Fatbin};
 
     using IndexSizeMap = std::unordered_map<unsigned, int64_t>;
     using IndexVector = std::vector<unsigned>;
