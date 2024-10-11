@@ -161,18 +161,7 @@ extern "C" __attribute__((visibility("default"))) void cudaLaunchKernel(int64_t 
     unsigned blocksPerGridX = std::min(realblocksX, MAX_NUM_BLOCKS_X);
     unsigned blocksPerGridY = std::min(realblocksY, MAX_NUM_BLOCKS_Y);
     unsigned blocksPerGridZ = std::min(realblocksZ, MAX_NUM_BLOCKS_Z);
-    char* name_with_suffix = (char*)malloc(kernel_name_size+1);
-    memcpy(name_with_suffix, kernel, kernel_name_size);
-    name_with_suffix[kernel_name_size] = '\0';
-    CU_CHECK(cuModuleGetFunction(&cuFunction, cuModule, name_with_suffix));
-    // printf("Kernel name: %s\n", name_with_suffix);
+    CU_CHECK(cuModuleGetFunction(&cuFunction, cuModule, kernel));
     void** cast_args = (void**)aligned_ptr;
-    // for(int i = 0; i < size; i++)
-    // {
-    //     printf("%p\n", cast_args[i]);
-    // }
-
-    free(name_with_suffix);
-
     CU_CHECK(cuLaunchKernel(cuFunction, blocksPerGridX, blocksPerGridY, blocksPerGridZ, numWraps* threadsPerWarp, 1, 1, sharedMem, 0, cast_args, 0));
 }

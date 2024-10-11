@@ -82,6 +82,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/IR/DialectRegistry.h"
@@ -211,6 +212,12 @@ static cl::opt<std::string> xclbinPath("xclbin_path", cl::init("-"), cl::desc("P
 static cl::opt<std::string> sprirvBinOutPath("spirv_bin_path", cl::init("-"), cl::desc("Path to output SPIRV binary"));
 #endif
 #ifdef ENABLE_GPU_TARGET
+static cl::opt<GPUCompilationFormat> GPUTargetCompilationFormat("gpu-format", cl::init(Binary), cl::desc("GPU target code generation format"),
+                                            cl::values(
+                                              clEnumVal(Assembly, "GPU target format is assembly"),
+                                              clEnumVal(Binary, "GPU target format is binary"),
+                                              clEnumVal(Fatbin, "GPU target format is fat binary")
+                                            ));
 static cl::opt<int> GPUComputeCapability("gpu-compute-capability", cl::init(CUDA_COMPUTE_CAPABILITY), cl::desc("GPU compute capability"));
 static cl::opt<int> GPUNumWarps("gpu-num-warps", cl::init(4), cl::desc("GPU number of warps"));
 static cl::opt<int> GPUThreadsPerWarp("gpu-threads-per-warp", cl::init(32), cl::desc("GPU threads per warp"));
@@ -635,11 +642,16 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (isLoweringToLLVM || emitLLVM)
   {
 #ifdef ENABLE_GPU_TARGET
-    if (CodegenTarget == GPU)
-    {
-      pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability));
-      pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
-    }
+  if ((isLoweringToLLVM || emitLLVM) && CodegenTarget == TargetDevice::GPU)
+  {
+    pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
+  }
+
+  if ((isLoweringToLLVM || emitLLVM) && CodegenTarget == TargetDevice::GPU)
+  {
+    pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
+  }
+
 #endif
 
     optPM.addPass(mlir::createCanonicalizerPass());
@@ -724,6 +736,7 @@ int main(int argc, char **argv)
   registerLLVMDialectTranslation(context);
   registerBuiltinDialectTranslation(context);
   registerNVVMDialectTranslation(context);
+  mlir::registerGPUDialectTranslation(context);
   LLVMInitializeNVPTXTargetInfo();
   LLVMInitializeNVPTXTarget();
   LLVMInitializeNVPTXTargetMC();

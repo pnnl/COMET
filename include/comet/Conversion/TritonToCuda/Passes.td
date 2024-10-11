@@ -57,6 +57,10 @@ def LowerTritonDeviceToCuda: Pass<"lower-triton-device-to-cuda", "mlir::ModuleOp
               Option<"computeCapability", "computeCapability",
                      "int32_t", "80",
                      "Target compute capability">,
+              
+              Option<"codeFormat", "codeFormat",
+                     "mlir::tensorAlgebra::GPUCompilationFormat", "mlir::tensorAlgebra::Binary",
+                     "Target code format">,
        ];
 
        let dependentDialects = ["mlir::arith::ArithDialect", "mlir::math::MathDialect",
