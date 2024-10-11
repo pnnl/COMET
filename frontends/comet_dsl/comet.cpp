@@ -212,7 +212,7 @@ static cl::opt<std::string> xclbinPath("xclbin_path", cl::init("-"), cl::desc("P
 static cl::opt<std::string> sprirvBinOutPath("spirv_bin_path", cl::init("-"), cl::desc("Path to output SPIRV binary"));
 #endif
 #ifdef ENABLE_GPU_TARGET
-static cl::opt<GPUCompilationFormat> GPUTargetCompilationFormat("gpu-format", cl::init(Binary), cl::desc("GPU target code generation format"),
+static cl::opt<GPUCompilationFormat> GPUTargetCompilationFormat("gpu-code-format", cl::init(Binary), cl::desc("GPU target code generation format"),
                                             cl::values(
                                               clEnumVal(Assembly, "GPU target format is assembly"),
                                               clEnumVal(Binary, "GPU target format is binary"),
