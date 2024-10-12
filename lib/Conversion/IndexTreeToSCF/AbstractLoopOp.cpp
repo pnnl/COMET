@@ -61,7 +61,7 @@ void AbstractLoopOp::setOp(scf::ParallelOp parallelOp, std::string iterator_type
   op = parallelOp;
 }
 
-void AbstractLoopOp::setOp(omp::LoopNestOp parallelOp, std::string iterator_type)
+void AbstractLoopOp::setOp(omp::WsloopOp parallelOp, std::string iterator_type)
 {
   setIteratorType(iterator_type);
   op = parallelOp;
@@ -138,7 +138,7 @@ mlir::Block *AbstractLoopOp::getBody()
   }
   else if ("omp.parallel" == iteratorType)
   {
-    auto handle = mlir::dyn_cast<omp::WsloopOp>(op);
+    auto handle =  mlir::dyn_cast<omp::LoopNestOp>(mlir::dyn_cast<omp::WsloopOp>(op).getWrappedLoop());
     return &handle.getRegion().getBlocks().front();
   }
   else
@@ -157,7 +157,7 @@ mlir::Value AbstractLoopOp::getInductionVar()
   }
   else if ("omp.parallel" == iteratorType)
   {
-    auto handle = mlir::dyn_cast<omp::WsloopOp>(op);
+    auto handle =  mlir::dyn_cast<omp::LoopNestOp>(mlir::dyn_cast<omp::WsloopOp>(op).getWrappedLoop());
     return handle.getRegion().getArguments().front();
   }
   else
@@ -183,14 +183,18 @@ void AbstractLoopOp::buildLoopOp(const std::string &type,
   }
   else if ("omp.parallel" == type)
   {
+    OpBuilder::InsertionGuard guard(builder);  /// RAII guard to reset the insertion point of the builder when destroyed.
+    auto wsloop = builder.create<omp::WsloopOp>(loc); 
+    builder.createBlock(&wsloop.getRegion(), {}, {}, {});
     auto tmp = builder.create<omp::LoopNestOp>(loc,
                                              ValueRange{lowerBound},
                                              ValueRange{upperBound},
                                              ValueRange{step});
-    OpBuilder::InsertionGuard guard(builder);  /// RAII guard to reset the insertion point of the builder when destroyed.
     builder.createBlock(&tmp.getRegion(), {}, {builder.getIndexType()}, {tmp.getLoc()});  /// NOTE: this changed the insertion point automatically.
     omp_wsloop_yield_op = builder.create<omp::YieldOp>(loc, ValueRange());
-    setOp(tmp, type);
+    builder.setInsertionPointToEnd(wsloop.getBody());
+    builder.create<omp::TerminatorOp>(loc);
+    setOp(wsloop, type);
   }
   else
   {
