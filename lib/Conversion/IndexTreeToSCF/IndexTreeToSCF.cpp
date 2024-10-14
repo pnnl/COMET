@@ -47,6 +47,7 @@
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/iterator_range.h"
+#include "llvm/ADT/SetVector.h"
 #include <iostream>
 #include <algorithm>
 #include <vector>
@@ -1025,6 +1026,7 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
 
   rewriter.restoreInsertionPoint(loop_end);
   auto users = topologicalSort(llvm::SetVector<Operation*>(op->user_begin(), op->user_end()));
+  llvm::SetVector<Operation*> toRemove;
   for(Operation* user : users)
   {
     LLVM_DEBUG({
@@ -1035,8 +1037,13 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
       auto clean_workspace_op = llvm::cast<IndexTreeCleanWorkspaceOp>(user);
       Value workspace = rewriter.create<WorkspaceClearOp>(loc, user->getResultTypes(), clean_workspace_op.getWorkspace());
       rewriter.replaceOp(user, {workspace});
+      toRemove.insert(user);
     }
   }
+  for(Operation * user : toRemove) {
+    users.remove(user);
+  }
+  
   for(Operation* user : users)
   {
     LLVM_DEBUG({
