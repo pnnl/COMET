@@ -504,11 +504,12 @@ LowerIndexTreeToSCFPass::convertCompute(Operation *op,
     output_tensor = rewriter.create<tensorAlgebra::TensorInsertOp>(loc, old_tensor.getType(), old_tensor, lhs.getPos(), lhs.getCrds(), reduce_result);
   }
   rewriter.replaceAllUsesWith(op->getResult(0), output_tensor);
-  rewriter.eraseOp(op);
-  rewriter.eraseOp(lhs);
-  for(Value rhs : compute_op.getRhs()){
-    rewriter.eraseOp(rhs.getDefiningOp());
+  ValueRange rhs = compute_op.getRhs();
+  rewriter.eraseOp(compute_op);
+  for(Value operand : rhs){
+    rewriter.eraseOp(operand.getDefiningOp());
   }
+  rewriter.eraseOp(lhs);
 
   return success();
 }
@@ -602,17 +603,16 @@ LowerIndexTreeToSCFPass::fillSubtree(Location loc,
 
 void
 LowerIndexTreeToSCFPass::deleteDomain(Operation* op, IRRewriter &rewriter) {
-  rewriter.eraseOp(op);
+  
+  ValueRange subdomains;
   if(llvm::isa<IndexTreeDomainIntersectionOp>(op)){
-    auto subdomains = llvm::cast<IndexTreeDomainIntersectionOp>(op).getDomains();
-    for(Value subdomain : subdomains) {
-      deleteDomain(subdomain.getDefiningOp(), rewriter);
-    }
+    subdomains = llvm::cast<IndexTreeDomainIntersectionOp>(op).getDomains();
   } else if(llvm::isa<IndexTreeDomainUnionOp>(op)){
-    auto subdomains = llvm::cast<IndexTreeDomainUnionOp>(op).getDomains();
-    for(Value subdomain : subdomains) {
-      deleteDomain(subdomain.getDefiningOp(), rewriter);
-    }
+    subdomains = llvm::cast<IndexTreeDomainUnionOp>(op).getDomains();
+  }
+  rewriter.eraseOp(op);
+  for(Value subdomain : subdomains) {
+    deleteDomain(subdomain.getDefiningOp(), rewriter);
   }
 }
 
