@@ -438,7 +438,7 @@ public:
             rewriter.eraseOp(parOp);
             return mlir::success();
         }
-        else if ((mlir::isa<mlir::scf::ParallelOp>(parOp->getParentOp()) && (mlir::cast<mlir::scf::ParallelOp>(parOp->getParentOp())->getAttrOfType<mlir::StringAttr>("parallelDim").getValue().equals("dimY_block") || mlir::cast<mlir::scf::ParallelOp>(parOp->getParentOp())->getAttrOfType<mlir::StringAttr>("parallelDim").getValue().equals("dimY_grid")) ))  // X level loop
+        else if ((mlir::isa<mlir::scf::ParallelOp>(parOp->getParentOp()) && (mlir::cast<mlir::scf::ParallelOp>(parOp->getParentOp())->getAttrOfType<mlir::StringAttr>("parallelDim").getValue().compare("dimY_block") == 0 || mlir::cast<mlir::scf::ParallelOp>(parOp->getParentOp())->getAttrOfType<mlir::StringAttr>("parallelDim").getValue().compare("dimY_grid") == 0) ))  // X level loop
         { 
             auto block_size_x = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), blockX );
             auto c1 = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), 1);
