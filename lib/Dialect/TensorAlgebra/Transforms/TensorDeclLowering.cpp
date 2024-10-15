@@ -346,7 +346,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
     comet_debug() << " --- " << formats_str << "\n";
 
     comet_debug() << " " << op.getNumOperands() << "\n";
-    auto rank_size = op.getResult().getType().getRank();
+    auto rank_size = mlir::cast<SparseTensorType>(op.getResult().getType()).getRank();
 
     IndexType indexType = IndexType::get(op.getContext());
     FloatType f64Type = FloatType::getF64(op.getContext());
@@ -461,15 +461,15 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           comet_vdump(dst_input);
           comet_debug() << " ";
           comet_pdump(dst_input.getDefiningOp());
-          mlir::TensorType type;
+          mlir::tensorAlgebra::SparseTensorType type;
           auto res = dst_input.getDefiningOp()->getResult(0);
-          if (res.getType().isa<TensorType>())
+          if (res.getType().isa<tensorAlgebra::SparseTensorType>())
           {
-            type = res.getType().cast<TensorType>();
+            type = res.getType().cast<tensorAlgebra::SparseTensorType>();
           }
           else
           {
-            assert(false && "Expected TensorType");
+            assert(false && "Expected SparseTensorType");
           }
           // unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
           unsigned int dst_rank = type.getRank();
@@ -805,10 +805,10 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
       comet_debug() << " " << op.getNumOperands() << "\n";
       auto res = op.getResult();
-      mlir::TensorType type;
-      if(res.getType().isa<TensorType>())
+      mlir::tensorAlgebra::SparseTensorType type;
+      if(res.getType().isa<SparseTensorType>())
       {
-        type = res.getType().cast<TensorType>();
+        type = res.getType().cast<SparseTensorType>();
       }
       else
       {

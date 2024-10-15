@@ -808,7 +808,7 @@ namespace
           ret_lbls_value.push_back(all_lbls_value[n]);
         }
 
-        std::vector<int64_t> result_dims = getDimSizes(ret_lbls_value);
+        // std::vector<int64_t> result_dims = getDimSizes(ret_lbls_value);
         auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
 
         auto res_map = affineMapArrayAttr[affineMapArrayAttr.size() - 1].cast<mlir::AffineMapAttr>().getValue();
@@ -828,7 +828,6 @@ namespace
             }
           }
         }
-        auto ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
 
         SmallVector<mlir::StringRef, 8> formats;
         std::vector<mlir::Value> exprs{lhs_labeledtensor, rhs_labeledtensor};
@@ -1776,6 +1775,8 @@ namespace
         }
       }
 
+      mlir::Type return_type = getType(shape);
+
       /// Create Tensor Declarations Ops and populate formats (for lhs)
       mlir::Value lhs_tensor;
       if (isa<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()))
@@ -1796,9 +1797,9 @@ namespace
         mlir::StringRef format_strref = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
 
-        std::vector<int32_t> format = mlir::tensorAlgebra::getFormats(format_strref, result_dims.size(), builder.getContext());
+        std::vector<int32_t> format = mlir::tensorAlgebra::getFormats(format_strref, shape.size(), builder.getContext());
         mlir::Type element_type = builder.getF64Type();
-        return_type = SparseTensorType::get(builder.getContext(), element_type, result_dims, format);
+        return_type = SparseTensorType::get(builder.getContext(), element_type, shape, format);
 
         /// no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
         /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries

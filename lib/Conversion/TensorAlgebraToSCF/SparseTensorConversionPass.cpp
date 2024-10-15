@@ -870,28 +870,28 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
 
   typeConverter.addArgumentMaterialization(
     [](OpBuilder &builder, SparseTensorType resultType, ValueRange inputs,
-        Location loc) -> Optional<Value> {
+        Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
       return op->getResult(0);
     });
 
   typeConverter.addSourceMaterialization(
     [](OpBuilder &builder, SparseTensorType resultType, ValueRange inputs,
-        Location loc) -> Optional<Value> {
+        Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
       return op->getResult(0);
     });
   
   typeConverter.addArgumentMaterialization(
     [](OpBuilder &builder, WorkspaceType resultType, ValueRange inputs,
-        Location loc) -> Optional<Value> {
+        Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
       return op->getResult(0);
     });
 
   typeConverter.addSourceMaterialization(
     [](OpBuilder &builder, WorkspaceType resultType, ValueRange inputs,
-        Location loc) -> Optional<Value> {
+        Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
       return op->getResult(0);
     });

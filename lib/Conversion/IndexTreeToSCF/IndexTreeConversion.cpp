@@ -111,7 +111,7 @@ class InlineIndexTreeOp : public OpConversionPattern<indexTree::IndexTreeOp>{
     Block& body = op.getRegion().front();
     Operation* terminator = body.getTerminator();
     rewriter.replaceOp(op, terminator->getOperands());
-    rewriter.mergeBlockBefore(&body, op);
+    rewriter.inlineBlockBefore(&body, op);
     return success();
   }
 };

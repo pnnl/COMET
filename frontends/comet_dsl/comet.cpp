@@ -341,7 +341,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   pm.addPass(mlir::comet::createFuncOpLoweringPass());
 
   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
-  optPM.addPass(mlir::comet::createRemoveLabeledTensorOpsPass());
 
   /// Check to see if we are dumping to TA dialect.
   if (emitTA)

@@ -747,7 +747,7 @@ class ConvertSetOp : public OpConversionPattern<TensorSetOp> {
     auto opAdaptor = llvm::cast<TensorSetOpAdaptor>(adaptor);
     Value lhs = opAdaptor.getLhs();
     Value rhs = opAdaptor.getRhs();
-    rewriter.replaceUseIf(rhs, lhs, [&](OpOperand& use) { 
+    rewriter.replaceUsesWithIf(rhs, lhs, [&](OpOperand& use) { 
       auto user = use.getOwner();
       auto ancestor = op->getBlock()->findAncestorOpInBlock(*user);
       return (ancestor && op->isBeforeInBlock(ancestor)); 

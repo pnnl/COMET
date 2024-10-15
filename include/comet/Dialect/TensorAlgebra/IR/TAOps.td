@@ -152,23 +152,23 @@ def SparseTensorDeclOp : TA_Op<"spTensor_decl", [Pure]> {
 
   let extraClassDeclaration = [{
     unsigned int getParameterCount() {
-        mlir::TensorType type = getResult().getType().cast<TensorType>();
+        mlir::tensorAlgebra::SparseTensorType type = getResult().getType().cast<mlir::tensorAlgebra::SparseTensorType>();
         return (type.getRank() * 6) + 1;
     }
 
     unsigned int getDimArrayCount() {
-        mlir::TensorType type = getResult().getType().cast<TensorType>();
+        mlir::tensorAlgebra::SparseTensorType type = getResult().getType().cast<mlir::tensorAlgebra::SparseTensorType>();
         return type.getRank() * 4;
     }
 
     unsigned int getValueArrayPos() {
-        mlir::TensorType type = getResult().getType().cast<TensorType>();
+        mlir::tensorAlgebra::SparseTensorType type = getResult().getType().cast<mlir::tensorAlgebra::SparseTensorType>();
 
         return (type.getRank() * 4) + 1;
     }
 
     unsigned int getTotalArrayCount() {
-        mlir::TensorType type = getResult().getType().cast<TensorType>();
+        mlir::tensorAlgebra::SparseTensorType type = getResult().getType().cast<mlir::tensorAlgebra::SparseTensorType>();
         return (type.getRank() * 4) + 1;
     }
   }];

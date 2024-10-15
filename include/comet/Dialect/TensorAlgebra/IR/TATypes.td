@@ -10,6 +10,11 @@ class TensorAlgebra_Type<string name, string typeMnemonic, list<Trait> traits = 
   let mnemonic = typeMnemonic;
 }
 
+def IndexLabel : TensorAlgebra_Type<"IndexLabel","index"> {
+    let summary = "Type representing the index of one dimnsion of a tensor";
+    let description = [{}];
+}
+
 def Range : TensorAlgebra_Type<"Range","range"> {
     let summary = "Type representing the range of one dimnsion of a tensor";
     let description = [{}];

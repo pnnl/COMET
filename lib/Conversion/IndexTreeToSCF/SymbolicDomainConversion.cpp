@@ -368,7 +368,7 @@ struct ConvertSymbolicDomainsPass
 
     typeConverter.addSourceMaterialization(
       [](OpBuilder &builder, indexTree::SymbolicDomainType resultType, ValueRange inputs,
-          Location loc) -> Optional<Value> {
+          Location loc) -> std::optional<Value> {
         assert(inputs.size() == 6);
         Value value = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs)->getResult(0);
         return value;
@@ -376,7 +376,7 @@ struct ConvertSymbolicDomainsPass
 
     typeConverter.addArgumentMaterialization(
       [](OpBuilder &builder, indexTree::SymbolicDomainType resultType, ValueRange inputs,
-          Location loc) -> Optional<Value> {
+          Location loc) -> std::optional<Value> {
         assert(inputs.size() == 6);
         Value value = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs)->getResult(0);
         return value;

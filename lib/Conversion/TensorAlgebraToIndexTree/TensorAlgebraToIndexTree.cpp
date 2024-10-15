@@ -176,6 +176,52 @@ Value getRealRhs(Operation *op)
   return op->getResult(0);
 }
 
+// void buildDefUseInfo(UnitExpression *e)
+// {
+//   auto lhs = e->getLHS();
+//   lhs->setDefiningExpr(e);
+//   for (auto operand : e->getOperands())
+//   {
+//     if (auto def = operand->getDefiningExpr())
+//     {
+//       def->addUser(e);
+//     }
+//   }
+// }
+
+// IndicesType getUnion(IndicesType indices1, IndicesType indices2)
+// {
+//   sort(indices1.begin(), indices1.end());
+//   sort(indices2.begin(), indices2.end());
+
+//   IndicesType allIndices(indices1.size() * 4);
+
+//   IndicesType::iterator it = set_union(indices1.begin(), indices1.end(), indices2.begin(), indices2.end(), allIndices.begin());
+//   allIndices.resize(it - allIndices.begin());
+//   return allIndices;
+// }
+
+// IndicesType gpuIndices(IndicesType indices1, IndicesType indices2)
+// {
+//   sort(indices1.begin(), indices1.end());
+//   sort(indices2.begin(), indices2.end());
+
+//   IndicesType interIndices;
+//   IndicesType unIndices;
+//   IndicesType difIndices;
+//   IndicesType allIndices;
+
+//   std::set_intersection(indices1.begin(), indices1.end(), indices2.begin(), indices2.end(),  std::back_inserter(interIndices));
+//   set_union(indices1.begin(), indices1.end(), indices2.begin(), indices2.end(), std::back_inserter(unIndices));
+//   std::set_difference(unIndices.begin(), unIndices.end(), interIndices.begin(), interIndices.end(), std::back_inserter(difIndices));
+//   allIndices = difIndices;
+//   allIndices.insert(allIndices.end(), interIndices.begin(), interIndices.end());
+
+//   // allIndices.resize(it - allIndices.begin());
+//   return allIndices;  
+// }
+
+
 template<class TATensorOp>
 mlir::LogicalResult generalIndexOperationRewrite(
     mlir::Operation* op, 
@@ -185,68 +231,6 @@ mlir::LogicalResult generalIndexOperationRewrite(
   auto loc = op->getLoc();
   auto context = rewriter.getContext();
   TATensorOp mult_op = llvm::dyn_cast<TATensorOp>(op);
-void buildDefUseInfo(UnitExpression *e)
-{
-  auto lhs = e->getLHS();
-  lhs->setDefiningExpr(e);
-  for (auto operand : e->getOperands())
-  {
-    if (auto def = operand->getDefiningExpr())
-    {
-      def->addUser(e);
-    }
-  }
-}
-
-IndicesType getUnion(IndicesType indices1, IndicesType indices2)
-{
-  sort(indices1.begin(), indices1.end());
-  sort(indices2.begin(), indices2.end());
-
-  IndicesType allIndices(indices1.size() * 4);
-
-  IndicesType::iterator it = set_union(indices1.begin(), indices1.end(), indices2.begin(), indices2.end(), allIndices.begin());
-  allIndices.resize(it - allIndices.begin());
-  return allIndices;
-}
-
-IndicesType gpuIndices(IndicesType indices1, IndicesType indices2)
-{
-  sort(indices1.begin(), indices1.end());
-  sort(indices2.begin(), indices2.end());
-
-  IndicesType interIndices;
-  IndicesType unIndices;
-  IndicesType difIndices;
-  IndicesType allIndices;
-
-  std::set_intersection(indices1.begin(), indices1.end(), indices2.begin(), indices2.end(),  std::back_inserter(interIndices));
-  set_union(indices1.begin(), indices1.end(), indices2.begin(), indices2.end(), std::back_inserter(unIndices));
-  std::set_difference(unIndices.begin(), unIndices.end(), interIndices.begin(), interIndices.end(), std::back_inserter(difIndices));
-  allIndices = difIndices;
-  allIndices.insert(allIndices.end(), interIndices.begin(), interIndices.end());
-
-  // allIndices.resize(it - allIndices.begin());
-  return allIndices;  
-}
-
-void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree, TargetDevice device = CPU)
-{
-  Value rhs1_tensor = getRealRhs(op.getRhs1().getDefiningOp());
-  Value rhs2_tensor = getRealRhs(op.getRhs2().getDefiningOp());
-  Value lhs_tensor = getRealLhs(op);
-  Value mask_tensor = op.getMask();
-  // rhs1_tensor.getDefiningOp
-struct TensorMultOpLowering : public mlir::ConversionPattern {
-  TensorMultOpLowering(mlir::MLIRContext *ctx)
-      : mlir::ConversionPattern(TensorMultOp::getOperationName(), 1, ctx) {}
-
-  mlir::LogicalResult
-  matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
-                  mlir::ConversionPatternRewriter &rewriter) const final {
-    auto loc = op->getLoc();
-    auto context = rewriter.getContext();
-    TensorMultOp mult_op = llvm::dyn_cast<TensorMultOp>(op);
 
   Value rhs1_tensor = getRealRhs(mult_op.getRhs1().getDefiningOp());
   Value rhs2_tensor = getRealRhs(mult_op.getRhs2().getDefiningOp());
