@@ -22,7 +22,7 @@ get_shared_lib_extension() {
 sharedlib_ext=$(get_shared_lib_extension)
 
 # Number of iterations
-iterations=10
+iterations=5
 
 ################## Non Optimized ##################
 

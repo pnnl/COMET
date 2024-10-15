@@ -255,11 +255,11 @@ void get_level3_blocksizes(int *mc, int *kc, int *nc, int *mr, int *nr, int size
   *nr = (int)bli_cntx_get_blksz_def_dt(BLIS_DOUBLE, BLIS_NR, cntx);
 
   //Only for docker container
-  // *mc = 4;
-  // *kc = 4;
-  // *nc = 4;
-  // *mr = 1;
-  // *nr = 1;
+  // *mc = 256;
+  // *kc = 256;
+  // *nc = 4096;
+  // *mr = 8;
+  // *nr = 4;
   /// printf("mc= %d, kc= %d, nc=%d, mr=%d, nr=%d\n", *mc, *kc, *nc, *mr, *nr);
   return;
 }

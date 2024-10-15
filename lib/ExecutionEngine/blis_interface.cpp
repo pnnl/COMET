@@ -46,7 +46,7 @@ void bli_dgemm_x86_ukr(
 {
   /// get the micro - arch
   const char *arch = bli_arch_string(bli_cpuid_query_id());
-  //printf("arch: %s\n", arch);
+  printf("arch: %s\n", arch);
 
   if ((strcmp("haswell", arch) == 0) ||
       (strcmp("zen", arch) == 0) ||
@@ -78,7 +78,7 @@ void bli_dgemm_arm_ukr(
     auxinfo_t *restrict data,
     cntx_t *restrict cntx)
 {
-  // get the micro - arch
+  //get the micro - arch
   const char *arch = bli_arch_string(bli_cpuid_query_id());
   // printf("arch: %s\n", arch);
 

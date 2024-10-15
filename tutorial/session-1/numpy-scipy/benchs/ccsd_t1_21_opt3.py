@@ -37,7 +37,7 @@ def run_comet_no_opt(v,t2):
 	i0 = comet.einsum('icmn,mnca->ia', v,t2)
 	return i0
 
-@comet.compile(flags="--opt-bestperm-ttgt --opt-matmul-tiling  --opt-matmul-mkernel  --opt-dense-transpose --convert-tc-to-ttgt") #opt3
+@comet.compile(flags="--opt-bestperm-ttgt --opt-matmul-tiling  --opt-matmul-mkernel --opt-dense-transpose --convert-tc-to-ttgt") #opt3
 def run_comet_opt3(v,t2):
 	i0 = comet.einsum('icmn,mnca->ia', v,t2)
 	return i0

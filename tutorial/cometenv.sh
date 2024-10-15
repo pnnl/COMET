@@ -1,7 +1,7 @@
 #/bin/sh
 
 export COMET_SRC=/Users/kest268/projects/COMET/COMET/
-$OPENBLAS="/opt/homebrew/opt/openblas/"
+OPENBLAS="/opt/homebrew/opt/openblas/"
 
 export LDFLAGS="-L$OPENBLAS/lib"
 export CPPFLAGS="-I$OPENBLAS/include"

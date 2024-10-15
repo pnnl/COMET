@@ -2,10 +2,10 @@
 
 # List of testcases to run 
 dense_testcases=(
-        "mult_dense_matrix" 
-        # "ccsd_t1_21_opt1" 
-        # "ccsd_t1_21_opt2" 
-        # "ccsd_t1_21_opt3" 
+        #"mult_dense_matrix" 
+        "ccsd_t1_21_opt1" 
+        "ccsd_t1_21_opt2" 
+        "ccsd_t1_21_opt3" 
         # "intensli1"
         )
 
@@ -19,7 +19,7 @@ sparse_testcases=(
         # "tc_SandiaLL_wSemiring_wMasking"
         )
 
-output_dir="../tutorial-acs-outputs/matmul/"
+output_dir="../results/ccsd-t1/"
 
 sparse_inputs=(
         # "bcsstk17"
