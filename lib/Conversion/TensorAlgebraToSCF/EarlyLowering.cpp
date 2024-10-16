@@ -255,6 +255,7 @@ namespace
                         tensorAlgebra::TensorSetOp,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::DenseConstantOp,
+                        tensorAlgebra::TensorMultOp,
                         tensorAlgebra::ScalarOp,
                         tensorAlgebra::SparseTensorConstructOp>();
 

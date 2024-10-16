@@ -38,13 +38,13 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Analysis/SliceAnalysis.h"
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/ADT/StringSet.h"
@@ -52,6 +52,7 @@
 #include "llvm/ADT/SetVector.h"
 #include <iostream>
 #include <algorithm>
+#include <ostream>
 #include <vector>
 
 #include <limits>
@@ -506,7 +507,12 @@ LowerIndexTreeToSCFPass::convertCompute(Operation *op,
     output_tensor = rewriter.create<tensorAlgebra::TensorInsertOp>(loc, old_tensor.getType(), old_tensor, lhs.getPos(), lhs.getCrds(), reduce_result);
   }
   rewriter.replaceAllUsesWith(op->getResult(0), output_tensor);
-  ValueRange rhs = compute_op.getRhs();
+
+  std::vector<Value> rhs; 
+  for(auto v: compute_op.getRhs())
+  {
+    rhs.push_back(v);
+  }
   rewriter.eraseOp(compute_op);
   for(Value operand : rhs){
     rewriter.eraseOp(operand.getDefiningOp());
@@ -962,7 +968,7 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
   }
   OpBuilder::InsertPoint after = rewriter.saveInsertionPoint();
   
-  for(Operation* user : op->getUsers())
+  for(Operation* user : llvm::make_early_inc_range(op->getUsers()))
   {
     if(llvm::isa<IndexTreeIndexToTensorOp>(user))
     {
@@ -1028,7 +1034,7 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
   rewriter.restoreInsertionPoint(loop_end);
   auto users = topologicalSort(llvm::SetVector<Operation*>(op->user_begin(), op->user_end()));
   llvm::SetVector<Operation*> toRemove;
-  for(Operation* user : users)
+  for(Operation* user : llvm::make_early_inc_range(users))
   {
     LLVM_DEBUG({
       user->emitOpError() << "Converting node from " << op <<  "\n";
@@ -1045,7 +1051,7 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
     users.remove(user);
   }
   
-  for(Operation* user : users)
+  for(Operation* user : llvm::make_early_inc_range(users))
   {
     LLVM_DEBUG({
       user->emitOpError() << "Converting node from " << op <<  "\n";
@@ -1084,6 +1090,10 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
                                                                  symbolic_domain_op.getNeedsMarkAttr());
       rewriter.replaceOp(user, {new_domain});
     }
+    else{
+      op->getParentOfType<ModuleOp>()->dump();
+      assert(false && "Unhandled case");
+    }
   }
   rewriter.eraseOp(op);
   deleteDomain(domain_op, rewriter);
@@ -1109,9 +1119,19 @@ void LowerIndexTreeToSCFPass::runOnOperation()
     for(Operation* user : op->getUsers())
     {
       if(llvm::isa<IndexTreeIndicesOp>(user))
-        convertIndexNode(user, rewriter);
+      {
+        if(convertIndexNode(user, rewriter).failed())
+        {
+          signalPassFailure();
+        }
+      }
       else if (llvm::isa<IndexTreeComputeOp>(user))
-        convertCompute(user, rewriter);
+      {
+        if(convertCompute(user, rewriter).failed())
+        {
+          signalPassFailure();
+        }
+      }
     }
     rewriter.eraseOp(op);
   }

@@ -420,6 +420,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   optPM.addPass(mlir::comet::createSparseTempOutputTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createSparseOutputTensorDeclLoweringPass());
   optPM.addPass(mlir::comet::createTensorFillLoweringPass());
+  optPM.addPass(mlir::comet::createDimOpLoweringPass());
 
   /// =============================================================================
 
@@ -433,15 +434,15 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // /// =============================================================================
   // /// Operation based optimizations
   // /// =============================================================================
-  // if (OptMatmulTiling)
-  // {
-  //   optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
-  // }
+  if (OptMatmulTiling)
+  {
+    optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
+  }
 
-  // if (OptCallToMatMulMicroKernel)
-  // {
-  //   optPM.addPass(mlir::comet::createLinAlgMatmulMicroKernelPass());
-  // }
+  if (OptCallToMatMulMicroKernel)
+  {
+    optPM.addPass(mlir::comet::createLinAlgMatmulMicroKernelPass());
+  }
 
   /// =============================================================================
   /// Lowering all the operations to loops
@@ -472,14 +473,14 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createIndexTreeInliningPass());
     optPM.addPass(mlir::createCanonicalizerPass());
 
-  //   if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
-  //   {
-  //     /// If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.transpose, then
-  //     /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
-  //     /// HPTT: A High-Performance Tensor Transposition C++ Library
-  //     /// https://arxiv.org/abs/1704.04374
-  //     optPM.addPass(mlir::comet::createOptDenseTransposePass());
-  //   }
+    if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
+    {
+      /// If it is a dense transpose ops, the rewrites rules replaces ta.transpose with linalg.transpose, then
+      /// Create a pass to optimize LinAlg Copy Op - follow in HPTT paper
+      /// HPTT: A High-Performance Tensor Transposition C++ Library
+      /// https://arxiv.org/abs/1704.04374
+      optPM.addPass(mlir::comet::createOptDenseTransposePass());
+    }
 
     /// Dump scf dialect.
     if (emitLoops)

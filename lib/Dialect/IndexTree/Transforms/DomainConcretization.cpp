@@ -279,10 +279,17 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
 
   mlir::LogicalResult
   matchAndRewrite(IndexTreeDomainUnionOp op,
-                  mlir::PatternRewriter &rewriter) const override {
+                  mlir::PatternRewriter &rewriter) const override 
+  {
     bool can_replace = false;
     Operation* operand_op;
+    std::vector<Value> domains;
     for(auto operand : op.getDomains())
+    {
+      domains.push_back(operand);
+    }
+
+    for(auto operand : domains)
     {
       if(!llvm::isa<ConcreteDomain>(operand.getDefiningOp())){
         return failure();
@@ -297,22 +304,25 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
 
     if(can_replace)
     {
-      for(auto operand : op.getDomains())
+      for(auto operand: domains)
       {
         operand_op = operand.getDefiningOp();
         if(operand_op->use_empty())
           rewriter.eraseOp(operand_op);
       }
-    } else {
-      if(op.getDimSize() != nullptr){
+    } 
+    else 
+    {
+      if(op.getDimSize() != nullptr)
+      {
         return failure();
       }
 
-      Value dim_size = llvm::dyn_cast<ConcreteDomain>(op.getDomains()[0].getDefiningOp()).getDimensionSize();
+      Value dim_size = llvm::dyn_cast<ConcreteDomain>(domains[0].getDefiningOp()).getDimensionSize();
       auto loc = op->getLoc();
       auto context = rewriter.getContext();
       indexTree::DomainType domain_type = indexTree::DomainType::get(context);
-      Value new_op = rewriter.create<IndexTreeDomainUnionOp>(loc, domain_type, op.getDomains(), dim_size);
+      Value new_op = rewriter.create<IndexTreeDomainUnionOp>(loc, domain_type, domains, dim_size);
       rewriter.replaceOp(op, {new_op});
     }
     return success();

@@ -1352,6 +1352,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::TensorSetOp,
                         tensorAlgebra::SparseOutputTensorDeclOp,
                         tensorAlgebra::TempSparseOutputTensorDeclOp,
+                        tensorAlgebra::TensorMultOp,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::ScalarOp,
                         tensorAlgebra::SparseTensorConstructOp>();
