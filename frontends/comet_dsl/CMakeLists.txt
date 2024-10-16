@@ -36,6 +36,7 @@ COMETIndexTreeToSCF
 if(ENABLE_GPU_TARGET)
   set(LIBS
     ${LIBS}
+    MLIRGPUToLLVMIRTranslation
     COMETParallelLoopsToGpu
     COMETGpuToTriton
     COMETTritonToCuda

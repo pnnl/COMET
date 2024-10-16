@@ -1510,7 +1510,8 @@ public:
         }
       }
       else {
-        dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes, rewriter.getBoolAttr(true), rewriter.getI32IntegerAttr(1));
+        // dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes, rewriter.getBoolAttr(true), rewriter.getI32IntegerAttr(1));
+        dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes);
       }
       // if(op->getOperand(1).getType().cast<RankedTensorType>().)
 
