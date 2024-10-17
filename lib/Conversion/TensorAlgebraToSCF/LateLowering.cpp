@@ -82,7 +82,7 @@ namespace
       auto inputType = op->getOperand(0).getType();
 
       /// If the Input type is scalar (F64)
-      if (inputType.isa<FloatType>())
+      if (mlir::isa<FloatType>(inputType))
       {
         std::string print_scalar_f64Str = "printF64";
         std::string print_newline_Str = "printNewline";
@@ -113,7 +113,7 @@ namespace
           module.push_back(print_func);
         }
 
-        if (inputType.isa<MemRefType>())
+        if (mlir::isa<MemRefType>(inputType))
         {
           auto alloc_op = cast<memref::AllocOp>(op->getOperand(0).getDefiningOp());
           comet_vdump(alloc_op);
@@ -123,7 +123,7 @@ namespace
         else
         {
           /// If the Input type is tensor
-          if (inputType.isa<TensorType>())
+          if (mlir::isa<TensorType>(inputType))
           {
             auto rhs = op->getOperand(0).getDefiningOp();
             auto alloc_op = cast<memref::AllocOp>(rhs->getOperand(0).getDefiningOp());
@@ -131,7 +131,7 @@ namespace
             auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, alloc_op);
             rewriter.create<func::CallOp>(loc, comet_print_f64Str, SmallVector<Type, 2>{}, ValueRange{u});
           }
-          else if (inputType.isa<SparseTensorType>())
+          else if (mlir::isa<SparseTensorType>(inputType))
           {
             std::string comet_print_i64Str = "comet_print_memref_i64";
             if (!hasFuncDeclaration(module, comet_print_i64Str))

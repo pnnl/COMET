@@ -164,12 +164,12 @@ namespace
       /// Find summation indices
       for (const auto &map : indexMaps)
       {
-        auto affineMap = map.cast<AffineMapAttr>().getValue();
+        auto affineMap = mlir::cast<AffineMapAttr>(map).getValue();
         std::vector<unsigned> perm;
         for (size_t i = 0; i < affineMap.getNumResults(); i++)
         {
           auto expr = affineMap.getResult(i);
-          perm.push_back(llvm::cast<AffineDimExpr>(expr).getPosition());
+          perm.push_back(mlir::cast<AffineDimExpr>(expr).getPosition());
         }
 
         allPerms.push_back(perm);
@@ -203,9 +203,9 @@ namespace
       Value rhs2Memref = rhs2Tensor.getMemref();
       Value lhsMemref = lhsTensor.getMemref();
 
-      auto rhs1MemrefType = rhs1Memref.getType().cast<MemRefType>();
-      auto rhs2MemrefType = rhs2Memref.getType().cast<MemRefType>();
-      auto lhsMemrefType = lhsMemref.getType().cast<MemRefType>();
+      auto rhs1MemrefType = mlir::cast<MemRefType>(rhs1Memref.getType());
+      auto rhs2MemrefType = mlir::cast<MemRefType>(rhs2Memref.getType());
+      auto lhsMemrefType = mlir::cast<MemRefType>(lhsMemref.getType());
 
       std::vector<TensorShape> allShapes{rhs1MemrefType.getShape(),
                                          rhs2MemrefType.getShape(),
@@ -331,7 +331,7 @@ namespace
             MemRefType::get(lhsDims, lhsMemrefType.getElementType()), operands, loc,
             rewriter);
         useLHSTranspose = true;
-        double beta_val = betaAttr.cast<FloatAttr>().getValueAsDouble();
+        double beta_val = mlir::cast<FloatAttr>(betaAttr).getValueAsDouble();
 
         if (beta_val == 0)
         {
@@ -617,7 +617,7 @@ namespace
       Value lhsExpand = lhsReshape;
       if (expandLHS) /// LHS tensor was collapsed and now needs to be re-expanded using the same reassociation indices
       {
-        auto expandedTensorType = MemRefType::get(lhsAlloc.getType().cast<MemRefType>().getShape(), lhsAlloc.getType().cast<MemRefType>().getElementType());
+        auto expandedTensorType = MemRefType::get(mlir::cast<MemRefType>(lhsAlloc.getType()).getShape(), mlir::cast<MemRefType>(lhsAlloc.getType()).getElementType());
 
         comet_debug() << "\nExpanded:\n";
         lhsExpand = rewriter.create<memref::ExpandShapeOp>(

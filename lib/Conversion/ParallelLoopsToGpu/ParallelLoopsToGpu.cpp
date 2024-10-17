@@ -82,7 +82,7 @@ mlir::Value reassociateIndices(T op, mlir::OpBuilder& builder)
             expr =  expr * mlir::getAffineSymbolExpr(currSymPos++, op->getContext());
         }
 
-        if(newIndex.isa<mlir::BlockArgument>()) 
+        if(mlir::isa<mlir::BlockArgument>(newIndex)) 
         {
             dimVals.push_back(newIndex);
             expr =  mlir::getAffineDimExpr(currDimPos++, op->getContext()) + expr;
@@ -107,7 +107,7 @@ mlir::Value reassociateIndices(T op, mlir::OpBuilder& builder)
 void collapseMemrefAndUsers(mlir::Value val, mlir::OpBuilder& builder)
 {
     
-    auto memref = val.getType().cast<mlir::MemRefType>();
+    auto memref = mlir::cast<mlir::MemRefType>(val.getType());
     if (memref.getRank() == 1)
     {
         return;
@@ -164,7 +164,7 @@ bool contains_arg(mlir::Block& block, mlir::BlockArgument arg)
                     }
                 }
             }
-            else if(auto block_arg = index.dyn_cast_or_null<mlir::BlockArgument>())
+            else if(auto block_arg = mlir::dyn_cast_if_present<mlir::BlockArgument>(index))
             {
                 if(block_arg == arg)
                 {
@@ -576,7 +576,7 @@ public:
         mlir::OpBuilder builder(funcOp);
         for(auto arg: funcOp.getArguments())
         {
-            if(arg.getType().isa<mlir::MemRefType>())
+            if(mlir::isa<mlir::MemRefType>(arg.getType()))
             {
                 builder.setInsertionPointToStart(&funcOp.getBody().getBlocks().front());
                 collapseMemrefAndUsers(arg, builder);

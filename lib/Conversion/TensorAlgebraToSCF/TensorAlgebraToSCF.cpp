@@ -117,7 +117,7 @@ namespace
       /// Create these constants up-front to avoid large amounts of redundant
       /// operations.
       auto valueShape = memRefType.getShape();
-      auto constTensor = op.getValue().getType().cast<mlir::TensorType>();
+      auto constTensor = mlir::cast<mlir::TensorType>(op.getValue().getType());
       if(constTensor.getRank() == 1 && constTensor.getDimSize(0) == 1)
       {
         auto float_attr = *constantValue.getValues<FloatAttr>().begin();
@@ -215,7 +215,7 @@ namespace
       tensorAlgebra::TensorSetOp setOp;
       Value lhs;
 
-      if (inputType.isa<TensorType>())
+      if (mlir::isa<TensorType>(inputType))
       { /// for dense
         comet_debug() << "Dense transpose\n";
 
@@ -224,7 +224,7 @@ namespace
 
         for (auto u : op.getOperation()->getResult(0).getUsers())
         {
-          if (isa<tensorAlgebra::TensorSetOp>(u))
+          if (mlir::isa<tensorAlgebra::TensorSetOp>(u))
           {
             setOp = cast<tensorAlgebra::TensorSetOp>(u);
             Value dstTensor = u->getOperand(1);
@@ -254,8 +254,8 @@ namespace
         }
 
         ArrayAttr opFormatsArrayAttr = op.getFormats();
-        std::string formats_strIn(opFormatsArrayAttr[0].cast<mlir::StringAttr>().getValue());
-        std::string formats_strOut(opFormatsArrayAttr[1].cast<mlir::StringAttr>().getValue());
+        std::string formats_strIn(mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[0]).getValue());
+        std::string formats_strOut(mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[1]).getValue());
         IntegerType i32Type = IntegerType::get(ctx, 32);
         IndexType indexType = IndexType::get(ctx);
         FloatType f64Type = FloatType::getF64(ctx);
@@ -492,7 +492,7 @@ namespace
 
       comet_vdump(res);
 
-      if (inputType.isa<TensorType>())
+      if (mlir::isa<TensorType>(inputType))
       { /// tensor is dense
         comet_debug() << "Input Tensor is dense\n";
         std::vector<Value> indices;
@@ -500,16 +500,16 @@ namespace
 
         comet_vdump(alloc_op);
 
-        for (unsigned rank = 0; rank < inputType.cast<mlir::TensorType>().getRank(); rank++)
+        for (unsigned rank = 0; rank < mlir::cast<mlir::TensorType>(inputType).getRank(); rank++)
         {
-          auto dimSize = inputType.cast<mlir::TensorType>().getDimSize(rank);
+          auto dimSize = mlir::cast<mlir::TensorType>(inputType).getDimSize(rank);
           Value upperBound;
           if (dimSize == ShapedType::kDynamic)
           {
             comet_debug() << " This dimension is a dynamic size\n";
 
             comet_vdump(alloc_op);
-            auto memRefType = alloc_op.getType().dyn_cast<MemRefType>();
+            auto memRefType = mlir::dyn_cast<MemRefType>(alloc_op.getType());
             unsigned dynamicDimPos = memRefType.getDynamicDimIndex(rank);
             comet_debug() << " dynamicDimPos: " << dynamicDimPos << "\n";
             upperBound = alloc_op.getDefiningOp()->getOperand(dynamicDimPos);
@@ -534,7 +534,7 @@ namespace
       }
       else
       { /// sparse tensor type
-        assert(inputType.isa<SparseTensorType>());
+        assert(mlir::isa<SparseTensorType>(inputType));
         comet_debug() << "Input Tensor is sparse\n";
 
         comet_pdump(op);
@@ -557,7 +557,7 @@ namespace
         comet_debug() << "Corresponding MemAllocOp for NNZ:\n";
         comet_vdump(memAllocForNNZ);
 
-        MemRefType resultMemTy = memAllocForNNZ.getDefiningOp()->getResult(0).getType().cast<MemRefType>();
+        MemRefType resultMemTy = mlir::cast<MemRefType>(memAllocForNNZ.getDefiningOp()->getResult(0).getType());
         auto memRefRank = resultMemTy.getRank();
         comet_debug() << "memRefRank for alloc: " << memRefRank << "\n";
         assert(memRefRank == 1); /// Memref rank should be 1

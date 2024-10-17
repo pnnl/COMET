@@ -376,7 +376,7 @@ void removeRedundantIndices(std::vector<Value> newComputeOps,
         std::vector<int> idsVec;
         for (auto n : idsArrayAttr)
         {
-          idsVec.push_back(n.cast<mlir::IntegerAttr>().getInt());
+          idsVec.push_back(mlir::cast<mlir::IntegerAttr>(n).getInt());
         }
         comet_debug() << " print idsVec: ";
         for (auto p : idsVec)
@@ -505,14 +505,14 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
   Operation *itComputeOpFirstUsers = *(itComputeOp.getOperation()->getUsers().begin());
   builder.setInsertionPoint(itComputeOpFirstUsers); /// Insert before itree Op
   std::vector<mlir::Value> w_lbls_value;
-  if (outputItComputeOp.getType().cast<TensorType>().isDynamicDim(sparseDimOrderInOutput))
+  if (mlir::cast<TensorType>(outputItComputeOp.getType()).isDynamicDim(sparseDimOrderInOutput))
   {
-    auto opIdx = outputItComputeOp.getType().cast<TensorType>().getDynamicDimIndex(sparseDimOrderInOutput);
+    auto opIdx = mlir::cast<TensorType>(outputItComputeOp.getType()).getDynamicDimIndex(sparseDimOrderInOutput);
     w_lbls_value.push_back(outputItComputeOp.getDefiningOp()->getOperand(opIdx));
   }
   else
   {
-    w_lbls_value.push_back(builder.create<ConstantIndexOp>(loc, outputItComputeOp.getType().cast<TensorType>().getDimSize(sparseDimOrderInOutput)));
+    w_lbls_value.push_back(builder.create<ConstantIndexOp>(loc, mlir::cast<TensorType>(outputItComputeOp.getType()).getDimSize(sparseDimOrderInOutput)));
   }
 
   mlir::Value w = builder.create<tensorAlgebra::DenseTensorDeclOp>(loc, w_type, w_lbls_value, w_format);
@@ -743,7 +743,7 @@ std::vector<Value> CompressedWorkspaceOutput(std::vector<int> sparseDimsOutput,
         /// actually only one index for the indicesOp in our implementation
         for (auto m : idsArrayAttr)
         {
-          int perm = m.cast<mlir::IntegerAttr>().getInt();
+          int perm = mlir::cast<mlir::IntegerAttr>(m).getInt();
           comet_debug() << " perm: " << perm << "\n";
 
           if (findIndexInVector(allperms, perm) == allperms.size())
@@ -1068,7 +1068,7 @@ void IndexTreeWorkspaceTransformationsPass::CompressedWorkspaceTransforms(mlir::
                     ArrayAttr idsArrayAttr = indicesop.getIndices();
                     for (auto n : idsArrayAttr)
                     {
-                      int ids = n.cast<mlir::IntegerAttr>().getInt();
+                      int ids = mlir::cast<mlir::IntegerAttr>(n).getInt();
                       indexValueMap.emplace(ids, computeOp);
                     }
                   }

@@ -339,7 +339,7 @@ static SmallVector<Type, 4> extractOperandTypes(Operation *op)
     /// The underlying descriptor type (e.g. LLVM) does not have layout
     /// information. Canonicalizing the type at the level of std when going into
     /// a library call avoids needing to introduce DialectCastOp.
-    if (auto memrefType = type.dyn_cast<MemRefType>())
+    if (auto memrefType = mlir::dyn_cast<MemRefType>(type))
       result.push_back(makeStridedLayoutDynamic(memrefType));
     else
       result.push_back(type);
@@ -356,7 +356,7 @@ createTypeCanonicalizedMemRefOperands(OpBuilder &b, Location loc,
   res.reserve(operands.size());
   for (auto op : operands)
   {
-    auto memrefType = op.getType().dyn_cast<MemRefType>();
+    auto memrefType = mlir::dyn_cast<MemRefType>(op.getType());
     if (!memrefType)
     {
       res.push_back(op);
@@ -495,7 +495,7 @@ struct OptDenseTranspose : public ConversionPattern
     comet_debug() << " Input Type:\n";
     comet_vdump(inputType);
     auto inputMemref = op->getOperand(0);
-    auto inputRank = inputType.cast<mlir::MemRefType>().getRank();
+    auto inputRank = mlir::cast<mlir::MemRefType>(inputType).getRank();
     auto outputMemref = op->getOperand(1);
 
     std::vector<AffineForOp> loops;
@@ -503,7 +503,7 @@ struct OptDenseTranspose : public ConversionPattern
     for (int64_t rank = 0; rank < inputRank; rank++)
     {
       indexIterateOrder.push_back(rank);
-      int64_t upperBound = inputType.cast<mlir::MemRefType>().getDimSize(rank);
+      int64_t upperBound = mlir::cast<mlir::MemRefType>(inputType).getDimSize(rank);
       if (upperBound == ShapedType::kDynamic)
       {
         assert(false && "TODO: This dimension is a dynamic size");

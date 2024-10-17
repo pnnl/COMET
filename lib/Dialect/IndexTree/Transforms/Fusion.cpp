@@ -165,7 +165,7 @@ namespace
                   }
                   ArrayAttr idsArrayAttr = indicesOp.getIndices();
                   for (auto ida: idsArrayAttr) {
-                    int id = ida.cast<mlir::IntegerAttr>().getInt();
+                    int id = mlir::cast<mlir::IntegerAttr>(ida).getInt();
                     comet_debug() << "id: " << id;
                   }
                   comet_debug() << "\n";
@@ -252,7 +252,7 @@ int IndexTreeKernelFusionPass::getIndicesOpsIndex(mlir::Operation *op)
 {
   assert(llvm::isa<indexTree::IndexTreeIndicesOp>(op) && "Error: op is not IndexTreeIndicesOp.");
   auto indices_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(*op);
-  int index = indices_op.getIndices()[0].cast<mlir::IntegerAttr>().getInt();
+  int index = mlir::cast<mlir::IntegerAttr>(indices_op.getIndices()[0]).getInt();
   return index;
 }
 
@@ -315,7 +315,7 @@ mlir::Value IndexTreeKernelFusionPass::createNewTensorDecl(
   /// Get operands
   std::vector<mlir::Value> operands;
 
-  TensorType old_tensor = old_dense_tensor_decl.getType().cast<TensorType>();
+  TensorType old_tensor = mlir::cast<TensorType>(old_dense_tensor_decl.getType());
 
   for (int64_t i = rank_base; i < old_tensor.getRank(); i++)
   {
@@ -392,7 +392,7 @@ mlir::Value IndexTreeKernelFusionPass::createNewTensorDecl(
   }
   else if (old_tensor_alloc_op->getNumOperands() <= 1)
   {
-    mlir::TensorType tensor_ty = old_tensor_load.getType().cast<mlir::TensorType>();
+    mlir::TensorType tensor_ty = mlir::cast<mlir::TensorType>(old_tensor_load.getType());
     uint32_t rank = tensor_ty.getRank();
     { /// test
       ///      comet_debug();
@@ -790,7 +790,7 @@ mlir::Value IndexTreeKernelFusionPass::createResetComputeLHS(
   std::vector<mlir::Value> tensors_lhs;
   tensors_lhs.push_back(new_dense_tensor_decl);
   lcp_index = getIndicesOpsIndex(last_common_prefix);
-  mlir::TensorType tensor_ty = new_dense_tensor_decl.getType().cast<mlir::TensorType>();
+  mlir::TensorType tensor_ty = mlir::cast<mlir::TensorType>(new_dense_tensor_decl.getType());
   rank = tensor_ty.getRank();
 
   /// Get indices [[1]]

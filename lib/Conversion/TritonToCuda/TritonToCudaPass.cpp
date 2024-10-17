@@ -200,7 +200,7 @@ public:
     {
       if(auto binOp = dyn_cast<mlir::gpu::BinaryOp>(op))
       {
-        auto result = binOp.getObjects().begin()->cast<gpu::ObjectAttr>().getObject().str();
+        auto result = mlir::cast<gpu::ObjectAttr>(*binOp.getObjects().begin()).getObject().str();
         auto type = LLVM::LLVMArrayType::get(IntegerType::get(builder.getContext(), 8), result.size());
         builder.setInsertionPointToStart(modOp.getBody());
         builder.create<LLVM::GlobalOp>(modOp->getLoc(), type, /*isConstant=*/false,
@@ -357,13 +357,13 @@ public:
     std::set<Value, bool(*) (Value, Value)> uniqueGpuAllocs(toAlloc.begin(), toAlloc.end(), cmp);
     for(Value alloc: uniqueGpuAllocs)
     {
-      MemRefType allocType = alloc.getType().cast<MemRefType>();
+      MemRefType allocType = mlir::cast<MemRefType>(alloc.getType());
       mlir::gpu::AllocOp gpuAlloc;
       if(auto defOp = alloc.getDefiningOp())
       {
         builder.setInsertionPointAfter(defOp);
       }
-      else if(alloc.isa<BlockArgument>())
+      else if(mlir::isa<BlockArgument>(alloc))
       {
         builder.setInsertionPointToStart(alloc.getParentBlock());
       }
@@ -425,19 +425,19 @@ public:
       }
 
       // builder.create<memref::DimOp>(gpuAlloc.getLoc(), gpuAlloc.getMemref(), 0);
-      if(FloatType floatType = gpuAlloc.getMemref().getType().getElementType().dyn_cast<FloatType>())
+      if(FloatType floatType = mlir::dyn_cast<FloatType>(gpuAlloc.getMemref().getType().getElementType()))
       {
         int width = floatType.getWidth();
         auto cudaOp = builder.create<mlir::func::CallOp>(gpuAlloc->getLoc(), "cudaMallocF"+std::to_string(width), TypeRange(builder.getIndexType()), ValueRange(allocSize));
         gpuAlloc->replaceAllUsesWith(cudaOp);
       }
-      else if(IntegerType intType = gpuAlloc.getMemref().getType().getElementType().dyn_cast<IntegerType>())
+      else if(IntegerType intType = mlir::dyn_cast<IntegerType>(gpuAlloc.getMemref().getType().getElementType()))
       {
         int width = intType.getWidth();
         auto cudaOp = builder.create<mlir::func::CallOp>(gpuAlloc->getLoc(), "cudaMallocI"+std::to_string(width), TypeRange(builder.getIndexType()), ValueRange(allocSize));
         gpuAlloc->replaceAllUsesWith(cudaOp);
       }
-      else if(IndexType intType = gpuAlloc.getMemref().getType().getElementType().dyn_cast<IndexType>())
+      else if(IndexType intType = mlir::dyn_cast<IndexType>(gpuAlloc.getMemref().getType().getElementType()))
       {
         auto cudaOp = builder.create<mlir::func::CallOp>(gpuAlloc->getLoc(), "cudaMallocI"+std::to_string(64), TypeRange(builder.getIndexType()), ValueRange(allocSize));
         gpuAlloc->replaceAllUsesWith(cudaOp);
@@ -463,17 +463,17 @@ public:
       {
         auto cast = builder.create<mlir::memref::CastOp>(cpy->getLoc(), MemRefType::get({ShapedType::kDynamic}, cpy.getSrc().getType().getElementType()), cpy.getSrc());
 
-        if(IntegerType intType = cpy.getOperand(1).getType().cast<MemRefType>().getElementType().dyn_cast<IntegerType>())
+        if(IntegerType intType = mlir::dyn_cast<IntegerType>(mlir::cast<MemRefType>(cpy.getOperand(1).getType()).getElementType()))
         {
           int width = intType.getWidth();
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyI"+std::to_string(width), TypeRange(), ValueRange({cpy.getOperand(0), cast, hToD}));
         }
-        else if(FloatType floatType = cpy.getOperand(1).getType().cast<MemRefType>().getElementType().dyn_cast<FloatType>())
+        else if(FloatType floatType = mlir::dyn_cast<FloatType>(mlir::cast<MemRefType>(cpy.getOperand(1).getType()).getElementType()))
         {
           int width = floatType.getWidth();
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyF"+std::to_string(width), TypeRange(), ValueRange({cpy.getOperand(0), cast, hToD}));
         }
-        else if(IndexType indexType = cpy.getOperand(1).getType().cast<MemRefType>().getElementType().dyn_cast<IndexType>())
+        else if(IndexType indexType =  mlir::dyn_cast<IndexType>(mlir::cast<MemRefType>(cpy.getOperand(1).getType()).getElementType()))
         {
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyIndex", TypeRange(), ValueRange({cpy.getOperand(0), cast, hToD}));
         }
@@ -482,17 +482,17 @@ public:
       {
         auto cast = builder.create<mlir::memref::CastOp>(cpy->getLoc(), MemRefType::get({ShapedType::kDynamic}, cpy.getDst().getType().getElementType()), cpy.getDst());
 
-        if(IntegerType intType = cpy.getOperand(0).getType().cast<MemRefType>().getElementType().dyn_cast<IntegerType>())
+        if(IntegerType intType = mlir::dyn_cast<IntegerType>(mlir::cast<MemRefType>(cpy.getOperand(0).getType()).getElementType()))
         {
           int width = intType.getWidth();
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyI"+std::to_string(width), TypeRange(), ValueRange({cpy.getOperand(1), cast, dToH}));
         }
-        else if(FloatType floatType = cpy.getOperand(0).getType().cast<MemRefType>().getElementType().dyn_cast<FloatType>())
+        else if(FloatType floatType = mlir::dyn_cast<FloatType>(mlir::cast<MemRefType>(cpy.getOperand(0).getType()).getElementType()))
         {
           int width = floatType.getWidth();
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyF"+std::to_string(width), TypeRange(), ValueRange({cpy.getOperand(1), cast, dToH}));
         }
-        else if(IndexType indexType = cpy.getOperand(0).getType().cast<MemRefType>().getElementType().dyn_cast<IndexType>())
+        else if(IndexType indexType = mlir::dyn_cast<IndexType>(mlir::cast<MemRefType>(cpy.getOperand(0).getType()).getElementType()))
         {
           builder.create<mlir::func::CallOp>(cpy->getLoc(), "cudaMemcpyIndex", TypeRange(), ValueRange({cpy.getOperand(1), cast, dToH}));
         }
@@ -517,7 +517,7 @@ public:
       
       for(auto op: launchOp.getKernelOperands())
       {
-        if(op.getType().isa<MemRefType>())
+        if(mlir::isa<MemRefType>(op.getType()))
         {
           ptr_ops.push_back(builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(launchOp->getLoc(), op));
         }

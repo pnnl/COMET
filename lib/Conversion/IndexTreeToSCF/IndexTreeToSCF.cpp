@@ -631,7 +631,7 @@ namespace
     {
       if (isa<memref::AllocOp>(init_alloc.getDefiningOp()))
       {
-        if (init_alloc.getType().dyn_cast<MemRefType>().getDimSize(0) != ShapedType::kDynamic)
+        if (mlir::dyn_cast<MemRefType>(init_alloc.getType()).getDimSize(0) != ShapedType::kDynamic)
         {
           return init_alloc;
         }
@@ -655,7 +655,7 @@ namespace
   {
     comet_vdump(tensor);
     std::vector<Value> allocs;
-    if (tensor.getType().isa<mlir::TensorType>())
+    if (mlir::isa<mlir::TensorType>(tensor.getType()))
     { /// Dense tensor
       comet_debug() << " getAllocs() -  it is dense\n";
       if (isa<ToTensorOp>(tensor.getDefiningOp()))
@@ -679,7 +679,7 @@ namespace
         }
       }
     }
-    else if (tensor.getType().isa<tensorAlgebra::SparseTensorType>())
+    else if (mlir::isa<tensorAlgebra::SparseTensorType>(tensor.getType()))
     { /// nSparse tensor
       comet_debug() << " getAllocs() -  it is sparse\n";
       auto defop = tensor.getDefiningOp<tensorAlgebra::SparseTensorConstructOp>();
@@ -815,7 +815,7 @@ namespace
     Value lowerBound = builder.create<ConstantIndexOp>(loc, 0);
     auto step = builder.create<ConstantIndexOp>(loc, 1);
 
-    if (tensor.getType().isa<mlir::RankedTensorType>())
+    if (mlir::isa<mlir::RankedTensorType>(tensor.getType()))
     { /// Dense tensor
       Value upperBound;
       auto dim = builder.create<tensor::DimOp>(loc, tensor, id);
@@ -835,7 +835,7 @@ namespace
       // forLoop = loop;
       accessIndex = forLoop.getInductionVar();
     }
-    else if (tensor.getType().isa<mlir::UnrankedTensorType>())
+    else if (mlir::isa<mlir::UnrankedTensorType>(tensor.getType()))
     {
       comet_debug() << " \n";
       comet_pdump(tensor.getDefiningOp());
@@ -845,7 +845,7 @@ namespace
         comet_debug() << " \n";
       }
     }
-    else if (tensor.getType().cast<tensorAlgebra::SparseTensorType>())
+    else if (mlir::isa<tensorAlgebra::SparseTensorType>(tensor.getType()))
     {
       comet_debug() << "cur_idx is in tensor " << i << "\n";
 
@@ -904,7 +904,7 @@ namespace
     comet_vdump(tensor);
     Value index_lower;
     Value index_upper;
-    if (tensor.getType().cast<tensorAlgebra::SparseTensorType>())
+    if (mlir::cast<tensorAlgebra::SparseTensorType>(tensor.getType()))
     {
       comet_debug() << " Tensor type is sparse\n";
       if (id == 0)
@@ -1047,7 +1047,7 @@ namespace
                          Value &accessIndex /* output */)
   {
     /// Generate for(int m = pos[0]; m < pos[1]; m++){int i = crd[m];}
-    if (tensor.getType().cast<tensorAlgebra::SparseTensorType>())
+    if (mlir::cast<tensorAlgebra::SparseTensorType>(tensor.getType()))
     {
       auto index_0 = builder.create<ConstantIndexOp>(loc, 0);
       std::vector<Value> lower_indices = {index_0};
@@ -1100,7 +1100,7 @@ namespace
     /// and it doesn't produce a loop
     /// Generate: int j = A2crd[m];
 
-    if (tensor.getType().cast<tensorAlgebra::SparseTensorType>())
+    if (mlir::cast<tensorAlgebra::SparseTensorType>(tensor.getType()))
     {
       comet_debug() << "cur_idx is in tensor " << i << "\n";
       /// Accesing the last level loop info
@@ -2846,14 +2846,14 @@ namespace
         comet_debug() << " DenseAllocs: ";
         auto inputType = denseAllocs[0].getType();
         std::vector<Value> denseDimsSize;
-        for (unsigned rank = 0; rank < inputType.cast<mlir::MemRefType>().getRank(); rank++)
+        for (unsigned rank = 0; rank < mlir::cast<mlir::MemRefType>(inputType).getRank(); rank++)
         {
-          auto dimSize = inputType.cast<mlir::MemRefType>().getDimSize(rank);
+          auto dimSize = mlir::cast<mlir::MemRefType>(inputType).getDimSize(rank);
           Value upperBound;
           if (dimSize == ShapedType::kDynamic)
           {
             comet_debug() << " This dimension is a dynamic size:\n";
-            unsigned dynamicDimPos = inputType.dyn_cast<MemRefType>().getDynamicDimIndex(rank);
+            unsigned dynamicDimPos = mlir::dyn_cast<MemRefType>(inputType).getDynamicDimIndex(rank);
             comet_debug() << " DynamicDimPos: " << dynamicDimPos << "\n";
             upperBound = denseAllocs[0].getDefiningOp()->getOperand(dynamicDimPos);
             comet_vdump(upperBound);
@@ -3146,7 +3146,7 @@ namespace
           for (int j = op_indices.size() - 1; j >= 0; j--)
           {
             /// Get the indices;
-            int64_t idx = op_indices[j].cast<IntegerAttr>().getInt();
+            int64_t idx = mlir::cast<IntegerAttr>(op_indices[j]).getInt();
             nested_forops_indices.push_back(idx);
           }
         }
@@ -3335,7 +3335,7 @@ namespace
     { /// If constantOp, do not consider it
       comet_debug() << " ";
       comet_vdump(main_tensors_all[i]);
-      if (main_tensors_all[i].getType().isa<tensorAlgebra::SparseTensorType>())
+      if (mlir::isa<tensorAlgebra::SparseTensorType>(main_tensors_all[i].getType()))
       { /// sparse tensor
 
         /// Find the last sparse index m, then loop_arg * all dense loop args
@@ -3382,7 +3382,7 @@ namespace
 
         allValueAccessIdx[i].push_back(valueAccessIdx_part);
       }
-      else if (main_tensors_all[i].getType().isa<TensorType>())
+      else if (mlir::isa<TensorType>(main_tensors_all[i].getType()))
       { /// dense tensor
         allValueAccessIdx[i] = allAccessIdx[i];
       }
@@ -3440,7 +3440,7 @@ namespace
           for (int j = op_indices.size() - 1; j >= 0; j--)
           {
             /// Get the indices;
-            int64_t idx = op_indices[j].cast<IntegerAttr>().getInt();
+            int64_t idx = mlir::cast<IntegerAttr>(op_indices[j]).getInt();
             nested_forops_indices.push_back(idx);
           }
         }
@@ -4774,10 +4774,10 @@ namespace
                                             allValueAccessIdx);
         }
       }
-      else if (main_tensors_rhs[0].getType().isa<mlir::TensorType>())
+      else if (mlir::isa<mlir::TensorType>(main_tensors_rhs[0].getType()))
       { /// Cij = Wj
         /// When Cij is dense type
-        if (lhs.getType().isa<mlir::TensorType>())
+        if (mlir::isa<mlir::TensorType>(lhs.getType()))
         {
           /// %1 = load b[...]
           /// store %1, a[...]
@@ -4790,7 +4790,7 @@ namespace
         }
         /// Cij = Wj
         /// When Cij is sparse
-        else if (lhs.getType().isa<tensorAlgebra::SparseTensorType>())
+        else if (mlir::isa<tensorAlgebra::SparseTensorType>(lhs.getType()))
         {
 
           unsigned int lhs_2crd_size_loc;
@@ -4847,7 +4847,7 @@ namespace
         }
       }
       /// Vj = Bij
-      else if (main_tensors_rhs[0].getType().isa<tensorAlgebra::SparseTensorType>())
+      else if (mlir::isa<tensorAlgebra::SparseTensorType>(main_tensors_rhs[0].getType()))
       {
         /// %Bvalue = load %Bval[..]
         /// store %Bvalue, %v[%j]
@@ -5344,7 +5344,7 @@ void LowerIndexTreeToSCFPass::doLoweringIndexTreeToSCF(indexTree::IndexTreeOp &r
       for (unsigned int j = 0; j < op_indices.size(); j++)
       {
         /// Get the indices;
-        int idx = op_indices[j].cast<IntegerAttr>().getInt();
+        int idx = mlir::cast<IntegerAttr>(op_indices[j]).getInt();
         indices.push_back(idx);
       }
       comet_debug() << " indices.size(): " << indices.size() << "\n";

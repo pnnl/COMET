@@ -192,7 +192,7 @@ namespace mlir
                           Value dynamic_init)
     {
       [[maybe_unused]] auto lowerBound = builder.create<ConstantIndexOp>(loc, 0);
-      MemRefType resultMemTy = alloc_op.getDefiningOp()->getResult(0).getType().cast<MemRefType>();
+      MemRefType resultMemTy = mlir::cast<MemRefType>(alloc_op.getDefiningOp()->getResult(0).getType());
       std::vector<Value> cur_indices;
       std::vector<int64_t> cur_memref;
 
@@ -330,7 +330,7 @@ namespace mlir
       /// Find summation indices
       for (const auto &map : indexMaps)
       {
-        auto affineMap = map.cast<AffineMapAttr>().getValue();
+        auto affineMap = mlir::cast<AffineMapAttr>(map).getValue();
         std::vector<int64_t> perm;
         for (size_t i = 0; i < affineMap.getNumResults(); i++)
         {
@@ -354,13 +354,13 @@ namespace mlir
         comet_vdump(map);
         std::vector<int64_t> perm;
 
-        if (auto arrayattr = map.dyn_cast<ArrayAttr>())
+        if (auto arrayattr = mlir::dyn_cast<ArrayAttr>(map))
         {
           comet_debug() << " ";
           for (auto n : arrayattr)
           {
             comet_debug() << " ";
-            if (IntegerAttr i = n.dyn_cast<IntegerAttr>())
+            if (IntegerAttr i = mlir::dyn_cast<IntegerAttr>(n))
             {
               comet_debug() << " " << i.getInt() << "\n";
               perm.push_back(i.getInt());
@@ -536,7 +536,7 @@ namespace mlir
       /// format with each input matrix: ["CSR", "D", "D"] SpMM
       for (unsigned int i = 0; i < opFormatsArrayAttr.size(); i++)
       {
-        std::string formats_str(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+        std::string formats_str(mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue());
         unsigned int tensorDims = allPerms[i].size();
 
         comet_debug() << "format_str: " << formats_str << ", tensorDims: " << tensorDims << "\n";
@@ -630,7 +630,7 @@ namespace mlir
       /// block format with each input matrix: ["CSR", "D", "D"] SpMM
       for (unsigned int i = 0; i < opFormatsArrayAttr.size(); i++)
       {
-        std::string formats_str(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+        std::string formats_str(mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue());
         unsigned int tensorDims = allPerms[i].size();
 
         comet_debug() << "format_str: " << formats_str << ", tensorDims: " << tensorDims << "\n";
@@ -724,16 +724,16 @@ namespace mlir
       {
         comet_debug() << " ";
         /// std::string formats_str;
-        if (opFormatsArrayAttr[i].dyn_cast<mlir::StringAttr>())
+        if (mlir::dyn_cast<mlir::StringAttr>(opFormatsArrayAttr[i]))
         {
           comet_debug() << " yes ";
         }
-        else if (mlir::ArrayAttr formatArrayAttr = opFormatsArrayAttr[i].dyn_cast<mlir::ArrayAttr>())
+        else if (mlir::ArrayAttr formatArrayAttr = mlir::dyn_cast<mlir::ArrayAttr>(opFormatsArrayAttr[i]))
         {
           comet_debug() << " yes " << formatArrayAttr.size() << " ";
           for (unsigned long j = 0; j < formatArrayAttr.size(); j++)
           {
-            if (mlir::StringAttr format = formatArrayAttr[j].dyn_cast<mlir::StringAttr>())
+            if (mlir::StringAttr format = mlir::dyn_cast<mlir::StringAttr>(formatArrayAttr[j]))
             {
               std::string formats_str(format.getValue());
               comet_debug() << " " << formats_str << " ";
@@ -1408,7 +1408,7 @@ namespace mlir
       std::vector<std::vector<bool>> mapping;
       for (unsigned int m = 0; m < perms.size(); m++)
       {
-        ArrayAttr aa = perms[m].dyn_cast<mlir::ArrayAttr>();
+        ArrayAttr aa = mlir::dyn_cast<mlir::ArrayAttr>(perms[m]);
         std::vector<bool> p;
         for (unsigned int n = 0; n < aa.size(); n++)
         {
@@ -1425,12 +1425,12 @@ namespace mlir
       std::vector<std::vector<int>> perms_int;
       for (unsigned int m = 0; m < perms.size(); m++)
       {
-        ArrayAttr aa = perms[m].dyn_cast<mlir::ArrayAttr>();
+        ArrayAttr aa = mlir::dyn_cast<mlir::ArrayAttr>(perms[m]);
         std::vector<int> p;
         for (unsigned int n = 0; n < aa.size(); n++)
         {
-          p.push_back(aa[n].cast<mlir::IntegerAttr>().getInt());
-          comet_debug() << " convertArrayAttrIntTo2DVector:" << aa[n].cast<mlir::IntegerAttr>().getInt() << "\n";
+          p.push_back(mlir::cast<mlir::IntegerAttr>(aa[n]).getInt());
+          comet_debug() << " convertArrayAttrIntTo2DVector:" << mlir::cast<mlir::IntegerAttr>(aa[n]).getInt() << "\n";
         }
         perms_int.push_back(p);
       }
@@ -1474,11 +1474,11 @@ namespace mlir
       std::vector<std::vector<std::string>> formats_str;
       for (unsigned int m = 0; m < formats.size(); m++)
       {
-        ArrayAttr aa = formats[m].dyn_cast<mlir::ArrayAttr>();
+        ArrayAttr aa = mlir::dyn_cast<mlir::ArrayAttr>(formats[m]);
         std::vector<std::string> p;
         for (unsigned int n = 0; n < aa.size(); n++)
         {
-          std::string format_str(aa[n].cast<mlir::StringAttr>().getValue());
+          std::string format_str(mlir::cast<mlir::StringAttr>(aa[n]).getValue());
           p.push_back(format_str);
           comet_debug() << " convertArrayAttrStrTo2DVector:" << format_str << "\n";
         }
@@ -2103,8 +2103,8 @@ namespace mlir
       auto rhs1AlphaAttr = rhs1Tensor.getDefiningOp()->getAttr("__alpha__");
       auto rhs2AlphaAttr = rhs2Tensor.getDefiningOp()->getAttr("__alpha__");
 
-      alpha *= rhs1AlphaAttr.cast<FloatAttr>().getValueAsDouble();
-      alpha *= rhs2AlphaAttr.cast<FloatAttr>().getValueAsDouble();
+      alpha *= mlir::cast<FloatAttr>(rhs1AlphaAttr).getValueAsDouble();
+      alpha *= mlir::cast<FloatAttr>(rhs2AlphaAttr).getValueAsDouble();
 
       unsigned idx = 0;
       for (auto lbl : rhs1Labels)

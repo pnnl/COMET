@@ -586,7 +586,7 @@ namespace
           std::vector<std::string> allFormatsStr;
           for (unsigned int i = 0; i < allFormats.size(); i++)
           {
-            std::string formats_str(allFormats[i].cast<mlir::StringAttr>().getValue());
+            std::string formats_str(mlir::cast<mlir::StringAttr>(allFormats[i]).getValue());
             allFormatsStr.push_back(formats_str);
           }
           std::string src_format = allFormatsStr[0];
@@ -602,9 +602,9 @@ namespace
           comet_pdump(dst_input.getDefiningOp());
           mlir::TensorType type;
           auto res = dst_input.getDefiningOp()->getResult(0);
-          if (res.getType().isa<TensorType>())
+          if (mlir::isa<TensorType>(res.getType()))
           {
-            type = res.getType().cast<TensorType>();
+            type = mlir::cast<TensorType>(res.getType());
           }
           else
           {
@@ -1078,7 +1078,7 @@ namespace
       auto resultTensorType = op.getResult().getType();
       std::vector<Value> cur_indices;
       std::vector<int64_t> cur_memref;
-      auto resultMemTy = convertTensorToMemRef(resultTensorType.cast<TensorType>());
+      auto resultMemTy = convertTensorToMemRef(mlir::cast<TensorType>(resultTensorType));
 
       int j = 0;
       for (int i = 0; i < resultMemTy.getRank(); i++)
@@ -1162,9 +1162,9 @@ namespace
       comet_debug() << " " << op.getNumOperands() << "\n";
       auto res = op.getResult();
       mlir::TensorType type;
-      if(res.getType().isa<TensorType>())
+      if(mlir::isa<TensorType>(res.getType()))
       {
-        type = res.getType().cast<TensorType>();
+        type = mlir::cast<TensorType>(res.getType());
       }
       else
       {
@@ -1327,8 +1327,8 @@ namespace
           {
             auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
             /// Can get filename, from "filename" attribute of fillfromfileop
-            StringAttr filename = fillfromfileop.getFilename().cast<StringAttr>();
-            IntegerAttr readModeAttr = fillfromfileop.getReadMode().cast<IntegerAttr>();
+            StringAttr filename = mlir::cast<StringAttr>(fillfromfileop.getFilename());
+            IntegerAttr readModeAttr = mlir::cast<IntegerAttr>(fillfromfileop.getReadMode());
             rewriter.eraseOp(fillfromfileop);
 
             comet_debug() << " filename: " << filename.getValue() << "\n";

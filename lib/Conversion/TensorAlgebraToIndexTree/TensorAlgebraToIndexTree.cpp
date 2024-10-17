@@ -355,8 +355,8 @@ void doTensorMultOp(TensorMultOp op, unique_ptr<Index_Tree> &tree, TargetDevice 
     e = make_unique<UnitExpression>(A, B, C, "*");
   }
 
-  e->setSemiring(SemiringOp.cast<mlir::StringAttr>().getValue());
-  e->setMaskType(MaskingTypeAttr.cast<mlir::StringAttr>().getValue());
+  e->setSemiring(mlir::cast<mlir::StringAttr>(SemiringOp).getValue());
+  e->setMaskType(mlir::cast<mlir::StringAttr>(MaskingTypeAttr).getValue());
 
   e->setOperation(op);
   buildDefUseInfo(e.get());

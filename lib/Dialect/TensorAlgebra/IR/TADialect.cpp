@@ -87,13 +87,13 @@ mlir::LogicalResult DenseConstantOp::verify()
 {
   /// If the return type of the constant is not an unranked tensor, the shape
   /// must match the shape of the attribute holding the data.
-  auto resultType = getResult().getType().dyn_cast<mlir::RankedTensorType>();
+  auto resultType = mlir::dyn_cast<mlir::RankedTensorType>(getResult().getType());
   if (!resultType)
     return success();
 
   /// Check that the rank of the attribute type matches the rank of the constant
   /// result type.
-  auto attrType = getValue().getType().cast<mlir::TensorType>();
+  auto attrType = mlir::cast<mlir::TensorType>(getValue().getType());
   if (attrType.getRank() != resultType.getRank())
   {
     if(!(attrType.getRank() == 1 && attrType.getDimSize(0) == 1))
@@ -237,8 +237,8 @@ mlir::LogicalResult TAReturnOp::verify()
   auto resultType = results.front();
 
   /// Check that the result type of the function matches the operand type.
-  if (inputType == resultType || inputType.isa<mlir::UnrankedTensorType>() ||
-      resultType.isa<mlir::UnrankedTensorType>())
+  if (inputType == resultType || mlir::isa<mlir::UnrankedTensorType>(inputType) ||
+      mlir::isa<mlir::UnrankedTensorType>(resultType))
     return mlir::success();
 
   return emitError() << "type of return operand (" << inputType
@@ -385,7 +385,7 @@ Type mlir::tensorAlgebra::TADialect::parseType(DialectAsmParser &parser) const
         return nullptr;
 
       /// Check that the type is either a TensorType or another SparseTensorType.
-      if (!elementType.isa<mlir::TensorType, SparseTensorType, IndexType>())
+      if (!mlir::isa<mlir::TensorType, SparseTensorType, IndexType>(elementType))
       {
         parser.emitError(typeLoc, "element type for a struct must either "
                                   "be a TensorType or a SparseTensorType, got: ")
@@ -418,14 +418,14 @@ static void print(IndexLabelType type, DialectAsmPrinter &printer)
 void mlir::tensorAlgebra::TADialect::printType(
     Type type, DialectAsmPrinter &printer) const
 {
-  if (type.isa<IndexLabelType>())
+  if (mlir::isa<IndexLabelType>(type))
   {
-    print(type.cast<IndexLabelType>(), printer);
+    print(mlir::cast<IndexLabelType>(type), printer);
   }
-  else if (type.isa<SparseTensorType>())
+  else if (mlir::isa<SparseTensorType>(type))
   {
     /// Currently the only sparse tensor type is a struct type.
-    SparseTensorType sparseTensorType = type.cast<SparseTensorType>();
+    SparseTensorType sparseTensorType = mlir::cast<SparseTensorType>(type);
 
     /// Print the struct type according to the parser format.
     printer << "spTensor<";

@@ -198,7 +198,7 @@ namespace
       comet_vdump(op);
 
       auto tensor = op.getTensor();
-      if (tensor.getType().isa<SparseTensorType>())
+      if (mlir::isa<SparseTensorType>(tensor.getType()))
       {
         SparseTensorConstructOp spconstruct = cast<SparseTensorConstructOp>(tensor.getDefiningOp());
         ::mlir::TypedValue<::mlir::IndexType> idx = op.getIndex();
@@ -206,7 +206,7 @@ namespace
         op.replaceAllUsesWith(spconstruct.getIndices()[18 + *realIndex]);
         rewriter.eraseOp(op);
       }
-      else if (tensor.getType().isa<TensorType>())
+      else if (mlir::isa<TensorType>(tensor.getType()))
       {
         ::mlir::TypedValue<::mlir::IndexType> idx = op.getIndex();
         auto dim = rewriter.create<tensor::DimOp>(op.getLoc(), tensor, idx);
