@@ -89,7 +89,7 @@ public:
     // Triton expects one kernel per module so we create temporary modules
     std::vector<ModuleOp> tempMods;
     OpBuilder builder(modOp); 
-    std::string chip = "sm_" + std::to_string(computeCapability.getValue());
+    std::string chip = std::to_string(computeCapability.getValue());
     // The pass that converts LLVM kernels to cubin expects all such kernels to be within gpu.module, so we create such a module to insert the 
     // kernels lowered by Triton
     auto tempMod = builder.create<mlir::gpu::GPUModuleOp>(modOp->getLoc(), "gpu_module", mlir::NVVM::NVVMTargetAttr::get(modOp->getContext(), 3, "nvptx64-nvidia-cuda", chip));
@@ -112,7 +112,7 @@ public:
       pm.addPass(createSymbolDCEPass());
       pm.addPass(createCanonicalizerPass());
       pm.addPass(createLoopInvariantCodeMotionPass());
-      pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass("cuda:"+std::to_string(computeCapability.getValue()), numWarps.getValue(), threadsPerWarp.getValue(), numCTAs.getValue()));
+      pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass("cuda:"+chip, numWarps.getValue(), threadsPerWarp.getValue(), numCTAs.getValue()));
       pm.addPass(triton::gpu::createTritonGPUCoalesce());
       pm.addPass(createTritonNvidiaGPUPlanCTAPass());
       pm.addPass(mlir::triton::createRewriteTensorPointerPass());

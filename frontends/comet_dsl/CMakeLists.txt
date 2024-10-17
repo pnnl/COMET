@@ -26,6 +26,7 @@ MLIRAnalysis
 MLIRIR
 MLIRParser
 MLIRPass
+MLIRFuncAllExtensions
 MLIRTransforms
 COMETUtils
 COMETTensorAlgebraDialect
@@ -40,6 +41,7 @@ if(ENABLE_GPU_TARGET)
     COMETParallelLoopsToGpu
     COMETGpuToTriton
     COMETTritonToCuda
+    COMETTritonToHIP
     ${triton_libs}
   )
 endif()

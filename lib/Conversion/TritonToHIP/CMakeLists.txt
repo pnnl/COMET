@@ -1,5 +1,4 @@
 add_llvm_library(COMETTritonToHIP
-    # GpuToTritonConversion.cpp
     TritonToHIPPass.cpp
 
     DEPENDS
@@ -13,5 +12,4 @@ add_llvm_library(COMETTritonToHIP
     TritonGPUIR
     TritonGPUTransforms
     TritonAMDGPUTransforms
-    AMDGPUIR
 )

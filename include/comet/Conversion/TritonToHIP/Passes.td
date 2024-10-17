@@ -34,7 +34,7 @@ def LowerTritonDeviceToHIP: Pass<"lower-triton-device-to-hip", "mlir::ModuleOp">
                      "Number of CTAs">,
               
               Option<"computeCapability", "computeCapability",
-                     "int32_t", "80",
+                     "std::string", "\"gfx90\"",
                      "Target compute capability">,
               
               Option<"codeFormat", "codeFormat",
@@ -45,6 +45,6 @@ def LowerTritonDeviceToHIP: Pass<"lower-triton-device-to-hip", "mlir::ModuleOp">
        let dependentDialects = ["mlir::arith::ArithDialect", "mlir::math::MathDialect",
                              "mlir::gpu::GPUDialect",
                              "mlir::memref::MemRefDialect",
-                             "mlir::scf::SCFDialect",  "mlir::tensor::TensorDialect","mlir::func::FuncDialect", "mlir::LLVM::LLVMDialect", "mlir::triton::TritonDialect", "mlir::triton::gpu::TritonGPUDialect", "mlir::triton::amdgpu::TritonAMDGPUDialect", "mlir::ROCDL::ROCDLDialect"];
+                             "mlir::scf::SCFDialect",  "mlir::tensor::TensorDialect","mlir::func::FuncDialect", "mlir::LLVM::LLVMDialect", "mlir::triton::TritonDialect", "mlir::triton::gpu::TritonGPUDialect", "mlir::triton::nvidia_gpu::TritonNvidiaGPUDialect", "mlir::triton::amdgpu::TritonAMDGPUDialect", "mlir::NVVM::NVVMDialect", "mlir::ROCDL::ROCDLDialect"];
 }
 #endif

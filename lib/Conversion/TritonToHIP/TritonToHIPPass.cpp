@@ -1,11 +1,10 @@
 
 #include <cstddef>
-#include <list>
 #include <memory>
 #include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
-
+#include "TritonAMDGPUToLLVM/Passes.h"
+#include "TritonAMDGPUTransforms/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
-#include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/ROCDLDialect.h"
 #include "mlir/IR/Builders.h"
@@ -15,52 +14,120 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-
-#include "mlir/Dialect/Arith/Transforms/Passes.h"
-
-// #include "triton/Conversion/NVGPUToLLVM/TritonGPUToLLVMPass.h"
-// #include "triton/Conversion/TritonGPUToLLVM/TritonGPUToLLVMPass.h"
-#include "third_party/nvidia/include/NVGPUToLLVM/NVGPUToLLVMPass.h"
-#include "third_party/nvidia/include/TritonNVIDIAGPUToLLVM/Passes.h"
 #include "triton/Conversion/TritonGPUToLLVM/Passes.h"
 #include "triton/Dialect/Triton/Transforms/Passes.h"
-#include "triton/Dialect/TritonGPU/IR/Dialect.h"
-#include "triton/Dialect/TritonNvidiaGPU/IR/Dialect.h"
-// #include "triton/Dialect/NVGPU/IR/Dialect.h"
 #include "triton/Conversion/TritonToTritonGPU/TritonToTritonGPUPass.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Dialect/TritonGPU/Transforms/Passes.h"
-#include "triton/Dialect/TritonNvidiaGPU/Transforms/Passes.h"
-
-#include "mlir/Dialect/LLVMIR/NVVMDialect.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
-#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
 #include "mlir/Target/LLVMIR/Export.h"
-
-#include "llvm/MC/TargetRegistry.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOptions.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include <set>
 #include <string>
+#include "mlir/Dialect/LLVMIR/NVVMDialect.h"
 
 #define GEN_PASS_CLASSES
 #include "comet/Conversion/TritonToHIP/Passes.h"
 
 using namespace mlir;
 
+
+
 class LowerTritonDeviceToHIP
     : public mlir::comet::LowerTritonDeviceToHIPBase<LowerTritonDeviceToHIP> {
 public:
+
+    bool add_ttir_passes(ModuleOp& mod)
+    {
+      PassManager pm(mod.getContext());
+
+      pm.addPass(createInlinerPass());
+      pm.addPass(triton::createRewriteTensorPointerPass());
+      pm.addPass(triton::createCombineOpsPass());
+      pm.addPass(createCanonicalizerPass());
+      pm.addPass(triton::createReorderBroadcastPass());
+      pm.addPass(createCSEPass());
+      pm.addPass(createLoopInvariantCodeMotionPass());
+      pm.addPass(triton::createLoopUnrollPass());
+      if (failed(pm.run(mod))) {
+        signalPassFailure();
+        return false;
+      }
+      return true;
+    }
+
+    bool add_ttgir_passes(ModuleOp& mod)
+    {
+      {
+        PassManager pm(mod.getContext());
+        pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass("hip:"+computeCapability, numWarps.getValue(), threadsPerWarp.getValue(), numCTAs.getValue()));
+        if (failed(pm.run(mod))) {
+          signalPassFailure();
+          return false;
+        }
+      }
+      PassManager pm(mod.getContext());
+      pm.addPass(triton::gpu::createTritonGPUCoalesce());
+
+      pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
+      pm.addPass(triton::gpu::createTritonGPUOptimizeThreadLocality());
+      // TODO: This one takes options
+      pm.addPass(createTritonAMDGPUAccelerateMatmulPass(computeCapability));
+      pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
+      pm.addPass(createTritonAMDGPUOptimizeEpiloguePass());
+      mlir::triton::gpu::TritonGPUOptimizeDotOperandsOptions options;
+      options.hoistLayoutConversion = true;
+      pm.addPass(triton::gpu::createTritonGPUOptimizeDotOperands(options));
+      // TODO: Tensor core options here
+      // addd.....
+
+      pm.addPass(createCanonicalizerPass());
+      // pm.addPass(triton::createTritonAMDGPUInsertInstructionSchedHintsPass()); TODO: Does not work
+      pm.addPass(triton::gpu::createTritonGPUOptimizeDotOperands(options));
+      pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
+      pm.addPass(triton::gpu::createTritonGPUReduceDataDuplication());
+      if(numStages.getValue() != 0)
+      {
+        pm.addPass(createTritonAMDGPUReorderInstructionsPass());
+      }
+      pm.addPass(createTritonAMDGPUCanonicalizePointersPass());
+      pm.addPass(createCanonicalizerPass());
+      pm.addPass(createCSEPass());
+      pm.addPass(createSymbolDCEPass());
+      if (failed(pm.run(mod))) {
+        signalPassFailure();
+        return false;
+      }
+
+      return true;
+    }
+
+    bool add_llir_passes(ModuleOp& mod)
+    {
+        PassManager pm(mod.getContext());
+
+      pm.addPass(triton::AMD::createDecomposeUnsupportedConversionsPass(computeCapability));
+      pm.addPass(createConvertSCFToCFPass());
+      pm.addPass(createConvertIndexToLLVMPass());
+      pm.addPass(triton::gpu::createAllocateSharedMemoryPass());
+      pm.addPass(triton::createConvertTritonAMDGPUToLLVMPass(computeCapability, true));
+      pm.addPass(createCanonicalizerPass());
+      pm.addPass(createCSEPass());
+      pm.addPass(createSymbolDCEPass());
+      pm.addPass(triton::createConvertBuiltinFuncToLLVMPass());
+
+      if (failed(pm.run(mod))) {
+        signalPassFailure();
+        return false;
+      }
+
+      return true;
+    }
     LowerTritonDeviceToHIP() = default;
 
 
@@ -68,7 +135,7 @@ public:
                             int threadsPerWarp,
                             int numCTAs,
                             int numStages,
-                            int computeCapability,
+                            std::string computeCapability,
                             mlir::tensorAlgebra::GPUCompilationFormat codeFormat) {
 
         this->numWarps = numWarps;
@@ -90,7 +157,6 @@ public:
     // Triton expects one kernel per module so we create temporary modules
     std::vector<ModuleOp> tempMods;
     OpBuilder builder(modOp); 
-    std::string chip = "sm_" + std::to_string(computeCapability.getValue());
     // The pass that converts LLVM kernels to cubin expects all such kernels to be within gpu.module, so we create such a module to insert the 
     // kernels lowered by Triton
     auto tempMod = builder.create<mlir::gpu::GPUModuleOp>(modOp->getLoc(), "gpu_module", mlir::ROCDL::ROCDLTargetAttr::get(modOp->getContext(), 3)); //, "nvptx64-nvidia-cuda", chip));
@@ -106,44 +172,18 @@ public:
       OpBuilder builder(tempMod.getBodyRegion()); 
       builder.clone(*ttFunc.getOperation());
       PassManager pm(tempMod.getContext());
+      if(!add_ttir_passes(tempMod))
+      {
+        return;
+      }
 
-      pm.addPass(createCanonicalizerPass());
-      pm.addPass(createCSEPass());
-      pm.addPass(createCSEPass());
-      pm.addPass(createSymbolDCEPass());
-      pm.addPass(createCanonicalizerPass());
-      pm.addPass(createLoopInvariantCodeMotionPass());
-      pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass("hip:"+std::to_string(computeCapability.getValue()), numWarps.getValue(), threadsPerWarp.getValue(), numCTAs.getValue()));
-      pm.addPass(triton::gpu::createTritonGPUCoalesce());
-      pm.addPass(createTritonNvidiaGPUPlanCTAPass());
-      pm.addPass(mlir::triton::createRewriteTensorPointerPass());
-      pm.addPass(createTritonNvidiaGPUPlanCTAPass());
-      pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
-      pm.addPass(triton::gpu::createTritonGPUOptimizeThreadLocality());
-      pm.addPass(triton::gpu::createTritonGPUAccelerateMatmul());
-      pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
-      pm.addPass(triton::gpu::createTritonGPUOptimizeDotOperands());
-      pm.addPass(createCSEPass());
-      triton::gpu::TritonGPUPipelineOptions pipelineOpts;
-      pipelineOpts.numStages = numStages.getValue();
-      pm.addPass(triton::gpu::createTritonGPUPipeline(pipelineOpts));
-      // pm.addPass(createTritonNvidiaGPUMaterializeLoadStorePass(numWarps.getValue(), computeCapability.getValue()));
-      pm.addPass(triton::NVIDIA::createDecomposeUnsupportedConversionsPass());
-      pm.addPass(triton::gpu::createTritonGPUPrefetch());
-      pm.addPass(triton::gpu::createTritonGPUOptimizeDotOperands());
-      pm.addPass(triton::gpu::createTritonGPUCombineTensorSelectAndIf());
-      pm.addPass(createConvertSCFToCFPass());
-      pm.addPass(createConvertIndexToLLVMPass());
-      pm.addPass(triton::gpu::createAllocateSharedMemoryPass());
-      pm.addPass(triton::createConvertTritonGPUToLLVMPass(computeCapability.getValue()));
-      pm.addPass(triton::createConvertNVGPUToLLVMPass());
-      pm.addPass(createArithToLLVMConversionPass());
-      pm.addPass(createCanonicalizerPass());
-      pm.addPass(createCSEPass());
-      pm.addPass(createSymbolDCEPass());
+      if(!add_ttgir_passes(tempMod))
+      {
+        return;
+      }
 
-      if (failed(pm.run(tempMod))) {
-        signalPassFailure();
+      if(!add_llir_passes(tempMod))
+      {
         return;
       }
 
@@ -224,7 +264,7 @@ mlir::comet::createLowerTritonDeviceToHIPPass(int numWarps,
                                                 int threadsPerWarp,
                                                 int numCTAs,
                                                 int numStages,
-                                                int computeCapability,
+                                                std::string computeCapability,
                                                 mlir::tensorAlgebra::GPUCompilationFormat format) {
   return std::make_unique<::LowerTritonDeviceToHIP>(numWarps, threadsPerWarp, numCTAs, numStages, computeCapability, format);
 }

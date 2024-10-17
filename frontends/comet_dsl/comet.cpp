@@ -25,6 +25,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
@@ -37,6 +38,7 @@
 #include "Parser.h"
 
 #include "mlir/Conversion/SCFToOpenMP/SCFToOpenMP.h"
+#include "mlir/Dialect/Func/Extensions/InlinerExtension.h"
 #include "mlir/Support/TypeID.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
@@ -68,9 +70,12 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Target/LLVMIR/Dialect/AMX/AMXToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/ROCDL/ROCDLToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
+#include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
@@ -190,7 +195,7 @@ static cl::opt<GPUCompilationFormat> GPUTargetCompilationFormat("gpu-code-format
 static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::init(32), cl::desc("GPU Block size in X direction"));
 static cl::opt<int> GPUBlockSizeY("gpu-block-y-size", cl::init(8), cl::desc("GPU Block size in Y direction"));
 static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::init(32), cl::desc("GPU Block size in R direction"));
-static cl::opt<int> GPUComputeCapability("gpu-compute-capability", cl::init(CUDA_COMPUTE_CAPABILITY), cl::desc("GPU compute capability"));
+static cl::opt<std::string> GPUComputeCapability("gpu-compute-capability", cl::init(DEVICE_COMPUTE_CAPABILITY), cl::desc("GPU target architecture"));
 static cl::opt<int> GPUNumWarps("gpu-num-warps", cl::init(4), cl::desc("GPU number of warps"));
 static cl::opt<int> GPUThreadsPerWarp("gpu-threads-per-warp", cl::init(32), cl::desc("GPU threads per warp"));
 static cl::opt<int> GPUNumCTAs("gpu-num-ctas", cl::init(1), cl::desc("GPU num CTAs"));
@@ -551,7 +556,14 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 #ifdef ENABLE_GPU_TARGET
   if ((isLoweringToLLVM || emitLLVM || IsLoweringDeviceToLLVM) && CodegenTarget == TargetDevice::GPU)
   {
-    pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
+    if(GPUComputeCapability.getValue().find("sm_") != std::string::npos || GPUComputeCapability.getValue().find("compute_") != std::string::npos)
+    {
+      int32_t cudaCC = std::stoi(GPUComputeCapability.substr(GPUComputeCapability.find("_")+1));
+      pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, cudaCC, GPUTargetCompilationFormat));
+    }
+    else {
+      pm.addPass(mlir::comet::createLowerTritonDeviceToHIPPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
+    }
   }
 
   if ((isLoweringToLLVM || emitLLVM || IsLoweringHostToLLVM) && CodegenTarget == TargetDevice::GPU)
@@ -646,10 +658,15 @@ int main(int argc, char **argv)
     /// Register our Dialect with MLIR.
 #ifdef ENABLE_GPU_TARGET
   context.loadDialect<mlir::triton::TritonDialect>();
+  mlir::DialectRegistry registry;
+  mlir::func::registerInlinerExtension(registry);
+  context.appendDialectRegistry(registry);
+
   registerLLVMDialectTranslation(context);
   registerLLVMDialectTranslation(context);
   registerBuiltinDialectTranslation(context);
   registerNVVMDialectTranslation(context);
+  mlir::registerROCDLDialectTranslation(context);
   mlir::registerGPUDialectTranslation(context);
   LLVMInitializeNVPTXTargetInfo();
   LLVMInitializeNVPTXTarget();

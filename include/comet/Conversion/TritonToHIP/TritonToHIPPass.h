@@ -1,5 +1,5 @@
-#ifndef TRITON_CONVERSION_TRITONTOCUDA_H
-#define TRITON_CONVERSION_TRITONTOCUDA_H
+#ifndef TRITON_CONVERSION_TRITONTOHIP_H
+#define TRITON_CONVERSION_TRITONTOHIP_H
 
 #include <memory>
 #include "comet/Dialect/Utils/Utils.h"
@@ -18,7 +18,7 @@ std::unique_ptr<OperationPass<mlir::ModuleOp>> createLowerTritonDeviceToHIPPass(
                                                 int threadsPerWarp,
                                                 int numCTAs,
                                                 int numStages,
-                                                int computeCapability,
+                                                std::string computeCapability,
                                                 mlir::tensorAlgebra::GPUCompilationFormat format);
 
 } // namespace triton
