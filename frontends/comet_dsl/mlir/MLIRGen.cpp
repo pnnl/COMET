@@ -47,6 +47,7 @@
 #include "llvm/ADT/ScopedHashTable.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdint>
+#include <iostream>
 #include <map>
 #include <numeric>
 #include <cstdlib> /// for random num generation
@@ -55,6 +56,7 @@
 #include "mlir/IR/Types.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Verifier.h"
+#include "mlir/Support/LLVM.h"
 
 using namespace mlir::tensorAlgebra;
 using namespace tensorAlgebra;
@@ -823,7 +825,18 @@ namespace
             auto map = affineMapArrayAttr[i].cast<mlir::AffineMapAttr>().getValue();
             if (auto pos = map.getResultPosition(v))
             {
-              result_dims.push_back((i == 0 ? lhs_labeledtensor : rhs_labeledtensor).getType().cast<mlir::TensorType>().getDimSize(*pos));
+              mlir::Value operand = i == 0 ? lhs_labeledtensor : rhs_labeledtensor;
+              if(auto spTensorType = mlir::dyn_cast<mlir::tensorAlgebra::SparseTensorType>(operand.getType()))
+              {
+                result_dims.push_back(spTensorType.getDimSize(*pos));
+              }
+              else if(auto denseTensorType = mlir::dyn_cast<mlir::TensorType>(operand.getType()))
+              {
+                result_dims.push_back(denseTensorType.getDimSize(*pos));
+              }
+              else{
+                assert(false && "Unexpected Tensor type");
+              }
               break;
             }
           }
@@ -1803,7 +1816,9 @@ namespace
 
         /// no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
         /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
-        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, builder.getF64Type()), indices, formatAttr, builder.getBoolAttr(true));
+        auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, shape, format);
+
+        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), sp_tensor_type, indices, formatAttr, builder.getBoolAttr(true));
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
         comet_vdump(lhs_tensor);
 
