@@ -618,8 +618,13 @@ LowerIndexTreeToSCFPass::deleteDomain(Operation* op, IRRewriter &rewriter) {
   } else if(llvm::isa<IndexTreeDomainUnionOp>(op)){
     subdomains = llvm::cast<IndexTreeDomainUnionOp>(op).getDomains();
   }
-  rewriter.eraseOp(op);
+  std::vector<Value> subdomains_vec;
   for(Value subdomain : subdomains) {
+    subdomains_vec.push_back(subdomain);
+  }
+  rewriter.eraseOp(op);
+  
+  for(Value subdomain : subdomains_vec) {
     deleteDomain(subdomain.getDefiningOp(), rewriter);
   }
 }
