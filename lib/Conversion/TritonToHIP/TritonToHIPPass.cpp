@@ -26,6 +26,7 @@
 #include "triton/Dialect/Triton/Transforms/Passes.h"
 #include "triton/Dialect/TritonGPU/Transforms/Passes.h"
 #include <cstddef>
+#include <iostream>
 #include <memory>
 #include <set>
 #include <string>
@@ -154,7 +155,8 @@ public:
     auto tempMod = builder.create<mlir::gpu::GPUModuleOp>(
         modOp->getLoc(), "gpu_module",
         mlir::ROCDL::ROCDLTargetAttr::get(
-            modOp->getContext(), 3)); //, "nvptx64-nvidia-cuda", chip));
+            modOp->getContext(), 3, "amdgcn-amd-amdhsa",
+            computeCapability)); //, "nvptx64-nvidia-Hip", chip));
 
     if (TTFuncs.empty()) {
       return signalPassFailure();
@@ -192,10 +194,19 @@ public:
     builder.setInsertionPointToStart(&tempMod.getBodyRegion().front());
     for (auto mod : tempMods) {
       for (auto &op : *mod.getBody()) {
+        // op.setAttr("rocdl.kernel", builder.getUnitAttr());
+
+        if (mlir::isa<LLVM::LLVMFuncOp>(op)) {
+          std::vector<NamedAttribute> kernelAttrs;
+          kernelAttrs.push_back(
+              builder.getNamedAttr("gpu.kernel", builder.getUnitAttr()));
+          kernelAttrs.push_back(
+              builder.getNamedAttr("rocdl.kernel", builder.getUnitAttr()));
+          op.setAttrs(kernelAttrs);
+        }
         builder.clone(op);
       }
     }
-
     // GPU dialect verifier expects this
     modOp->setAttr("gpu.container_module", builder.getUnitAttr());
 
@@ -291,67 +302,67 @@ public:
     auto mallocI32Type = builder.getFunctionType({builder.getIndexType()},
                                                  builder.getIndexType());
     auto mallocI32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocI32", mallocI32Type);
+        builder.getUnknownLoc(), "HipMallocI32", mallocI32Type);
     mallocI32.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(mallocI32);
 
     auto mallocI64Type = builder.getFunctionType({builder.getIndexType()},
                                                  builder.getIndexType());
     auto mallocI64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocI64", mallocI64Type);
+        builder.getUnknownLoc(), "HipMallocI64", mallocI64Type);
     mallocI64.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(mallocI64);
 
     auto mallocF32Type = builder.getFunctionType({builder.getIndexType()},
                                                  builder.getIndexType());
     auto mallocF32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocF32", mallocF32Type);
+        builder.getUnknownLoc(), "HipMallocF32", mallocF32Type);
     mallocF32.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(mallocF32);
 
     auto mallocF64Type = builder.getFunctionType({builder.getIndexType()},
                                                  builder.getIndexType());
     auto mallocF64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocF64", mallocF64Type);
+        builder.getUnknownLoc(), "HipMallocF64", mallocF64Type);
     mallocF64.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(mallocF64);
 
-    auto cudaMemcpyI32Type = builder.getFunctionType(
+    auto HipMemcpyI32Type = builder.getFunctionType(
         {builder.getIndexType(), memrefI32, builder.getIndexType()}, {});
-    auto cudaMemcpyI32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyI32", cudaMemcpyI32Type);
-    cudaMemcpyI32.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyI32);
+    auto HipMemcpyI32 = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyI32", HipMemcpyI32Type);
+    HipMemcpyI32.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyI32);
 
-    auto cudaMemcpyI64Type = builder.getFunctionType(
+    auto HipMemcpyI64Type = builder.getFunctionType(
         {builder.getIndexType(), memrefI64, builder.getIndexType()}, {});
-    auto cudaMemcpyI64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyI64", cudaMemcpyI64Type);
-    cudaMemcpyI64.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyI64);
+    auto HipMemcpyI64 = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyI64", HipMemcpyI64Type);
+    HipMemcpyI64.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyI64);
 
-    auto cudaMemcpyIndexType = builder.getFunctionType(
+    auto HipMemcpyIndexType = builder.getFunctionType(
         {builder.getIndexType(), memrefIndex, builder.getIndexType()}, {});
-    auto cudaMemcpyIndex = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyIndex", cudaMemcpyIndexType);
-    cudaMemcpyIndex.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyIndex);
+    auto HipMemcpyIndex = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyIndex", HipMemcpyIndexType);
+    HipMemcpyIndex.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyIndex);
 
-    auto cudaMemcpyF32Type = builder.getFunctionType(
+    auto HipMemcpyF32Type = builder.getFunctionType(
         {builder.getIndexType(), memrefF32, builder.getIndexType()}, {});
-    auto cudaMemcpyF32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyF32", cudaMemcpyF32Type);
-    cudaMemcpyF32.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyF32);
+    auto HipMemcpyF32 = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyF32", HipMemcpyF32Type);
+    HipMemcpyF32.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyF32);
 
-    auto cudaMemcpyF64Type = builder.getFunctionType(
+    auto HipMemcpyF64Type = builder.getFunctionType(
         {builder.getIndexType(), memrefF64, builder.getIndexType()}, {});
-    auto cudaMemcpyF64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyF64", cudaMemcpyF64Type);
-    cudaMemcpyF64.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyF64);
+    auto HipMemcpyF64 = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyF64", HipMemcpyF64Type);
+    HipMemcpyF64.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyF64);
 
-    auto cudaLaunchKernelT = builder.getFunctionType(
+    auto HipLaunchKernelT = builder.getFunctionType(
         {builder.getIndexType(), builder.getIndexType(), builder.getIndexType(),
          builder.getIndexType(), builder.getIndexType(), builder.getIndexType(),
          MemRefType::get({ShapedType::kDynamic}, builder.getIndexType()),
@@ -359,23 +370,23 @@ public:
          builder.getIndexType(), builder.getIntegerType(32),
          builder.getIndexType(), builder.getIndexType()},
         {});
-    auto cudaLaunchKernel = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaLaunchKernel", cudaLaunchKernelT);
-    cudaLaunchKernel.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaLaunchKernel);
+    auto HipLaunchKernel = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipLaunchKernel", HipLaunchKernelT);
+    HipLaunchKernel.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipLaunchKernel);
 
-    auto cudaSetModuleImageT = builder.getFunctionType(
+    auto HipSetModuleImageT = builder.getFunctionType(
         {LLVM::LLVMPointerType::get(builder.getContext())}, {});
-    auto cudaSetModuleImage = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaSetModuleImage", cudaSetModuleImageT);
-    cudaSetModuleImage.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaSetModuleImage);
+    auto HipSetModuleImage = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipSetModuleImage", HipSetModuleImageT);
+    HipSetModuleImage.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipSetModuleImage);
 
-    auto cudaFreeT = builder.getFunctionType({builder.getIndexType()}, {});
-    auto cudaFree = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(),
-                                                       "cudaFree", cudaFreeT);
-    cudaFree.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaFree);
+    auto HipFreeT = builder.getFunctionType({builder.getIndexType()}, {});
+    auto HipFree = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(),
+                                                      "HipFree", HipFreeT);
+    HipFree.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipFree);
 
     std::vector<mlir::gpu::LaunchFuncOp> launchOps;
 
@@ -403,7 +414,7 @@ public:
             launchOp->getLoc(), LLVM::LLVMPointerType::get(&getContext()),
             "gpu_code");
         builder.create<mlir::func::CallOp>(launchOp.getLoc(),
-                                           "cudaSetModuleImage", TypeRange(),
+                                           "HipSetModuleImage", TypeRange(),
                                            ValueRange({gpu_code}));
 
         initFuncs.insert(launchOp->getParentOfType<mlir::func::FuncOp>());
@@ -421,7 +432,7 @@ public:
         // builder.create<arith::IndexCastOp>(operand.get().getLoc(),
         // builder.getIntegerType(32), operand.get());
         // //   // operand.set(i32Operand);
-        // //   cudaCallArgs.push_back(i32Operand);
+        // //   HipCallArgs.push_back(i32Operand);
         // }
         // else
         if (isa<MemRefType>(operand.get().getType())) {
@@ -509,23 +520,23 @@ public:
       if (FloatType floatType = mlir::dyn_cast<FloatType>(
               gpuAlloc.getMemref().getType().getElementType())) {
         int width = floatType.getWidth();
-        auto cudaOp = builder.create<mlir::func::CallOp>(
-            gpuAlloc->getLoc(), "cudaMallocF" + std::to_string(width),
+        auto HipOp = builder.create<mlir::func::CallOp>(
+            gpuAlloc->getLoc(), "HipMallocF" + std::to_string(width),
             TypeRange(builder.getIndexType()), ValueRange(allocSize));
-        gpuAlloc->replaceAllUsesWith(cudaOp);
+        gpuAlloc->replaceAllUsesWith(HipOp);
       } else if (IntegerType intType = mlir::dyn_cast<IntegerType>(
                      gpuAlloc.getMemref().getType().getElementType())) {
         int width = intType.getWidth();
-        auto cudaOp = builder.create<mlir::func::CallOp>(
-            gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(width),
+        auto HipOp = builder.create<mlir::func::CallOp>(
+            gpuAlloc->getLoc(), "HipMallocI" + std::to_string(width),
             TypeRange(builder.getIndexType()), ValueRange(allocSize));
-        gpuAlloc->replaceAllUsesWith(cudaOp);
+        gpuAlloc->replaceAllUsesWith(HipOp);
       } else if (IndexType intType = mlir::dyn_cast<IndexType>(
                      gpuAlloc.getMemref().getType().getElementType())) {
-        auto cudaOp = builder.create<mlir::func::CallOp>(
-            gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(64),
+        auto HipOp = builder.create<mlir::func::CallOp>(
+            gpuAlloc->getLoc(), "HipMallocI" + std::to_string(64),
             TypeRange(builder.getIndexType()), ValueRange(allocSize));
-        gpuAlloc->replaceAllUsesWith(cudaOp);
+        gpuAlloc->replaceAllUsesWith(HipOp);
       }
       gpuAlloc->erase();
     }
@@ -544,7 +555,7 @@ public:
           (isa<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()) &&
            cast<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp())
                .getCallee()
-               .starts_with("cudaMalloc"))) {
+               .starts_with("HipMalloc"))) {
         auto cast = builder.create<mlir::memref::CastOp>(
             cpy->getLoc(),
             MemRefType::get({ShapedType::kDynamic},
@@ -556,27 +567,27 @@ public:
                     .getElementType())) {
           int width = intType.getWidth();
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
+              cpy->getLoc(), "HipMemcpyI" + std::to_string(width), TypeRange(),
               ValueRange({cpy.getOperand(0), cast, hToD}));
         } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
                        mlir::cast<MemRefType>(cpy.getOperand(1).getType())
                            .getElementType())) {
           int width = floatType.getWidth();
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
+              cpy->getLoc(), "HipMemcpyF" + std::to_string(width), TypeRange(),
               ValueRange({cpy.getOperand(0), cast, hToD}));
         } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
                        mlir::cast<MemRefType>(cpy.getOperand(1).getType())
                            .getElementType())) {
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
+              cpy->getLoc(), "HipMemcpyIndex", TypeRange(),
               ValueRange({cpy.getOperand(0), cast, hToD}));
         }
       } else if (cpy.getOperand(1).getDefiningOp() &&
                  (isa<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()) &&
                   cast<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp())
                       .getCallee()
-                      .starts_with("cudaMalloc"))) {
+                      .starts_with("HipMalloc"))) {
         auto cast = builder.create<mlir::memref::CastOp>(
             cpy->getLoc(),
             MemRefType::get({ShapedType::kDynamic},
@@ -588,20 +599,20 @@ public:
                     .getElementType())) {
           int width = intType.getWidth();
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
+              cpy->getLoc(), "HipMemcpyI" + std::to_string(width), TypeRange(),
               ValueRange({cpy.getOperand(1), cast, dToH}));
         } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
                        mlir::cast<MemRefType>(cpy.getOperand(0).getType())
                            .getElementType())) {
           int width = floatType.getWidth();
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
+              cpy->getLoc(), "HipMemcpyF" + std::to_string(width), TypeRange(),
               ValueRange({cpy.getOperand(1), cast, dToH}));
         } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
                        mlir::cast<MemRefType>(cpy.getOperand(0).getType())
                            .getElementType())) {
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
+              cpy->getLoc(), "HipMemcpyIndex", TypeRange(),
               ValueRange({cpy.getOperand(1), cast, dToH}));
         }
       }
@@ -672,7 +683,7 @@ public:
                                    .str()];
       if (funcs.find(funcName) == funcs.end()) {
         // We need the global string to include the \0 character so that it is
-        // correctly read by the cuda lib Hence the StringRef(funcName.c_str(),
+        // correctly read by the Hip lib Hence the StringRef(funcName.c_str(),
         // funcName.size()+1)
         funcs[funcName] = LLVM::createGlobalString(
             modOp->getLoc(), builder, funcName + "_str",
@@ -693,7 +704,7 @@ public:
           ttFunc->getAttrOfType<IntegerAttr>("triton_gpu.threads-per-warp")
               .getInt());
       builder.create<mlir::func::CallOp>(
-          launchOp->getLoc(), "cudaLaunchKernel", TypeRange(),
+          launchOp->getLoc(), "HipLaunchKernel", TypeRange(),
           ValueRange({launchOp.getGridSizeX(), launchOp.getGridSizeY(),
                       launchOp.getGridSizeZ(), launchOp.getBlockSizeX(),
                       launchOp.getBlockSizeY(), launchOp.getBlockSizeZ(),
@@ -712,7 +723,7 @@ public:
 
     for (auto dealloc : gpuDeallocs) {
       builder.setInsertionPoint(dealloc);
-      builder.create<mlir::func::CallOp>(dealloc->getLoc(), "cudaFree",
+      builder.create<mlir::func::CallOp>(dealloc->getLoc(), "HipFree",
                                          TypeRange(),
                                          ValueRange(dealloc->getOperand(0)));
       dealloc.erase();

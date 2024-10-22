@@ -1,7 +1,11 @@
 if(ENABLE_GPU_TARGET)
   find_package(CUDAToolkit)
   if(NOT ${CUDAToolkit_FOUND})
-    message(WARNING "CUDAToolkit not found. You can still lower to GPU Assembly code (use --gpu-code-format=Assembly), but you will not be able to run it using COMET's execution engine")
+    find_package(hip)
+
+    if(NOT ${hip_FOUND})
+      message(WARNING "hip, CUDAToolkit not found. You can still lower to GPU Assembly code (use --gpu-code-format=Assembly), but you will not be able to run it using COMET's execution engine")
+    endif()
   endif()
 endif()
 
@@ -15,7 +19,10 @@ set(SOURCES
 
 if(ENABLE_GPU_TARGET)
   if(${CUDAToolkit_FOUND})
-    set(SOURCES ${SOURCES} GpuUtils.cpp)
+    set(SOURCES ${SOURCES} CuGpuUtils.cpp)
+  endif()
+  if(${hip_FOUND})
+    set(SOURCES ${SOURCES} HipGpuUtils.cpp)
   endif()
 endif()
 
@@ -34,6 +41,9 @@ set(LIBS
 if(ENABLE_GPU_TARGET)
   if(${CUDAToolkit_FOUND})
     set(LIBS ${LIBS} CUDA::cuda_driver)
+  endif()
+  if(${hip_FOUND})
+    set(LIBS ${LIBS} hip::host)
   endif()
 endif()
 
