@@ -2,6 +2,7 @@
 #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/IndexTree/Patterns.h"
 
+#include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Index/IR/IndexAttrs.h"
 #include "mlir/Dialect/Index/IR/IndexOps.h"
@@ -155,7 +156,7 @@ struct IndexTreeInliningPass
     TypeConverter typeConverter;
     typeConverter.addConversion([](Type type) { return type; });
     mlir::ConversionTarget target(getContext());
-    target.addLegalDialect<index::IndexDialect>();
+    target.addLegalDialect<index::IndexDialect, func::FuncDialect>();
     target.addIllegalOp<indexTree::IndexTreeOp, indexTree::YieldOp>();
 
     mlir::RewritePatternSet patterns(&getContext());
