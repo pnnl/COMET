@@ -12,6 +12,7 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/ValueRange.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Dialect/Func/Transforms/DecomposeCallGraphTypes.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
@@ -220,7 +221,7 @@ struct ConvertSparseTensorOp
           auto dense_domain_op = llvm::cast<indexTree::IndexTreeDenseDomainOp>(domain_op);
           Value dim_size = dense_domain_op.getDimSize();
 
-          Value pos = rewriter.create<memref::AllocOp>(loc, MemRefType::get({1,}, index_type));
+          Value pos = rewriter.create<memref::AllocOp>(loc,  MemRefType::get({ShapedType::kDynamic,}, index_type), ValueRange({rewriter.create<index::ConstantOp>(loc, 1).getResult()}));
           rewriter.create<memref::StoreOp>(loc, TypeRange(), dim_size, pos, zero);
           Value crd = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
           Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));

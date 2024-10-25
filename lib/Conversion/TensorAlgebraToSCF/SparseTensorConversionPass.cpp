@@ -5,6 +5,7 @@
 #include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
 #include "comet/Dialect/IndexTree/Patterns.h"
 
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Index/IR/IndexAttrs.h"
 #include "mlir/Dialect/Index/IR/IndexOps.h"
@@ -13,12 +14,19 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/TypeRange.h"
+#include "mlir/IR/ValueRange.h"
+#include "mlir/Support/LogicalResult.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Dialect/Func/Transforms/DecomposeCallGraphTypes.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
 #include "mlir/Dialect/SCF/Transforms/Patterns.h"
 #include "mlir/Pass/Pass.h"
 
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ScopedPrinter.h"
 
@@ -125,6 +133,35 @@ static bool unpack_sparse_tensor(Value sparse_tensor, SparseTensor& result)
     result.val_size = *cur_arg;
     return true;
   }
+  else if(auto cast =
+          sparse_tensor.getDefiningOp<SparseTensorConstructOp>())
+  {
+    SparseTensorType type = llvm::dyn_cast<SparseTensorType>(sparse_tensor.getType());
+    if(!type)
+      return false;
+    OpBuilder builder(cast);
+
+    // This is unnecessarily complicated because sptensor_construct does not have named arguments
+    auto inputs = cast.getIndices();
+    unsigned rank = type.getDims().size();
+    for(unsigned i = 0; i < rank; i++)
+    {
+      Dimension d;
+      d.format = (TensorFormatEnum) type.getFormat()[2 * i];
+      d.dim_size = inputs[(8 * rank) + 2 + i];
+      d.insert_pos = builder.create<index::ConstantOp>(cast.getLoc(), builder.getIndexType(), builder.getIndexAttr(0));
+      d.pos = inputs[(4 * i)];
+      d.crd = inputs[(4 * i) + 1];
+      d.pos_size = inputs[(4 * rank) + 1 + (4 * i)];
+      d.crd_size = inputs[(4 * rank) + 1 + (4 * i) + 1];
+      result.dims.push_back(d);
+    }
+
+    result.vals = inputs[(4 * rank)];
+    result.val_size = inputs[(8*rank)+1];
+    return true;
+  }
+
   return false;
 }
 
@@ -381,6 +418,62 @@ class ConvertSpTensorGetDimSize
   }
 };
 
+
+class ConvertSpTensorGetDimCrd
+    : public OpConversionPattern<SpTensorGetDimCrd> {
+  using OpConversionPattern<SpTensorGetDimCrd>::OpConversionPattern;
+  ConvertSpTensorGetDimCrd(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(SpTensorGetDimCrd op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    SpTensorGetDimCrdAdaptor tensorAdaptor = llvm::cast<SpTensorGetDimCrdAdaptor>(adaptor);
+    SparseTensor sp_tensor;
+    if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
+      return failure();
+    }
+    rewriter.replaceOp(op, {sp_tensor.dims[tensorAdaptor.getDim()].crd});
+    return success();
+  }
+};
+
+class ConvertSpTensorGetVals
+    : public OpConversionPattern<SpTensorGetVals> {
+  using OpConversionPattern<SpTensorGetVals>::OpConversionPattern;
+  ConvertSpTensorGetVals(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(SpTensorGetVals op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    SpTensorGetValsAdaptor tensorAdaptor = llvm::cast<SpTensorGetValsAdaptor>(adaptor);
+    SparseTensor sp_tensor;
+    if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
+      return failure();
+    }
+    rewriter.replaceOp(op, {sp_tensor.vals});
+    return success();
+  }
+};
+
+
+class ConvertSpTensorGetDimPos
+    : public OpConversionPattern<SpTensorGetDimPos> {
+  using OpConversionPattern<SpTensorGetDimPos>::OpConversionPattern;
+  ConvertSpTensorGetDimPos(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(SpTensorGetDimPos op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    SpTensorGetDimPosAdaptor tensorAdaptor = llvm::cast<SpTensorGetDimPosAdaptor>(adaptor);
+    SparseTensor sp_tensor;
+    if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
+      return failure();
+    }
+    rewriter.replaceOp(op, {sp_tensor.dims[tensorAdaptor.getDim()].pos});
+    return success();
+  }
+};
+
 class ConvertSpTensorFindPos
     : public OpConversionPattern<TensorFindPos> {
   using OpConversionPattern<TensorFindPos>::OpConversionPattern;
@@ -469,6 +562,87 @@ class ConvertWorkspaceGetNNZ
     }
 
     rewriter.replaceOp(op, {workspace.num_crds,});
+    return success();
+  }
+};
+
+class ConvertFunCallOp
+    : public OpConversionPattern<func::CallOp> {
+  using OpConversionPattern<func::CallOp>::OpConversionPattern;
+  ConvertFunCallOp(MLIRContext *context)
+      : OpConversionPattern(context) {}
+
+  LogicalResult
+  matchAndRewrite(func::CallOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto opAdaptor = llvm::cast<func::CallOpAdaptor>(adaptor);
+
+    SmallVector<Value, 8> args;
+    SmallVector<Type, 8> args_types;
+    for(auto operand: opAdaptor.getOperands())
+    {
+      if(mlir::isa<SparseTensorType>(operand.getType()))
+      {
+        SparseTensor sp_tensor;
+        if(!unpack_sparse_tensor(operand, sp_tensor))
+        {
+          return failure();
+        }
+        for(unsigned i = 0; i < sp_tensor.dims.size(); i++) {
+          Dimension dim = sp_tensor.dims[i];
+          args.push_back(dim.dim_size);
+          args_types.push_back(dim.dim_size.getType());
+          args.push_back(dim.insert_pos);
+          args_types.push_back(dim.insert_pos.getType());
+
+          switch(dim.format) {
+            case TensorFormatEnum::D:
+            {
+              args.push_back(dim.pos);
+              args_types.push_back(dim.pos.getType());
+              args.push_back(dim.pos_size);
+              args_types.push_back(dim.pos_size.getType());
+              break;
+            }
+            case TensorFormatEnum::CU:
+            case TensorFormatEnum::CN:
+            {
+              args.push_back(dim.pos);
+              args_types.push_back(dim.pos.getType()); //Pos tensor
+              args.push_back(dim.pos_size);
+              args_types.push_back(dim.pos_size.getType()); //Pos size
+              args.push_back(dim.crd);
+              args_types.push_back(dim.crd.getType()); //Crd tensor
+              args.push_back(dim.crd_size);
+              args_types.push_back(dim.crd_size.getType()); //Crd size
+              break;
+            }
+            case TensorFormatEnum::S:
+            {
+              args.push_back(dim.crd); //Crd tensor
+              args_types.push_back(dim.crd.getType()); //Crd tensor
+              args.push_back(dim.crd_size); //Crd size
+              args_types.push_back(dim.crd_size.getType()); //Crd size
+              break;
+            }
+            default: {
+            }
+          }
+        }
+        args.push_back(sp_tensor.vals);
+        args_types.push_back(sp_tensor.vals.getType());
+        args.push_back(sp_tensor.val_size);
+        args_types.push_back(sp_tensor.val_size.getType());
+      }
+      else
+      {
+        args.push_back(operand);
+        args_types.push_back(operand.getType());
+      }
+    }
+    
+    rewriter.replaceOpWithNewOp<func::CallOp>(op, op.getCallee(), TypeRange(), args);
+
     return success();
   }
 };
@@ -816,7 +990,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
             } else {
               is_known_size = false;
             }
-            auto pos_type = mlir::RankedTensorType::get({1,}, index_type);
+            auto pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, index_type);
             types.push_back(pos_type); //Pos tensor
             types.push_back(index_type); //Pos size
             break;
@@ -897,7 +1071,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
     });
 
   patterns.add<PrintOpLowering, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
-  patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorFindPos>(typeConverter, context);
+  patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorGetDimCrd, ConvertSpTensorGetDimPos, ConvertSpTensorGetVals, ConvertSpTensorFindPos, ConvertFunCallOp>(typeConverter, context);
   patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
 }
 
@@ -924,6 +1098,15 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
         tensor::TensorDialect, memref::MemRefDialect, scf::SCFDialect,
         func::FuncDialect, index::IndexDialect
     >();
+
+    target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op){
+      return typeConverter.isSignatureLegal(op.getFunctionType());
+    });
+    
+    target.addDynamicallyLegalOp<func::CallOp>([&](func::CallOp op){
+      return typeConverter.isLegal(op);
+    });
+
     target.addLegalOp<UnrealizedConversionCastOp>();
     target.addDynamicallyLegalOp<tensorAlgebra::PrintOp>([&](tensorAlgebra::PrintOp op) {
       return typeConverter.isLegal(op->getOperandTypes());
@@ -942,7 +1125,9 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
     mlir::comet::populateSparseTensorConversionPatterns(ctx, patterns, typeConverter);
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))
-      signalPassFailure();
+    {
+      return signalPassFailure(); 
+    }
   }
 };
 

@@ -140,11 +140,10 @@ Value getRealLhs(Operation *op)
   return setOp.getOperand(1);
 }
 
-Value getRealRhs(Operation *op)
+Value getRealRhs(Value val)
 {
   /// this will return set_op for transpose, but messes up getUsers() or subsequent calls to it.
-  Operation *firstUser = op->getNextNode();
-  comet_pdump(firstUser);
+
   /// TODO(gkestor): need to find out why user set_op is not showing up in users of TransposeOp
   ///       from the for loop below. once resolved, remove getNextNode().
   /// Operation *firstUser;
@@ -153,25 +152,27 @@ Value getRealRhs(Operation *op)
   ///  firstUser = user;
   ///  break;
   //}
+  if(Operation* op = val.getDefiningOp())
+  {
+    Operation *firstUser = op->getNextNode();
+    comet_pdump(firstUser);
 
-  if (isa<tensorAlgebra::TransposeOp>(op))
-  {
-    if (isa<TensorSetOp>(firstUser))
+    if (isa<tensorAlgebra::TransposeOp>(op))
     {
-      TensorSetOp setOp = cast<TensorSetOp>(firstUser);
-      return setOp.getOperand(1);
-    }
-    else
-    {
-      llvm::errs() << "ERROR: Transpose has no set_op after it!\n";
+      if (isa<TensorSetOp>(firstUser))
+      {
+        TensorSetOp setOp = cast<TensorSetOp>(firstUser);
+        return setOp.getOperand(1);
+      }
+      else
+      {
+        llvm::errs() << "ERROR: Transpose has no set_op after it!\n";
+      }
+      
     }
   }
-  else
-  {
-    /// do nothing
-    return op->getResult(0);
-  }
-  return op->getResult(0);
+
+  return val;
 }
 
 // void buildDefUseInfo(UnitExpression *e)
@@ -231,8 +232,8 @@ mlir::LogicalResult generalIndexOperationRewrite(
   auto context = rewriter.getContext();
   TATensorOp mult_op = llvm::dyn_cast<TATensorOp>(op);
 
-  Value rhs1_tensor = getRealRhs(mult_op.getRhs1().getDefiningOp());
-  Value rhs2_tensor = getRealRhs(mult_op.getRhs2().getDefiningOp());
+  Value rhs1_tensor = getRealRhs(mult_op.getRhs1());
+  Value rhs2_tensor = getRealRhs(mult_op.getRhs2());
   Value lhs_tensor = getRealLhs(op);
 
   Value mask_tensor = nullptr;

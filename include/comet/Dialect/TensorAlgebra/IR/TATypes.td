@@ -29,8 +29,8 @@ def SparseTensor : TensorAlgebra_Type<"SparseTensor", "sparse_tensor", [DeclareT
         ArrayRefParameter<"int64_t", "Dimensions of tensor">:$dims,
         ArrayRefParameter<"int32_t", "Format">:$format
     );
-    let assemblyFormat = "`<` $element_type `,` $dims `,` $format `>`";
 
+    let hasCustomAssemblyFormat = 1;
     // TODO: Implement custom builder from "common" format strings into format strings
 }
 

@@ -28,6 +28,7 @@
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/Utils/Utils.h"
 
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -161,23 +162,7 @@ namespace mlir
         llvm::errs() << __FILE__ << ":" << __LINE__ << "Not supported memory reference type. Supported element Types are F32, F64, Index \n";
       }
 
-      /// TODO(gkestor): add better initialization method based on the dimension, leverage existing operations for initialization
-      auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-      auto upperBound = alloc_op.getDefiningOp()->getOperand(0);
-      auto step = rewriter.create<ConstantIndexOp>(loc, 1);
-      auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-      auto insertPt = rewriter.saveInsertionPoint();
-      rewriter.setInsertionPointToStart(loop.getBody());
-
-      /// Build loop body
-      std::vector<Value> indices = {loop.getInductionVar()};
-      rewriter.create<memref::StoreOp>(loc, cst_init, alloc_op, ValueRange{indices});
-
-      /// need to restore the insertion point to the previous point
-      rewriter.restoreInsertionPoint(insertPt);
-      comet_debug() << " insertAllocAndInitialize loop "
-                    << "\n";
-      comet_vdump(loop);
+      rewriter.create<linalg::FillOp>(loc, ValueRange(cst_init), ValueRange(alloc_op));
 
       return alloc_op;
     }

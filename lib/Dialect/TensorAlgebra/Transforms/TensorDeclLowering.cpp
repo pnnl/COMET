@@ -31,6 +31,7 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
@@ -953,6 +954,11 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           /// do nothing!
           comet_debug() << " the tensor has use in AllocWorkspaceOp\n";
         }
+        else if(isa<func::CallOp>(u1))
+        {
+          /// do nothing!
+          comet_debug() << " the tensor has use in func::CallOp\n";
+        }
         else
         {
           u1->dump();
@@ -1341,6 +1347,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                              memref::MemRefDialect,
                              scf::SCFDialect,
                              bufferization::BufferizationDialect,
+                             linalg::LinalgDialect,
                              IndexTreeDialect>();
 
       target.addLegalOp<tensorAlgebra::PrintOp,

@@ -29,9 +29,11 @@
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
+#include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;
@@ -302,6 +304,99 @@ bool SparseTensorType::hasRank() const
 llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
 {
   return getDims();
+}
+
+::mlir::Type SparseTensorType::parse(::mlir::AsmParser &odsParser) {
+  if (odsParser.parseLess()) return {};
+  ::mlir::FailureOr<::mlir::Type> _result_element_type;
+  SmallVector<int64_t> result_dims;
+  SmallVector<int32_t> result_formats;
+
+
+  // Parse variable 'element_type'
+  _result_element_type = ::mlir::FieldParser<::mlir::Type>::parse(odsParser);
+  if (::mlir::failed(_result_element_type)) {
+    odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'element_type' which is to be a `::mlir::Type`");
+    return {};
+  }
+
+  // Parse literal ','
+  if (odsParser.parseComma()) return {};
+  // Parse literal '['
+  if (odsParser.parseLSquare()) return {};
+
+  // Parse variable 'dims'
+  do {
+    int64_t dim;
+    if (!odsParser.parseOptionalInteger(dim).has_value()){  // Parse each integer
+      if (odsParser.parseQuestion()){
+        return {};
+      }
+      else {
+        dim = ShapedType::kDynamic;
+      }
+    }
+
+    result_dims.push_back(dim);
+      
+  } while (odsParser.parseOptionalComma().succeeded()); 
+
+    // Parse literal ']'
+  if (odsParser.parseRSquare()) return {};
+  // Parse literal ','
+  if (odsParser.parseComma()) return {};
+  // Parse literal '['
+  if (odsParser.parseLSquare()) return {};
+
+
+  // Parse variable 'format'
+  do {
+    int32_t format;
+    if (odsParser.parseInteger(format))  // Parse each integer
+      return {};
+    result_formats.push_back(format);
+  } while (odsParser.parseOptionalComma().succeeded()); 
+
+  // Parse literal ']'
+  if (odsParser.parseRSquare()) return {};
+  // Parse literal '>'
+  if (odsParser.parseGreater()) return {};
+
+   return SparseTensorType::get(odsParser.getContext(),
+      ::mlir::Type((*_result_element_type)),
+      ::llvm::ArrayRef<int64_t>((result_dims)),
+      ::llvm::ArrayRef<int32_t>((result_formats)));
+}
+
+
+void SparseTensorType::print(::mlir::AsmPrinter &odsPrinter) const {
+  ::mlir::Builder odsBuilder(getContext());
+  odsPrinter << "<";
+  odsPrinter.printStrippedAttrOrType(getElementType());
+  odsPrinter << ",";
+  odsPrinter << ' ' << "[";
+  for(size_t i = 0; i< getDims().size(); i++)
+  {
+    long long v = getDims()[i];
+    if(v == ShapedType::kDynamic)
+    {
+      odsPrinter << "?";
+    }  
+    else 
+    {
+      odsPrinter << v;    
+    }
+    if(i != getDims().size() - 1)
+    {
+      odsPrinter << ", ";
+    }
+  }
+  odsPrinter << "]";
+  odsPrinter << ",";
+  odsPrinter << ' ' << "[";
+  odsPrinter.printStrippedAttrOrType(getFormat());
+  odsPrinter << "]";
+  odsPrinter << ">";
 }
 
 //===----------------------------------------------------------------------===//

@@ -503,6 +503,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   mlir::bufferization::OneShotBufferizationOptions opts;
   opts.allowUnknownOps = true;
   pm.addPass(mlir::bufferization::createOneShotBufferizePass(opts));
+  pm.addPass(mlir::func::createFuncBufferizePass());
 
   mlir::OpPassManager &late_lowering_pm = pm.nest<mlir::func::FuncOp>();
   late_lowering_pm.addPass(mlir::comet::createSTCRemoveDeadOpsPass());

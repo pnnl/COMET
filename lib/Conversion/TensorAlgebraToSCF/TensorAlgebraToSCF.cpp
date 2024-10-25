@@ -35,6 +35,9 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/BuiltinTypes.h"
 
 using namespace mlir;
 using namespace mlir::arith;
@@ -495,30 +498,16 @@ namespace
       { /// tensor is dense
         comet_debug() << "Input Tensor is dense\n";
         std::vector<Value> indices;
-        auto alloc_op = op->getOperand(0).getDefiningOp()->getOperand(0);
 
         comet_vdump(alloc_op);
+        auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
+        auto step = rewriter.create<ConstantIndexOp>(loc, 1);
+
 
         for (unsigned rank = 0; rank < inputType.cast<mlir::TensorType>().getRank(); rank++)
         {
-          auto dimSize = inputType.cast<mlir::TensorType>().getDimSize(rank);
-          Value upperBound;
-          if (dimSize == ShapedType::kDynamic)
-          {
-            comet_debug() << " This dimension is a dynamic size\n";
-
-            comet_vdump(alloc_op);
-            auto memRefType = alloc_op.getType().dyn_cast<MemRefType>();
-            unsigned dynamicDimPos = memRefType.getDynamicDimIndex(rank);
-            comet_debug() << " dynamicDimPos: " << dynamicDimPos << "\n";
-            upperBound = alloc_op.getDefiningOp()->getOperand(dynamicDimPos);
-          }
-          else
-          {
-            upperBound = rewriter.create<ConstantIndexOp>(loc, dimSize);
-          }
-          auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
-          auto step = rewriter.create<ConstantIndexOp>(loc, 1);
+          Value upperBound = rewriter.create<tensor::DimOp>(loc, op->getOperand(0), rank);
+          
           /// create for loops
           auto loop = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
           indices.push_back(loop.getInductionVar());
@@ -526,58 +515,25 @@ namespace
         }
 
         /// Build loop body
-        auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_op, indices);
+        auto load_rhs = rewriter.create<tensor::ExtractOp>(loc, op->getOperand(0), indices);
         auto res_load = rewriter.create<memref::LoadOp>(loc, res, alloc_zero_loc);
         auto reduced = rewriter.create<AddFOp>(loc, load_rhs, res_load);
         rewriter.create<memref::StoreOp>(loc, reduced, res, alloc_zero_loc);
       }
       else
       { /// sparse tensor type
-        assert(inputType.isa<SparseTensorType>());
+        SparseTensorType sp_tensor_type = inputType.cast<SparseTensorType>();
         comet_debug() << "Input Tensor is sparse\n";
 
         comet_pdump(op);
-        assert(isa<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp()));
-        tensorAlgebra::SparseTensorConstructOp sp_op = cast<tensorAlgebra::SparseTensorConstructOp>(op->getOperand(0).getDefiningOp());
 
-        int tensorRanks = sp_op.getTensorRank();
+        int tensorRanks = sp_tensor_type.getRank();
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
         comet_debug() << "Tensor to reduce:\n";
         comet_pdump(op->getOperand(0).getDefiningOp());
+        Value sp_tensor_values = rewriter.create<tensorAlgebra::SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getF64Type()), op->getOperand(0));
+        Value upperBound = rewriter.create<tensor::DimOp>(loc, sp_tensor_values, 0);
 
-        ///  create the lowerBound, upperbound and step for loop
-        int indexValueSize = sp_op.getIndexValueSize();
-        comet_debug() << "indexValueSize in SparseTensorConstructOp:" << indexValueSize << "\n";
-
-        auto loadOpForNNZ = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
-        comet_debug() << "Corresponding AllocOp from SparseTensorConstructOp:\n";
-        comet_vdump(loadOpForNNZ);
-        auto memAllocForNNZ = loadOpForNNZ.getDefiningOp()->getOperand(0);
-        comet_debug() << "Corresponding MemAllocOp for NNZ:\n";
-        comet_vdump(memAllocForNNZ);
-
-        MemRefType resultMemTy = memAllocForNNZ.getDefiningOp()->getResult(0).getType().cast<MemRefType>();
-        auto memRefRank = resultMemTy.getRank();
-        comet_debug() << "memRefRank for alloc: " << memRefRank << "\n";
-        assert(memRefRank == 1); /// Memref rank should be 1
-
-        auto memRefDimSize = resultMemTy.getDimSize(memRefRank - 1);
-        comet_debug() << "memRefDimSize for alloc: " << memRefDimSize << "\n";
-
-        Value upperBound;
-        if (memRefDimSize == 1) /// size of value array comes from temporary sparse tensor and Dimsize of alloc is one
-        {
-          upperBound = rewriter.create<memref::LoadOp>(loc, memAllocForNNZ, alloc_zero_loc);
-        }
-        else
-        {
-          /// size of value array comes from read_input_sizes_2D_f64, and alloc dimsize can be only expected size
-          auto expectedMemRefSize = sp_op.getTotalParamCount();
-          comet_debug() << "tensorRanks: " << tensorRanks << "\n";
-          comet_debug() << "expectedMemRefSize: " << expectedMemRefSize << "\n";
-          assert(memRefDimSize == expectedMemRefSize);
-          upperBound = op->getOperand(0).getDefiningOp()->getOperand(indexValueSize);
-        }
         comet_debug() << "Upper Bound:\n";
         comet_vdump(upperBound);
         auto lowerBound = rewriter.create<ConstantIndexOp>(loc, 0);
@@ -590,12 +546,8 @@ namespace
         rewriter.setInsertionPointToStart(loop.getBody());
 
         /// Build loop body
-        int indexValuePtr = (tensorRanks * 4); /// 4 corresponding to pos, crd
-        auto alloc_op = op->getOperand(0).getDefiningOp()->getOperand(indexValuePtr).getDefiningOp()->getOperand(0);
-        comet_debug() << " ValueAllocOp";
-        comet_vdump(alloc_op);
         std::vector<Value> indices = {loop.getInductionVar()};
-        auto load_rhs = rewriter.create<memref::LoadOp>(loc, alloc_op, indices);
+        auto load_rhs = rewriter.create<tensor::ExtractOp>(loc, sp_tensor_values, indices);
         auto res_load = rewriter.create<memref::LoadOp>(loc, res, alloc_zero_loc);
         auto reduce = rewriter.create<AddFOp>(loc, load_rhs, res_load);
         rewriter.create<memref::StoreOp>(loc, reduce, res, alloc_zero_loc);
@@ -764,7 +716,7 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
                          bufferization::BufferizationDialect>();
 
   target.addLegalOp<func::CallOp>();
-  target.addLegalDialect<tensorAlgebra::TADialect, indexTree::IndexTreeDialect>();
+  target.addLegalDialect<tensorAlgebra::TADialect, indexTree::IndexTreeDialect, tensor::TensorDialect>();
   target.addIllegalOp<tensorAlgebra::TransposeOp, 
                       tensorAlgebra::ReduceOp,
                       tensorAlgebra::ScalarOp,

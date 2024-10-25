@@ -1,4 +1,8 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/Value.h"
+#include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
@@ -59,10 +63,8 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
     indexTree::DomainType domain_type = indexTree::DomainType::get(context);
     uint32_t dim = domain_op.getDim();
     Value new_domain;
-
     Value tensor = domain_op.getTensor();
-    SparseTensorConstructOp construct_op = tensor.getDefiningOp<SparseTensorConstructOp>();
-    if(construct_op)
+    if(SparseTensorConstructOp construct_op = mlir::dyn_cast_if_present<SparseTensorConstructOp>(tensor.getDefiningOp()))
     {
       //Domain comes from a sparse tensor (may still be dense)
       int32_t rank = construct_op.getTensorRank();
@@ -119,7 +121,73 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
           TensorFormatEnumAttr::get(context, format), 
           pos, crd, pos_size, crd_size, dim_size, parent);
       }
-    } else if(llvm::isa<tensorAlgebra::WorkspaceType>(tensor.getType())) {
+    }
+    else if(SparseTensorType sp_tensor = mlir::dyn_cast<SparseTensorType>(tensor.getType()))
+    {
+      auto prev = rewriter.saveInsertionPoint();
+      rewriter.setInsertionPointToStart(tensor.getParentBlock());
+      //Domain comes from a sparse tensor (may still be dense)
+      ArrayRef<int32_t> tensor_dim_formats = sp_tensor.getFormat();
+      TensorFormatEnum format = static_cast<TensorFormatEnum>(tensor_dim_formats[2*dim]); 
+
+      if(format == TensorFormatEnum::D)
+      {
+        auto index_type = rewriter.getIndexType();
+        Value max = rewriter.create<tensorAlgebra::SpTensorGetDimSize>(loc, index_type, tensor, rewriter.getI32IntegerAttr(dim));
+        rewriter.restoreInsertionPoint(prev);
+        new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max, tensor, rewriter.getI32ArrayAttr({static_cast<int>(dim)}));
+      } 
+      else
+      {
+        Value pos = rewriter.create<tensorAlgebra::SpTensorGetDimPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), tensor, rewriter.getI32IntegerAttr(dim));
+        Value crd = rewriter.create<tensorAlgebra::SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), tensor, rewriter.getI32IntegerAttr(dim));
+        Value pos_size = rewriter.create<tensor::DimOp>(loc, pos, 0);
+        Value crd_size = rewriter.create<tensor::DimOp>(loc, crd, 0);
+        Value dim_size = rewriter.create<tensorAlgebra::SpTensorGetDimSize>(loc, rewriter.getIndexType(), tensor, rewriter.getI32IntegerAttr(dim));
+        Value parent = domain_op.getParent();
+        if(!parent)
+        {
+          // Get associated index
+          IndexTreeIndicesOp index_op; 
+          Operation* use = *(domain_op->user_begin());
+          // TODO: Fix danger of infinite loop!!!
+          while(!(index_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(use)))
+          {
+            use = *(use->user_begin());
+          }
+          assert(index_op);
+
+          if(dim == 0)
+          {
+            parent = nullptr;
+          } else
+          {
+            // Infer parent index variable
+            for(Operation* use : index_op->getUsers())
+            {
+              IndexTreeIndexToTensorOp access_op = llvm::dyn_cast<indexTree::IndexTreeIndexToTensorOp>(use);
+              if(!access_op || access_op.getTensor() != tensor || access_op.getDim() != dim)
+                continue;
+
+              parent = access_op.getPrevDim();
+              IndexTreeIndexToTensorOp prev_access_op = 
+                llvm::cast<indexTree::IndexTreeIndexToTensorOp>(parent.getDefiningOp());
+              if(mlir::failed(this->liftAccessOp(domain_op, prev_access_op)))
+                return failure();
+
+              break;
+            }
+          }
+        }
+        rewriter.restoreInsertionPoint(prev);
+
+        new_domain = rewriter.create<IndexTreeSparseDomainOp>(
+          loc, domain_type, tensor, domain_op.getDimAttr(), 
+          TensorFormatEnumAttr::get(context, format), 
+          pos, crd, pos_size, crd_size, dim_size, parent);
+      }
+    } 
+    else if(llvm::isa<tensorAlgebra::WorkspaceType>(tensor.getType())) {
       auto index_type = rewriter.getIndexType();
       Value dim_size = rewriter.create<tensorAlgebra::SpTensorGetDimSize>(loc, index_type, tensor, rewriter.getI32IntegerAttr(dim));
       
@@ -176,7 +244,17 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
       Value max_val;
       if(max < 0) {
         auto prev = rewriter.saveInsertionPoint();
-        rewriter.setInsertionPointAfter(tensor.getDefiningOp());
+        if(tensor.getDefiningOp())
+        {
+          rewriter.setInsertionPointAfter(tensor.getDefiningOp());
+        }
+        else if(auto block_arg = mlir::dyn_cast<BlockArgument>(tensor)){ // If no definingOp, it is a block argument
+          rewriter.setInsertionPointToStart(block_arg.getOwner());
+        }
+        else
+        {
+          assert(false && "Unhandled condition");
+        }
         Value dim_val = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(dim));
         max_val = rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), tensor, dim_val);
         rewriter.restoreInsertionPoint(prev);
@@ -482,10 +560,12 @@ void indexTree::populateDomainConcretizationPatterns(
 struct IndexTreeDomainConcretization : comet::impl::IndexTreeDomainConcretizationBase<IndexTreeDomainConcretization> {
   using IndexTreeDomainConcretizationBase::IndexTreeDomainConcretizationBase;
 
-  void runOnOperation() {
+  void runOnOperation() override {
     mlir::RewritePatternSet domain_concretization_patterns(&getContext());
     indexTree::populateDomainConcretizationPatterns(&getContext(), domain_concretization_patterns);
-    mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(domain_concretization_patterns));
+    if(failed(mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(domain_concretization_patterns)))) {
+      return signalPassFailure();
+    }
   }
 };
 
