@@ -338,6 +338,12 @@ static cl::opt<bool> GenTensorAlgebraLabelsInAlphabeticalOrder(
 static cl::opt<bool> IsPrintFlops("print-flops", cl::init(false),
                                   cl::desc("Print the flops per tensor contraction"));
 
+/// =============================================================================
+/// MLIR options
+/// =============================================================================
+static cl::opt<bool> allowUnregisteredDialects("allow-unregistered-dialects", cl::init(false),
+                                               cl::desc("Allow unregistered dialects, e.g., non-standard dialects."));
+
 /// Returns a Tensor Algebra AST resulting from parsing the file or a nullptr on error.
 std::unique_ptr<tensorAlgebra::ModuleAST> parseInputFile(llvm::StringRef filename)
 {
@@ -398,12 +404,21 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   bool emitTriton_ = false;
 #endif
 
+<<<<<<< HEAD
   /// Load debug options
   if (GenTensorAlgebraLabelsInAlphabeticalOrder)
   {
     tensorAlgebra::debugOptions.insert("debug-ta-labels-alphabet-order");
   }
   /// end Load debug options
+=======
+  /// Allow unregistered dialects, such as some non-standard dialects not included in MLIR code base.
+  if (allowUnregisteredDialects)
+  {
+    context.allowUnregisteredDialects(true);
+  }
+
+>>>>>>> 6ffb75e (Improved the Memory Access Analysis pass.)
   if (int error = loadMLIR(context, module))
     return error;
 
