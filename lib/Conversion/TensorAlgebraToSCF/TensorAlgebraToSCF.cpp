@@ -209,6 +209,7 @@ namespace
       comet_vdump(op);
       auto *ctx = op->getContext();
       auto inputType = op->getOperand(0).getType();
+      auto  inputTensor = op->getOperand(0);
 
       /// Get tensor contraction expression through analyzing the index map
       ArrayAttr indexMaps = op.getIndexingMaps();
@@ -223,7 +224,7 @@ namespace
       { /// for dense
         comet_debug() << "Dense transpose\n";
 
-        auto  inputTensor = op->getOperand(0);
+        
         // auto inputTensorLoadOp = cast<ToTensorOp>(op->getOperand(0).getDefiningOp());
         // auto inputMemref = inputTensorLoadOp.getMemref();
 
@@ -244,7 +245,7 @@ namespace
         rewriter.replaceOp(op, la_transpose.getResults());
         return success();
       }
-      else
+      else if(auto spType = mlir::dyn_cast<SparseTensorType>(inputType))
       { /// for sparse tensors
         int64_t pnum[2];
         /// print allPerms
@@ -295,7 +296,28 @@ namespace
           comet_debug() << " tensor[n]: "
                         << "\n";
           comet_pdump(tensors[n].getDefiningOp());
+          // for(int i = 0; i < tensor_rank; i++)
+          // {
+          //   mlir::Value crd = rewriter.create<SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), inputTensor);
+          //   mlir::Value crd_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, rewriter.getIndexType()), crd);
+          //   mlir::Value crd_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, crd_memref);
+          //   alloc_sizes_cast_vecs[n].push_back(crd_v);
+            
+          //   Value pos = rewriter.create<SpTensorGetDimPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), inputTensor);
+          //   Value pos_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, rewriter.getIndexType()), pos);
+          //   Value pos_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, pos_memref);
+          //   alloc_sizes_cast_vecs[n].push_back(pos_v);
+            
+          //   mlir::Value block_crd = rewriter.create<SpTensorGetDimBlockCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), inputTensor);
+          //   mlir::Value block_crd_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, rewriter.getIndexType()), block_crd);
+          //   mlir::Value block_crd_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, block_crd_memref);
+          //   alloc_sizes_cast_vecs[n].push_back(block_crd_v);
 
+          //   Value block_pos = rewriter.create<SpTensorGetDimBlockPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), inputTensor);
+          //   Value block_pos_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, rewriter.getIndexType()), block_pos);
+          //   Value block_pos_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, block_pos_memref);
+          //   alloc_sizes_cast_vecs[n].push_back(block_pos_v);
+          // }
           for (unsigned int i = 0; i < 4 * tensor_rank + 1; i++)
           {
             auto tensorload_op = tensors[n].getDefiningOp()->getOperand(i);
@@ -713,9 +735,9 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
                          scf::SCFDialect,
                          ArithDialect,
                          memref::MemRefDialect,
+                         func::FuncDialect,
                          bufferization::BufferizationDialect>();
 
-  target.addLegalOp<func::CallOp>();
   target.addLegalDialect<tensorAlgebra::TADialect, indexTree::IndexTreeDialect, tensor::TensorDialect>();
   target.addIllegalOp<tensorAlgebra::TransposeOp, 
                       tensorAlgebra::ReduceOp,

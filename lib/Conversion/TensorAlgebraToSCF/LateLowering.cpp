@@ -32,9 +32,13 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Transforms/DialectConversion.h"
+#include <memory>
 
 using namespace mlir;
 using namespace mlir::arith;
@@ -327,4 +331,124 @@ void LateLoweringPass::runOnOperation()
 std::unique_ptr<Pass> mlir::comet::createLateLoweringPass()
 {
   return std::make_unique<LateLoweringPass>();
+}
+
+
+namespace
+{
+  struct BufferizeFunc
+      : public PassWrapper<BufferizeFunc, OperationPass<ModuleOp>>
+  {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(BufferizeFunc)
+    void runOnOperation() override;
+  };
+}
+
+
+void BufferizeFunc::runOnOperation()
+{
+  ModuleOp module = getOperation();
+  // func::FuncOp function = getOperation();
+  mlir::OpBuilder builder(module.getContext());
+  auto callOps = module.getOps<func::CallOp>();
+
+  for(func::FuncOp function: module.getOps<func::FuncOp>())
+  {
+    std::vector<Type> newTypes;
+    std::vector<Type> resultTypes;
+    for(auto arg: function.getArguments())
+    {
+      if(RankedTensorType ttype = mlir::dyn_cast<RankedTensorType>(arg.getType()))
+      {
+        auto newType = MemRefType::get(ttype.getShape(), ttype.getElementType());
+        newTypes.push_back(newType);
+      }
+      else
+      {
+        newTypes.push_back(arg.getType());
+      }
+    }
+    for(auto res: function.getResultTypes())
+    {
+      if(RankedTensorType ttype = mlir::dyn_cast<RankedTensorType>(res))
+      {
+        auto newType = MemRefType::get(ttype.getShape(), ttype.getElementType());
+        resultTypes.push_back(newType);
+      }
+      else 
+      {
+        resultTypes.push_back(res);
+      }
+    }
+
+    if(newTypes.empty() && resultTypes.empty())
+    {
+      return;
+    }
+    assert(function.getArguments().size() == newTypes.size());
+    auto newFuncType = builder.getFunctionType(newTypes, resultTypes);
+    function.setType(newFuncType);
+
+    if(!function.isDeclaration()) 
+    {
+      builder.setInsertionPointToStart(&function.getFunctionBody().front());
+      for(auto arg: function.getFunctionBody().getArguments())
+      {
+        if(RankedTensorType ttype = mlir::dyn_cast<RankedTensorType>(arg.getType()))
+        {
+          auto newType = MemRefType::get(ttype.getShape(), ttype.getElementType());
+          arg.setType(newType);
+          ToTensorOp to_tensor = builder.create<bufferization::ToTensorOp>(function->getLoc(), ttype, arg, true, true);
+          arg.replaceAllUsesExcept(to_tensor, to_tensor);
+        }
+      }
+      for(auto& arg: function.getFunctionBody().front().getTerminator()->getOpOperands())
+      {
+        builder.setInsertionPoint(function.getFunctionBody().front().getTerminator());
+        if(RankedTensorType ttype = mlir::dyn_cast<RankedTensorType>(arg.get().getType()))
+        {
+          auto newType = MemRefType::get(ttype.getShape(), ttype.getElementType());
+          ToMemrefOp to_memref = builder.create<bufferization::ToMemrefOp>(function->getLoc(), newType, arg.get());
+          arg.assign(to_memref);
+        }
+      }
+    }
+
+    module->walk([&](mlir::func::CallOp call)
+    {
+      if(call.getCallee() == function.getName())
+      {
+        builder.setInsertionPoint(call);
+        llvm::SmallVector<mlir::Value, 4> newOperands;
+        int argIdx = 0;
+        for (auto oldOperand : call->getOperands()) {
+            if (oldOperand.getType() != newTypes[argIdx]) {
+                auto newOperad = builder.create<bufferization::ToMemrefOp>(function->getLoc(), newTypes[argIdx], oldOperand);
+                newOperands.push_back(newOperad);
+            } else {
+                newOperands.push_back(oldOperand);
+            }
+            argIdx++;
+        }
+
+        auto new_call = builder.create<mlir::func::CallOp>(call.getLoc(), function, newOperands);
+        builder.setInsertionPointAfter(new_call);
+        for(auto res: llvm::zip(call.getResults(), new_call->getResults()))
+        {
+          if(RankedTensorType ttype = mlir::dyn_cast<RankedTensorType>(std::get<0>(res).getType()))
+          {
+            ToTensorOp to_tensor = builder.create<bufferization::ToTensorOp>(function->getLoc(), ttype, std::get<1>(res), true, true);
+            std::get<0>(res).replaceAllUsesExcept(to_tensor, to_tensor);
+          }
+        }
+
+        call.erase();
+      }
+    });
+  }
+}
+
+std::unique_ptr<Pass> mlir::comet::createTABufferizeFunc()
+{
+  return std::make_unique<BufferizeFunc>();
 }

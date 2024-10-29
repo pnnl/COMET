@@ -15,7 +15,9 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinDialect.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/ValueRange.h"
@@ -29,6 +31,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ScopedPrinter.h"
+#include <cstddef>
 
 using namespace mlir;
 using namespace mlir::tensorAlgebra;
@@ -432,7 +435,62 @@ class ConvertSpTensorGetDimCrd
     if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
       return failure();
     }
-    rewriter.replaceOp(op, {sp_tensor.dims[tensorAdaptor.getDim()].crd});
+
+    if(sp_tensor.dims[tensorAdaptor.getDim()].crd == nullptr)
+    {
+      auto zero = rewriter.create<index::ConstantOp>(op->getLoc(), 0);
+      rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getIndexType()), ValueRange(zero)));
+    }
+    else
+    {
+      rewriter.replaceOp(op, {sp_tensor.dims[tensorAdaptor.getDim()].crd});
+    }
+    return success();
+  }
+};
+
+class ConvertSpTensorGetDimBlockPos
+    : public OpConversionPattern<SpTensorGetDimBlockPos> {
+  using OpConversionPattern<SpTensorGetDimBlockPos>::OpConversionPattern;
+  ConvertSpTensorGetDimBlockPos(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(SpTensorGetDimBlockPos op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    SpTensorGetDimBlockPosAdaptor tensorAdaptor = llvm::cast<SpTensorGetDimBlockPosAdaptor>(adaptor);
+    
+    
+    // SparseTensor sp_tensor;
+    // if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
+    //   return failure();
+    // }
+
+    auto zero = rewriter.create<index::ConstantOp>(op->getLoc(), 0);
+    rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getIndexType()), ValueRange(zero)));
+
+    return success();
+  }
+};
+
+class ConvertSpTensorGetDimBlockCrd
+    : public OpConversionPattern<SpTensorGetDimBlockCrd> {
+  using OpConversionPattern<SpTensorGetDimBlockCrd>::OpConversionPattern;
+  ConvertSpTensorGetDimBlockCrd(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(SpTensorGetDimBlockCrd op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    SpTensorGetDimBlockCrdAdaptor tensorAdaptor = llvm::cast<SpTensorGetDimBlockCrdAdaptor>(adaptor);
+    
+    
+    // SparseTensor sp_tensor;
+    // if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
+    //   return failure();
+    // }
+
+    auto zero = rewriter.create<index::ConstantOp>(op->getLoc(), 0);
+    rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getIndexType()), ValueRange(zero)));
+
     return success();
   }
 };
@@ -469,7 +527,16 @@ class ConvertSpTensorGetDimPos
     if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
       return failure();
     }
-    rewriter.replaceOp(op, {sp_tensor.dims[tensorAdaptor.getDim()].pos});
+    if(sp_tensor.dims[tensorAdaptor.getDim()].pos == nullptr)
+    {
+      auto zero = rewriter.create<index::ConstantOp>(op->getLoc(), 0);
+      rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getIndexType()), ValueRange(zero)));
+    }
+    else
+    {
+      rewriter.replaceOp(op, {sp_tensor.dims[tensorAdaptor.getDim()].pos});
+    }
+
     return success();
   }
 };
@@ -1046,28 +1113,28 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
     [](OpBuilder &builder, SparseTensorType resultType, ValueRange inputs,
         Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
-      return op->getResult(0);
+      return op.getResult(0);
     });
 
   typeConverter.addSourceMaterialization(
     [](OpBuilder &builder, SparseTensorType resultType, ValueRange inputs,
         Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
-      return op->getResult(0);
+      return op.getResult(0);
     });
   
   typeConverter.addArgumentMaterialization(
     [](OpBuilder &builder, WorkspaceType resultType, ValueRange inputs,
         Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
-      return op->getResult(0);
+      return op.getResult(0);
     });
 
   typeConverter.addSourceMaterialization(
     [](OpBuilder &builder, WorkspaceType resultType, ValueRange inputs,
         Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
-      return op->getResult(0);
+      return op.getResult(0);
     });
 
   patterns.add<PrintOpLowering, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
@@ -1092,11 +1159,12 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
     
     // The following operations and dialects may be introduced by the
     // rewriting rules, and are therefore marked as legal.
+    // target.addLegalOp<TensorInsertOp, TensorExtractOp, SpTensorGetDimCrd, SpTensorInsertCrd, SpTensorGetDimPos, SpTensorGetDimSize, SpTensorGetVals, TensorFindPos, PrintOp, PrintElapsedTimeOp, GetTimeOp, tensor::ExtractOp, tensor::InsertOp>();
     target.addLegalOp<tensor::ExtractOp, tensor::InsertOp>();
     target.addLegalDialect<
         arith::ArithDialect, bufferization::BufferizationDialect,
         tensor::TensorDialect, memref::MemRefDialect, scf::SCFDialect,
-        func::FuncDialect, index::IndexDialect
+        func::FuncDialect, index::IndexDialect, BuiltinDialect
     >();
 
     target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op){
