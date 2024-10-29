@@ -633,10 +633,10 @@ class ConvertWorkspaceTensorExtractOp
         Value extracted = builder.create<tensor::ExtractOp>(loc, op->getResultTypes(), workspace.workspace, pos);
         builder.create<scf::YieldOp>(loc, ArrayRef<Value>({extracted}));
       },
-      [op] (OpBuilder& builder, Location loc) {
+      [&] (OpBuilder& builder, Location loc) {
         // TODO: Does the zero value depend on the semi-ring?
         Type result_type  = op->getResult(0).getType();
-        Value zero = builder.create<arith::ConstantOp>(loc, result_type, builder.getFloatAttr(result_type, 0));
+        Value zero = builder.create<arith::ConstantOp>(loc, result_type, op.getZeroAttr());
         builder.create<scf::YieldOp>(loc, ArrayRef<Value>({zero}));
       }
     );

@@ -1060,7 +1060,8 @@ def TensorExtractOp : TA_Op<"TAExtractOp", [Pure, SameVariadicOperandSize]>{
 
   let arguments = (
     ins TA_AnyTensor:$tensor, 
-    Index:$pos
+    Index:$pos,
+    F64Attr:$zero
   );
 
   let results = (outs AnyFloat);
