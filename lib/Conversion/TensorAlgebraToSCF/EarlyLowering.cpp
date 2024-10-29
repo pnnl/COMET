@@ -257,6 +257,9 @@ namespace
                         tensorAlgebra::TensorMultOp,
                         tensorAlgebra::ScalarOp,
                         tensorAlgebra::SpTensorGetDimSize,
+                        tensorAlgebra::SpTensorGetDimPos,
+                        tensorAlgebra::SpTensorGetDimCrd,
+                        tensorAlgebra::SpTensorGetVals,
                         tensorAlgebra::SparseTensorConstructOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))

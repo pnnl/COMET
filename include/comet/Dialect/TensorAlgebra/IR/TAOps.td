@@ -1077,7 +1077,17 @@ def SpTensorGetDimCrd : TA_Op<"SpTensorGetDimCrd", [Pure]>{
   let results = (outs TensorOf<[AnyType]>);
 }
 
-def SpTensorGetVals : TA_Op<"SpTensorGetDimVals", [Pure]>{
+def SpTensorGetDimBlockPos : TA_Op<"SpTensorGetDimBlockPos", [Pure]>{
+  let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim);
+  let results = (outs TensorOf<[AnyType]>);
+}
+
+def SpTensorGetDimBlockCrd : TA_Op<"SpTensorGetDimBlockCrd", [Pure]>{
+  let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim);
+  let results = (outs TensorOf<[AnyType]>);
+}
+
+def SpTensorGetVals : TA_Op<"SpTensorGetVals", [Pure]>{
   let arguments = (ins TA_AnyTensor:$tensor);
   let results = (outs TensorOf<[AnyType]>);
 }
