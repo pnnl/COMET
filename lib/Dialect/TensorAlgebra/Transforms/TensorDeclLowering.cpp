@@ -33,7 +33,10 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/BuiltinTypes.h"
 
 #include <limits>
 #include <map>
@@ -477,7 +480,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           for (unsigned int i = 0; i < dst_rank; i++)
           {
             /// 4*rank+2 + i
-            dimSizes.push_back(src_input.getDefiningOp()->getOperand(8 * dst_rank + 2 + dstIndexLocInSrcVec[i]));
+            dimSizes.push_back(rewriter.create<SpTensorGetDimSize>(loc, rewriter.getIndexType(), src_input, rewriter.getI32IntegerAttr(i)));
           }
 
           Value cst_index_0 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(0));
@@ -502,13 +505,13 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
               unsigned int posLocInSrc2 = posLocInSrc + 2;
               unsigned int crdLocInSrc2 = crdLocInSrc + 2;
 
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(posLocInSrc));
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(crdLocInSrc));
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(posLocInSrc2));
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(crdLocInSrc2));
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 0), 0));
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 0), 0));
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 1), 0));
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 1), 0));
             }
             /// val array size
-            array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(8 * dst_rank + 1));
+            array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, src_input.getType().cast<SparseTensorType>().getElementType()), src_input), 0));
 
             /// set the pos array size, 1st dim as 2, all others as 1.
             for (unsigned int i = 0; i < dst_rank * 2; i++)
@@ -542,16 +545,15 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
               comet_vdump(crd_size);
               array_sizes_vec.push_back(crd_size);
               /// B2pos, Bval are the same size with A2pos, Aval
-              /// TODO(gkestor): Do not hardcode
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(17));
+              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, src_input.getType().cast<SparseTensorType>().getElementType()), src_input), 0);
+              array_sizes_vec.push_back(vals_size);
 
               /// A2tile
               array_sizes_vec.push_back(cst_index_0);
               array_sizes_vec.push_back(cst_index_0);
 
               /// Aval
-              /// TODO(gkestor): Do not hardcode
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(17));
+              array_sizes_vec.push_back(vals_size);
             }
             else if (src_format.compare("ELL") == 0)
             {
@@ -567,16 +569,15 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
               /// A2
               array_sizes_vec.push_back(cst_index_1);
-              /// TODO(gkestor): Do not hardcode
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(14));
+              /// TODO(PT): Verify this
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 1), 0));
 
               /// A2tile
               array_sizes_vec.push_back(cst_index_0);
               array_sizes_vec.push_back(cst_index_0);
 
               /// Aval
-              /// TODO(gkestor): Do not hardcode
-              array_sizes_vec.push_back(src_input.getDefiningOp()->getOperand(17));
+              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, src_input.getType().cast<SparseTensorType>().getElementType()), src_input), 0);
             }
           }
           /// For 3D, consider CSF
@@ -796,7 +797,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       auto function = cast<func::FuncOp>(op->getParentOp());
       auto module = function.getOperation()->getParentOfType<ModuleOp>();
 
-      std::string op_str = dump2str(op);
       bool isOutputTensor = false;
 
       auto loc = op.getLoc();
@@ -828,77 +828,22 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       {
         comet_debug() << "\nCheck the tensor is input or output\n";
         comet_pdump(u1);
-        if (isa<tensorAlgebra::TensorMultOp>(u1))
+        if (isa<tensorAlgebra::TensorMultOp, tensorAlgebra::TensorElewsMultOp, tensorAlgebra::TransposeOp>(u1))
         {
           comet_debug() << " used in ta.tc op\n";
-          auto p = cast<tensorAlgebra::TensorMultOp>(u1).getOperation();
-          for (unsigned int i = 0; i < p->getNumOperands(); i++)
+          auto p = u1->getOperand(2);
+          if(p == op)
           {
-            /// comet_vdump(n);
-            std::string n_str = dump2str(p->getOperand(i));
-            comet_debug() << "the operands: " << n_str << "\n";
-            if (n_str.compare(0, op_str.size(), op_str) == 0)
-            {
-              comet_debug() << " FIND IT: " << i << "\n";
-              if (i == 2)
-              {
-                isOutputTensor = true;
-              }
-            }
-          }
-        }
-        else if (isa<tensorAlgebra::TensorElewsMultOp>(u1))
-        {
-          comet_debug() << " used in ta.elews_mul op\n";
-          auto p = cast<tensorAlgebra::TensorElewsMultOp>(u1).getOperation();
-          for (unsigned int i = 0; i < p->getNumOperands(); i++)
-          {
-            std::string n_str = dump2str(p->getOperand(i));
-            if (n_str.compare(0, op_str.size(), op_str) == 0)
-            {
-              comet_debug() << " FIND IT: " << i << "\n";
-              if (i == 2)
-              {
-                isOutputTensor = true;
-              }
-            }
+            isOutputTensor = true;
           }
         }
         else if (isa<tensorAlgebra::TensorSetOp>(u1))
         {
           comet_debug() << " used in ta.set op\n";
-          auto p = cast<tensorAlgebra::TensorSetOp>(u1).getOperation();
-          for (unsigned int i = 0; i < p->getNumOperands(); i++)
+          auto p = u1->getOperand(1);
+          if(p == op)
           {
-            comet_debug() << " the " << i << "th operand\n";
-            std::string n_str = dump2str(p->getOperand(i));
-            if (n_str.compare(0, op_str.size(), op_str) == 0)
-            {
-              comet_debug() << " FIND IT: " << i << "\n";
-              if (i == 1)
-              {
-                /// The source tensor of the set op
-                isOutputTensor = true;
-              }
-            }
-          }
-        }
-        else if (isa<tensorAlgebra::TransposeOp>(u1))
-        {
-          comet_debug() << " used in transpose op\n";
-          auto p = cast<tensorAlgebra::TransposeOp>(u1).getOperation();
-          for (unsigned int i = 0; i < p->getNumOperands(); i++)
-          {
-            std::string n_str = dump2str(p->getOperand(i));
-            if (n_str.compare(0, op_str.size(), op_str) == 0)
-            {
-              comet_debug() << " FIND IT: " << i << "\n";
-              if (i == 2)
-              {
-                /// output of ta.elews_mul
-                isOutputTensor = true;
-              }
-            }
+            isOutputTensor = true;
           }
         }
         else if (isa<indexTree::IndexTreeLHSOperandOp>(u1))
@@ -1362,7 +1307,11 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::TensorMultOp,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::ScalarOp,
-                        tensorAlgebra::SparseTensorConstructOp>();
+                        tensorAlgebra::SparseTensorConstructOp,
+                        tensorAlgebra::SpTensorGetDimPos,
+                        tensorAlgebra::SpTensorGetDimCrd,
+                        tensorAlgebra::SpTensorGetVals,
+                        tensorAlgebra::SpTensorGetDimSize>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
       {
@@ -1439,6 +1388,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                              scf::SCFDialect,
                              mlir::memref::MemRefDialect,
                              IndexTreeDialect,
+                             tensor::TensorDialect,
                              bufferization::BufferizationDialect>();
 
       target.addIllegalDialect<TADialect>();
@@ -1455,6 +1405,10 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::DenseConstantOp,
                         tensorAlgebra::TensorDimOp,
+                        tensorAlgebra::SpTensorGetDimCrd,
+                        tensorAlgebra::SpTensorGetDimPos,
+                        tensorAlgebra::SpTensorGetDimSize,
+                        tensorAlgebra::SpTensorGetVals,
                         tensorAlgebra::ScalarOp,
                         tensorAlgebra::AllocWorkspaceOp,
                         tensorAlgebra::TensorMultOp, // Should this be dynamically legal to only work with dense tensors?
@@ -1492,6 +1446,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                              scf::SCFDialect,
                              mlir::memref::MemRefDialect,
                              IndexTreeDialect,
+                             tensor::TensorDialect,
                              bufferization::BufferizationDialect>();
 
       target.addIllegalDialect<TADialect>();
@@ -1509,6 +1464,10 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::TensorDimOp,
                         tensorAlgebra::ScalarOp,
                         tensorAlgebra::AllocWorkspaceOp,
+                        tensorAlgebra::SpTensorGetDimCrd,
+                        tensorAlgebra::SpTensorGetDimPos,
+                        tensorAlgebra::SpTensorGetDimSize,
+                        tensorAlgebra::SpTensorGetVals,
                         tensorAlgebra::TensorMultOp, // Should this be dynamically legal to only work with dense tensors?
                         func::CallOp>();
 
