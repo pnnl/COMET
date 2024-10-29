@@ -174,7 +174,7 @@ namespace
       }
 
       /// Replace this operation with the generated alloc.
-      op->replaceAllUsesWith(rewriter.create<ToTensorOp>(op->getLoc(),alloc));
+      op->replaceAllUsesWith(rewriter.create<ToTensorOp>(op->getLoc(), alloc, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
       rewriter.eraseOp(op);
       comet_debug() << "ConstantOpLowering ends\n";
       return success();
@@ -640,26 +640,6 @@ namespace
       comet_vdump(const_index_0);
       std::vector<Value> alloc_zero_loc = {const_index_0};
 
-      if (auto toTensorOp = llvm::dyn_cast_if_present<ToTensorOp>(rhs.getDefiningOp()))
-      {
-        rhs = toTensorOp.getMemref();
-        // comet_debug() << "RHS is a tensor\n";
-        // rhs = rewriter.create<memref::LoadOp>(loc, rhs, alloc_zero_loc);
-        // comet_vdump(rhs);
-      }
-      if (auto toTensorOp = llvm::dyn_cast_if_present<ToTensorOp>(lhs.getDefiningOp()))
-      {
-        lhs = toTensorOp.getMemref();
-        // comet_debug() << "RHS is a tensor\n";
-        // rhs = rewriter.create<memref::LoadOp>(loc, rhs, alloc_zero_loc);
-        // comet_vdump(rhs);
-      }
-      // if (lhsType.isa<MemRefType>())
-      // {
-      //   comet_debug() << "LHS is a tensor\n";
-      //   lhs = rewriter.create<memref::LoadOp>(loc, lhs, alloc_zero_loc);
-      // }
-
       Value res;
       bool res_comes_from_setop = false;
       for (auto u : op.getOperation()->getResult(0).getUsers())
@@ -676,12 +656,6 @@ namespace
           {
             res = cast<tensorAlgebra::TensorSetOp>(*(++res.getUsers().begin())).getRhs();
           }
-          if(auto toTensor = mlir::dyn_cast_or_null<ToTensorOp>(res.getDefiningOp()))
-          {
-            res = toTensor.getMemref();
-          }
-          comet_debug() << "Result from SetOp:\n";
-          comet_vdump(res);
           res_comes_from_setop = true;
           break;
         }
@@ -702,36 +676,26 @@ namespace
       Value res_val;
       if (op_attr.compare("+") == 0)
       {
-        rewriter.create<linalg::AddOp>(loc, ValueRange{lhs, rhs}, ValueRange(res));
-        // res_val = rewriter.create<AddFOp>(loc, lhs, rhs);
+        res_val = rewriter.create<linalg::AddOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
       }
       else if (op_attr.compare("-") == 0)
       {
-        rewriter.create<linalg::SubOp>(loc, ValueRange{lhs, rhs}, ValueRange(res));
-        // res_val = rewriter.create<SubFOp>(loc, lhs, rhs);
+        res_val = rewriter.create<linalg::SubOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
       }
       else if (op_attr.compare("*") == 0)
       {
-        rewriter.create<linalg::MulOp>(loc, ValueRange{lhs, rhs}, ValueRange(res));
-        // res_val = rewriter.create<MulFOp>(loc, lhs, rhs);
+        res_val = rewriter.create<linalg::MulOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
       }
       else if (op_attr.compare("/") == 0)
       {
-        rewriter.create<linalg::DivOp>(loc, ValueRange{lhs, rhs}, ValueRange(res));
-        // res_val = rewriter.create<DivFOp>(loc, lhs, rhs);
+        res_val = rewriter.create<linalg::DivOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
       }
       else
       {
         llvm::errs() << "ERROR: Unsuported Operation\n";
       }
-
-      comet_vdump(res_val);
-      /// store res_val to res
-      // rewriter.create<linalg::CopyOp>(loc, res_val, res);
-      // [[maybe_unused]] auto storeOp = rewriter.create<memref::StoreOp>(loc, res_val, res, alloc_zero_loc);
-      comet_vdump(storeOp);
-
-      op.replaceAllUsesWith(res);
+      
+      op.replaceAllUsesWith(res_val);
       rewriter.eraseOp(op);
       return success();
     }
