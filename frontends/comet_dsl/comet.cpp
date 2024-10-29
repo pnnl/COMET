@@ -500,10 +500,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // /// Late lowering passes
   // /// =============================================================================
   // pm.addPass(mlir::bufferization::createEmptyTensorToAllocTensorPass());
+  pm.addPass(mlir::comet::createTABufferizeFunc());
+  pm.addPass(mlir::createCanonicalizerPass());
+
   mlir::bufferization::OneShotBufferizationOptions opts;
   opts.allowUnknownOps = true;
   pm.addPass(mlir::bufferization::createOneShotBufferizePass(opts));
-  pm.addPass(mlir::func::createFuncBufferizePass());
 
   mlir::OpPassManager &late_lowering_pm = pm.nest<mlir::func::FuncOp>();
   late_lowering_pm.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
