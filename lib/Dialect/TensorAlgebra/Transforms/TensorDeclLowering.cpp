@@ -37,6 +37,7 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/ValueRange.h"
 
 #include <limits>
 #include <map>
@@ -257,64 +258,56 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
     Value sptensor;
     if (rank_size == 2)
     {
+      Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange{dimSizes[0], dimSizes[1]});
       sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
+                                                                          dims,
                                                                           ValueRange{
                                                                               tensorload_sizes_vec[0], /// A1pos (each dimension consists of pos and crd arrays)
-                                                                              tensorload_sizes_vec[1], /// A1crd
-                                                                              tensorload_sizes_vec[2], /// A1tile_pos
-                                                                              tensorload_sizes_vec[3], /// A1tile_crd
                                                                               tensorload_sizes_vec[4], /// A2pos
+                                                                          },
+                                                                          ValueRange{
+                                                                              tensorload_sizes_vec[1], /// A1crd
                                                                               tensorload_sizes_vec[5], /// A2crd
+                                                                          },
+                                                                          ValueRange {
+                                                                              tensorload_sizes_vec[2], /// A1tile_pos
                                                                               tensorload_sizes_vec[6], /// A2tile_pos
+                                                                          },
+                                                                          ValueRange {
+                                                                              tensorload_sizes_vec[3], /// A1tile_crd
                                                                               tensorload_sizes_vec[7], /// A2tile_crd
-                                                                              tensorload_sizes_vec[8], /// Aval
-                                                                              array_sizes_vec[0],      /// A1pos_size (size of each pos and crd arrays)
-                                                                              array_sizes_vec[1],      /// A1crd_size
-                                                                              array_sizes_vec[2],      /// A1tile_pos_size
-                                                                              array_sizes_vec[3],      /// A1tile_crd_size
-                                                                              array_sizes_vec[4],      /// A2pos_size
-                                                                              array_sizes_vec[5],      /// A2crd_size
-                                                                              array_sizes_vec[6],      /// A2tile_pos_size
-                                                                              array_sizes_vec[7],      /// A2tile_crd_size
-                                                                              array_sizes_vec[8],      /// Aval_size (size of value array)
-                                                                              dimSizes[0],             /// dim1_size(size of each dimension in sparse tensor)
-                                                                              dimSizes[1]              /// dim2_size (size of each dimension in sparse tensor)
-                                                                          }, 2, rewriter.getI32ArrayAttr(dim_formats));
+                                                                          },
+                                                                          tensorload_sizes_vec[8], /// Aval
+                                                                           2, rewriter.getI32ArrayAttr(dim_formats));
     }
     else if (rank_size == 3)
     {
-      sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
+      Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange{dimSizes[0], dimSizes[1], dimSizes[2]});
+
+      sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, dims,
                                                                           ValueRange{
                                                                               tensorload_sizes_vec[0],  /// A1pos (each dimension consists of pos and crd arrays)
-                                                                              tensorload_sizes_vec[1],  /// A1crd
-                                                                              tensorload_sizes_vec[2],  /// A1tile_pos
-                                                                              tensorload_sizes_vec[3],  /// A1tile_crd
                                                                               tensorload_sizes_vec[4],  /// A2pos
-                                                                              tensorload_sizes_vec[5],  /// A2crd
-                                                                              tensorload_sizes_vec[6],  /// A2tile_pos
-                                                                              tensorload_sizes_vec[7],  /// A2tile_crd
                                                                               tensorload_sizes_vec[8],  /// A3pos
+                                                                          },
+                                                                          ValueRange{
+                                                                              tensorload_sizes_vec[1],  /// A1crd
+                                                                              tensorload_sizes_vec[5],  /// A2crd
                                                                               tensorload_sizes_vec[9],  /// A3crd
+                                                                          },
+                                                                          ValueRange{
+                                                                              tensorload_sizes_vec[2],  /// A1tile_pos
+                                                                              tensorload_sizes_vec[6],  /// A2tile_pos
                                                                               tensorload_sizes_vec[10], /// A3tile_pos
+                                                                          },
+                                                                          ValueRange{
+                                                                              tensorload_sizes_vec[3],  /// A1tile_crd
+                                                                              tensorload_sizes_vec[7],  /// A2tile_crd
                                                                               tensorload_sizes_vec[11], /// A3tile_crd
-                                                                              tensorload_sizes_vec[12], /// Aval
-                                                                              array_sizes_vec[0],       /// A1pos_size (size of each pos and crd arrays)
-                                                                              array_sizes_vec[1],       /// A1crd_size
-                                                                              array_sizes_vec[2],       /// A1tile_pos_size
-                                                                              array_sizes_vec[3],       /// A1tile_crd_size
-                                                                              array_sizes_vec[4],       /// A2pos_size
-                                                                              array_sizes_vec[5],       /// A2crd_size
-                                                                              array_sizes_vec[6],       /// A2tile_pos_size
-                                                                              array_sizes_vec[7],       /// A2tile_crd_size
-                                                                              array_sizes_vec[8],       /// A3pos_size
-                                                                              array_sizes_vec[9],       /// A3crd_size
-                                                                              array_sizes_vec[10],      /// A3tile_pos_size
-                                                                              array_sizes_vec[11],      /// A3tile_crd_size
-                                                                              array_sizes_vec[12],      /// Aval_size (size of value array)
-                                                                              dimSizes[0],              /// dim1_size (size of each dimension in sparse tensor)
-                                                                              dimSizes[1],              /// dim2_size (size of each dimension in sparse tensor)
-                                                                              dimSizes[2]               /// dim3_size
-                                                                          }, 3, rewriter.getI32ArrayAttr(dim_formats));
+                                                                          },
+                                                                          // ValueRange{
+                                                                          tensorload_sizes_vec[12], /// Aval
+                                                                          3, rewriter.getI32ArrayAttr(dim_formats));
     }
     else
     {
@@ -371,7 +364,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       /// search read_from_file function call to get the input file name
       /// Currently, has no filename
 
-      std::vector<Value> tensorload_sizes_vec;
       std::vector<Value> array_sizes_vec; /// Store the size of C1pos, C1crd,..., Cval,C_dim1_size, C_dim2_size....
 
       /// No need to read from file
@@ -587,7 +579,9 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
             {
               comet_debug() << " 3D CSF transpose to 3D CSF\n";
               array_sizes_vec.push_back(cst_index_2);
-              mlir::Value src_nnz = src_input.getDefiningOp()->getOperand(25); 
+              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, src_input.getType().cast<SparseTensorType>().getElementType()), src_input), 0);
+
+              mlir::Value src_nnz = vals_size; 
               mlir::Value src_nnz_add1 = rewriter.create<AddIOp>(loc, src_nnz, cst_index_1);
               comet_debug() << "AddIOp generated for nnz for CSF:\n";
               comet_vdump(src_nnz_add1);
@@ -610,6 +604,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
           comet_debug() << " array_sizes_vec.size(): " << array_sizes_vec.size() << "\n";
           comet_debug() << " dst_rank: " << dst_rank << "\n";
+          std::vector<Value> tensorload_sizes_vec;
           for (unsigned int i = 0; i < 4 * dst_rank + 1; i++)
           {
             Value alloc_sizes;
@@ -1159,22 +1154,54 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         Value sptensor;
         if (rank_size == 2)
         {
-          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{alloc_tensor_vec[0], alloc_tensor_vec[1], /// A1
-                                                                                                 alloc_tensor_vec[2], alloc_tensor_vec[3], /// A1_tile
-                                                                                                 alloc_tensor_vec[4], alloc_tensor_vec[5], /// A2
-                                                                                                 alloc_tensor_vec[6], alloc_tensor_vec[7], /// A2_tile
-                                                                                                 alloc_tensor_vec[8], array_sizes[0], array_sizes[1], array_sizes[2], array_sizes[3], array_sizes[4], array_sizes[5], array_sizes[6], array_sizes[7], array_sizes[8], array_sizes[9], array_sizes[10]},
+          Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange{array_sizes[9], array_sizes[10]});
+          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, 
+                                                                                                dims, /// Dim sizes
+                                                                                                ValueRange{
+                                                                                                  alloc_tensor_vec[0], // A1_pos
+                                                                                                  alloc_tensor_vec[4], /// A2_pos
+                                                                                                },
+                                                                                                ValueRange{
+                                                                                                  alloc_tensor_vec[1], /// A1_crd
+                                                                                                  alloc_tensor_vec[5], /// A2_crd
+                                                                                                },
+                                                                                                ValueRange{
+                                                                                                  alloc_tensor_vec[2], /// A1_tile_pos
+                                                                                                  alloc_tensor_vec[6], /// A2_tile_pos
+                                                                                                },
+                                                                                                ValueRange{
+                                                                                                  alloc_tensor_vec[3], /// A1_tile_crd
+                                                                                                  alloc_tensor_vec[7], /// A2_tile_crd
+                                                                                                },
+                                                                                                alloc_tensor_vec[8], /// Avals
                                                                              2, dim_format_attrs);
         }
         else if (rank_size == 3)
         {
-          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, ValueRange{alloc_tensor_vec[0], alloc_tensor_vec[1],   /// A1
-                                                                                                 alloc_tensor_vec[2], alloc_tensor_vec[3],   /// A1_tile
-                                                                                                 alloc_tensor_vec[4], alloc_tensor_vec[5],   /// A2
-                                                                                                 alloc_tensor_vec[6], alloc_tensor_vec[7],   /// A2_tile
-                                                                                                 alloc_tensor_vec[8], alloc_tensor_vec[9],   /// A3
-                                                                                                 alloc_tensor_vec[10], alloc_tensor_vec[11], /// A3_tile
-                                                                                                 alloc_tensor_vec[12], array_sizes[0], array_sizes[1], array_sizes[2], array_sizes[3], array_sizes[4], array_sizes[5], array_sizes[6], array_sizes[7], array_sizes[8], array_sizes[9], array_sizes[10], array_sizes[11], array_sizes[12], array_sizes[13], array_sizes[14], array_sizes[15], array_sizes[16], array_sizes[17], array_sizes[18]},
+          Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange{array_sizes[16], array_sizes[17], array_sizes[18]});
+
+          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, dims,
+                                                                                      ValueRange {
+                                                                                        alloc_tensor_vec[0], /// A1_pos
+                                                                                        alloc_tensor_vec[4],   /// A2_pos
+                                                                                        alloc_tensor_vec[8],   /// A3_pos
+                                                                                      },
+                                                                                      ValueRange {
+                                                                                        alloc_tensor_vec[1],   /// A1_crd
+                                                                                        alloc_tensor_vec[5],   /// A2_crd
+                                                                                        alloc_tensor_vec[9],   /// A3_crd
+                                                                                      },
+                                                                                      ValueRange {
+                                                                                        alloc_tensor_vec[2],   /// A1_tile_pos
+                                                                                        alloc_tensor_vec[6],   /// A2_tile_pos
+                                                                                        alloc_tensor_vec[10], /// A3_tile_pos
+                                                                                      },
+                                                                                      ValueRange {
+                                                                                        alloc_tensor_vec[3],   /// A1_tile_crd
+                                                                                        alloc_tensor_vec[7],   /// A2_tile_crd
+                                                                                        alloc_tensor_vec[11], /// A3_tile_crd
+                                                                                      },
+                                                                                      alloc_tensor_vec[12], /// Avals
                                                                              3, dim_format_attrs);
         }
         else
@@ -1341,6 +1368,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                              scf::SCFDialect,
                              mlir::memref::MemRefDialect,
                              IndexTreeDialect,
+                             tensor::TensorDialect,
                              bufferization::BufferizationDialect>();
 
       target.addLegalOp<tensorAlgebra::PrintOp,

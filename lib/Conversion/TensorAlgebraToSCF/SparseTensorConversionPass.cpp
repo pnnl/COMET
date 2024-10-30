@@ -65,6 +65,7 @@ struct Dimension {
 };
 
 struct SparseTensor {
+  Value dim_sizes;
   SmallVector<Dimension, 3> dims;
   Value vals;
   Value val_size;
@@ -90,10 +91,11 @@ static bool unpack_sparse_tensor(Value sparse_tensor, SparseTensor& result)
     auto format = type.getFormat();
     auto dim_sizes = type.getDims();
     auto cur_arg = cast.getInputs().begin();
+    result.dim_sizes = *cur_arg;
+    ++cur_arg;
+
     for(unsigned i = 0; i < dim_sizes.size(); i++){
       Dimension d;
-      d.dim_size = *cur_arg;
-      cur_arg++;
       d.insert_pos = *cur_arg;
       cur_arg++;
       d.format = (TensorFormatEnum)format[2 * i];
@@ -101,27 +103,19 @@ static bool unpack_sparse_tensor(Value sparse_tensor, SparseTensor& result)
         case TensorFormatEnum::D: {
           d.pos = *cur_arg;
           cur_arg++;
-          d.pos_size = *cur_arg;
-          cur_arg++;
           break;
         }
         case TensorFormatEnum::CU:
         case TensorFormatEnum::CN: {
           d.pos = *cur_arg;
           cur_arg++;
-          d.pos_size = *cur_arg;
-          cur_arg++;
 
           d.crd = *cur_arg;
-          cur_arg++;
-          d.crd_size = *cur_arg;
           cur_arg++;
           break;
         }
         case TensorFormatEnum::S: {
           d.crd = *cur_arg;
-          cur_arg++;
-          d.crd_size = *cur_arg;
           cur_arg++;
           break;
         }
@@ -132,8 +126,6 @@ static bool unpack_sparse_tensor(Value sparse_tensor, SparseTensor& result)
       result.dims.push_back(d);
     }
     result.vals = *cur_arg;
-    cur_arg++;
-    result.val_size = *cur_arg;
     return true;
   }
   else if(auto cast =
@@ -144,24 +136,23 @@ static bool unpack_sparse_tensor(Value sparse_tensor, SparseTensor& result)
       return false;
     OpBuilder builder(cast);
 
-    // This is unnecessarily complicated because sptensor_construct does not have named arguments
-    auto inputs = cast.getIndices();
+    auto dims = cast.getDims();
+    auto crd = cast.getCrdIndices();
+    auto pos = cast.getPosIndices();
+    auto vals = cast.getVals();
     unsigned rank = type.getDims().size();
+    result.dim_sizes = dims;
     for(unsigned i = 0; i < rank; i++)
     {
       Dimension d;
       d.format = (TensorFormatEnum) type.getFormat()[2 * i];
-      d.dim_size = inputs[(8 * rank) + 2 + i];
       d.insert_pos = builder.create<index::ConstantOp>(cast.getLoc(), builder.getIndexType(), builder.getIndexAttr(0));
-      d.pos = inputs[(4 * i)];
-      d.crd = inputs[(4 * i) + 1];
-      d.pos_size = inputs[(4 * rank) + 1 + (4 * i)];
-      d.crd_size = inputs[(4 * rank) + 1 + (4 * i) + 1];
+      d.pos = pos[i];
+      d.crd = crd[i];
       result.dims.push_back(d);
     }
 
-    result.vals = inputs[(4 * rank)];
-    result.val_size = inputs[(8*rank)+1];
+    result.vals = vals;
     return true;
   }
 
@@ -170,27 +161,23 @@ static bool unpack_sparse_tensor(Value sparse_tensor, SparseTensor& result)
 
 static void pack_sparse_tensor(SparseTensorType type, SparseTensor& sparse_tensor, SmallVectorImpl<Value>& result)
 {
+  result.push_back(sparse_tensor.dim_sizes);
   for(Dimension d : sparse_tensor.dims)
   {
-    result.push_back(d.dim_size);
     result.push_back(d.insert_pos);
     switch(d.format){
       case TensorFormatEnum::D: {
         result.push_back(d.pos);
-        result.push_back(d.pos_size);
         break;
       }
       case TensorFormatEnum::CU:
       case TensorFormatEnum::CN: {
         result.push_back(d.pos);
-        result.push_back(d.pos_size);
         result.push_back(d.crd);
-        result.push_back(d.crd_size);
         break;
       }
       case TensorFormatEnum::S: {
         result.push_back(d.crd);
-        result.push_back(d.crd_size);
         break;
       }
       default: {
@@ -199,7 +186,6 @@ static void pack_sparse_tensor(SparseTensorType type, SparseTensor& sparse_tenso
     }
   }
   result.push_back(sparse_tensor.vals);
-  result.push_back(sparse_tensor.val_size);
   return;
 }
 
@@ -238,26 +224,26 @@ class ConvertSpTensorConstructOp
   LogicalResult
   matchAndRewrite(SparseTensorConstructOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-    // This is unnecessarily complicated because sptensor_construct does not have named arguments
+
     SparseTensor sp_tensor;
     SparseTensorType sp_tensor_type = llvm::cast<SparseTensorType>(op->getResult(0).getType());
-    auto inputs = op.getIndices();
+    auto dims = op.getDims();
+    auto crd = op.getCrdIndices();
+    auto pos = op.getPosIndices();
+    auto vals = op.getVals();
     unsigned rank = sp_tensor_type.getDims().size();
+    sp_tensor.dim_sizes = dims;
     for(unsigned i = 0; i < rank; i++)
     {
       Dimension d;
       d.format = (TensorFormatEnum) sp_tensor_type.getFormat()[2 * i];
-      d.dim_size = inputs[(8 * rank) + 2 + i];
       d.insert_pos = rewriter.create<index::ConstantOp>(op.getLoc(), rewriter.getIndexType(), rewriter.getIndexAttr(0));
-      d.pos = inputs[(4 * i)];
-      d.crd = inputs[(4 * i) + 1];
-      d.pos_size = inputs[(4 * rank) + 1 + (4 * i)];
-      d.crd_size = inputs[(4 * rank) + 1 + (4 * i) + 1];
+      d.pos = pos[i];
+      d.crd = crd[i];
       sp_tensor.dims.push_back(d);
     }
 
-    sp_tensor.vals = inputs[(4 * rank)];
-    sp_tensor.val_size = inputs[(8*rank)+1];
+    sp_tensor.vals = vals;
 
     SmallVector<Value, 12> cast_args;
     pack_sparse_tensor(sp_tensor_type, sp_tensor, cast_args);
@@ -416,7 +402,8 @@ class ConvertSpTensorGetDimSize
     if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
       return failure();
     }
-    rewriter.replaceOp(op, {sp_tensor.dims[tensorAdaptor.getDim()].dim_size});
+    Value index = rewriter.create<index::ConstantOp>(op->getLoc(), tensorAdaptor.getDim());
+    rewriter.replaceOpWithNewOp<tensor::ExtractOp>(op, sp_tensor.dim_sizes, index);
     return success();
   }
 };
@@ -449,6 +436,8 @@ class ConvertSpTensorGetDimCrd
   }
 };
 
+
+/// TODO: Implement this conversion to actually handle blocks/tiles
 class ConvertSpTensorGetDimBlockPos
     : public OpConversionPattern<SpTensorGetDimBlockPos> {
   using OpConversionPattern<SpTensorGetDimBlockPos>::OpConversionPattern;
@@ -472,6 +461,7 @@ class ConvertSpTensorGetDimBlockPos
   }
 };
 
+/// TODO: Implement this conversion to actually handle blocks/tiles
 class ConvertSpTensorGetDimBlockCrd
     : public OpConversionPattern<SpTensorGetDimBlockCrd> {
   using OpConversionPattern<SpTensorGetDimBlockCrd>::OpConversionPattern;
@@ -655,10 +645,11 @@ class ConvertFunCallOp
         {
           return failure();
         }
+
+        args.push_back(sp_tensor.dim_sizes);
+        args_types.push_back(sp_tensor.dim_sizes.getType());
         for(unsigned i = 0; i < sp_tensor.dims.size(); i++) {
           Dimension dim = sp_tensor.dims[i];
-          args.push_back(dim.dim_size);
-          args_types.push_back(dim.dim_size.getType());
           args.push_back(dim.insert_pos);
           args_types.push_back(dim.insert_pos.getType());
 
@@ -667,8 +658,6 @@ class ConvertFunCallOp
             {
               args.push_back(dim.pos);
               args_types.push_back(dim.pos.getType());
-              args.push_back(dim.pos_size);
-              args_types.push_back(dim.pos_size.getType());
               break;
             }
             case TensorFormatEnum::CU:
@@ -676,20 +665,14 @@ class ConvertFunCallOp
             {
               args.push_back(dim.pos);
               args_types.push_back(dim.pos.getType()); //Pos tensor
-              args.push_back(dim.pos_size);
-              args_types.push_back(dim.pos_size.getType()); //Pos size
               args.push_back(dim.crd);
               args_types.push_back(dim.crd.getType()); //Crd tensor
-              args.push_back(dim.crd_size);
-              args_types.push_back(dim.crd_size.getType()); //Crd size
               break;
             }
             case TensorFormatEnum::S:
             {
               args.push_back(dim.crd); //Crd tensor
               args_types.push_back(dim.crd.getType()); //Crd tensor
-              args.push_back(dim.crd_size); //Crd size
-              args_types.push_back(dim.crd_size.getType()); //Crd size
               break;
             }
             default: {
@@ -698,8 +681,6 @@ class ConvertFunCallOp
         }
         args.push_back(sp_tensor.vals);
         args_types.push_back(sp_tensor.vals.getType());
-        args.push_back(sp_tensor.val_size);
-        args_types.push_back(sp_tensor.val_size.getType());
       }
       else
       {
@@ -1045,8 +1026,8 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
       Type index_type = IndexType::get(context);
       bool is_known_size = true;
       int known_size = 1;
+      types.push_back(RankedTensorType::get({static_cast<long long>(dim_sizes.size())}, IndexType::get(context))); //Dimension sizes
       for(unsigned i = 0; i < dim_sizes.size(); i++) {
-        types.push_back(index_type); //Dimension size
         types.push_back(index_type); //Insert pos
         switch((TensorFormatEnum)format[2 * i])
         {
@@ -1059,7 +1040,6 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
             }
             auto pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, index_type);
             types.push_back(pos_type); //Pos tensor
-            types.push_back(index_type); //Pos size
             break;
           }
           case TensorFormatEnum::CU:
@@ -1072,16 +1052,13 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
             is_known_size = false;
 
             types.push_back(pos_type); //Pos tensor
-            types.push_back(index_type); //Pos size
             types.push_back(crd_type); //Crd tensor
-            types.push_back(index_type); //Crd size
             break;
           }
           case TensorFormatEnum::S:
           {
             Type crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, index_type);
             types.push_back(crd_type); //Crd tensor
-            types.push_back(index_type); //Crd size
             break;
           }
           default: {
@@ -1092,7 +1069,6 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
       Type element_type = type.getElementType();
       Type value_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, element_type);
       types.push_back(value_type); //Value tensor
-      types.push_back(index_type); //Value size
       return success();
     });
 

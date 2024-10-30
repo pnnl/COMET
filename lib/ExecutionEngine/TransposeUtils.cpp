@@ -518,7 +518,7 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
   auto *desc_B2crd = static_cast<StridedMemRefType<int64_t, 1> *>(B2crd_ptr);
   auto *desc_Bval = static_cast<StridedMemRefType<T, 1> *>(Bval_ptr);
 
-  auto *desc_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
+  auto *dim_sizes = static_cast<StridedMemRefType<int64_t, 1> *>(sizes_ptr);
 
   auto *desc_B1tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(B1tile_pos_ptr);
   auto *desc_B1tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(B1tile_crd_ptr);
@@ -549,8 +549,8 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
               << "desc_sizes->data[10]: " << desc_sizes->data[10] << "\n";
   */
 
-  int rowSize = desc_sizes->data[9];
-  int colSize = desc_sizes->data[10];
+  int rowSize = dim_sizes->data[0];
+  int colSize = dim_sizes->data[1];
 
   if (A1format == Dense && A1tile_format == Dense && A2format == singleton)
   {
@@ -691,8 +691,8 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
     desc_B2pos->data[0] = desc_A2pos->data[0];
 
     /// switch row and col size
-    desc_sizes->data[9] = colSize;
-    desc_sizes->data[10] = rowSize;
+    dim_sizes->data[0] = colSize;
+    dim_sizes->data[1] = rowSize;
   }
 
   if (Aspformat.compare("CSR") == 0 && Bspformat.compare("CSR") == 0)
@@ -702,8 +702,8 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
       /// 1) not by sorting: only works for CSR/matrices
       /// Atomic-based Transposition: retraverse the matrix from the transposed direction
       /// B's row size == input's col size
-      int BRowSize = desc_sizes->data[9];
-      int BColSize = desc_sizes->data[10];
+      int BRowSize = dim_sizes->data[0];
+      int BColSize = dim_sizes->data[1];
 
       /// B's col pos size == B's #rows + 1
       desc_B2pos->sizes[0] = BRowSize + 1;
@@ -732,8 +732,8 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
       desc_B1crd->data[0] = -1;
 
       /// switch row and col size
-      desc_sizes->data[9] = colSize;
-      desc_sizes->data[10] = rowSize;
+      dim_sizes->data[0] = colSize;
+      dim_sizes->data[1] = rowSize;
     }
     else
     {
@@ -807,8 +807,8 @@ void transpose_2D(int32_t A1format, int32_t A1tile_format, int32_t A2format, int
       }
 
       /// switch row and col size
-      desc_sizes->data[9] = colSize;
-      desc_sizes->data[10] = rowSize;
+      dim_sizes->data[0] = colSize;
+      dim_sizes->data[1] = rowSize;
     }
   }
 

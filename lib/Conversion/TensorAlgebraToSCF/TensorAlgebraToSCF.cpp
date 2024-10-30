@@ -325,14 +325,15 @@ namespace
           Value vals_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, vals_memref);
           alloc_sizes_cast_vecs[n].push_back(vals_v);
 
-          auto memrefload_op = tensors[n].getDefiningOp()->getOperand(tensors[n].getDefiningOp()->getNumOperands() - 1);
-          allocs_for_sparse_tensors[n].push_back(memrefload_op);
+          auto dims_tensor = mlir::cast<SparseTensorConstructOp>(tensors[n].getDefiningOp()).getDims();
+          auto dims_memref = rewriter.create<ToMemrefOp>(loc, MemRefType::get(dims_tensor.getType().getShape(), dims_tensor.getType().getElementType()), dims_tensor);
+          allocs_for_sparse_tensors[n].push_back(dims_memref);
           comet_debug() << " memrefload_op "
                         << "\n";
           comet_vdump(memrefload_op);
         }
 
-        Value last_dim_size_alloc = allocs_for_sparse_tensors[0][0].getDefiningOp()->getOperand(0);
+        Value last_dim_size_alloc = allocs_for_sparse_tensors[0][0];
         comet_debug() << "Alloc for last dim size:\n";
         comet_vdump(last_dim_size_alloc);
 

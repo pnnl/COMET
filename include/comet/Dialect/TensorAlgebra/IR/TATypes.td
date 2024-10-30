@@ -49,5 +49,5 @@ def WorkspaceTensor : TensorAlgebra_Type<"Workspace", "workspace", [DeclareTypeI
 
 /// Provide a definition of the types that are used within the TA dialect.
 def TA_AnyTensor : AnyTypeOf<[TensorOf<[AnyType]>, SparseTensor, WorkspaceTensor]>;
-
+def TA_FloatTensor: TensorOf<[F32, F64]>;
 #endif //TA_TYPES
