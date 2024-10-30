@@ -21,6 +21,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/ValueRange.h"
+#include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Dialect/Func/Transforms/DecomposeCallGraphTypes.h"
@@ -623,6 +624,45 @@ class ConvertWorkspaceGetNNZ
   }
 };
 
+
+class ConvertReturnOp
+    : public OpConversionPattern<func::ReturnOp> {
+  using OpConversionPattern<func::ReturnOp>::OpConversionPattern;
+  ConvertReturnOp(MLIRContext *context)
+      : OpConversionPattern(context) {}
+
+  LogicalResult
+  matchAndRewrite(func::ReturnOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto opAdaptor = llvm::cast<func::ReturnOpAdaptor>(adaptor);
+    auto converter = getTypeConverter();
+    SmallVector<Value, 13> newOperands;
+    for(auto operand: op.getOperands())
+    {
+      if(!converter->isLegal(operand.getType()))
+      {
+        if(UnrealizedConversionCastOp cast_op = mlir::dyn_cast_if_present<UnrealizedConversionCastOp>(operand.getDefiningOp()); cast_op && mlir::isa<SparseTensorType>(operand.getType()) )
+        {
+          newOperands.insert(newOperands.end(), cast_op->getOperands().begin(), cast_op->getOperands().end());
+        }
+        else {
+          return failure();
+        }
+      }
+      else
+      {
+        newOperands.push_back(operand);
+      }
+      
+    }
+
+    func::ReturnOp new_return = rewriter.create<func::ReturnOp>(op->getLoc(), newOperands);
+    rewriter.replaceOp(op, new_return);
+
+    return success();
+  }
+};
+
 class ConvertFunCallOp
     : public OpConversionPattern<func::CallOp> {
   using OpConversionPattern<func::CallOp>::OpConversionPattern;
@@ -633,9 +673,9 @@ class ConvertFunCallOp
   matchAndRewrite(func::CallOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto opAdaptor = llvm::cast<func::CallOpAdaptor>(adaptor);
+    auto converter = getTypeConverter();
 
     SmallVector<Value, 8> args;
-    SmallVector<Type, 8> args_types;
     for(auto operand: opAdaptor.getOperands())
     {
       if(mlir::isa<SparseTensorType>(operand.getType()))
@@ -647,32 +687,26 @@ class ConvertFunCallOp
         }
 
         args.push_back(sp_tensor.dim_sizes);
-        args_types.push_back(sp_tensor.dim_sizes.getType());
         for(unsigned i = 0; i < sp_tensor.dims.size(); i++) {
           Dimension dim = sp_tensor.dims[i];
           args.push_back(dim.insert_pos);
-          args_types.push_back(dim.insert_pos.getType());
 
           switch(dim.format) {
             case TensorFormatEnum::D:
             {
               args.push_back(dim.pos);
-              args_types.push_back(dim.pos.getType());
               break;
             }
             case TensorFormatEnum::CU:
             case TensorFormatEnum::CN:
             {
-              args.push_back(dim.pos);
-              args_types.push_back(dim.pos.getType()); //Pos tensor
-              args.push_back(dim.crd);
-              args_types.push_back(dim.crd.getType()); //Crd tensor
+              args.push_back(dim.pos); //Pos tensor
+              args.push_back(dim.crd); //Crd tensor
               break;
             }
             case TensorFormatEnum::S:
             {
               args.push_back(dim.crd); //Crd tensor
-              args_types.push_back(dim.crd.getType()); //Crd tensor
               break;
             }
             default: {
@@ -680,16 +714,50 @@ class ConvertFunCallOp
           }
         }
         args.push_back(sp_tensor.vals);
-        args_types.push_back(sp_tensor.vals.getType());
       }
       else
       {
         args.push_back(operand);
-        args_types.push_back(operand.getType());
       }
     }
+
+    SmallVector<SmallVector<Type, 8>, 8> res_types;
     
-    rewriter.replaceOpWithNewOp<func::CallOp>(op, op.getCallee(), TypeRange(), args);
+    for(auto resultType: op.getResultTypes())
+    {
+      SmallVector<Type, 8> arg_res_types;
+      if(SparseTensorType spT = mlir::dyn_cast<SparseTensorType>(resultType))
+      {
+        if(failed(converter->convertType(spT,arg_res_types)))
+        {
+          return failure();
+        }
+      }
+      else
+      {
+        arg_res_types.push_back(resultType);
+      }
+
+      res_types.push_back(arg_res_types);
+    }
+
+
+    SmallVector<Type,8> all_res_types;
+    for(size_t i = 0; i < res_types.size(); i++)
+    {
+      all_res_types.append(res_types[i]);
+    }
+    auto newCallOp = rewriter.create<func::CallOp>(op->getLoc(), op.getCallee(), all_res_types, args);
+
+    SmallVector<Value,3> result_values;
+    size_t start = 0;
+    for(size_t i = 0; i < op->getResultTypes().size(); i++)
+    {
+      result_values.push_back(typeConverter->materializeSourceConversion(rewriter, op->getLoc(), op->getResultTypes()[i], newCallOp->getResults().slice(start, res_types[i].size())));
+      start += res_types[i].size();
+    }
+
+    rewriter.replaceOp(op, result_values);
 
     return success();
   }
@@ -1114,7 +1182,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
     });
 
   patterns.add<PrintOpLowering, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
-  patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorGetDimCrd, ConvertSpTensorGetDimPos, ConvertSpTensorGetDimBlockCrd, ConvertSpTensorGetDimBlockPos, ConvertSpTensorGetVals, ConvertSpTensorFindPos, ConvertFunCallOp>(typeConverter, context);
+  patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorGetDimCrd, ConvertSpTensorGetDimPos, ConvertSpTensorGetDimBlockCrd, ConvertSpTensorGetDimBlockPos, ConvertSpTensorGetVals, ConvertSpTensorFindPos>(typeConverter, context);
   patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
 }
 
@@ -1147,10 +1215,6 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
       return typeConverter.isSignatureLegal(op.getFunctionType());
     });
     
-    target.addDynamicallyLegalOp<func::CallOp>([&](func::CallOp op){
-      return typeConverter.isLegal(op);
-    });
-
     target.addLegalOp<UnrealizedConversionCastOp>();
     target.addDynamicallyLegalOp<tensorAlgebra::PrintOp>([&](tensorAlgebra::PrintOp op) {
       return typeConverter.isLegal(op->getOperandTypes());
@@ -1169,6 +1233,28 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
     mlir::comet::populateSparseTensorConversionPatterns(ctx, patterns, typeConverter);
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))
+    {
+      return signalPassFailure(); 
+    }
+
+    RewritePatternSet funcPatterns(ctx);
+    funcPatterns.add<ConvertFunCallOp, ConvertReturnOp>(typeConverter, ctx);
+    TypeConverter funcTypeConverter;
+
+    target.addDynamicallyLegalOp<func::CallOp>([&](func::CallOp op){
+      return typeConverter.isLegal(op);
+    });
+    
+    target.addDynamicallyLegalOp<func::ReturnOp>([&](func::ReturnOp op){
+      return typeConverter.isLegal(op);
+    });
+
+    target.addLegalOp<UnrealizedConversionCastOp>();
+
+    populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(funcPatterns,
+                                                                   typeConverter);
+    if (failed(applyPartialConversion(getOperation(), target,
+                                      std::move(funcPatterns))))
     {
       return signalPassFailure(); 
     }

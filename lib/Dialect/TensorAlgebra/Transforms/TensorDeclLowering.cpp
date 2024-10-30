@@ -899,6 +899,10 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           /// do nothing!
           comet_debug() << " the tensor has use in func::CallOp\n";
         }
+        else if(isa<func::ReturnOp>(u1))
+        {
+          comet_debug() << " the tensor has use in func::ReturnOp\n";
+        }
         else
         {
           u1->dump();
