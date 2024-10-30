@@ -12,6 +12,7 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Dialect/Func/Transforms/DecomposeCallGraphTypes.h"
@@ -192,10 +193,6 @@ struct ConvertSparseTensorOp
       }
     }
 
-    llvm::SmallVector<Value, 12> arrays;
-    llvm::SmallVector<Value, 12> array_sizes;
-    llvm::SmallVector<Value, 3> dim_sizes;
-
     auto ctx = op.getContext();
     auto format_unk = tensorAlgebra::TensorFormatEnumAttr::get(ctx, tensorAlgebra::TensorFormatEnum::UNK);
     auto format_dense = tensorAlgebra::TensorFormatEnumAttr::get(ctx, tensorAlgebra::TensorFormatEnum::D);
@@ -209,6 +206,11 @@ struct ConvertSparseTensorOp
     Value zero = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
     Value one = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
     Value nnz = one;
+    llvm::SmallVector<Value, 3> dim_sizes, 
+                                pos_indices, 
+                                crd_indices, 
+                                tile_pos_indices, 
+                                tile_crd_indices;
 
     for(Value domain : llvm::cast<indexTree::IndexTreeSparseTensorOpAdaptor>(adaptor).getDomains())
     {
@@ -227,15 +229,10 @@ struct ConvertSparseTensorOp
           Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
           Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
 
-          arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-          arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-          arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-          arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-
-          array_sizes.push_back(one);
-          array_sizes.push_back(zero);
-          array_sizes.push_back(zero);
-          array_sizes.push_back(zero);
+          pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+          crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+          tile_pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+          tile_crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
 
           dim_sizes.push_back(dim_size);
           nnz = rewriter.create<index::MulOp>(loc, index_type, nnz, dim_size);
@@ -245,7 +242,6 @@ struct ConvertSparseTensorOp
         {
           auto sparse_domain_op = llvm::cast<indexTree::IndexTreeSparseDomainOp>(domain_op);
           Value dim_size = sparse_domain_op.getDimSize();
-          Value pos_size = sparse_domain_op.getPosSize();
           Value crd_size = sparse_domain_op.getCrdSize();
 
           Value pos = sparse_domain_op.getPos();
@@ -253,15 +249,11 @@ struct ConvertSparseTensorOp
           Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
           Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
 
-          arrays.push_back(pos);
-          arrays.push_back(crd);
-          arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-          arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+          pos_indices.push_back(pos);
+          crd_indices.push_back(crd);
 
-          array_sizes.push_back(pos_size);
-          array_sizes.push_back(crd_size);
-          array_sizes.push_back(zero);
-          array_sizes.push_back(zero);
+          tile_pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+          tile_crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
 
           dim_sizes.push_back(dim_size);
           nnz = crd_size;
@@ -277,15 +269,10 @@ struct ConvertSparseTensorOp
         Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
         Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
 
-        arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, domain_struct.pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-        arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-        arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-        arrays.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-
-        array_sizes.push_back(domain_struct.pos_size);
-        array_sizes.push_back(domain_struct.crd_size);
-        array_sizes.push_back(zero);
-        array_sizes.push_back(zero);
+        pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, domain_struct.pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+        crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+        tile_pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+        tile_crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
 
         dim_sizes.push_back(domain_struct.dim_size);
         nnz = domain_struct.crd_size;
@@ -306,13 +293,12 @@ struct ConvertSparseTensorOp
     val_array = rewriter.create<bufferization::ToTensorOp>(loc, val_array, rewriter.getUnitAttr(), rewriter.getUnitAttr());
 
     std::vector<Value> args;
-    args.insert(args.end(), arrays.begin(), arrays.end());
     args.push_back(val_array);
-    args.insert(args.end(), array_sizes.begin(), array_sizes.end());
     args.push_back(nnz);
     args.insert(args.end(), dim_sizes.begin(), dim_sizes.end());
+    Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange(dim_sizes));
 
-    rewriter.replaceOpWithNewOp<tensorAlgebra::SparseTensorConstructOp>(op, op.getResult().getType(), args, rank, rewriter.getArrayAttr(dim_format));
+    rewriter.replaceOpWithNewOp<tensorAlgebra::SparseTensorConstructOp>(op, op.getResult().getType(), dims, pos_indices, crd_indices, tile_pos_indices, tile_crd_indices, val_array, rank, rewriter.getArrayAttr(dim_format));
     return success();
   }
 };

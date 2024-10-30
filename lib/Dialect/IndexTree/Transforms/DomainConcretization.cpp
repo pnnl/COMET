@@ -64,68 +64,17 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
     uint32_t dim = domain_op.getDim();
     Value new_domain;
     Value tensor = domain_op.getTensor();
-    if(SparseTensorConstructOp construct_op = mlir::dyn_cast_if_present<SparseTensorConstructOp>(tensor.getDefiningOp()))
+    if(SparseTensorType sp_tensor = mlir::dyn_cast<SparseTensorType>(tensor.getType()))
     {
-      //Domain comes from a sparse tensor (may still be dense)
-      int32_t rank = construct_op.getTensorRank();
-      TensorFormatEnum format = construct_op.getDimensionFormats()[2 * dim].cast<TensorFormatEnumAttr>().getValue();
-
-      if(format == TensorFormatEnum::D)
+      mlir::RewriterBase::InsertPoint prev = rewriter.saveInsertionPoint();
+      if(tensor.getDefiningOp())
       {
-        Value max = construct_op.getOperand((8*rank) + 2 + dim); //TODO: Fix magic numbers
-        new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max, tensor, rewriter.getI32ArrayAttr({static_cast<int>(dim)}));
-      } else
-      {
-        Value pos = construct_op.getOperand(4 * dim);
-        Value crd = construct_op.getOperand((4 * dim) + 1);
-        Value pos_size = construct_op.getOperand((4 * rank) + (4 * dim) + 1);
-        Value crd_size = construct_op.getOperand((4 * rank) + (4 * dim) + 2);
-        Value dim_size = construct_op.getOperand((8*rank) + 2 + dim);
-        Value parent = domain_op.getParent();
-        if(!parent)
-        {
-          // Get associated index
-          IndexTreeIndicesOp index_op; 
-          Operation* use = *(domain_op->user_begin());
-          // TODO: Fix danger of infinite loop!!!
-          while(!(index_op = llvm::dyn_cast<indexTree::IndexTreeIndicesOp>(use)))
-          {
-            use = *(use->user_begin());
-          }
-          assert(index_op);
-
-          if(dim == 0)
-          {
-            parent = nullptr;
-          } else
-          {
-            // Infer parent index variable
-            for(Operation* use : index_op->getUsers())
-            {
-              IndexTreeIndexToTensorOp access_op = llvm::dyn_cast<indexTree::IndexTreeIndexToTensorOp>(use);
-              if(!access_op || access_op.getTensor() != tensor || access_op.getDim() != dim)
-                continue;
-
-              parent = access_op.getPrevDim();
-              IndexTreeIndexToTensorOp prev_access_op = 
-                llvm::cast<indexTree::IndexTreeIndexToTensorOp>(parent.getDefiningOp());
-              if(mlir::failed(this->liftAccessOp(domain_op, prev_access_op)))
-                return failure();
-
-              break;
-            }
-          }
-        }
-        new_domain = rewriter.create<IndexTreeSparseDomainOp>(
-          loc, domain_type, tensor, domain_op.getDimAttr(), 
-          TensorFormatEnumAttr::get(context, format), 
-          pos, crd, pos_size, crd_size, dim_size, parent);
+        rewriter.setInsertionPointAfter(tensor.getDefiningOp());
       }
-    }
-    else if(SparseTensorType sp_tensor = mlir::dyn_cast<SparseTensorType>(tensor.getType()))
-    {
-      auto prev = rewriter.saveInsertionPoint();
-      rewriter.setInsertionPointToStart(tensor.getParentBlock());
+      else {
+        rewriter.setInsertionPointToStart(tensor.getParentBlock());
+      }
+
       //Domain comes from a sparse tensor (may still be dense)
       ArrayRef<int32_t> tensor_dim_formats = sp_tensor.getFormat();
       TensorFormatEnum format = static_cast<TensorFormatEnum>(tensor_dim_formats[2*dim]); 
@@ -310,7 +259,6 @@ struct SimplifyIntersectionOp : public OpRewritePattern<IndexTreeDomainIntersect
       if(to_remove.size() > 1){
         auto loc = op->getLoc();
         auto context = rewriter.getContext();
-        auto index_type = rewriter.getIndexType();
         Value max = maximums[0];
         // TODO: Do we need this to check if the domains are compatible?
         // for(Value new_max : maximums){

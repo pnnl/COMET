@@ -275,7 +275,7 @@ def DenseConstantOp : TA_Op<"constant", [Pure]> {
   let hasVerifier = 1;
 }
 
-def SparseTensorConstructOp : TA_Op<"spTensor_construct", [Pure]>{
+def SparseTensorConstructOp : TA_Op<"spTensor_construct", [SameVariadicOperandSize]>{
 
   let summary = "";
   let description = [{
@@ -291,12 +291,12 @@ def SparseTensorConstructOp : TA_Op<"spTensor_construct", [Pure]>{
   //Aval_size (size of value array) 
   //dim1_size, dim2_size (size of each dimension in sparse tensor) 
   //TODO(gkestor): might be better to have a struct with all the data elements
-  let arguments = (ins Variadic<AnyType>:$indices, I32Attr:$tensor_rank, TAFormatArrayAttr:$dimension_formats);
+  let arguments = (ins TensorOf<[Index]>:$dims, Variadic<TensorOf<[Index]>>:$pos_indices, Variadic<TensorOf<[Index]>>:$crd_indices, Variadic<TensorOf<[Index]>>:$block_pos_indices, Variadic<TensorOf<[Index]>>:$block_crd_indices, TA_FloatTensor:$vals, I32Attr:$tensor_rank, TAFormatArrayAttr:$dimension_formats);
   let results = (outs TA_AnyTensor:$output);
 
-  let assemblyFormat = [{
-    `(` $indices `)` attr-dict `:` `(` type($indices) `)` `->` `(` type($output) `)`
-  }];
+  // let assemblyFormat = [{
+  //   `(` $indices `)` attr-dict `:` `(` type($indices) `)` `->` `(` type($output) `)`
+  // }];
 
   // TODO(pflynn) This may need to be adjusted
   // This works for the moment; the idea is that each rank has a block
