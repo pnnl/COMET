@@ -15,6 +15,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinDialect.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
@@ -926,7 +927,8 @@ class ConvertWorkspaceTensorExtractOp
       [&] (OpBuilder& builder, Location loc) {
         // TODO: Does the zero value depend on the semi-ring?
         Type result_type  = op->getResult(0).getType();
-        Value zero = builder.create<arith::ConstantOp>(loc, result_type, op.getZeroAttr());
+        FloatAttr zero_attr = op.getZeroAttr().cast<FloatAttr>();
+        Value zero = builder.create<arith::ConstantOp>(loc, result_type, zero_attr);
         builder.create<scf::YieldOp>(loc, ArrayRef<Value>({zero}));
       }
     );

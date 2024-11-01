@@ -39,7 +39,6 @@
 #include <typeinfo>
 
 /// TODO(gkestor): supports only f64 -  need generalization
-extern std::string VALUETYPE;
 
 using namespace mlir::linalg;
 

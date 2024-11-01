@@ -36,6 +36,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 
@@ -261,12 +262,11 @@ namespace
         std::string formats_strOut(opFormatsArrayAttr[1].cast<mlir::StringAttr>().getValue());
         IntegerType i32Type = IntegerType::get(ctx, 32);
         IndexType indexType = IndexType::get(ctx);
-        FloatType f64Type = FloatType::getF64(ctx);
 
         Value input_perm_num = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getI32IntegerAttr(pnum[0]));
         Value output_perm_num = rewriter.create<ConstantOp>(loc, i32Type, rewriter.getI32IntegerAttr(pnum[1]));
 
-        Type unrankedMemrefType_f64 = UnrankedMemRefType::get(f64Type, 0);
+        UnrankedMemRefType unrankedMemrefType_float = UnrankedMemRefType::get(spType.getElementType(), 0);
         Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
 
         mlir::func::FuncOp transpose_func; /// runtime call
@@ -322,7 +322,7 @@ namespace
           }
           Value vals = rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, tensor_type.getElementType()), tensor);
           Value vals_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, tensor_type.getElementType()), vals);
-          Value vals_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_f64, vals_memref);
+          Value vals_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_float, vals_memref);
           alloc_sizes_cast_vecs[n].push_back(vals_v);
 
           auto dims_tensor = mlir::cast<SparseTensorConstructOp>(tensors[n].getDefiningOp()).getDims();
@@ -356,26 +356,35 @@ namespace
 
         if (rank_size == 2)
         { /// 2D
-          auto transpose2DF64Func = FunctionType::get(ctx,
+          auto transpose2DFunc = FunctionType::get(ctx,
                                                       {i32Type, i32Type, i32Type, i32Type,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_f64,
+                                                       unrankedMemrefType_float,
                                                        i32Type, i32Type, i32Type, i32Type,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_f64,
+                                                       unrankedMemrefType_float,
                                                        unrankedMemrefType_index},
                                                       {});
 
-          std::string func_name = "transpose_2D_f64";
+          std::string func_name;
+          if(unrankedMemrefType_float.getElementType().isF32())
+          {
+           func_name = "transpose_2D_f32";
+          }
+          else if(unrankedMemrefType_float.getElementType().isF64())
+          {
+           func_name = "transpose_2D_f64";
+          }
+
           if (!hasFuncDeclaration(module, func_name))
           {
-            transpose_func = mlir::func::FuncOp::create(loc, func_name, transpose2DF64Func, ArrayRef<NamedAttribute>{});
+            transpose_func = mlir::func::FuncOp::create(loc, func_name, transpose2DFunc, ArrayRef<NamedAttribute>{});
             transpose_func.setPrivate();
             module.push_back(transpose_func);
           }
@@ -402,7 +411,7 @@ namespace
         }
         else if (rank_size == 3)
         { /// 3D
-          auto transpose3DF64Func = FunctionType::get(ctx,
+          auto transpose3DFunc = FunctionType::get(ctx,
                                                       {i32Type, i32Type,
                                                        i32Type, i32Type,
                                                        i32Type, i32Type,
@@ -413,7 +422,7 @@ namespace
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_f64,
+                                                       unrankedMemrefType_float,
                                                        i32Type, i32Type,
                                                        i32Type, i32Type,
                                                        i32Type, i32Type,
@@ -423,14 +432,22 @@ namespace
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
                                                        unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_f64,
+                                                       unrankedMemrefType_float,
                                                        unrankedMemrefType_index},
                                                       {});
 
-          std::string func_name = "transpose_3D_f64";
+          std::string func_name;
+          if(unrankedMemrefType_float.getElementType().isF32())
+          {
+            func_name = "transpose_3D_f32";
+          }
+          else
+          {
+            func_name = "transpose_3D_f64";
+          }
           if (!hasFuncDeclaration(module, func_name))
           {
-            transpose_func = mlir::func::FuncOp::create(loc, func_name, transpose3DF64Func, ArrayRef<NamedAttribute>{});
+            transpose_func = mlir::func::FuncOp::create(loc, func_name, transpose3DFunc, ArrayRef<NamedAttribute>{});
             transpose_func.setPrivate();
             module.push_back(transpose_func);
           }
@@ -484,16 +501,31 @@ namespace
       comet_debug() << "Lowering Reduce operation to SCF\n";
 
       Location loc = op.getLoc();
-      auto f64Type = rewriter.getF64Type();
+      // auto f64Type = rewriter.getF64Type();
       auto inputType = op->getOperand(0).getType();
 
       /// Allocate memory for the result and initialized it
       auto cst_zero = rewriter.create<ConstantIndexOp>(loc, 0); /// need to access res alloc
-      MemRefType memTy_alloc_res = MemRefType::get({1}, f64Type);
+      ShapedType shapeT = mlir::cast<ShapedType>(inputType);
+      MemRefType memTy_alloc_res = MemRefType::get({1}, shapeT.getElementType());
+
       Value res = rewriter.create<memref::AllocOp>(loc, memTy_alloc_res);
-      Value const_f64_0 = rewriter.create<ConstantOp>(loc, f64Type, rewriter.getF64FloatAttr(0));
+      FloatAttr zero;
+      if(shapeT.getElementType().isF32())
+      {
+        zero = rewriter.getF32FloatAttr(0);
+      }
+      else if(shapeT.getElementType().isF64())
+      {
+        zero = rewriter.getF64FloatAttr(0);
+      }
+      else 
+      {
+        assert(false && "Unexpected type");
+      }
+      Value const_float_0 = rewriter.create<ConstantOp>(loc, shapeT.getElementType(), zero);
       std::vector<Value> alloc_zero_loc = {cst_zero};
-      rewriter.create<memref::StoreOp>(loc, const_f64_0,
+      rewriter.create<memref::StoreOp>(loc, const_float_0,
                                        res, alloc_zero_loc);
 
       comet_vdump(res);
@@ -535,7 +567,7 @@ namespace
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
         comet_debug() << "Tensor to reduce:\n";
         comet_pdump(op->getOperand(0).getDefiningOp());
-        Value sp_tensor_values = rewriter.create<tensorAlgebra::SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getF64Type()), op->getOperand(0));
+        Value sp_tensor_values = rewriter.create<tensorAlgebra::SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic,}, sp_tensor_type.getElementType()), op->getOperand(0));
         Value upperBound = rewriter.create<tensor::DimOp>(loc, sp_tensor_values, 0);
 
         comet_debug() << "Upper Bound:\n";
