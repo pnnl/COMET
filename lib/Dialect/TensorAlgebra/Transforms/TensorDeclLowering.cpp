@@ -66,24 +66,16 @@ using namespace mlir::indexTree;
 //===----------------------------------------------------------------------===//
 namespace
 {
-  void insertReadFileLibCall(int rank_size, MLIRContext *ctx, ModuleOp &module, func::FuncOp function)
+  void insertReadFileLibCall(int rank_size, Type floatEleType,MLIRContext *ctx, ModuleOp &module, func::FuncOp function)
   {
     comet_debug() << "Inserting insertReadFileLibCall\n";
-    FloatType f32Type, f64Type;
-    if (VALUETYPE.compare("f32") == 0)
-    {
-      f32Type = FloatType::getF32(ctx);
-    }
-    else
-    {
-      f64Type = FloatType::getF64(ctx);
-    }
+
 
     IndexType indexType = IndexType::get(function.getContext());
     IntegerType i32Type = IntegerType::get(ctx, 32);
-    auto unrankedMemref_f64 = mlir::UnrankedMemRefType::get(f64Type, 0);
+    auto unrankedMemref_f64 = mlir::UnrankedMemRefType::get(Float64Type::get(ctx), 0);
     /// TODO(gkestor): there is an issue with F32 UnrankedMemRefType
-    auto unrankedMemref_f32 = mlir::UnrankedMemRefType::get(f64Type, 0);
+    auto unrankedMemref_f32 = mlir::UnrankedMemRefType::get(Float32Type::get(ctx), 0);
     auto unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
 
     if (rank_size == 2)
@@ -106,7 +98,7 @@ namespace
                                                         unrankedMemref_f64, i32Type},
                                                   {});
 
-      if (VALUETYPE.compare("f32") == 0)
+      if (floatEleType.isF32())
       {
         std::string func_name = "read_input_2D_f32";
         if (!hasFuncDeclaration(module, func_name))
@@ -118,7 +110,7 @@ namespace
           module.push_back(func1);
         }
       }
-      else /// f64
+      else if (floatEleType.isF64())
       {
         std::string func_name = "read_input_2D_f64";
         if (!hasFuncDeclaration(module, func_name))
@@ -130,10 +122,14 @@ namespace
           module.push_back(func1);
         }
       }
+      else 
+      {
+        assert(false && "Unexpected type");
+      }
 
       auto readInputSizes2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {}); /// last arg (i32Type): readMode
 
-      if (VALUETYPE.compare("f32") == 0)
+      if (floatEleType.isF32())
       {
         std::string func_name = "read_input_sizes_2D_f32";
         if (!hasFuncDeclaration(module, func_name))
@@ -145,7 +141,7 @@ namespace
           module.push_back(func1);
         }
       }
-      else
+      else if (floatEleType.isF64())
       {
         std::string func_name = "read_input_sizes_2D_f64";
         if (!hasFuncDeclaration(module, func_name))
@@ -156,6 +152,10 @@ namespace
           func1.setPrivate();
           module.push_back(func1);
         }
+      }
+      else 
+      {
+        assert(false && "Unsupported type");
       }
     }
     /// 3D tensor
@@ -180,7 +180,7 @@ namespace
                                                         unrankedMemref_f64, i32Type},
                                                   {});
 
-      if (VALUETYPE.compare("f32") == 0)
+      if (floatEleType.isF32())
       {
         std::string func_name = "read_input_3D_f32";
         if (!hasFuncDeclaration(module, func_name))
@@ -191,24 +191,27 @@ namespace
           module.push_back(func1);
         }
       }
-      else
+      else if (floatEleType.isF64())
       {
         std::string func_name = "read_input_3D_f64";
         if (!hasFuncDeclaration(module, func_name))
         {
-          comet_debug() << " Insert read_input_3D_f64 decl\n";
           func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
                                                     readInput3DF64Func, ArrayRef<NamedAttribute>{});
           func1.setPrivate();
           module.push_back(func1);
         }
       }
+      else 
+      {
+        assert(false && "Unexpected type");
+      }
+
 
       auto readInputSizes3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {}); /// last arg (i32Type): readMode
 
-      if (VALUETYPE.compare("f32") == 0)
+      if (floatEleType.isF32())
       {
-
         std::string func_name = "read_input_sizes_3D_f32";
         if (!hasFuncDeclaration(module, func_name))
         {
@@ -218,7 +221,7 @@ namespace
           module.push_back(func1);
         }
       }
-      else
+      else if (floatEleType.isF64())
       {
         std::string func_name = "read_input_sizes_3D_f64";
         if (!hasFuncDeclaration(module, func_name))
@@ -229,6 +232,10 @@ namespace
           func1.setPrivate();
           module.push_back(func1);
         }
+      }
+      else 
+      {
+        assert(false && "Unsupported type");
       }
     }
     else
@@ -332,9 +339,13 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
     {
       comet_debug() << "lowerSparseOutputTensorDec::TempSparseOutputTensorDeclOp lowering\n";
     }
+    else 
+    {
+      assert(false && "Op should be either SparseOutputTensorDeclOp or TempSparseOutputTensorDeclOp");
+    }
 
-    assert(isa<SparseOutputTensorDeclOp>(op) || (isa<TempSparseOutputTensorDeclOp>(op) &&
-                                                    "Op should be either SparseOutputTensorDeclOp or TempSparseOutputTensorDeclOp"));
+    SparseTensorType spType = mlir::cast<SparseTensorType>(op->getResultTypes()[0]);
+
 
     comet_vdump(op);
     auto loc = op.getLoc();
@@ -346,13 +357,11 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
     auto rank_size = mlir::cast<SparseTensorType>(op.getResult().getType()).getRank();
 
     IndexType indexType = IndexType::get(op.getContext());
-    FloatType f64Type = FloatType::getF64(op.getContext());
-    if (VALUETYPE.compare(0, 3, "f32") == 0)
-      f64Type = FloatType::getF32(op.getContext());
+    Type valsType = spType.getElementType();
 
     /// A1_pos ... A_value
     auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); /// memref<?xindex>
-    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, f64Type);     /// memref<?xf64>
+    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, valsType);     /// memref<?xf64>
 
     comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
@@ -681,7 +690,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       }
       llvm::ArrayRef<int64_t> cur_memref_arrayref = llvm::ArrayRef<int64_t>(cur_memref);
 
-      MemRefType memrefType2 = MemRefType::get(cur_memref_arrayref, f64Type);
+      MemRefType memrefType2 = MemRefType::get(cur_memref_arrayref, valsType);
       Value alloc_sizes1 = insertAllocAndInitialize(loc, memrefType2, ValueRange(cur_indices), rewriter);
       comet_debug() << " AllocOp: ";
       comet_vdump(alloc_sizes1);
@@ -815,9 +824,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       // auto rank_size = op.getNumOperands();
 
       IndexType indexType = IndexType::get(op.getContext());
-      FloatType f64Type = FloatType::getF64(op.getContext());
-      if (VALUETYPE.compare(0, 3, "f32") == 0)
-        f64Type = FloatType::getF32(op.getContext());
+      Type floatEleType = type.getElementType();
 
       for (auto u1 : op.getOperation()->getUsers())
       {
@@ -914,10 +921,10 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
       /// A1_pos ... A_value
       auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); /// memref<?xindex>
-      auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, f64Type);     /// memref<?xf64>
+      auto dynamicmemTy_1d_float = MemRefType::get({ShapedType::kDynamic}, floatEleType);     /// memref<?xfloat>
 
       Type unrankedMemTy_index = UnrankedMemRefType::get(indexType, 0);
-      Type unrankedMemTy_f64 = UnrankedMemRefType::get(f64Type, 0);
+      Type unrankedMemTy_float = UnrankedMemRefType::get(floatEleType, 0);
 
       comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
@@ -1003,16 +1010,20 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         { /// 2D
           comet_debug() << " 2D\n";
           /// Add function definition to the module
-          insertReadFileLibCall(rank_size, ctx, module, function);
+          insertReadFileLibCall(rank_size, floatEleType, ctx, module, function);
 
           std::string read_input_sizes_str;
-          if (VALUETYPE.compare(0, 3, "f32") == 0)
+          if (floatEleType.isF32())
           {
             read_input_sizes_str = "read_input_sizes_2D_f32";
           }
-          else
+          else if(floatEleType.isF64())
           {
             read_input_sizes_str = "read_input_sizes_2D_f64";
+          }
+          else 
+          {
+            assert(false && "Unexpected data type");
           }
           auto read_input_sizes_Call = rewriter.create<func::CallOp>(loc, read_input_sizes_str, SmallVector<Type, 2>{},
                                                                      ValueRange{sparseFileID,
@@ -1024,16 +1035,21 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         { /// 3D
           comet_debug() << " 3D\n";
           /// Add function definition to the module
-          insertReadFileLibCall(rank_size, ctx, module, function);
+          insertReadFileLibCall(rank_size, floatEleType, ctx, module, function);
+
 
           std::string read_input_sizes_str;
-          if (VALUETYPE.compare(0, 3, "f32") == 0)
+          if (floatEleType.isF32())
           {
             read_input_sizes_str = "read_input_sizes_3D_f32";
           }
-          else
-          { /// default f64
+          else if(floatEleType.isF64())
+          {
             read_input_sizes_str = "read_input_sizes_3D_f64";
+          }
+          else 
+          {
+            assert(false && "Unexpected data type");
           }
           auto read_input_sizes_3D_Call = rewriter.create<func::CallOp>(loc, read_input_sizes_str, SmallVector<Type, 2>{},
                                                                         ValueRange{sparseFileID,
@@ -1079,11 +1095,11 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         {
           std::vector<Value> idxes;
           idxes.push_back(array_sizes[i]);
-          Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{idxes}, rewriter);
+          Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_float, ValueRange{idxes}, rewriter);
           comet_debug() << " ";
           comet_vdump(alloc_size);
           alloc_sizes_vec.push_back(alloc_size);
-          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_f64, alloc_size);
+          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_float, alloc_size);
           alloc_sizes_cast_vec.push_back(alloc_size_cast);
         }
 
@@ -1091,13 +1107,17 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         if (rank_size == 2)
         { /// 2D
           std::string read_input_str;
-          if (VALUETYPE.compare(0, 3, "f32") == 0)
+          if (floatEleType.isF32())
           {
             read_input_str = "read_input_2D_f32";
           }
-          else
+          else if (floatEleType.isF64())
           {
             read_input_str = "read_input_2D_f64";
+          }
+          else 
+          {
+            assert(false && "Unexpected type");
           }
           auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
                                                                   ValueRange{sparseFileID,
@@ -1117,11 +1137,11 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         else if (rank_size == 3)
         { /// 3D
           std::string read_input_str;
-          if (VALUETYPE.compare(0, 3, "f32") == 0)
+          if (floatEleType.isF32())
           {
             read_input_str = "read_input_3D_f32";
           }
-          else
+          else if (floatEleType.isF64())
           {
             read_input_str = "read_input_3D_f64";
           }

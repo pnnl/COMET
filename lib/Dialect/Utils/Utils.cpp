@@ -46,7 +46,7 @@
 // *********** For debug purpose *********//
 
 /// TODO(gkestor): supports only f64 -  need generalization
-std::string VALUETYPE = "f64";
+// std::string VALUETYPE = "f64";
 
 using namespace mlir::arith;
 using namespace mlir::affine;

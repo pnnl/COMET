@@ -36,6 +36,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
@@ -1174,9 +1175,10 @@ namespace
           auto *rhsLT = llvm::cast<LabeledTensorExprAST>(expr);
           auto name = rhsLT->getTensorName();
           mlir::Value tensorValue = symbolTable.lookup(name);
+          mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(tensorValue.getType());
           comet_debug() << " generate ta.sum op\n";
           /// TODO(gkestor): look at reduceOp in linalg
-          sumVal = builder.create<mlir::tensorAlgebra::ReduceOp>(location, builder.getF64Type(), tensorValue);
+          sumVal = builder.create<mlir::tensorAlgebra::ReduceOp>(location, shapedT.getElementType(), tensorValue);
         }
 
         /// Case 2: SUM(A[i,j]*B[j,k])
@@ -1797,7 +1799,9 @@ namespace
         /// for DenseTensorDeclOp create
         mlir::StringRef format_strref = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
-        lhs_tensor = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, builder.getF64Type()), indices, formatAttr);
+        mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
+
+        lhs_tensor = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, shapedT.getElementType()), indices, formatAttr);
 
         /// populate formats
         /// assumes lhs and rhs formats are same
@@ -1811,9 +1815,9 @@ namespace
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
 
         std::vector<int32_t> format = mlir::tensorAlgebra::getFormats(format_strref, shape.size(), builder.getContext());
-        mlir::Type element_type = builder.getF64Type();
+        mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
+        mlir::Type element_type = shapedT.getElementType();
         return_type = SparseTensorType::get(builder.getContext(), element_type, shape, format);
-
         /// no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
         /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
         auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, shape, format);
@@ -1832,7 +1836,8 @@ namespace
       auto strAttr = builder.getStrArrayAttr(formats);
 
       comet_debug() << " create TransposeOp\n";
-      mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, builder.getF64Type()),
+      mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
+      mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, shapedT.getElementType()),
                                                                        rhs_tensor, all_labels_val, affineMapArrayAttr, strAttr);
       builder.create<TensorSetOp>(loc(transpose.loc()), t.getDefiningOp()->getResult(0), lhs_tensor);
       comet_vdump(t);

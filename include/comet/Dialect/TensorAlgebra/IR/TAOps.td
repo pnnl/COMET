@@ -619,7 +619,7 @@ def ReduceOp : TA_Op<"reduce",[Pure]> {
 
   let arguments = (ins TA_AnyTensor:$rhs); 
 
-  let results = (outs F64:$lhs);
+  let results = (outs AnyTypeOf<[F32,F64,Index]>:$lhs);
 
   let builders = [OpBuilder<
     (ins "Value":$input)>];
@@ -903,7 +903,9 @@ def PrintOp : TA_Op<"print"> {
 
   /// The print operation takes an input tensor to print.
   /// We can extend the list of supported datatype for print with F64Tensor, I8MemRef, I64MemRef, F32MemRef, etc.
-  let arguments = (ins AnyTypeOf<[F64,
+  let arguments = (ins AnyTypeOf<[F32,
+                                  F64,
+                                  F32MemRef, 
                                   F64MemRef, 
                                   TA_AnyTensor]>:$input);
 }
@@ -1048,7 +1050,7 @@ def TensorInsertOp : TA_Op<"TAInsertOp", [Pure, SameVariadicOperandSize]>{
     ins TA_AnyTensor:$tensor, 
     Variadic<Index>:$pos,
     Variadic<Index>:$crds,
-    F64:$value
+    AnyTypeOf<[F32,F64]>:$value
   );
 
   let results = (outs TA_AnyTensor);
@@ -1061,7 +1063,7 @@ def TensorExtractOp : TA_Op<"TAExtractOp", [Pure, SameVariadicOperandSize]>{
   let arguments = (
     ins TA_AnyTensor:$tensor, 
     Index:$pos,
-    F64Attr:$zero
+    AnyAttrOf<[F32Attr, F64Attr]>:$zero
   );
 
   let results = (outs AnyFloat);

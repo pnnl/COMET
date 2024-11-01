@@ -38,6 +38,8 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/IR/Dominance.h"
@@ -446,10 +448,24 @@ LowerIndexTreeToSCFPass::convertOperand(IndexTreeOperandOp op, IRRewriter &rewri
     }
     Value pos = positions[positions.size() - 1];
     double zero = 0;
+    FloatAttr zero_attr;
+    
     if(semiring == "minxy"){
       zero = INFINITY;
     }
-    return rewriter.create<TensorExtractOp>(loc, element_type, tensor, pos, rewriter.getF64FloatAttr(zero));
+    if(element_type.isF32())
+    {
+      zero_attr = rewriter.getF32FloatAttr(zero);
+    }
+    else if(element_type.isF64())
+    {
+      zero_attr = rewriter.getF64FloatAttr(zero);
+    }
+    else  
+    {
+      assert(false && "Unsupported type");
+    }
+    return rewriter.create<TensorExtractOp>(loc, element_type, tensor, pos, zero_attr);
   }
 }
 
@@ -465,14 +481,30 @@ LowerIndexTreeToSCFPass::convertOperand(IndexTreeLHSOperandOp op, IRRewriter &re
   if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
     return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, crds);
   } else {
+    ShapedType sparseT = mlir::cast<ShapedType>(tensor.getType());
     // LHS may not be constant (i.e. if we are inserting into a tensor that we need to resize), 
     // so cannot directly lower like we can the RHS
     Value pos = positions[positions.size() - 1];
     double zero = 0;
+    FloatAttr zero_attr;
+    
     if(semiring == "minxy"){
       zero = INFINITY;
     }
-    return rewriter.create<tensorAlgebra::TensorExtractOp>(loc, rewriter.getF64Type(), tensor, pos, rewriter.getF64FloatAttr(zero));
+    if(sparseT.getElementType().isF32())
+    {
+      zero_attr = rewriter.getF32FloatAttr(zero);
+    }
+    else if(sparseT.getElementType().isF64())
+    {
+      zero_attr = rewriter.getF64FloatAttr(zero);
+    }
+    else  
+    {
+      assert(false && "Unsupported type");
+    }
+
+    return rewriter.create<tensorAlgebra::TensorExtractOp>(loc, sparseT.getElementType(), tensor, pos, zero_attr);
   }
 }
 
