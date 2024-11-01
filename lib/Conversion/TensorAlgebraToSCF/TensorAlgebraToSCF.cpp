@@ -560,10 +560,10 @@ namespace
         rewriter.restoreInsertionPoint(insertPt);
         comet_vdump(loop);
       }
-
+      rewriter.setInsertionPoint(op);
       /// Important to replace all uses of this operation with the new one, otherwise, the current op won't be lowered.
-      op.replaceAllUsesWith(res);
-      rewriter.eraseOp(op);
+      memref::LoadOp load = rewriter.create<memref::LoadOp>(op->getLoc(), res, ValueRange(cst_zero));
+      rewriter.replaceOp(op, load);
 
       return success();
     }
