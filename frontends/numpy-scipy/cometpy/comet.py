@@ -201,16 +201,16 @@ class NewVisitor(ast.NodeVisitor):
                 'dimsSSA': [self.get_index_constant(d) for d in self.inputs[i].shape],
                 'scalar': False,
                 }
-            self.declarations.append(
-                {
-                    "type": "T",
-                    "is_input": True,
-                    "arg_num": i,
-                    "format": format,
-                    "shape": self.inputs[i].shape,
-                    "dimsSSA": [self.get_index_constant(d) for d in self.inputs[i].shape],
-                    "id": self.tcurr,
-                })
+            # self.declarations.append(
+            #     {
+            #         "type": "T",
+            #         "is_input": True,
+            #         "arg_num": i,
+            #         "format": format,
+            #         "shape": self.inputs[i].shape,
+            #         "dimsSSA": [self.get_index_constant(d) for d in self.inputs[i].shape],
+            #         "id": self.tcurr,
+            #     })
             self.in_args.append(self.tcurr)
             self.tcurr += 1
         for stmt in node.body:
@@ -586,6 +586,7 @@ class NewVisitor(ast.NodeVisitor):
                     "operands": [obj],
                     "out_id": self.tcurr,
                 })
+            
             # if not no_assign:
             # self.declarations.append(
             #     {
@@ -645,15 +646,24 @@ class NewVisitor(ast.NodeVisitor):
     def visit_Return(self, node):
         obj = NewVisitor.visit(self, node.value)
         self.returns.append(obj)
-        if self.tsemantics[obj]['format'] == DENSE:
+        if self.tsemantics[obj]['format'] == DENSE and self.tsemantics[obj]['shape'] != 1:
             self.in_args.append(obj)
-        self.ops.append(
-            {
-                "op_type": "p",
-                "shapes": [self.tsemantics[obj]["shape"]],
-                "value_type": "f64",
-                "operands": [obj]
-            })
+            self.ops.append(
+                {
+                    "op_type": "p",
+                    "shapes": [self.tsemantics[obj]["shape"]],
+                    "value_type": "f64",
+                    "operands": [obj]
+                })
+        if self.tsemantics[obj]['format'] != DENSE or self.tsemantics[obj]['shape'] == 1:
+            self.ops.append(
+            
+                {
+                    "op_type": "r",
+                    "shapes": [self.tsemantics[obj]["shape"]],
+                    "value_type": "f64",
+                    "operands": [obj]
+                })
 
     def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, beta, no_assign):
 
@@ -908,15 +918,40 @@ def compile(flags, target:str = "cpu", with_jit=True):
                 if isinstance(v.tsemantics[arg]['shape'], int):
                     in_types.append(("%t"+str(arg), "tensor<1xf64>"))
                 else:
-                    in_types.append(("%t"+str(arg), "tensor<{}xf64>".format("x".join(str(d) for d in v.tsemantics[arg]['shape']))))
+                    if v.tsemantics[arg]['format'] == DENSE:
+                        in_types.append(("%t"+str(arg), "tensor<{}xf64>".format("x".join(str(d) for d in v.tsemantics[arg]['shape']))))
+                    else:
+                        ssa = "!ta.sparse_tensor<f64, [{}]".format(",".join(str(d) for d in v.tsemantics[arg]['shape']))
+                        if v.tsemantics[arg]['format'] == CSR:
+                            ssa = ssa + ", [1, 0, 2, 0]>"
+                            in_types.append(("%t"+str(arg), ssa))
+                        elif v.tsemantics[arg]['format'] == COO:
+                            ssa = ssa + ", [3, 0, 4, 0]>"
+                            in_types.append(("%t"+str(arg), ssa))
+
+            ret = v.tsemantics[v.returns[0]]
+            format = ret['format']
+            shape = ret['shape']
+            return_types=[]
+            if format != DENSE:
+                type = "!ta.sparse_tensor<f64, [{}]".format(",".join(str(d) for d in ret['shape']))
+                if format == CSR:
+                    type += ", [1, 0, 2, 0]>"
+                elif format == COO:
+                    type += ", [3, 0, 4, 0]>"
+                return_types.append(type)
+            elif shape == 1:
+                type ="f64"
+                return_types.append(type)
+
             irb = builders.MLIRFunctionBuilder(
                 func_def.name,
                 input_types=in_types,
-                return_types=[],
+                return_types=return_types,
             ) 
 
             for i in range(v.currIndexLabel):
-                irb.add_statement('%i{} = "ta.index_label"() : () -> !ta.indexlabel'.format(i))
+                irb.add_statement('%i{} = "ta.index_label"() : () -> !ta.index'.format(i))
 
 
             dense_tensors = []
@@ -924,6 +959,8 @@ def compile(flags, target:str = "cpu", with_jit=True):
             for dec in v.declarations:
                 
                 if dec["type"] == "T":
+                    if dec["id"] in v.in_args:
+                        continue
                     dec["value_type"] = "f64"
                     t = builders.Tensor_Decl_Builder(dec)
                     if dec["format"] == DENSE:
@@ -938,7 +975,8 @@ def compile(flags, target:str = "cpu", with_jit=True):
 
 
             for t in dense_tensors:
-                irb.add_statement(t.build_tensor())
+                if t not in v.in_args:
+                    irb.add_statement(t.build_tensor())
 
             for t in scalars:
                 irb.add_statement(t)
@@ -955,24 +993,31 @@ def compile(flags, target:str = "cpu", with_jit=True):
                 elif op["op_type"] == 'scalar':
                     irb.add_statement(builders.ScalarOp_Builder(op).build_op())
                 elif op["op_type"] == 's':
+                    op["formats"] = [v.tsemantics[op["operands"][0]]['format']] 
                     irb.add_statement(builders.TensorSumBuilder(op).build_op())
                 elif op["op_type"] == 'p':
+                    op["formats"] = [v.tsemantics[op["operands"][0]]['format']] 
                     irb.add_statement(builders.PrintBuilder(op).build_op())
+                elif op["op_type"] == 'r':
+                    op["formats"] = [v.tsemantics[op["operands"][0]]['format']] 
+                    irb.add_statement(builders.ReturnBuilder(op).build_op())
                 elif op["op_type"] == '*':
                     op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
                     irb.add_statement(builders.ArithOp_Builder(op).build_op())
                 elif op["op_type"] == '=':
+                    op["formats"] = [v.tsemantics[op['lhs']]['format']] + [v.tsemantics[op['rhs']]['format']] + [v.tsemantics[op['rhs']]['format']]
                     irb.add_statement(builders.SetOp_Builder(op).build_op())
                 else:
                     op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
                     irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-            irb.add_statement("return")
+            if format == DENSE and shape != 1:
+                irb.add_statement("return")
 
             outputs = []
             ret = v.tsemantics[v.returns[0]]
             format = ret['format']
             if format == DENSE:
-                outputs.append(np.empty(ret['shape']))
+                outputs.append(np.zeros(ret['shape']))
             elif format == CSR:
                 outputs.append(sp.sparse.csr_array(np.empty(ret['shape'])))
             elif format == COO:
