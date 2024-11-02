@@ -94,7 +94,10 @@ def memref_from_np_array(np_array):
         constructor = create_memref_type(ctype,len(np_array.shape))
     elif np_array.dtype == 'float32':
         ctype = c_float
-        constructor = create_memref_type(ctype,len(np_array.shape))
+        if(len(np_array.shape) == 1):
+            constructor = memref_f32
+        else: 
+            constructor = create_memref_type(ctype,len(np_array.shape))
     elif np_array.dtype == 'float64':
         ctype = c_double
         if(len(np_array.shape) == 1):
@@ -105,11 +108,17 @@ def memref_from_np_array(np_array):
 
 # llvm_args += [*expand_memref_ptr(dim_sizes), 0, *expand_memref_ptr(A1pos), 0, *expand_memref_ptr(A2pos), *expand_memref_ptr(A2crd), *expand_memref_ptr(Aval)]
 
-class output_csr(Structure):
+class output_csr_f64(Structure):
     _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_longlong), ('A1pos', memref_i64), ('insert_2', c_longlong), ('A2pos', memref_i64), ('A2crd', memref_i64), ('Aval', memref_f64)]
+    
+class output_csr_f32(Structure):
+    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_longlong), ('A1pos', memref_i64), ('insert_2', c_longlong), ('A2pos', memref_i64), ('A2crd', memref_i64), ('Aval', memref_f32)]
 
-class output_coo(Structure):
+class output_coo_f64(Structure):
     _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_longlong), ('A1pos', memref_i64), ('A1crd', memref_i64), ('insert_2', c_longlong), ('A2crd', memref_i64), ('Aval', memref_f64)]
+
+class output_coo_f32(Structure):
+    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_longlong), ('A1pos', memref_i64), ('A1crd', memref_i64), ('insert_2', c_longlong), ('A2crd', memref_i64), ('Aval', memref_f32)]
 
 def np_array_to_memref(np_array):
     ctype = ctypes.c_longlong
@@ -276,9 +285,13 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                     A2pos, A2pos_type = memref_from_np_array(A2pos_temp)
                     A2crd, A2crd_type = memref_from_np_array(A2crd_temp)
 
-                    out = output_csr(dim_sizes, 0, A1pos, 0, A2pos, A2crd, Aval)
+                    if ndarray.data.dtype == 'float64':
+                        out = output_csr_f64(dim_sizes, 0, A1pos, 0, A2pos, A2crd, Aval)
+                        llvm_args_types = [POINTER(output_csr_f64)] + llvm_args_types
+                    elif ndarray.data.dtype == 'float32':
+                        out = output_csr_f32(dim_sizes, 0, A1pos, 0, A2pos, A2crd, Aval)
+                        llvm_args_types = [POINTER(output_csr_f32)] + llvm_args_types
                     llvm_args = [out] + llvm_args
-                    llvm_args_types = [POINTER(output_csr)] + llvm_args_types
                     all_outputs.append(out)
                 elif ndarray.format == 'coo':
                     A1pos_temp = np.array([0, ndarray.nnz], dtype=np.int64)
@@ -291,9 +304,14 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                     A1crd, A1crd_type = memref_from_np_array(A1crd_temp)
                     A2crd, A2crd_type = memref_from_np_array(A2crd_temp)
 
-                    out = output_coo(dim_sizes, 0, A1pos, A1crd, 0, A2crd, Aval)
+                    if ndarray.data.dtype == 'float64':
+                        out = output_coo_f64(dim_sizes, 0, A1pos, A1crd, 0, A2crd, Aval)
+                        llvm_args_types = [POINTER(output_coo_f64)] + llvm_args_types
+                    elif ndarray.data.dtype == 'float32':
+                        out = output_coo_f32(dim_sizes, 0, A1pos, A1crd, 0, A2crd, Aval)
+                        llvm_args_types = [POINTER(output_coo_f32)] + llvm_args_types
+
                     llvm_args = [out] + llvm_args
-                    llvm_args_types = [POINTER(output_coo)] + llvm_args_types
                     all_outputs.append(out)
             else:
 
