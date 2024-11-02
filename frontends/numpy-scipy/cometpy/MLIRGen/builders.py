@@ -144,7 +144,6 @@ class MLIRFunctionBuilder:
         return_type = ", ".join(str(rt) for rt in self.return_types)
         if len(self.return_types) != 1:
             return_type = f"({return_type})"
-        # signature = ", ".join(f"{ var[0].replace('%','%arg_')}: {var[1].replace('tensor', 'memref')}" if 'tensor' in var[1] else  f"{ var[0].replace('%', '%arg_') }: memref<1xf64>" if var[1] =="f64" else f"{ var[0]}: {var[1]}" for var in self.inputs)
         signature = ", ".join(f"{ var[0]}: {var[1]}" if 'tensor' in var[1] else  f"{ var[0].replac }: tensor<1xf64>" if var[1] =="f64" else f"{ var[0]}: {var[1]}" for var in self.inputs)
 
         return needed_function_definitions + self.function_wrapper_text.render(
@@ -211,13 +210,13 @@ class TensorSumBuilder:
 
     def __init__(self, data): # lhs, operators, tensors_shapes, label_map):
         self.lhs = data["out_id"]
-        self.input_type = get_tensor_type("f64", data["shapes"][0],  data["formats"][0])
-        # "tensor<{}xf64>".format("x".join(str(v) for v in data["shapes"][0]))
+        self.input_type = get_tensor_type(data['value_type'], data["shapes"][0],  data["formats"][0])
+        self.output_type = data['value_type']
 
         self.operators = "({})".format(",".join("%t"+str(v) for v in data["operands"]))
 
     def build_op(self):
-        output_type = "f64"
+        output_type =  self.output_type
         
         return self.tensor_sum_wrapper_text.render(
             lhs = self.lhs,
@@ -242,13 +241,11 @@ class SetOp_Builder:
         self.formats = data["formats"]
         self.tensors_shapes = data["shapes"]
         self.beta = "{:e}".format(data["beta"])
+        self.type = data['value_type']
 
 
     def build_op(self):
-        output_type = get_tensor_type('f64', self.tensors_shapes[-1], self.formats[-1]) #"tensor<{}xf64>".format("x".join(str(v) for v in self.tensors_shapes[-1]))
-        # input_type = []
-        # for t in self.tensors_shapes[:-1]:
-        #     input_type.append("tensor<{}xf64>".format("x".join(str(v) for v in t)))
+        output_type = get_tensor_type(self.type, self.tensors_shapes[-1], self.formats[-1]) 
 
         return self.set_op_wrapper_text.render(
             dest = self.target,
@@ -278,9 +275,9 @@ class ScalarOp_Builder:
         self.tensors_shapes =[]
         for l in data["shapes"]:
             if isinstance(l, int):
-                self.tensors_shapes.append('f64')
+                self.tensors_shapes.append(data['value_type'])
             else:
-                self.tensors_shapes.append('tensor<1xf64>')
+                self.tensors_shapes.append('tensor<1x{}>'.format(data['value_type']))
 
         self.op = data["op"]
 
@@ -315,7 +312,6 @@ class ArithOp_Builder:
         +"({{inputtype}})"
         +"-> {{outputtype}}"
         + "\n" ,
-        # + '"ta.set_op"(%t{{dest}},%t{{dest}}) {__beta__ = {{beta}} : f64} : ({{outputtype}}, {{outputtype}}) -> ()\n',
         undefined=jinja2.StrictUndefined,
     )
 
@@ -408,15 +404,12 @@ class ArithOp_Builder:
         if "semiring" in data:
             self.semiring = data["semiring"]
         self.beta = "{:e}".format(data["beta"])
+        self.datatype = data["value_type"]
 
     def build_op(self):
         input_type = []
         for t,f in zip(self.tensors_shapes[:-1],self.formats[:-1]):
-            input_type.append(get_tensor_type('f64', t, f))
-                # if f == DENSE:
-                #     input_type.append("tensor<{}xf64>".format("x".join(str(v) for v in t)))
-                # elif f == CSR:
-                #     input_type.append("tensor<{}xf64>".format("x".join(str(v) for v in t)))
+            input_type.append(get_tensor_type(self.datatype, t, f))
 
 
         for t in self.tensors_shapes:
@@ -425,7 +418,7 @@ class ArithOp_Builder:
         input_type = ",".join(input_type) 
         if self.mask_shape != None:
 
-            input_type += ", " + get_tensor_type('f64', self.mask_shape, CSR) 
+            input_type += ", " + get_tensor_type(self.datatype, self.mask_shape, CSR) 
         # beta_val = ArithOp_Builder.get_beta_val(self.op)
         
         iMap = {}
@@ -458,7 +451,7 @@ class ArithOp_Builder:
         indexing_map.append(temp)
         indexing_maps = []
 
-        output_type = get_tensor_type('f64', [vMap[v] for v in self.op_ilabels[-1]], self.formats[-1]) #"tensor<{}xf64>".format("x".join(str(vMap[v]) for v in self.op_ilabels[-1]))
+        output_type = get_tensor_type(self.datatype, [vMap[v] for v in self.op_ilabels[-1]], self.formats[-1]) 
 
         for imap in indexing_map:
             indexing_maps.append("affine_map<({})->({})>".format(",".join(["d"+str(l) for l in range(i)]) , ",".join(["d"+str(l) for l in imap])))

@@ -287,9 +287,7 @@ namespace
 
         for (unsigned int n = 0; n < tensors_num; n++)
         {
-          auto tensor_rank_attr = tensors[n].getDefiningOp()->getAttr("tensor_rank");
-          auto tensor_rank_int_attr = cast<IntegerAttr>(tensor_rank_attr);
-          unsigned int tensor_rank = tensor_rank_int_attr.getValue().getLimitedValue();
+          auto tensor_rank = tensors[n].getType().cast<ShapedType>().getRank();
           comet_debug() << "ATTR_Val: " << tensor_rank << "\n";
 
           comet_debug() << " tensor_rank: " << tensor_rank << "\n";
