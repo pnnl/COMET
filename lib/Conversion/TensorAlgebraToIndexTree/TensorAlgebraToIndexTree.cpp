@@ -225,9 +225,11 @@ template<class TATensorOp>
 mlir::LogicalResult generalIndexOperationRewrite(
     mlir::Operation* op,
     ArrayRef<mlir::Value> operands,
-    mlir::ConversionPatternRewriter &rewriter) {
+    mlir::ConversionPatternRewriter &rewriter,
+    bool compute_missing = false)
+{
   comet_pdump(op);
-
+  
   auto loc = op->getLoc();
   auto context = rewriter.getContext();
   TATensorOp mult_op = llvm::dyn_cast<TATensorOp>(op);
@@ -237,7 +239,8 @@ mlir::LogicalResult generalIndexOperationRewrite(
   Value lhs_tensor = getRealLhs(op);
 
   Value mask_tensor = nullptr;
-  if(llvm::isa<TensorMultOp>(op)){
+  if (llvm::isa<TensorMultOp>(op))
+  {
     mask_tensor = llvm::cast<TensorMultOp>(op).getMask();
   }
 
@@ -356,7 +359,8 @@ mlir::LogicalResult generalIndexOperationRewrite(
       parent,
       lhs_operand,
       rhs_operands,
-      rewriter.getStringAttr(semiring)
+      rewriter.getStringAttr(semiring),
+      rewriter.getBoolAttr(compute_missing)
   );
   comet_vdump(compute_op);
 
@@ -394,7 +398,7 @@ struct TensorAddOpLowering : public mlir::ConversionPattern {
   mlir::LogicalResult
   matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    return generalIndexOperationRewrite<TensorAddOp>(op, operands, rewriter);
+    return generalIndexOperationRewrite<TensorAddOp>(op, operands, rewriter, true);
   }
 };
 
@@ -405,7 +409,7 @@ struct TensorSubtractOpLowering : public mlir::ConversionPattern {
   mlir::LogicalResult
   matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    return generalIndexOperationRewrite<TensorSubtractOp>(op, operands, rewriter);
+    return generalIndexOperationRewrite<TensorSubtractOp>(op, operands, rewriter, true);
   }
 };
 

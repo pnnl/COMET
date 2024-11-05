@@ -82,7 +82,7 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
       auto itComputeOp = cast<indexTree::IndexTreeComputeOp>(compute_op);
       auto semiringParts = itComputeOp.getSemiring().split('_');
 
-      if(!Semiring_intersectOps.contains(semiringParts.second)){
+      if(itComputeOp.getComputeMissing()){
         for(auto operand_op_val : itComputeOp.getRhs())
         {
           auto operand_op = operand_op_val.getDefiningOp();
