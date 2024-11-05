@@ -227,7 +227,8 @@ template<class TATensorOp>
 mlir::LogicalResult generalIndexOperationRewrite(
     mlir::Operation* op, 
     ArrayRef<mlir::Value> operands,
-    mlir::ConversionPatternRewriter &rewriter) {
+    mlir::ConversionPatternRewriter &rewriter,
+    bool compute_missing = false) {
 
   auto loc = op->getLoc();
   auto context = rewriter.getContext();
@@ -346,7 +347,8 @@ mlir::LogicalResult generalIndexOperationRewrite(
       parent,
       lhs_operand,
       rhs_operands,
-      rewriter.getStringAttr(semiring)
+      rewriter.getStringAttr(semiring),
+      rewriter.getBoolAttr(compute_missing)
   );
 
   rewriter.create<indexTree::YieldOp>(loc, TypeRange(), compute_op);
@@ -383,7 +385,7 @@ struct TensorAddOpLowering : public mlir::ConversionPattern {
   mlir::LogicalResult
   matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    return generalIndexOperationRewrite<TensorAddOp>(op, operands, rewriter);
+    return generalIndexOperationRewrite<TensorAddOp>(op, operands, rewriter, true);
   }
 };
 
@@ -394,7 +396,7 @@ struct TensorSubtractOpLowering : public mlir::ConversionPattern {
   mlir::LogicalResult
   matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    return generalIndexOperationRewrite<TensorSubtractOp>(op, operands, rewriter);
+    return generalIndexOperationRewrite<TensorSubtractOp>(op, operands, rewriter, true);
   }
 };
 

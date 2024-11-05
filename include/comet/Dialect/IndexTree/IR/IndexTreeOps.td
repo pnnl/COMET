@@ -128,8 +128,9 @@ def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
   }];
 
   //TODO(gkestor): rethink the use of comp_worksp_opt, should we decouple that?
+  //TODO(alokvk2): Rename semiring to operation to account for elementwise addition
   /// MaskType attribute: {push, pull, auto, none}
-  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, StrAttr:$semiring);
+  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, StrAttr:$semiring, DefaultValuedAttr<BoolAttr, "false">:$compute_missing);
 
   let results = (outs TA_AnyTensor);
 
