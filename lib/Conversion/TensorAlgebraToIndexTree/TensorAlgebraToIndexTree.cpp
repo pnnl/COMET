@@ -42,11 +42,9 @@ using namespace mlir::indexTree;
 using namespace mlir::tensorAlgebra;
 
 // *********** For debug purpose *********//
-// #define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
-
-using namespace mlir;
 
 namespace
 {
@@ -56,7 +54,7 @@ namespace
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTensorAlgebraToIndexTreePass)
     LowerTensorAlgebraToIndexTreePass(TargetDevice device) : device(device){};
     void runOnOperation() override;
-  
+
     TargetDevice device;
   };
 
@@ -219,16 +217,17 @@ Value getRealRhs(Value val)
 //   allIndices.insert(allIndices.end(), interIndices.begin(), interIndices.end());
 
 //   // allIndices.resize(it - allIndices.begin());
-//   return allIndices;  
+//   return allIndices;
 // }
 
 
 template<class TATensorOp>
 mlir::LogicalResult generalIndexOperationRewrite(
-    mlir::Operation* op, 
+    mlir::Operation* op,
     ArrayRef<mlir::Value> operands,
     mlir::ConversionPatternRewriter &rewriter,
     bool compute_missing = false) {
+  comet_pdump(op);
 
   auto loc = op->getLoc();
   auto context = rewriter.getContext();
@@ -256,13 +255,16 @@ mlir::LogicalResult generalIndexOperationRewrite(
   Region* body = &itree_op.getRegion();
   loc = body->getLoc();
   Block* block = rewriter.createBlock(body);
+  comet_vdump(itree_op);
+  comet_pdump(block);
 
   indexTree::IndexTreeType tree_type = indexTree::IndexTreeType::get(context);
   Value parent = rewriter.create<indexTree::IndexTreeRootOp>(loc, tree_type);
+  comet_vdump(parent);
 
   //Construct each index variable
   auto lhsMap = cast<AffineMapAttr>(indexing_maps[2]).getValue();
-  indexTree::IndexNodeType index_node_type = indexTree::IndexNodeType::get(context); 
+  indexTree::IndexNodeType index_node_type = indexTree::IndexNodeType::get(context);
   std::vector<Value> index_nodes;
   bool is_parallel = true; // Outer-most, non-reduction dimensions are parallel
 
@@ -279,6 +281,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
     }
     parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel);
     index_nodes.push_back(parent);
+    comet_vdump(parent);
   }
 
   //Construct LHS Operand
@@ -296,13 +299,15 @@ mlir::LogicalResult generalIndexOperationRewrite(
       loc,
       TypeRange({access_type, access_type}),
       lhs_tensor,
-      index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
+//      index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
+      index_nodes[llvm::cast<AffineDimExpr>(expr).getPosition()],
       rewriter.getUI32IntegerAttr((unsigned)i),
       prev_dim
     );
     pos.push_back(access_op.getPos());
     crds.push_back(access_op.getCrd());
     prev_dim = pos[pos.size() - 1];
+    comet_vdump(access_op);
 
     if(mask_tensor != nullptr)
     {
@@ -324,6 +329,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
   Value lhs_operand = rewriter.create<indexTree::IndexTreeLHSOperandOp>(loc, operand_type,
                                                                         lhs_tensor, pos,
                                                                         crds);
+  comet_vdump(lhs_operand);
   Value mask_operand = nullptr;
   if(mask_tensor != nullptr)
   {
@@ -345,17 +351,19 @@ mlir::LogicalResult generalIndexOperationRewrite(
       loc,
       TypeRange({access_type, access_type}),
       rhs1_tensor,
-      index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
+//      index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
+      index_nodes[llvm::cast<AffineDimExpr>(expr).getPosition()],
       rewriter.getUI32IntegerAttr((unsigned)i),
       prev_dim
     );
     pos.push_back(access_op.getPos());
     crds.push_back(access_op.getCrd());
     prev_dim = pos[pos.size() - 1];
+    comet_vdump(access_op);
   }
   rhs_operands.push_back(rewriter.create<IndexTreeOperandOp>(
                           loc, operand_type, rhs1_tensor, pos, crds));
-  
+
   pos.clear();
   crds.clear();
   prev_dim = nullptr;
@@ -367,13 +375,15 @@ mlir::LogicalResult generalIndexOperationRewrite(
       loc,
       TypeRange({access_type, access_type}),
       rhs2_tensor,
-      index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
+//      index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
+      index_nodes[llvm::cast<AffineDimExpr>(expr).getPosition()],
       rewriter.getUI32IntegerAttr((unsigned)i),
       prev_dim
     );
     pos.push_back(access_op.getPos());
     crds.push_back(access_op.getCrd());
     prev_dim = pos[pos.size() - 1];
+    comet_vdump(access_op);
   }
   rhs_operands.push_back(rewriter.create<indexTree::IndexTreeOperandOp>(
                           loc, operand_type, rhs2_tensor, pos, crds));
@@ -388,6 +398,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
       rewriter.getStringAttr(semiring),
       rewriter.getBoolAttr(compute_missing)
   );
+  comet_vdump(compute_op);
 
   rewriter.create<indexTree::YieldOp>(loc, TypeRange(), compute_op);
   rewriter.replaceOp(op, itree_op->getResults());
@@ -440,21 +451,23 @@ struct TensorSubtractOpLowering : public mlir::ConversionPattern {
 
 void LowerTensorAlgebraToIndexTreePass::runOnOperation()
 {
+  comet_pdump(getOperation()->getParentOfType<ModuleOp>());
   mlir::ConversionTarget target(getContext());
 
   target.addLegalDialect<indexTree::IndexTreeDialect>();
   target.addLegalOp<tensorAlgebra::SpTensorAliasOp>();
   target.addIllegalOp<tensorAlgebra::TensorMultOp, tensorAlgebra::TensorElewsMultOp,
                       tensorAlgebra::TensorAddOp, tensorAlgebra::TensorSubtractOp>();
-  
+
   mlir::RewritePatternSet patterns(&getContext());
-  patterns.add<TensorMultOpLowering, 
+  patterns.add<TensorMultOpLowering,
                TensorElewsMultOpLowering,
                TensorAddOpLowering,
                TensorSubtractOpLowering>(&getContext());
 
   if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
     signalPassFailure();
+  comet_pdump(getOperation()->getParentOfType<ModuleOp>());
 }
 
 /// create all the passes.
