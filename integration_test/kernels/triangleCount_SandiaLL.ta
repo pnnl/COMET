@@ -34,4 +34,4 @@ def main() {
 }
 
 # Print the result for verification.
-# CHECK: 5,
+# CHECK: 5
