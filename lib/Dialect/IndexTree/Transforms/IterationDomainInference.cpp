@@ -12,6 +12,11 @@
 using namespace mlir;
 using namespace mlir::indexTree;
 
+// *********** For debug purpose *********//
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+// *********** For debug purpose *********//
+
 namespace mlir {
     namespace comet{
     #define GEN_PASS_DEF_INDEXTREEDOMAININFERENCE
@@ -33,37 +38,40 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
     if(op.getDomain())
       return failure();
 
+    comet_vdump(op);
+
     Location loc = op.getLoc();
     auto context = builder.getContext();
     indexTree::DomainType domain_type = indexTree::DomainType::get(context);
-    
+
     // Map operands to domains
     llvm::SmallDenseMap<Operation*, Value, 8> operands_to_domains;
     // Set of all compute operands
     llvm::SmallPtrSet<Operation*, 4> compute_ops;
     for(Operation* tensor_access_op : op->getUsers())
     {
-        if(!llvm::isa<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op))
+      if(!llvm::isa<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op))
+        continue;
+
+      for(Operation* operand_op : tensor_access_op->getUsers())
+      {
+        if(!llvm::isa<indexTree::IndexTreeOperandOp>(operand_op))
           continue;
 
-        for(Operation* operand_op : tensor_access_op->getUsers())
-        {
-          if(!llvm::isa<indexTree::IndexTreeOperandOp>(operand_op))
-            continue;
-          
-          auto tensor_val = llvm::cast<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op).getTensor();
-          unsigned dim = llvm::cast<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op).getDim();;
-          Value domain = builder.create<indexTree::IndexTreeTensorDomainOp>(loc, 
-              domain_type, 
-              tensor_val, 
-              builder.getUI32IntegerAttr(dim),
-              tensorAlgebra::TensorFormatEnumAttr::get(context, tensorAlgebra::TensorFormatEnum::UNK),
-              nullptr);
+        auto tensor_val = llvm::cast<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op).getTensor();
+        unsigned dim = llvm::cast<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op).getDim();;
+        Value domain = builder.create<indexTree::IndexTreeTensorDomainOp>(loc,
+            domain_type,
+            tensor_val,
+            builder.getUI32IntegerAttr(dim),
+            tensorAlgebra::TensorFormatEnumAttr::get(context, tensorAlgebra::TensorFormatEnum::UNK),
+            nullptr);
+        comet_vdump(domain);
 
-          operands_to_domains.insert(std::pair<Operation*, Value>(operand_op, domain));
-          compute_ops.insert(operand_op->user_begin(), operand_op->user_end());
-          break;
-        }          
+        operands_to_domains.insert(std::pair<Operation*, Value>(operand_op, domain));
+        compute_ops.insert(operand_op->user_begin(), operand_op->user_end());
+        break;
+      }
     }
 
     llvm::SmallVector<Value, 8> domains;
@@ -99,13 +107,14 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
 
     Value final_domain;
     if(domains.size() > 1) {
-      final_domain = builder.create<indexTree::IndexTreeDomainUnionOp>(loc, 
+      final_domain = builder.create<indexTree::IndexTreeDomainUnionOp>(loc,
             domain_type, domains, nullptr);
     } else {
       final_domain = domains[0];
     }
+    comet_vdump(final_domain);
 
-    indexTree::IndexNodeType index_node_type = indexTree::IndexNodeType::get(context); 
+    indexTree::IndexNodeType index_node_type = indexTree::IndexNodeType::get(context);
     builder.replaceOpWithNewOp<indexTree::IndexTreeIndicesOp>(
                           op, index_node_type, op.getParent(), final_domain);
     return success();
@@ -120,7 +129,8 @@ void mlir::indexTree::populateDomainInferencePatterns(
 void IndexTreeDomainInference::runOnOperation(){
   mlir::RewritePatternSet domain_inference_patterns(&getContext());
   populateDomainInferencePatterns(&getContext(), domain_inference_patterns);
-  mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(domain_inference_patterns));
+  if (mlir::failed(mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(domain_inference_patterns))))
+    signalPassFailure();
 }
 
 /// Apply the compressed workspace transformations on the index tree IR
