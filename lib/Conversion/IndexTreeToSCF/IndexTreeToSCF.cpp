@@ -49,13 +49,9 @@
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/iterator_range.h"
-<<<<<<< HEAD
-#include "llvm/ADT/SetVector.h"
-=======
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Debug.h"
 
->>>>>>> 026fe56 (Changing how index tree to SCF conversion pass is structured)
 #include <iostream>
 #include <algorithm>
 #include <ostream>
@@ -895,7 +891,7 @@ namespace
       loop_info->updateOutput(rewriter, input_idx, new_output);
     }
 
-    Value convertOperand(LoopInfo* loop_info, IndexTreeLHSOperandOp op, IRRewriter &rewriter)
+    Value convertOperand(LoopInfo* loop_info, IndexTreeLHSOperandOp op, StringRef semiring, IRRewriter &rewriter)
     {
       Location loc = op->getLoc();
       Value tensor = mapInputIntoLoop(op.getTensor(), loop_info);
@@ -915,11 +911,15 @@ namespace
           element_type = llvm::cast<WorkspaceType>(tensor.getType()).getElementType();
         }
         Value pos = positions[positions.size() - 1];
-        return rewriter.create<TensorExtractOp>(loc, element_type, tensor, pos);
+        double zero = 0;
+        if(semiring == "minxy"){
+          zero = INFINITY;
+        }
+        return rewriter.create<TensorExtractOp>(loc, element_type, tensor, pos, rewriter.getF64FloatAttr(zero));
       }
     }
 
-    Value convertOperand(LoopInfo* loop_info, IndexTreeOperandOp op, IRRewriter &rewriter)
+    Value convertOperand(LoopInfo* loop_info, IndexTreeOperandOp op, StringRef semiring, IRRewriter &rewriter)
     {
       Location loc = op->getLoc();
       Value tensor = mapInputIntoLoop(op.getTensor(), loop_info);
@@ -933,7 +933,11 @@ namespace
         // LHS may not be constant (i.e. if we are inserting into a tensor that we need to resize), 
         // so cannot directly lower like we can the RHS
         Value pos = positions[positions.size() - 1];
-        return rewriter.create<tensorAlgebra::TensorExtractOp>(loc, rewriter.getF64Type(), tensor, pos);
+        double zero = 0;
+        if(semiring == "minxy"){
+          zero = INFINITY;
+        }
+        return rewriter.create<TensorExtractOp>(loc, rewriter.getF64Type(), tensor, pos, rewriter.getF64FloatAttr(zero));
       }
     }
 
@@ -947,7 +951,7 @@ namespace
       Value elementwise_result;
       for(auto rhs = compute_op.getRhs().begin(); rhs != compute_op.getRhs().end(); rhs++)
       {
-        Value rhs_value = convertOperand(parent_info, cast<IndexTreeOperandOp>((*rhs).getDefiningOp()), rewriter);
+        Value rhs_value = convertOperand(parent_info, cast<IndexTreeOperandOp>((*rhs).getDefiningOp()), semiringParts.first, rewriter);
         if(rhs == compute_op.getRhs().begin()){
           elementwise_result = rhs_value;
         } else {
@@ -957,7 +961,7 @@ namespace
       }
 
       IndexTreeLHSOperandOp lhs = llvm::cast<IndexTreeLHSOperandOp>(compute_op.getLhs().getDefiningOp());
-      Value reduce_result = convertOperand(parent_info, lhs, rewriter);
+      Value reduce_result = convertOperand(parent_info, lhs, semiringParts.first, rewriter);
       reduce_result = getSemiringFirstVal(rewriter, loc, semiringParts.first, 
                                           reduce_result, elementwise_result);
 
