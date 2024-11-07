@@ -2,19 +2,21 @@ import time
 import numpy as np
 import scipy as sp
 from cometpy import comet
+from conftest import gpu
 
 def run_numpy(A,B):
 	C = A+B 
 
 	return C
 
-@comet.compile(flags=None)
+@comet.compile(flags=None, target="gpu")
 def run_comet_with_jit(A,B):
 	C = A+B 
 
 	return C
 
-def test_eltwise_add_dense_matrix():
+@gpu
+def test_gpu_eltwise_add_dense_matrix():
 	A = np.full([4, 4], 2.2,  dtype=float)
 	B = np.full([4, 4], 3.4,  dtype=float)
 	C = np.full([4, 4], 0.0,  dtype=float)
