@@ -310,7 +310,7 @@ llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
   if (odsParser.parseLess()) return {};
   ::mlir::FailureOr<::mlir::Type> _result_element_type;
   SmallVector<int64_t> result_dims;
-  SmallVector<int32_t> result_formats;
+  SmallVector<TensorFormatEnum> result_formats;
 
 
   // Parse variable 'element_type'
@@ -351,10 +351,10 @@ llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
 
   // Parse variable 'format'
   do {
-    int32_t format;
-    if (odsParser.parseInteger(format))  // Parse each integer
+    auto format = ::mlir::FieldParser<TensorFormatEnum>::parse(odsParser);
+    if (mlir::failed(format))  // Parse each integer
       return {};
-    result_formats.push_back(format);
+    result_formats.push_back(*format);
   } while (odsParser.parseOptionalComma().succeeded()); 
 
   // Parse literal ']'
@@ -365,7 +365,7 @@ llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
    return SparseTensorType::get(odsParser.getContext(),
       ::mlir::Type((*_result_element_type)),
       ::llvm::ArrayRef<int64_t>((result_dims)),
-      ::llvm::ArrayRef<int32_t>((result_formats)));
+      ::llvm::ArrayRef<TensorFormatEnum>((result_formats)));
 }
 
 

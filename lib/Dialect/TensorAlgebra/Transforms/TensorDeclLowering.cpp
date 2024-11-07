@@ -35,6 +35,8 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/IR/Attributes.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/ValueRange.h"
@@ -44,6 +46,7 @@
 #include <set>
 #include <unordered_map>
 
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
 
 using namespace mlir;
@@ -260,7 +263,12 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
     comet_debug() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
     /// create sptensor_construct
     
-    std::vector<int32_t> dim_formats = mlir::tensorAlgebra::getFormats(formats_str, rank_size, ctx);
+    std::vector<TensorFormatEnum> dim_formats = mlir::tensorAlgebra::getFormats(formats_str, rank_size, ctx);
+    llvm::SmallVector<Attribute, 4> dim_formats_attr;
+    for(TensorFormatEnum& format: dim_formats)
+    {
+      dim_formats_attr.push_back(TensorFormatEnumAttr::get(ctx,format));
+    }
 
     Value sptensor;
     if (rank_size == 2)
@@ -285,7 +293,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                                                               tensorload_sizes_vec[7], /// A2tile_crd
                                                                           },
                                                                           tensorload_sizes_vec[8], /// Aval
-                                                                           2, rewriter.getI32ArrayAttr(dim_formats));
+                                                                           2, ArrayAttr::get(ctx, dim_formats_attr));
     }
     else if (rank_size == 3)
     {
@@ -314,7 +322,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                                                           },
                                                                           // ValueRange{
                                                                           tensorload_sizes_vec[12], /// Aval
-                                                                          3, rewriter.getI32ArrayAttr(dim_formats));
+                                                                          3, ArrayAttr::get(ctx, dim_formats_attr));
     }
     else
     {
@@ -969,8 +977,13 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         Value alloc_sizes_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_index, alloc_sizes);
 
         std::vector<Value> dim_format = mlir::tensorAlgebra::getFormatsValue(formats_str, rank_size, rewriter, loc, indexType);
-        std::vector<int32_t> dim_format_int = mlir::tensorAlgebra::getFormats(formats_str, rank_size, ctx);
-        auto dim_format_attrs = rewriter.getI32ArrayAttr(dim_format_int);
+        std::vector<TensorFormatEnum> dim_format_int = mlir::tensorAlgebra::getFormats(formats_str, rank_size, ctx);
+        llvm::SmallVector<Attribute, 4> dim_format_attr;
+        for(TensorFormatEnum& format: dim_format_int)
+        {
+          dim_format_attr.push_back(TensorFormatEnumAttr::get(ctx, format));
+        }
+        auto dim_format_attrs = ArrayAttr::get(ctx, ArrayRef(dim_format_attr));
         comet_debug() << " Get the dim_format\n";
 
         /// inform the runtime of what env var to use for parsing input file

@@ -880,6 +880,7 @@ class NewVisitor(ast.NodeVisitor):
             
             self.ops.append(
                 {
+                    "value_type": op_semantics['value_type'],
                     "op_type": "*",
                     "shapes": [op_semantics['shape']] * 3,
                     "operands": operands,
@@ -891,7 +892,7 @@ class NewVisitor(ast.NodeVisitor):
                 
                 # ("*", operands, indices+','+indices+'->'+indices, self.tcurr, semiring))
             format = self.sp_elw_mult_conversions[op0_sems['format']][op1_sems['format']]
-            self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False }
+            self.tsemantics[self.tcurr] = {'value_type' : op_semantics['value_type'], 'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False }
             self.tcurr += 1
             self.declarations.append(
                 {
@@ -906,6 +907,7 @@ class NewVisitor(ast.NodeVisitor):
                 })
             self.ops.append(
                 {
+                    "value_type": op_semantics['value_type'],
                     "op_type": "=",
                     "shapes": [op_semantics['shape']] * 2,
                     "rhs": self.tcurr-1,
@@ -981,10 +983,10 @@ def compile(flags, target:str = "cpu", with_jit=True):
                     else:
                         ssa = "!ta.sparse_tensor<{}, [{}]".format(v.tsemantics[arg]['value_type'],",".join(str(d) for d in v.tsemantics[arg]['shape']))
                         if v.tsemantics[arg]['format'] == CSR:
-                            ssa = ssa + ", [1, 0, 2, 0]>"
+                            ssa = ssa + ", [d, unk, cu, unk]>"
                             in_types.append(("%t"+str(arg), ssa))
                         elif v.tsemantics[arg]['format'] == COO:
-                            ssa = ssa + ", [3, 0, 4, 0]>"
+                            ssa = ssa + ", [cn, unk, s, unk]>"
                             in_types.append(("%t"+str(arg), ssa))
 
             ret = v.tsemantics[v.returns[0]]
@@ -994,9 +996,9 @@ def compile(flags, target:str = "cpu", with_jit=True):
             if format != DENSE:
                 type = "!ta.sparse_tensor<{}, [{}]".format(ret['value_type'], ",".join(str(d) for d in ret['shape']))
                 if format == CSR:
-                    type += ", [1, 0, 2, 0]>"
+                    type += ", [d, unk, cu, unk]>"
                 elif format == COO:
-                    type += ", [3, 0, 4, 0]>"
+                    type += ", [cn, unk, s, unk]>"
                 return_types.append(type)
             elif shape == 1:
                 type = ret['value_type']

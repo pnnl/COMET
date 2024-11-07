@@ -76,7 +76,7 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
       }
 
       //Domain comes from a sparse tensor (may still be dense)
-      ArrayRef<int32_t> tensor_dim_formats = sp_tensor.getFormat();
+      ArrayRef<TensorFormatEnum> tensor_dim_formats = sp_tensor.getFormat();
       TensorFormatEnum format = static_cast<TensorFormatEnum>(tensor_dim_formats[2*dim]); 
 
       if(format == TensorFormatEnum::D)

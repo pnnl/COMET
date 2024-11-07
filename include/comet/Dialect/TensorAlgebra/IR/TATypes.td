@@ -27,7 +27,7 @@ def SparseTensor : TensorAlgebra_Type<"SparseTensor", "sparse_tensor", [DeclareT
     let parameters = (ins
         "::mlir::Type":$element_type, 
         ArrayRefParameter<"int64_t", "Dimensions of tensor">:$dims,
-        ArrayRefParameter<"int32_t", "Format">:$format
+        ArrayRefParameter<"TensorFormatEnum", "Format">:$format
     );
 
     let hasCustomAssemblyFormat = 1;

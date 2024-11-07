@@ -1488,7 +1488,7 @@ namespace
       {
         /// BoolAttr is false because there is explicit sparse densor declaration.
         /// SparseTensorDeclOp is not for temporaries in compound expression
-        std::vector<int32_t> format = mlir::tensorAlgebra::getFormats(tensor_format, dims_sizes.size(), builder.getContext());
+        std::vector<TensorFormatEnum> format = mlir::tensorAlgebra::getFormats(tensor_format, dims_sizes.size(), builder.getContext());
         mlir::Type element_type;
         switch (vartype.elt_ty)
         {
@@ -1814,7 +1814,7 @@ namespace
         mlir::StringRef format_strref = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
 
-        std::vector<int32_t> format = mlir::tensorAlgebra::getFormats(format_strref, shape.size(), builder.getContext());
+        std::vector<TensorFormatEnum> format = mlir::tensorAlgebra::getFormats(format_strref, shape.size(), builder.getContext());
         mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
         mlir::Type element_type = shapedT.getElementType();
         return_type = SparseTensorType::get(builder.getContext(), element_type, shape, format);

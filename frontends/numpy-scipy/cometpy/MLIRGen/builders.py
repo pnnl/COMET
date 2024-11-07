@@ -12,17 +12,17 @@ def get_tensor_type(datatype, shape, format):
     if format != DENSE:
         tensor_formats = []
         if format == CSR:
-            tensor_formats.append(1)
-            tensor_formats.append(0)
-            tensor_formats.append(2)
-            tensor_formats.append(0)
+            tensor_formats.append("d")
+            tensor_formats.append("unk")
+            tensor_formats.append("cu")
+            tensor_formats.append("unk")
         elif format == COO:
-            tensor_formats.append(3)
-            tensor_formats.append(0)
-            tensor_formats.append(4)
-            tensor_formats.append(0)
-        
-        return "!ta.sparse_tensor<{}, [{}], {}>".format(datatype, ",".join(str(v) for v in shape), tensor_formats)
+            tensor_formats.append("cn")
+            tensor_formats.append("unk")
+            tensor_formats.append("s")
+            tensor_formats.append("unk")
+        print("Will return {}", "!ta.sparse_tensor<{}, [{}], [{}]>".format(datatype, ",".join(str(v) for v in shape), ",".join(f for f in tensor_formats)))
+        return "!ta.sparse_tensor<{}, [{}], [{}]>".format(datatype, ",".join(str(v) for v in shape), ",".join(f for f in tensor_formats))
     else:
         return "tensor<{}x{}>".format("x".join(str(v) for v in shape), datatype)
 
