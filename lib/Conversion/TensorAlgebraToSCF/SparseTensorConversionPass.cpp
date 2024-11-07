@@ -1090,7 +1090,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
   typeConverter.addConversion(
     [](tensorAlgebra::SparseTensorType type, SmallVectorImpl<Type> &types) {
       ArrayRef<int64_t> dim_sizes = type.getDims();
-      ArrayRef<int32_t> format = type.getFormat();
+      ArrayRef<TensorFormatEnum> format = type.getFormat();
 
       auto context = type.getContext();
       Type index_type = IndexType::get(context);
@@ -1099,7 +1099,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
       types.push_back(RankedTensorType::get({static_cast<long long>(dim_sizes.size())}, IndexType::get(context))); //Dimension sizes
       for(unsigned i = 0; i < dim_sizes.size(); i++) {
         types.push_back(index_type); //Insert pos
-        switch((TensorFormatEnum)format[2 * i])
+        switch(format[2 * i])
         {
           case TensorFormatEnum::D:
           {

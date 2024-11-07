@@ -24,6 +24,7 @@
 #ifndef TENSORALGEBRA_UTILS_H_
 #define TENSORALGEBRA_UTILS_H_
 
+#include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -136,7 +137,7 @@ namespace mlir
                                        PatternRewriter &rewriter, Location loc, IndexType indexType);
     std::vector<Value> getFormatsValueInt(llvm::StringRef formats_str, int rank_size,
                                           PatternRewriter &rewriter, Location loc, IntegerType intType);
-    std::vector<int32_t> getFormats(llvm::StringRef formats_str, int rank_size, MLIRContext* ctx);
+    std::vector<TensorFormatEnum> getFormats(llvm::StringRef formats_str, int rank_size, MLIRContext* ctx);
 
     double loopCostHeuristic(const std::vector<unsigned> &loopOrder, size_t dim_,
                              std::vector<unsigned> &sourceOrder, std::vector<unsigned> &destOrder);

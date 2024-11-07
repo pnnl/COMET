@@ -1144,16 +1144,16 @@ namespace mlir
 
     // TODO (alokvk2): Not good to have this replicated 3 times. Ideally this is only used for "special" formats (i.e. CSR, COO etc.)
     // And this converts it to a vector of TAFormatAttrs.
-    std::vector<int32_t> getFormats(llvm::StringRef formats_str, int rank_size, MLIRContext* ctx)
+    std::vector<TensorFormatEnum> getFormats(llvm::StringRef formats_str, int rank_size, MLIRContext* ctx)
     {
-      auto format_unk =  (int32_t)TensorFormatEnum::UNK;
-      auto format_dense = (int32_t)TensorFormatEnum::D;
-      auto format_compressed = (int32_t)TensorFormatEnum::CU;
-      auto format_compressednonunique = (int32_t)TensorFormatEnum::CN;
-      auto format_singleton = (int32_t)TensorFormatEnum::S;
+      auto format_unk =  TensorFormatEnum::UNK;
+      auto format_dense = TensorFormatEnum::D;
+      auto format_compressed = TensorFormatEnum::CU;
+      auto format_compressednonunique = TensorFormatEnum::CN;
+      auto format_singleton = TensorFormatEnum::S;
       /// read_input_sizes_2D_f64 or read_input_sizes_3D_f64
       comet_debug() << "\n";
-      std::vector<int32_t> dim_format;
+      std::vector<TensorFormatEnum> dim_format;
 
       if (rank_size == 2)
       { /// 2D
