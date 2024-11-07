@@ -281,11 +281,11 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                     llvm_args_types = [POINTER(output_csr)] + llvm_args_types
                     all_outputs.append(out)
                 elif ndarray.format == 'coo':
-                    A1pos_temp = np.array([ndarray.shape[0]], dtype=np.int64)
+                    A1pos_temp = np.array([0, ndarray.nnz], dtype=np.int64)
                     aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                    A2pos_temp = ndarray.indptr.astype('int64') # TODO: This copies data, make comet-code adaptable to index data types
-                    aux.append(A2pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                    A2crd_temp = ndarray.indices.astype('int64') # TODO: This copies data, make comet-code adaptable to index data types
+                    A1crd_temp = ndarray.row.astype('int64')
+                    aux.append(A1crd_temp) # Make sure the array we created persists until we actually call the mlir-generated function
+                    A2crd_temp = ndarray.col.astype('int64') # TODO: This copies data, make comet-code adaptable to index data types
                     aux.append(A2crd_temp) # Make sure the array we created persists until we actually call the mlir-generated function
                     A1pos, A1pos_type = memref_from_np_array(A1pos_temp)
                     A1crd, A1crd_type = memref_from_np_array(A1crd_temp)
@@ -411,9 +411,9 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
                 ret_outputs.append(scp.sparse.csr_array((np_values, np_c_indices, np_r_indices), copy=False))
             elif v1.format == 'coo':
                 out_coo = v0
-                rows = np.ctypeslib.as_array(out_coo.A1crd.mem, [out_coo.A1crd.dim])
-                cols = np.ctypeslib.as_array(out_coo.A2crd.mem, [out_coo.A2crd.dim])
-                np_values = np.ctypeslib.as_array(out_coo.Aval.mem, [out_coo.Aval.dim])
+                rows = np.ctypeslib.as_array(out_coo.A1crd.mem, [out_coo.A1crd.dim[0]])
+                cols = np.ctypeslib.as_array(out_coo.A2crd.mem, [out_coo.A2crd.dim[0]])
+                np_values = np.ctypeslib.as_array(out_coo.Aval.mem, [out_coo.Aval.dim[0]])
                 ret_outputs.append(scp.sparse.coo_array((np_values, (rows, cols)), copy=False))
         else:
             if v1.shape == (1,):
@@ -549,13 +549,13 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
     if target != "cpu":
         if target.startswith("sm_") or target.startswith("compute_") or target.startswith("lto_"):
             if not cfg.gpu_target_enabled:
-                raise "COMET gpu target is not enabled"
+                raise Exception("COMET gpu target is not enabled")
             
             scf_lower_flags += " " + " --convert-to-triton --target=GPU --gpu-compute-capability="+target.split("_")[1]
             mlir_lower_flags += " " + "--target=GPU"
         elif target == "gpu":
             if not cfg.gpu_target_enabled:
-                raise "COMET gpu target is not enabled"
+                raise Exception("COMET gpu target is not enabled")
         
             scf_lower_flags += " " + " --convert-to-triton --target=GPU"
             mlir_lower_flags += " " + "--target=GPU"
