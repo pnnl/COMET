@@ -38,6 +38,11 @@ def IndexTree_OperandType : IndexTree_Type<"Operand", "operand"> {
 def IndexTree_SymbolicDomainType : IndexTree_Type<"SymbolicDomain", "symbolic_domain"> {
   let summary = "Type representing a computed iteration/tensor domain";
   let description = [{}];
+  let parameters = (
+        ins "unsigned":$indices_type
+    );
+
+    let assemblyFormat = "`<`$indices_type`>`";
 }
 
 def IndexTree_DomainType : IndexTree_Type<"Domain", "domain"> {

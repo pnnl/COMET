@@ -39,11 +39,13 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/TypeRange.h"
 #include "mlir/IR/ValueRange.h"
 
 #include <limits>
 #include <map>
 #include <set>
+#include <string>
 #include <unordered_map>
 
 #include "llvm/ADT/SmallVector.h"
@@ -69,181 +71,100 @@ using namespace mlir::indexTree;
 //===----------------------------------------------------------------------===//
 namespace
 {
-  void insertReadFileLibCall(int rank_size, Type floatEleType,MLIRContext *ctx, ModuleOp &module, func::FuncOp function)
+  void insertReadFileLibCall(int rank_size, Type floatEleType, Type indicesType, MLIRContext *ctx, ModuleOp &module, func::FuncOp function)
   {
     comet_debug() << "Inserting insertReadFileLibCall\n";
-
-
     IndexType indexType = IndexType::get(function.getContext());
     IntegerType i32Type = IntegerType::get(ctx, 32);
-    auto unrankedMemref_f64 = mlir::UnrankedMemRefType::get(Float64Type::get(ctx), 0);
-    /// TODO(gkestor): there is an issue with F32 UnrankedMemRefType
-    auto unrankedMemref_f32 = mlir::UnrankedMemRefType::get(Float32Type::get(ctx), 0);
     auto unrankedMemref_index = mlir::UnrankedMemRefType::get(indexType, 0);
-
-    if (rank_size == 2)
+    auto unrankedMemref_element_type = mlir::UnrankedMemRefType::get(floatEleType, 0);
+    auto unrankedMemref_indices_type = mlir::UnrankedMemRefType::get(indicesType, 0);
+    llvm::SmallVector<Type, 21> inputFuncArgTypes;
+    llvm::SmallVector<Type, 10> inputSizeFuncArgTypes;
+    inputFuncArgTypes.push_back(i32Type);
+    inputSizeFuncArgTypes.push_back(i32Type);
+    for(int i = 0; i < rank_size * 2; i++)
     {
-      comet_debug() << " Rank Size is 2\n";
-      auto readInput2DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType,              /// A1_format, A1_tile_format
-                                                        indexType, indexType,                       /// A2_format, A2_tile_format
-                                                        unrankedMemref_index, unrankedMemref_index, /// A1_pos, A1_crd
-                                                        unrankedMemref_index, unrankedMemref_index, /// A1_tile_pos, A1_tile_crd
-                                                        unrankedMemref_index, unrankedMemref_index, /// A2_pos, A2_crd
-                                                        unrankedMemref_index, unrankedMemref_index, /// A2_tile_pos, A2_tile_crd
-                                                        unrankedMemref_f32, i32Type},
-                                                  {});                                              /// last arg (i32Type): readMode
-      auto readInput2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType,              /// A1_format, A1_tile_format
-                                                        indexType, indexType,                       /// A2_format, A2_tile_format
-                                                        unrankedMemref_index, unrankedMemref_index, /// A1_pos, A1_crd
-                                                        unrankedMemref_index, unrankedMemref_index, /// A1_tile_pos, A1_tile_crd
-                                                        unrankedMemref_index, unrankedMemref_index, /// A2_pos, A2_crd
-                                                        unrankedMemref_index, unrankedMemref_index, /// A2_tile_pos, A2_tile_crd
-                                                        unrankedMemref_f64, i32Type},
-                                                  {});
-
-      if (floatEleType.isF32())
-      {
-        std::string func_name = "read_input_2D_f32";
-        if (!hasFuncDeclaration(module, func_name))
-        {
-          comet_debug() << "Adding read_input_2D_f32 to the module\n";
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
-                                                    readInput2DF32Func, ArrayRef<NamedAttribute>{});
-          func1.setPrivate();
-          module.push_back(func1);
-        }
-      }
-      else if (floatEleType.isF64())
-      {
-        std::string func_name = "read_input_2D_f64";
-        if (!hasFuncDeclaration(module, func_name))
-        {
-          comet_debug() << "Adding read_input_2D_f64 to the module\n";
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
-                                                    readInput2DF64Func, ArrayRef<NamedAttribute>{});
-          func1.setPrivate();
-          module.push_back(func1);
-        }
-      }
-      else 
-      {
-        assert(false && "Unexpected type");
-      }
-
-      auto readInputSizes2DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {}); /// last arg (i32Type): readMode
-
-      if (floatEleType.isF32())
-      {
-        std::string func_name = "read_input_sizes_2D_f32";
-        if (!hasFuncDeclaration(module, func_name))
-        {
-          comet_debug() << "Adding read_input_sizes_2D_f32 to the module\n";
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
-                                                    readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
-          func1.setPrivate();
-          module.push_back(func1);
-        }
-      }
-      else if (floatEleType.isF64())
-      {
-        std::string func_name = "read_input_sizes_2D_f64";
-        if (!hasFuncDeclaration(module, func_name))
-        {
-          comet_debug() << "Adding read_input_sizes_2D_f64 to the module\n";
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
-                                                    readInputSizes2DF64Func, ArrayRef<NamedAttribute>{});
-          func1.setPrivate();
-          module.push_back(func1);
-        }
-      }
-      else 
-      {
-        assert(false && "Unsupported type");
-      }
+      inputFuncArgTypes.push_back(indexType);
+      inputSizeFuncArgTypes.push_back(indexType);
     }
-    /// 3D tensor
-    else if (rank_size == 3)
+    for(int i = 0; i < rank_size * 4; i++)
     {
-      auto readInput3DF32Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, indexType, indexType, /// Dimensions
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A1
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A1_tile
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A2
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A2_tile
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A3
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A3_tile
-                                                        unrankedMemref_f32, i32Type},
-                                                  {});                                                                             /// last arg (i32Type): readMode
-      auto readInput3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, indexType, indexType, /// Dimensions
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A1
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A1_tile
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A2
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A2_tile
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A3
-                                                        unrankedMemref_index, unrankedMemref_index,                                /// A3_tile
-                                                        unrankedMemref_f64, i32Type},
-                                                  {});
-
-      if (floatEleType.isF32())
-      {
-        std::string func_name = "read_input_3D_f32";
-        if (!hasFuncDeclaration(module, func_name))
-        {
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
-                                                    readInput3DF32Func, ArrayRef<NamedAttribute>{});
-          func1.setPrivate();
-          module.push_back(func1);
-        }
-      }
-      else if (floatEleType.isF64())
-      {
-        std::string func_name = "read_input_3D_f64";
-        if (!hasFuncDeclaration(module, func_name))
-        {
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
-                                                    readInput3DF64Func, ArrayRef<NamedAttribute>{});
-          func1.setPrivate();
-          module.push_back(func1);
-        }
-      }
-      else 
-      {
-        assert(false && "Unexpected type");
-      }
-
-
-      auto readInputSizes3DF64Func = FunctionType::get(ctx, {i32Type, indexType, indexType, indexType, indexType, indexType, indexType, unrankedMemref_index, i32Type}, {}); /// last arg (i32Type): readMode
-
-      if (floatEleType.isF32())
-      {
-        std::string func_name = "read_input_sizes_3D_f32";
-        if (!hasFuncDeclaration(module, func_name))
-        {
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
-                                                    readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
-          func1.setPrivate();
-          module.push_back(func1);
-        }
-      }
-      else if (floatEleType.isF64())
-      {
-        std::string func_name = "read_input_sizes_3D_f64";
-        if (!hasFuncDeclaration(module, func_name))
-        {
-          comet_debug() << " Insert read_input_sizes_3D_f64 decl\n";
-          func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
-                                                    readInputSizes3DF64Func, ArrayRef<NamedAttribute>{});
-          func1.setPrivate();
-          module.push_back(func1);
-        }
-      }
-      else 
-      {
-        assert(false && "Unsupported type");
-      }
+      inputFuncArgTypes.push_back(unrankedMemref_indices_type);
     }
-    else
+    inputSizeFuncArgTypes.push_back(unrankedMemref_index);
+    inputFuncArgTypes.push_back(unrankedMemref_element_type);
+    inputSizeFuncArgTypes.push_back(i32Type);
+    inputFuncArgTypes.push_back(i32Type);
+
+    auto readInpuFunc = FunctionType::get(ctx, TypeRange(inputFuncArgTypes), {});
+    assert(rank_size <=3 && rank_size >=2);
+
+    std::string func_name = "read_input_"+std::to_string(rank_size)+"D";
+    if (floatEleType.isF32())
     {
-      llvm::errs() << __LINE__ << "Not supported dims\n";
+      func_name += "_f32";
+    }
+    else if (floatEleType.isF64())
+    {
+      func_name += "_f64";
+    }
+    else 
+    {
+      assert(false && "Unexpected type");
+    }
+
+    if(indicesType.isIndex())
+    {
+      func_name += "_64";
+    }
+    else if(indicesType.isInteger(32))
+    {
+      func_name += "_i32";
+    }
+    else if(indicesType.isInteger(64))
+    {
+      func_name += "_i64";
+    }
+    else 
+    {
+      assert(false && "Unexpected type");
+    }
+
+    if (!hasFuncDeclaration(module, func_name))
+    {
+      comet_debug() << "Adding " << func_name <<" to the module\n";
+      func::FuncOp func1 = func::FuncOp::create(function.getLoc(), func_name,
+                                                readInpuFunc, ArrayRef<NamedAttribute>{});
+      func1.setPrivate();
+      module.push_back(func1);
+    }
+
+
+    auto readInputSizesFunc = FunctionType::get(ctx, TypeRange(inputSizeFuncArgTypes), {}); /// last arg (i32Type): readMode
+
+    std::string input_size_func_name = "read_input_sizes_"+std::to_string(rank_size)+"D";
+    if (floatEleType.isF32())
+    {
+      input_size_func_name+="_f32";
+    }
+    else if (floatEleType.isF64())
+    {
+      input_size_func_name+="_f64";
+    }
+    else 
+    {
+      assert(false && "Unsupported type");
+    }
+
+
+    if (!hasFuncDeclaration(module, input_size_func_name))
+    {
+      comet_debug() << "Adding read_input_sizes_2D_f32 to the module\n";
+      func::FuncOp func1 = func::FuncOp::create(function.getLoc(), input_size_func_name,
+                                                readInputSizesFunc, ArrayRef<NamedAttribute>{});
+      func1.setPrivate();
+      module.push_back(func1);
     }
   }
 
@@ -366,10 +287,12 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
     IndexType indexType = IndexType::get(op.getContext());
     Type valsType = spType.getElementType();
+    Type indicesType = spType.getIndicesType();
 
     /// A1_pos ... A_value
     auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); /// memref<?xindex>
-    auto dynamicmemTy_1d_f64 = MemRefType::get({ShapedType::kDynamic}, valsType);     /// memref<?xf64>
+    auto dynamicmemTy_1d_vals_type = MemRefType::get({ShapedType::kDynamic}, valsType);     /// memref<?xf64>
+    auto dynamicmemTy_1d_indices_type = MemRefType::get({ShapedType::kDynamic}, indicesType); 
 
     comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
@@ -489,7 +412,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           for (unsigned int i = 0; i < dst_rank; i++)
           {
             /// 4*rank+2 + i
-            dimSizes.push_back(rewriter.create<SpTensorGetDimSize>(loc, rewriter.getIndexType(), src_input, rewriter.getI32IntegerAttr(i)));
+            dimSizes.push_back(rewriter.create<SpTensorGetDimSize>(loc, src_input, rewriter.getI32IntegerAttr(i)));
           }
 
           Value cst_index_0 = rewriter.create<ConstantOp>(loc, IndexType::get(op.getContext()), rewriter.getIndexAttr(0));
@@ -514,10 +437,10 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
               unsigned int posLocInSrc2 = posLocInSrc + 2;
               unsigned int crdLocInSrc2 = crdLocInSrc + 2;
 
-              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 0), 0));
-              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 0), 0));
-              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 1), 0));
-              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 1), 0));
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimPos>(loc, src_input, rewriter.getI32IntegerAttr(0)), 0));
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, src_input, rewriter.getI32IntegerAttr(0)), 0));
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimPos>(loc, src_input, rewriter.getI32IntegerAttr(1)), 0));
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, src_input, rewriter.getI32IntegerAttr(1)), 0));
             }
             /// val array size
             array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, src_input.getType().cast<SparseTensorType>().getElementType()), src_input), 0));
@@ -579,14 +502,14 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
               /// A2
               array_sizes_vec.push_back(cst_index_1);
               /// TODO(PT): Verify this
-              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), src_input, 1), 0));
+              array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, src_input, rewriter.getI32IntegerAttr(1)), 0));
 
               /// A2tile
               array_sizes_vec.push_back(cst_index_0);
               array_sizes_vec.push_back(cst_index_0);
 
               /// Aval
-              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, src_input.getType().cast<SparseTensorType>().getElementType()), src_input), 0);
+              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, src_input), 0);
             }
           }
           /// For 3D, consider CSF
@@ -596,7 +519,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
             {
               comet_debug() << " 3D CSF transpose to 3D CSF\n";
               array_sizes_vec.push_back(cst_index_2);
-              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, src_input.getType().cast<SparseTensorType>().getElementType()), src_input), 0);
+              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, src_input), 0);
 
               mlir::Value src_nnz = vals_size; 
               mlir::Value src_nnz_add1 = rewriter.create<AddIOp>(loc, src_nnz, cst_index_1);
@@ -627,13 +550,13 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
             Value alloc_sizes;
             if (i < 4 * dst_rank)
             {
-              alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{array_sizes_vec[i]}, rewriter);
+              alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_indices_type, ValueRange{array_sizes_vec[i]}, rewriter);
               comet_debug() << " AllocOp: ";
               comet_vdump(alloc_sizes);
             }
             else
             {
-              alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_f64, ValueRange{array_sizes_vec[i]}, rewriter);
+              alloc_sizes = insertAllocAndInitialize(loc, dynamicmemTy_1d_vals_type, ValueRange{array_sizes_vec[i]}, rewriter);
               comet_debug() << " AllocOp: ";
               comet_vdump(alloc_sizes);
             }
@@ -833,6 +756,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
       IndexType indexType = IndexType::get(op.getContext());
       Type floatEleType = type.getElementType();
+      IntegerType indicesType = type.getIndicesType();
 
       for (auto u1 : op.getOperation()->getUsers())
       {
@@ -1023,7 +947,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         { /// 2D
           comet_debug() << " 2D\n";
           /// Add function definition to the module
-          insertReadFileLibCall(rank_size, floatEleType, ctx, module, function);
+          insertReadFileLibCall(rank_size, floatEleType, indicesType, ctx, module, function);
 
           std::string read_input_sizes_str;
           if (floatEleType.isF32())
@@ -1048,7 +972,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         { /// 3D
           comet_debug() << " 3D\n";
           /// Add function definition to the module
-          insertReadFileLibCall(rank_size, floatEleType, ctx, module, function);
+          insertReadFileLibCall(rank_size, floatEleType, indicesType, ctx, module, function);
 
 
           std::string read_input_sizes_str;
@@ -1090,17 +1014,22 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
         std::vector<Value> alloc_sizes_cast_vec;
         std::vector<Value> alloc_sizes_vec;
+
+        /// A1_pos ... A_value
+        auto dynamicmemTy_1d_indices_type = MemRefType::get({ShapedType::kDynamic}, type.getIndicesType()); /// memref<?xindex>
+        Type unrankedMemTy_indices_type = UnrankedMemRefType::get(type.getIndicesType(), 0);
+      
         for (unsigned int i = 0; i < sp_decl.getDimArrayCount(); i++)
         {
           std::vector<Value> idxes;
           idxes.push_back(array_sizes[i]);
           comet_vdump(array_sizes[i]);
-          Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_index, ValueRange{idxes}, rewriter);
+          Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_indices_type, ValueRange{idxes}, rewriter);
           comet_debug() << " ";
           comet_vdump(alloc_size);
 
           alloc_sizes_vec.push_back(alloc_size);
-          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_index, alloc_size);
+          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_indices_type, alloc_size);
           alloc_sizes_cast_vec.push_back(alloc_size_cast);
         }
 
@@ -1120,6 +1049,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         if (rank_size == 2)
         { /// 2D
           std::string read_input_str;
+          
           if (floatEleType.isF32())
           {
             read_input_str = "read_input_2D_f32";
@@ -1132,6 +1062,9 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           {
             assert(false && "Unexpected type");
           }
+
+          read_input_str += "_i"+std::to_string(indicesType.getWidth());
+
           auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
                                                                   ValueRange{sparseFileID,
                                                                              dim_format[0], dim_format[1], /// A1_format, A1_tile_format
@@ -1158,6 +1091,9 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           {
             read_input_str = "read_input_3D_f64";
           }
+
+          read_input_str += "_i"+std::to_string(indicesType.getWidth());
+
           auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
                                                                   ValueRange{sparseFileID,
                                                                              dim_format[0], dim_format[1],                       /// A1, A1_tile

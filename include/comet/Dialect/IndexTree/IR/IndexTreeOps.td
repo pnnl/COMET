@@ -280,7 +280,7 @@ def DeclDomainOp : IndexTree_Op<"DeclDomainOp", [Pure]>{
   let description = [{
   }];
 
-  let arguments = (ins Index:$dim_size, Index:$num_rows, OptionalAttr<BoolAttr>:$is_dynamic);
+  let arguments = (ins Index:$dim_size, Index:$num_rows, OptionalAttr<BoolAttr>:$is_dynamic, OptionalAttr<I32Attr>:$indices_bitwidth);
   let results = (outs IndexTree_SymbolicDomainType);
 }
 

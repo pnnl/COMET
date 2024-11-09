@@ -30,6 +30,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
 #include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
@@ -307,16 +308,28 @@ llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
 }
 
 ::mlir::Type SparseTensorType::parse(::mlir::AsmParser &odsParser) {
-  if (odsParser.parseLess()) return {};
-  ::mlir::FailureOr<::mlir::Type> _result_element_type;
+  ::mlir::FailureOr<::mlir::Type> _result_element_type; 
+  ::mlir::FailureOr<::mlir::IntegerType> indices_type;
   SmallVector<int64_t> result_dims;
   SmallVector<TensorFormatEnum> result_formats;
 
+  // Parse literal '<'
+  if (odsParser.parseLess()) return {};
 
   // Parse variable 'element_type'
   _result_element_type = ::mlir::FieldParser<::mlir::Type>::parse(odsParser);
   if (::mlir::failed(_result_element_type)) {
     odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'element_type' which is to be a `::mlir::Type`");
+    return {};
+  }
+
+    // Parse literal ','
+  if (odsParser.parseComma()) return {};
+
+  // Parse variable 'indices_type'
+  indices_type = ::mlir::FieldParser<::mlir::IntegerType>::parse(odsParser);
+  if (::mlir::failed(indices_type)) {
+    odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'indices_type' which is to be a `::mlir::IntegerType`");
     return {};
   }
 
@@ -364,6 +377,7 @@ llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
 
    return SparseTensorType::get(odsParser.getContext(),
       ::mlir::Type((*_result_element_type)),
+      ::mlir::IntegerType((*indices_type)),
       ::llvm::ArrayRef<int64_t>((result_dims)),
       ::llvm::ArrayRef<TensorFormatEnum>((result_formats)));
 }
@@ -373,6 +387,9 @@ void SparseTensorType::print(::mlir::AsmPrinter &odsPrinter) const {
   ::mlir::Builder odsBuilder(getContext());
   odsPrinter << "<";
   odsPrinter.printStrippedAttrOrType(getElementType());
+  odsPrinter << ",";
+  odsPrinter << ' ';
+  odsPrinter.printStrippedAttrOrType(getIndicesType());
   odsPrinter << ",";
   odsPrinter << ' ' << "[";
   for(size_t i = 0; i< getDims().size(); i++)

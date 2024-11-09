@@ -94,9 +94,17 @@ namespace
         {
           comet_print = "comet_print_memref_f64";
         }
-        else if(shaped_type.getElementType().isIndex())
+        else if(shaped_type.getElementType().isInteger(64))
         {
           comet_print = "comet_print_memref_i64";
+        }
+        else if(shaped_type.getElementType().isIndex())
+        {
+          comet_print = "comet_print_memref_index";
+        }
+        else if(shaped_type.getElementType().isInteger(32))
+        {
+          comet_print = "comet_print_memref_i32";
         }
         else 
         {

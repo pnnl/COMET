@@ -25,11 +25,13 @@ def SparseTensor : TensorAlgebra_Type<"SparseTensor", "sparse_tensor", [DeclareT
     let description = [{}];
 
     let parameters = (ins
-        "::mlir::Type":$element_type, 
+        "::mlir::Type":$element_type,
+        "::mlir::IntegerType":$indices_type,
         ArrayRefParameter<"int64_t", "Dimensions of tensor">:$dims,
         ArrayRefParameter<"TensorFormatEnum", "Format">:$format
     );
 
+    // let assemblyFormat = "`<` $element_type `,` $indices_type `,` $dims `,` $format `>`";
     let hasCustomAssemblyFormat = 1;
     // TODO: Implement custom builder from "common" format strings into format strings
 }
@@ -42,9 +44,10 @@ def WorkspaceTensor : TensorAlgebra_Type<"Workspace", "workspace", [DeclareTypeI
     }];
     let parameters = (
         ins "::mlir::Type":$element_type,
+        "::mlir::IntegerType":$indices_type,
         ArrayRefParameter<"int64_t", "Dimensions of workspace">:$dims
     );
-    let assemblyFormat = "`<` $element_type `,` $dims `>`";
+    let assemblyFormat = "`<` $element_type `,` $indices_type `,` $dims `>`";
 }
 
 /// Provide a definition of the types that are used within the TA dialect.

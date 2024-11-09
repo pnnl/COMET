@@ -291,7 +291,7 @@ def SparseTensorConstructOp : TA_Op<"spTensor_construct", [SameVariadicOperandSi
   //Aval_size (size of value array) 
   //dim1_size, dim2_size (size of each dimension in sparse tensor) 
   //TODO(gkestor): might be better to have a struct with all the data elements
-  let arguments = (ins TensorOf<[Index]>:$dims, Variadic<TensorOf<[Index]>>:$pos_indices, Variadic<TensorOf<[Index]>>:$crd_indices, Variadic<TensorOf<[Index]>>:$block_pos_indices, Variadic<TensorOf<[Index]>>:$block_crd_indices, TA_FloatTensor:$vals, I32Attr:$tensor_rank, TAFormatArrayAttr:$dimension_formats);
+  let arguments = (ins TensorOf<[Index]>:$dims, Variadic<TensorOf<[AnySignlessIntegerOrIndex]>>:$pos_indices, Variadic<TensorOf<[AnySignlessIntegerOrIndex]>>:$crd_indices, Variadic<TensorOf<[AnySignlessIntegerOrIndex]>>:$block_pos_indices, Variadic<TensorOf<[AnySignlessIntegerOrIndex]>>:$block_crd_indices, TA_FloatTensor:$vals, I32Attr:$tensor_rank, TAFormatArrayAttr:$dimension_formats);
   let results = (outs TA_AnyTensor:$output);
 
   // let assemblyFormat = [{
@@ -1072,26 +1072,64 @@ def TensorExtractOp : TA_Op<"TAExtractOp", [Pure, SameVariadicOperandSize]>{
 def SpTensorGetDimPos : TA_Op<"SpTensorGetDimPos", [Pure]>{
   let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim);
   let results = (outs TensorOf<[AnyType]>);
+
+  let builders = 
+    [OpBuilder<(ins "Value":$tensor, "IntegerAttr":$dim), [{
+      auto indices_type = tensor.getType().cast<SparseTensorType>().getIndicesType();
+      auto outType =  RankedTensorType::get({ShapedType::kDynamic}, indices_type);
+      build($_builder, $_state, outType, tensor, dim); 
+     }]>,
+     
+    ];
 }
 
 def SpTensorGetDimCrd : TA_Op<"SpTensorGetDimCrd", [Pure]>{
   let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim);
   let results = (outs TensorOf<[AnyType]>);
+
+  let builders = 
+    [OpBuilder<(ins "Value":$tensor, "IntegerAttr":$dim), [{
+      auto indices_type = tensor.getType().cast<SparseTensorType>().getIndicesType();
+      auto outType =  RankedTensorType::get({ShapedType::kDynamic}, indices_type);
+      build($_builder, $_state, outType, tensor, dim); 
+     }]>];
 }
 
 def SpTensorGetDimBlockPos : TA_Op<"SpTensorGetDimBlockPos", [Pure]>{
   let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim);
   let results = (outs TensorOf<[AnyType]>);
+
+  let builders = 
+    [OpBuilder<(ins "Value":$tensor, "IntegerAttr":$dim), [{
+      auto indices_type = tensor.getType().cast<SparseTensorType>().getIndicesType();
+      auto outType =  RankedTensorType::get({ShapedType::kDynamic}, indices_type);
+      build($_builder, $_state, outType, tensor, dim); 
+     }]>];
 }
 
 def SpTensorGetDimBlockCrd : TA_Op<"SpTensorGetDimBlockCrd", [Pure]>{
   let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim);
   let results = (outs TensorOf<[AnyType]>);
+
+  let builders = 
+    [OpBuilder<(ins "Value":$tensor, "IntegerAttr":$dim), [{
+      auto indices_type = tensor.getType().cast<SparseTensorType>().getIndicesType();
+      auto outType =  RankedTensorType::get({ShapedType::kDynamic}, indices_type);
+      build($_builder, $_state, outType, tensor, dim); 
+     }]>];
 }
 
 def SpTensorGetVals : TA_Op<"SpTensorGetVals", [Pure]>{
   let arguments = (ins TA_AnyTensor:$tensor);
   let results = (outs TensorOf<[AnyType]>);
+
+
+  let builders = 
+    [OpBuilder<(ins "Value":$tensor), [{
+      auto val_type =  tensor.getType().cast<SparseTensorType>().getElementType();
+      auto outType =  RankedTensorType::get({ShapedType::kDynamic}, val_type);
+      build($_builder, $_state, outType, tensor); 
+     }]>];
 }
 
 def SpTensorGetCrd : TA_Op<"SpTensorGetCrd", [Pure]>{
@@ -1107,6 +1145,11 @@ def SpTensorInsertCrd : TA_Op<"SpTensorInsertCrd", [Pure]>{
 def SpTensorGetDimSize : TA_Op<"SpTensorGetDimSize", [Pure]>{
   let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim);
   let results = (outs Index:$result);
+
+  let builders = 
+  [OpBuilder<(ins "Value":$tensor, "IntegerAttr":$dim), [{
+    build($_builder, $_state, $_builder.getIndexType(), tensor, dim); 
+    }]>];
 }
 
 def SpTensorGetNNZ : TA_Op<"SpTensorGetNNZ", [Pure]>{
