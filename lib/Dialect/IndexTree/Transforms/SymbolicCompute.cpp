@@ -1,4 +1,5 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
@@ -9,6 +10,7 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/IndexedMap.h"
+#include <cstdint>
 
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -157,8 +159,10 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
     auto context = rewriter.getContext();
 
     // Declare Sparse Domains and allocate position vectors for each dimension
+    unsigned indicesBitwidth = it_tensor_decl_op->getResultTypes()[0].cast<SparseTensorType>().getIndicesType().getWidth();
     llvm::SmallDenseMap<Value, Value> symbolic_domains;
-    auto domain_type = SymbolicDomainType::get(context);
+
+    auto domain_type = SymbolicDomainType::get(context, indicesBitwidth);
     auto index_type = rewriter.getIndexType();
     Value cur_pos_size = nullptr;
     unsigned dim = 0;
@@ -183,7 +187,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
         }
         auto concrete_domain = llvm::cast<indexTree::ConcreteDomain>(domain_op);
         Value dim_size = concrete_domain.getDimensionSize();
-        Value symbolic_domain = rewriter.create<DeclDomainOp>(loc, domain_type, dim_size, num_rows, is_dynamic);
+        Value symbolic_domain = rewriter.create<DeclDomainOp>(loc, domain_type, dim_size, num_rows, is_dynamic, rewriter.getI32IntegerAttr(indicesBitwidth));
         symbolic_domains.insert(std::make_pair(domain, symbolic_domain));
       }
       

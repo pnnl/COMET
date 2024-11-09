@@ -152,9 +152,9 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
     auto loc = compute_op.getLoc();
     auto tree_op = compute_op->getParentOfType<IndexTreeOp>();
     rewriter.setInsertionPoint(tree_op);
-    Type element_type = llvm::cast<SparseTensorType>(old_output.getType()).getElementType();
+    SparseTensorType spType = llvm::cast<SparseTensorType>(old_output.getType());
     llvm::SmallVector<int64_t> dim_sizes(workspace_rank, ShapedType::kDynamic);
-    Type workspace_type = WorkspaceType::get(compute_op.getContext(), element_type, dim_sizes);
+    Type workspace_type = WorkspaceType::get(compute_op.getContext(), spType.getElementType(), spType.getIndicesType(), dim_sizes);
     std::reverse(dims.begin(), dims.end());
     Value workspace = rewriter.create<AllocWorkspaceOp>(loc, workspace_type, old_output, rewriter.getI32ArrayAttr(dims));
 

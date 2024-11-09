@@ -281,6 +281,26 @@ class ConvertSpTensorInsertOp
         Value crd_idx = insertAdpator.getPos()[i];
         Value crd = insertAdpator.getCrds()[i];
         Value crd_tensor = dim.crd;
+        RankedTensorType crd_tensorT = mlir::cast<RankedTensorType>(dim.crd.getType());
+        if(crd.getType() != crd_tensorT.getElementType())
+        {
+          if(crd.getType().isIndex())
+          {
+            if(crd_tensorT.getElementType().isInteger(64))
+            {
+              crd = rewriter.create<mlir::arith::IndexCastOp>(loc, crd_tensorT.getElementType(), crd);
+            }
+            else if(crd_tensorT.getElementType().isInteger(32))
+            {
+              crd = rewriter.create<mlir::arith::IndexCastOp>(loc, rewriter.getI64Type(), crd);
+              crd = rewriter.create<mlir::arith::TruncIOp>(loc, crd_tensorT.getElementType(), crd);
+            }
+          }
+          else 
+          {
+            assert(false && "Unexpected type");  
+          }
+        }
         Value crd_size = dim.crd_size;
         crd_tensor = rewriter.create<tensor::InsertOp>(
           loc,
@@ -341,8 +361,8 @@ class ConvertSpTensorExtractOp
     });
     // Match successful!
     auto loc = op.getLoc();
-    Type float_type = llvm::cast<TensorType>(sp_tensor.vals.getType()).getElementType();
-    Value result = rewriter.create<tensor::ExtractOp>(loc, float_type, sp_tensor.vals, extractAdaptor.getPos());
+    // Type float_type = llvm::cast<TensorType>(sp_tensor.vals.getType()).getElementType();
+    Value result = rewriter.create<tensor::ExtractOp>(loc, sp_tensor.vals, extractAdaptor.getPos());
     rewriter.replaceOp(op, {result});
     return success();
   }
@@ -424,11 +444,13 @@ class ConvertSpTensorGetDimCrd
     if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
       return failure();
     }
+    SparseTensorType spTensorType = mlir::cast<SparseTensorType>(tensorAdaptor.getTensor().getType());
+
 
     if(sp_tensor.dims[tensorAdaptor.getDim()].crd == nullptr)
     {
       auto zero = rewriter.create<index::ConstantOp>(op->getLoc(), 0);
-      rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getIndexType()), ValueRange(zero)));
+      rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, spTensorType.getIndicesType()), ValueRange(zero)));
     }
     else
     {
@@ -455,9 +477,10 @@ class ConvertSpTensorGetDimBlockPos
     // if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
     //   return failure();
     // }
+    SparseTensorType spTensorType = mlir::cast<SparseTensorType>(tensorAdaptor.getTensor().getType());
 
     auto zero = rewriter.create<index::ConstantOp>(op->getLoc(), 0);
-    rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getIndexType()), ValueRange(zero)));
+    rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, spTensorType.getIndicesType()), ValueRange(zero)));
 
     return success();
   }
@@ -479,9 +502,10 @@ class ConvertSpTensorGetDimBlockCrd
     // if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
     //   return failure();
     // }
+    SparseTensorType spTensorType = mlir::cast<SparseTensorType>(tensorAdaptor.getTensor().getType());
 
     auto zero = rewriter.create<index::ConstantOp>(op->getLoc(), 0);
-    rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getIndexType()), ValueRange(zero)));
+    rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, spTensorType.getIndicesType()), ValueRange(zero)));
 
     return success();
   }
@@ -515,6 +539,7 @@ class ConvertSpTensorGetDimPos
   matchAndRewrite(SpTensorGetDimPos op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     SpTensorGetDimPosAdaptor tensorAdaptor = llvm::cast<SpTensorGetDimPosAdaptor>(adaptor);
+    SparseTensorType spTensorType = mlir::cast<SparseTensorType>(tensorAdaptor.getTensor().getType());
     SparseTensor sp_tensor;
     if(!unpack_sparse_tensor(tensorAdaptor.getTensor(), sp_tensor)) {
       return failure();
@@ -522,7 +547,7 @@ class ConvertSpTensorGetDimPos
     if(sp_tensor.dims[tensorAdaptor.getDim()].pos == nullptr)
     {
       auto zero = rewriter.create<index::ConstantOp>(op->getLoc(), 0);
-      rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, rewriter.getIndexType()), ValueRange(zero)));
+      rewriter.replaceOp(op, rewriter.create<tensor::EmptyOp>(op->getLoc(), RankedTensorType::get({ShapedType::kDynamic,}, spTensorType.getIndicesType()), ValueRange(zero)));
     }
     else
     {
@@ -581,6 +606,7 @@ class ConvertAllocWorkspaceOp
       sizes.push_back(dim_size);
     }
 
+    WorkspaceType wsType =  op.getType();
     Workspace workspace;
     auto workspace_tensor_type = RankedTensorType::get(dim_attrs, sp_tensor_type.getElementType());
     workspace.workspace = rewriter.create<bufferization::AllocTensorOp>(loc, workspace_tensor_type, sizes);
@@ -588,7 +614,7 @@ class ConvertAllocWorkspaceOp
     auto workspace_mark_type = RankedTensorType::get(dim_attrs, rewriter.getI32Type());
     workspace.mark_array = rewriter.create<bufferization::AllocTensorOp>(loc, workspace_mark_type, sizes);
     workspace.num_crds = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
-    auto crds_type = RankedTensorType::get({ShapedType::kDynamic,}, index_type);
+    auto crds_type = RankedTensorType::get({ShapedType::kDynamic,}, wsType.getIndicesType());
     workspace.crds = rewriter.create<bufferization::AllocTensorOp>(loc, crds_type, sizes);
 
     auto workspace_type = llvm::cast<WorkspaceType>(op->getResult(0).getType());
@@ -782,7 +808,10 @@ class ConvertWorkspaceGetCrds
       return failure();
     }
 
-    rewriter.replaceOpWithNewOp<tensor::ExtractOp>(op, op->getResultTypes(), workspace.crds, opAdaptor.getIdx());
+    Value new_op = rewriter.create<tensor::ExtractOp>(op->getLoc(), workspace.crds, opAdaptor.getIdx());
+    new_op = rewriter.create<mlir::arith::IndexCastOp>(op->getLoc(), rewriter.getIndexType(), new_op);
+    rewriter.replaceOp(op, new_op);
+
     return success();
   }
 };
@@ -836,7 +865,6 @@ class ConvertWorkspaceTensorInsertOp
     Value crd = crds[opAdaptor.getCrds().size() - 1];
     Value mark_at_crd = rewriter.create<tensor::ExtractOp>(
       loc,
-      rewriter.getI32Type(),
       workspace.mark_array,
       crd      
     );
@@ -853,8 +881,14 @@ class ConvertWorkspaceTensorInsertOp
       not_seen,
       [workspace, crd] (OpBuilder& builder, Location loc) {
         Type index_type = builder.getIndexType();
-        Value new_mark = builder.create<tensor::InsertOp>(loc, workspace.mark_array.getType(), workspace.mark_value, workspace.mark_array, crd);
-        Value new_crds = builder.create<tensor::InsertOp>(loc, workspace.crds.getType(), crd, workspace.crds, workspace.num_crds);
+        Value new_mark = builder.create<tensor::InsertOp>(loc, workspace.mark_value, workspace.mark_array, crd);
+        Value crd_cast = crd;
+        RankedTensorType crdT = mlir::cast<RankedTensorType>(workspace.crds.getType());
+        if(crdT.getElementType() != crd.getType())
+        {
+          crd_cast = builder.create<mlir::arith::IndexCastOp>(loc, crdT.getElementType(), crd);
+        }
+        Value new_crds = builder.create<tensor::InsertOp>(loc, crd_cast, workspace.crds, workspace.num_crds);
         Value inc = builder.create<index::ConstantOp>(loc, index_type, builder.getIndexAttr(1));
         Value new_crd_size = builder.create<index::AddOp>(loc, index_type, workspace.num_crds, inc);
         builder.create<scf::YieldOp>(loc, ArrayRef<Value>({new_mark, new_crd_size, new_crds}));
@@ -904,7 +938,6 @@ class ConvertWorkspaceTensorExtractOp
     Value pos = opAdaptor.getPos();
     Value mark_at_pos = rewriter.create<tensor::ExtractOp>(
       loc,
-      rewriter.getI32Type(),
       workspace.mark_array,
       pos      
     );
@@ -921,7 +954,7 @@ class ConvertWorkspaceTensorExtractOp
       loc,
       seen,
       [op, workspace, pos] (OpBuilder& builder, Location loc) {
-        Value extracted = builder.create<tensor::ExtractOp>(loc, op->getResultTypes(), workspace.workspace, pos);
+        Value extracted = builder.create<tensor::ExtractOp>(loc, workspace.workspace, pos);
         builder.create<scf::YieldOp>(loc, ArrayRef<Value>({extracted}));
       },
       [&] (OpBuilder& builder, Location loc) {
@@ -1108,7 +1141,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
             } else {
               is_known_size = false;
             }
-            auto pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, index_type);
+            auto pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, type.getIndicesType());
             types.push_back(pos_type); //Pos tensor
             break;
           }
@@ -1116,9 +1149,9 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
           case TensorFormatEnum::CN:
           {
             Type pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, 
-                                                      index_type);
+                                                      type.getIndicesType());
             Type crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, 
-                                                    index_type);
+                                                    type.getIndicesType());
             is_known_size = false;
 
             types.push_back(pos_type); //Pos tensor
@@ -1127,7 +1160,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
           }
           case TensorFormatEnum::S:
           {
-            Type crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, index_type);
+            Type crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, type.getIndicesType());
             types.push_back(crd_type); //Crd tensor
             break;
           }
@@ -1136,8 +1169,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
           }
         }
       }
-      Type element_type = type.getElementType();
-      Type value_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, element_type);
+      Type value_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, type.getElementType());
       types.push_back(value_type); //Value tensor
       return success();
     });
@@ -1151,7 +1183,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
       types.push_back(IntegerType::get(context, 32)); // Mark Value
       types.push_back(RankedTensorType::get(dim_sizes, IntegerType::get(context, 32))); // Mark array
       types.push_back(IndexType::get(context)); // Crd Size
-      types.push_back(RankedTensorType::get({ShapedType::kDynamic,}, IndexType::get(context)));// Crd tensors
+      types.push_back(RankedTensorType::get({ShapedType::kDynamic,}, type.getIndicesType()));// Crd tensors
       return success();
     });
 

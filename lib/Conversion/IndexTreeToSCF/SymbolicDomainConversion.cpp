@@ -4,6 +4,7 @@
 #include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
 #include "comet/Dialect/IndexTree/Patterns.h"
 
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Index/IR/IndexAttrs.h"
 #include "mlir/Dialect/Index/IR/IndexOps.h"
@@ -12,7 +13,9 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Dialect/Func/Transforms/DecomposeCallGraphTypes.h"
@@ -77,10 +80,14 @@ struct ConvertDomainInsertOp
     {
       
       Value mark = rewriter.create<index::AddOp>(loc, index_type, domain.pos_size, one);
-      Value mark_val = rewriter.create<memref::LoadOp>(loc, index_type, domain.mark_array, op.getCrd());
-      Value is_marked = rewriter.create<index::CmpOp>(loc, 
+      if(mark.getType() != domain.mark_array.getType().cast<ShapedType>().getElementType())
+      {
+        mark = rewriter.create<mlir::arith::IndexCastOp>(loc,  domain.mark_array.getType().cast<ShapedType>().getElementType() ,mark);
+      }
+      Value mark_val = rewriter.create<memref::LoadOp>(loc, domain.mark_array, op.getCrd());
+      Value is_marked = rewriter.create<arith::CmpIOp>(loc, 
                                     rewriter.getI1Type(),
-                                    index::IndexCmpPredicateAttr::get(context, index::IndexCmpPredicate::EQ), 
+                                    arith::CmpIPredicate::eq, 
                                     mark,
                                     mark_val);
       scf::IfOp if_op = rewriter.create<scf::IfOp>(loc, index_type, is_marked, true);
@@ -90,7 +97,7 @@ struct ConvertDomainInsertOp
 
       // We haven't seen this crd before
       rewriter.setInsertionPointToStart(if_op.elseBlock());
-      rewriter.create<memref::StoreOp>(loc, TypeRange(), mark, domain.mark_array, op.getCrd());
+      rewriter.create<memref::StoreOp>(loc, mark, domain.mark_array, op.getCrd());
       Value new_crd_size = rewriter.create<index::AddOp>(loc, index_type, domain.crd_size, one);
       rewriter.create<scf::YieldOp>(loc, new_crd_size);
       rewriter.setInsertionPointAfter(if_op);
@@ -130,9 +137,9 @@ struct ConvertDomainEndRowOp
 
     Value inc = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
     Value new_pos_size = rewriter.create<index::AddOp>(loc, index_type, domain.pos_size, inc);
-
+    Value crd_size_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, rewriter.getIntegerType(op.getResult().getType().getIndicesType()), domain.crd_size);
     // TODO: Dynamically resize array?
-    rewriter.create<memref::StoreOp>(loc, TypeRange(), domain.crd_size, domain.pos, new_pos_size);
+    rewriter.create<memref::StoreOp>(loc, crd_size_cast, domain.pos, new_pos_size);
     Value materialized = getTypeConverter()->materializeArgumentConversion(
             rewriter,
             op.getLoc(),
@@ -158,14 +165,25 @@ struct ConvertDomainDeclarationOp
   matchAndRewrite(indexTree::DeclDomainOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op.getLoc();
+    Type indices_type = rewriter.getIntegerType(*op.getIndicesBitwidth());
     Type index_type = rewriter.getIndexType();
-    Type memref_type = MemRefType::get({ShapedType::kDynamic,}, index_type);
+    Type memref_type = MemRefType::get({ShapedType::kDynamic,}, indices_type);
 
     Value zero = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
     Value inc = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1)); 
-    Value pos_alloc_size = rewriter.create<index::AddOp>(loc, index_type, op.getNumRows(), inc);
-    Value pos = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{pos_alloc_size}, ValueRange(), nullptr);
-    rewriter.create<memref::StoreOp>(loc, zero, pos, zero);
+    Value pos_alloc_size = rewriter.create<index::AddOp>(loc, op.getNumRows(), inc);
+    TypedValue<MemRefType> pos = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{pos_alloc_size}, ValueRange(), nullptr);
+    Value zero_cast = zero;
+    if(!pos.getType().getElementType().isIndex())
+    {
+      zero_cast = rewriter.create<mlir::arith::IndexCastOp>(loc, rewriter.getI64Type(), zero);
+    }
+    if(!pos.getType().getElementType().isInteger(64))
+    {
+      zero_cast = rewriter.create<arith::TruncIOp>(loc, pos.getType().getElementType(), zero);
+    }
+
+    rewriter.create<memref::StoreOp>(loc, zero_cast, pos, zero);
     Value mark_array = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{op.getDimSize()}, ValueRange(), nullptr);
     auto new_op = rewriter.create<UnrealizedConversionCastOp>(
       loc, 
@@ -193,6 +211,7 @@ struct ConvertSparseTensorOp
       }
     }
 
+    tensorAlgebra::SparseTensorType spType = mlir::cast<tensorAlgebra::SparseTensorType>(op->getResultTypes()[0]);
     auto ctx = op.getContext();
     auto format_unk = tensorAlgebra::TensorFormatEnumAttr::get(ctx, tensorAlgebra::TensorFormatEnum::UNK);
     auto format_dense = tensorAlgebra::TensorFormatEnumAttr::get(ctx, tensorAlgebra::TensorFormatEnum::D);
@@ -202,7 +221,7 @@ struct ConvertSparseTensorOp
 
     auto loc = op.getLoc();
     Type index_type = rewriter.getIndexType();
-    Type memref_type = MemRefType::get({ShapedType::kDynamic,}, index_type);
+    Type memref_type = MemRefType::get({ShapedType::kDynamic,}, spType.getIndicesType());
     Value zero = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
     Value one = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
     Value nnz = one;
@@ -221,13 +240,20 @@ struct ConvertSparseTensorOp
         if(llvm::isa<indexTree::IndexTreeDenseDomainOp>(domain_op))
         {
           auto dense_domain_op = llvm::cast<indexTree::IndexTreeDenseDomainOp>(domain_op);
-          Value dim_size = dense_domain_op.getDimSize();
+          Value dim_size = dense_domain_op.getDimSize(); // Always index type
+          Value dim_size_cast;
+          if(!(spType.getIndicesType().isInteger(64) || spType.getIndicesType().isIndex()))
+          {
+            dim_size_cast = rewriter.create<arith::TruncIOp>(loc, spType.getIndicesType(), dim_size);
+          }
+          dim_size_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, spType.getIndicesType(), dim_size);
 
-          Value pos = rewriter.create<memref::AllocOp>(loc,  MemRefType::get({ShapedType::kDynamic,}, index_type), ValueRange({rewriter.create<index::ConstantOp>(loc, 1).getResult()}));
-          rewriter.create<memref::StoreOp>(loc, TypeRange(), dim_size, pos, zero);
-          Value crd = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
-          Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
-          Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
+
+          Value pos = rewriter.create<memref::AllocOp>(loc,  MemRefType::get({ShapedType::kDynamic,}, spType.getIndicesType()), ValueRange({rewriter.create<index::ConstantOp>(loc, 1).getResult()}));
+          rewriter.create<memref::StoreOp>(loc, dim_size_cast, pos, zero);
+          Value crd = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+          Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+          Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
 
           pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
           crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
@@ -246,8 +272,8 @@ struct ConvertSparseTensorOp
 
           Value pos = sparse_domain_op.getPos();
           Value crd = sparse_domain_op.getCrd();
-          Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
-          Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
+          Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+          Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
 
           pos_indices.push_back(pos);
           crd_indices.push_back(crd);
@@ -266,8 +292,8 @@ struct ConvertSparseTensorOp
         SymbolicDomain domain_struct;
         assert(unpack_symbolic_domain(domain, domain_struct));
         Value crd = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{domain_struct.crd_size}, ValueRange(), nullptr);
-        Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
-        Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, index_type));
+        Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+        Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
 
         pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, domain_struct.pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
         crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
@@ -288,7 +314,7 @@ struct ConvertSparseTensorOp
     auto for_loop = rewriter.create<scf::ForOp>(loc, zero, nnz, one);
     rewriter.setInsertionPointToStart(for_loop.getBody());
     auto induction_var = for_loop.getInductionVar();
-    rewriter.create<memref::StoreOp>(loc, TypeRange(), float_zero, val_array, induction_var);
+    rewriter.create<memref::StoreOp>(loc, float_zero, val_array, induction_var);
     rewriter.setInsertionPointAfter(for_loop);
     val_array = rewriter.create<bufferization::ToTensorOp>(loc, val_array, rewriter.getUnitAttr(), rewriter.getUnitAttr());
 
@@ -342,8 +368,9 @@ struct ConvertSymbolicDomainsPass
     typeConverter.addConversion(
       [](indexTree::SymbolicDomainType domainType, SmallVectorImpl<Type> &types) {
         auto context = domainType.getContext();
+        IntegerType indicesType = IntegerType::get(context, domainType.getIndicesType());
         Type index_type = IndexType::get(context);
-        Type memref_type = MemRefType::get({ShapedType::kDynamic,}, index_type);
+        Type memref_type = MemRefType::get({ShapedType::kDynamic,}, indicesType);
         types.push_back(index_type);
         types.push_back(index_type);
         types.push_back(index_type);

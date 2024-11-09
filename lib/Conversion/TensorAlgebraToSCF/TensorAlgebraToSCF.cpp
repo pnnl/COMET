@@ -39,6 +39,10 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/ValueRange.h"
+#include "mlir/Support/LogicalResult.h"
+#include "llvm/ADT/SmallVector.h"
+#include <string>
 
 using namespace mlir;
 using namespace mlir::arith;
@@ -268,6 +272,7 @@ namespace
 
         UnrankedMemRefType unrankedMemrefType_float = UnrankedMemRefType::get(spType.getElementType(), 0);
         Type unrankedMemrefType_index = UnrankedMemRefType::get(indexType, 0);
+        Type unrankedMemrefType_indices_type = UnrankedMemRefType::get(spType.getIndicesType(), 0);
 
         mlir::func::FuncOp transpose_func; /// runtime call
 
@@ -298,27 +303,28 @@ namespace
           auto tensor_type = tensors[n].getType().cast<SparseTensorType>();
           for(int i = 0; i < tensor_rank; i++)
           {
-            Value pos = rewriter.create<SpTensorGetDimPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), tensor, rewriter.getI32IntegerAttr(i));
-            Value pos_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, rewriter.getIndexType()), pos);
-            Value pos_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, pos_memref);
+            Value pos = rewriter.create<SpTensorGetDimPos>(loc, tensor, rewriter.getI32IntegerAttr(i));
+            ShapedType shape = pos.getType().cast<ShapedType>();
+            Value pos_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get(shape.getShape(), shape.getElementType()), pos);
+            Value pos_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_indices_type, pos_memref);
             alloc_sizes_cast_vecs[n].push_back(pos_v);
 
-            mlir::Value crd = rewriter.create<SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), tensor, rewriter.getI32IntegerAttr(i));
-            mlir::Value crd_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, rewriter.getIndexType()), crd);
-            mlir::Value crd_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, crd_memref);
+            mlir::Value crd = rewriter.create<SpTensorGetDimCrd>(loc, tensor, rewriter.getI32IntegerAttr(i));
+            mlir::Value crd_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get(shape.getShape(), shape.getElementType()), crd);
+            mlir::Value crd_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_indices_type, crd_memref);
             alloc_sizes_cast_vecs[n].push_back(crd_v);
             
-            Value block_pos = rewriter.create<SpTensorGetDimBlockPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), tensor, rewriter.getI32IntegerAttr(i));
-            Value block_pos_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, rewriter.getIndexType()), block_pos);
-            Value block_pos_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, block_pos_memref);
+            Value block_pos = rewriter.create<SpTensorGetDimBlockPos>(loc, tensor, rewriter.getI32IntegerAttr(i));
+            Value block_pos_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get(shape.getShape(), shape.getElementType()), block_pos);
+            Value block_pos_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_indices_type, block_pos_memref);
             alloc_sizes_cast_vecs[n].push_back(block_pos_v);
             
-            mlir::Value block_crd = rewriter.create<SpTensorGetDimBlockCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), tensor, rewriter.getI32IntegerAttr(i));
-            mlir::Value block_crd_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, rewriter.getIndexType()), block_crd);
-            mlir::Value block_crd_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_index, block_crd_memref);
+            mlir::Value block_crd = rewriter.create<SpTensorGetDimBlockCrd>(loc, tensor, rewriter.getI32IntegerAttr(i));
+            mlir::Value block_crd_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get(shape.getShape(), shape.getElementType()), block_crd);
+            mlir::Value block_crd_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_indices_type, block_crd_memref);
             alloc_sizes_cast_vecs[n].push_back(block_crd_v);
           }
-          Value vals = rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, tensor_type.getElementType()), tensor);
+          Value vals = rewriter.create<SpTensorGetVals>(loc, tensor);
           Value vals_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get({ShapedType::kDynamic}, tensor_type.getElementType()), vals);
           Value vals_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_float, vals_memref);
           alloc_sizes_cast_vecs[n].push_back(vals_v);
@@ -343,6 +349,7 @@ namespace
         auto tensor_rank_int_attr = cast<IntegerAttr>(tensor_rank_attr);
         unsigned int rank_size = tensor_rank_int_attr.getValue().getLimitedValue();
         comet_debug() << "ATTR_Val: Rank_size: " << rank_size << "\n";
+        assert(rank_size <= 3 && rank_size >=2 && "Rank size not supported");
 
         /// dim format of input tensor
         std::vector<Value>
@@ -351,137 +358,57 @@ namespace
         /// dim format of output tensor
         std::vector<Value>
             dim_formatOut = mlir::tensorAlgebra::getFormatsValueInt(formats_strOut, rank_size, rewriter, loc, i32Type);
-
-        if (rank_size == 2)
-        { /// 2D
-          auto transpose2DFunc = FunctionType::get(ctx,
-                                                      {i32Type, i32Type, i32Type, i32Type,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_float,
-                                                       i32Type, i32Type, i32Type, i32Type,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_float,
-                                                       unrankedMemrefType_index},
-                                                      {});
-
-          std::string func_name;
-          if(unrankedMemrefType_float.getElementType().isF32())
-          {
-           func_name = "transpose_2D_f32";
-          }
-          else if(unrankedMemrefType_float.getElementType().isF64())
-          {
-           func_name = "transpose_2D_f64";
-          }
-
-          if (!hasFuncDeclaration(module, func_name))
-          {
-            transpose_func = mlir::func::FuncOp::create(loc, func_name, transpose2DFunc, ArrayRef<NamedAttribute>{});
-            transpose_func.setPrivate();
-            module.push_back(transpose_func);
-          }
-          comet_debug() << "alloc_sizes_vec: " << alloc_sizes_cast_vecs.size() << "\n";
-          comet_debug() << "alloc_sizes_vec[0]: " << alloc_sizes_cast_vecs[0].size() << "\n";
-          comet_debug() << "alloc_sizes_vec[1]: " << alloc_sizes_cast_vecs[1].size() << "\n";
-          comet_debug() << "dim_formatIn: " << dim_formatIn.size() << "\n";
-          comet_debug() << "dim_formatOut: " << dim_formatOut.size() << "\n";
-
-          rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{},
-                                        ValueRange{dim_formatIn[0], dim_formatIn[1], dim_formatIn[2], dim_formatIn[3],
-                                                   alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
-                                                   alloc_sizes_cast_vecs[0][2], alloc_sizes_cast_vecs[0][3],
-                                                   alloc_sizes_cast_vecs[0][4], alloc_sizes_cast_vecs[0][5],
-                                                   alloc_sizes_cast_vecs[0][6], alloc_sizes_cast_vecs[0][7],
-                                                   alloc_sizes_cast_vecs[0][8],
-                                                   dim_formatOut[0], dim_formatOut[1], dim_formatOut[2], dim_formatOut[3],
-                                                   alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
-                                                   alloc_sizes_cast_vecs[1][2], alloc_sizes_cast_vecs[1][3],
-                                                   alloc_sizes_cast_vecs[1][4], alloc_sizes_cast_vecs[1][5],
-                                                   alloc_sizes_cast_vecs[1][6], alloc_sizes_cast_vecs[1][7],
-                                                   alloc_sizes_cast_vecs[1][8],
-                                                   sparse_tensor_desc});
-        }
-        else if (rank_size == 3)
-        { /// 3D
-          auto transpose3DFunc = FunctionType::get(ctx,
-                                                      {i32Type, i32Type,
-                                                       i32Type, i32Type,
-                                                       i32Type, i32Type,
-                                                       i32Type, i32Type,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_float,
-                                                       i32Type, i32Type,
-                                                       i32Type, i32Type,
-                                                       i32Type, i32Type,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_index, unrankedMemrefType_index,
-                                                       unrankedMemrefType_float,
-                                                       unrankedMemrefType_index},
-                                                      {});
-
-          std::string func_name;
-          if(unrankedMemrefType_float.getElementType().isF32())
-          {
-            func_name = "transpose_3D_f32";
-          }
-          else
-          {
-            func_name = "transpose_3D_f64";
-          }
-          if (!hasFuncDeclaration(module, func_name))
-          {
-            transpose_func = mlir::func::FuncOp::create(loc, func_name, transpose3DFunc, ArrayRef<NamedAttribute>{});
-            transpose_func.setPrivate();
-            module.push_back(transpose_func);
-          }
-
-          rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{},
-                                        ValueRange{input_perm_num, output_perm_num,
-                                                   dim_formatIn[0], dim_formatIn[1], dim_formatIn[2],
-                                                   dim_formatIn[3], dim_formatIn[4], dim_formatIn[5],
-                                                   alloc_sizes_cast_vecs[0][0], alloc_sizes_cast_vecs[0][1],
-                                                   alloc_sizes_cast_vecs[0][2], alloc_sizes_cast_vecs[0][3],
-                                                   alloc_sizes_cast_vecs[0][4], alloc_sizes_cast_vecs[0][5],
-                                                   alloc_sizes_cast_vecs[0][6], alloc_sizes_cast_vecs[0][7],
-                                                   alloc_sizes_cast_vecs[0][8], alloc_sizes_cast_vecs[0][9],
-                                                   alloc_sizes_cast_vecs[0][10], alloc_sizes_cast_vecs[0][11],
-                                                   alloc_sizes_cast_vecs[0][12],
-                                                   dim_formatOut[0], dim_formatOut[1], dim_formatOut[2],
-                                                   dim_formatOut[3], dim_formatOut[4], dim_formatOut[5],
-                                                   alloc_sizes_cast_vecs[1][0], alloc_sizes_cast_vecs[1][1],
-                                                   alloc_sizes_cast_vecs[1][2], alloc_sizes_cast_vecs[1][3],
-                                                   alloc_sizes_cast_vecs[1][4], alloc_sizes_cast_vecs[1][5],
-                                                   alloc_sizes_cast_vecs[1][6], alloc_sizes_cast_vecs[1][7],
-                                                   alloc_sizes_cast_vecs[1][8], alloc_sizes_cast_vecs[1][9],
-                                                   alloc_sizes_cast_vecs[1][10], alloc_sizes_cast_vecs[1][11],
-                                                   alloc_sizes_cast_vecs[1][12],
-                                                   sparse_tensor_desc});
-        }
-        else
+        std::string func_name = "transpose_" + std::to_string(rank_size)+ "D" + "_" + "f" + std::to_string(unrankedMemrefType_float.getElementType().getIntOrFloatBitWidth()) + "_i"+std::to_string(spType.getIndicesType().getWidth());
+        llvm::SmallVector<Type, 28> funcArgTypes;
+        if( rank_size == 3)
         {
-          llvm::errs() << "ERROR: Tensors greater than 3 are not currently supported.\n";
+          funcArgTypes.push_back(i32Type);
+          funcArgTypes.push_back(i32Type);
         }
+        for(int k = 0; k < 2; k++)
+        {
+          for(unsigned i = 0; i < rank_size * 2; i++)
+          { 
+            funcArgTypes.push_back(i32Type);
+          }
+          for(unsigned i = 0; i < rank_size * 4; i++)
+          {
+            funcArgTypes.push_back(unrankedMemrefType_indices_type);
+          }
+          funcArgTypes.push_back(unrankedMemrefType_float);
+        }
+        funcArgTypes.push_back(unrankedMemrefType_index);
+        auto transposeFunc = FunctionType::get(ctx, TypeRange(funcArgTypes), {});
+        if (!hasFuncDeclaration(module, func_name))
+        {
+          transpose_func = mlir::func::FuncOp::create(loc, func_name, transposeFunc, ArrayRef<NamedAttribute>{});
+          transpose_func.setPrivate();
+          module.push_back(transpose_func);
+        }
+        
+        std::vector<Value> allInputs;
+        if(rank_size == 3)
+        {
+          allInputs.push_back(input_perm_num);
+          allInputs.push_back(output_perm_num);
+        }
+        allInputs.insert(allInputs.end(), dim_formatIn.begin(), dim_formatIn.end());
+        allInputs.insert(allInputs.end(), alloc_sizes_cast_vecs[0].begin(), alloc_sizes_cast_vecs[0].end());
+        allInputs.insert(allInputs.end(), dim_formatOut.begin(), dim_formatOut.end());
+        allInputs.insert(allInputs.end(), alloc_sizes_cast_vecs[1].begin(), alloc_sizes_cast_vecs[1].end());
+        allInputs.push_back(sparse_tensor_desc);
+        
+        rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{}, ValueRange(allInputs) );
 
         rewriter.eraseOp(setOp);
         rewriter.eraseOp(op);
         return success();
 
       } /// end else sparse tensor
+      else 
+      {
+        return failure();
+      }
     }   /// Tensor TransposeLowering
   };
 

@@ -71,6 +71,7 @@ using llvm::ScopedHashTableScope;
 using llvm::SmallVector;
 using llvm::StringRef;
 using llvm::Twine;
+int32_t defaultSpTensorIndiceBitWidth = 64; // TODO: We should be able to pass this from the DSL
 
 using StringSet = std::set<std::string>;
 
@@ -970,7 +971,7 @@ namespace
         {
           formats.push_back("CSR");
           std::vector format_array = getFormats("CSR", result_dims.size(), builder.getContext());
-          ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, result_dims, format_array);
+          ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), result_dims, format_array);
         }
         else if (formats[0].compare("Dense") == 0 && formats[1].compare("Dense") == 0)
         {
@@ -986,7 +987,7 @@ namespace
             ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
           } else {
             std::vector format_array = getFormats(out_format, result_dims.size(), builder.getContext());
-            ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, result_dims, format_array);
+            ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), result_dims, format_array);
           }
         }
         else
@@ -1502,7 +1503,7 @@ namespace
             element_type  = builder.getIntegerType(64);
             break;
         }
-        auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, dims_sizes, format);
+        auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), dims_sizes, format);
         value = builder.create<SparseTensorDeclOp>(loc(tensordecl.loc()),
                                                    sp_tensor_type, labels, tensor_format, false);
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
@@ -1810,6 +1811,7 @@ namespace
       }
       else if (isa<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()))
       {
+
         /// for SparseTensorDeclOp create
         mlir::StringRef format_strref = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
@@ -1817,10 +1819,10 @@ namespace
         std::vector<TensorFormatEnum> format = mlir::tensorAlgebra::getFormats(format_strref, shape.size(), builder.getContext());
         mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
         mlir::Type element_type = shapedT.getElementType();
-        return_type = SparseTensorType::get(builder.getContext(), element_type, shape, format);
+        return_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), shape, format);
         /// no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
         /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
-        auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, shape, format);
+        auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), shape, format);
 
         lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), sp_tensor_type, indices, formatAttr, builder.getBoolAttr(true));
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";

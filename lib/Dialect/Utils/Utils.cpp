@@ -137,30 +137,34 @@ namespace mlir
       auto elementType = memtype.getElementType();
 
       Value cst_init;
-      if (elementType.isF64())
-      {
-        comet_debug() << "Element type F64\n";
-        cst_init = rewriter.create<ConstantOp>(loc, rewriter.getF64FloatAttr(0.0));
-      }
-      else if (elementType.isF32())
-      {
-        comet_debug() << "Element type F32\n";
-        cst_init = rewriter.create<ConstantOp>(loc, rewriter.getF32FloatAttr(0.0));
-      }
-      else if (elementType.isIndex())
+      // if (elementType.isF64())
+      // {
+      //   comet_debug() << "Element type F64\n";
+      //   cst_init = rewriter.create<ConstantOp>(loc, rewriter.getZeroAttr(elementType));
+      // }
+      // else if (elementType.isF32())
+      // {
+      //   comet_debug() << "Element type F32\n";
+      //   cst_init = rewriter.create<ConstantOp>(loc, rewriter.getF32FloatAttr(0.0));
+      // }
+      if (elementType.isIndex())
       {
         comet_debug() << "Element type Index\n";
         cst_init = rewriter.create<ConstantIndexOp>(loc, 0);
       }
-      else if (elementType.isInteger(1))
+      else 
       {
-        comet_debug() << "Element type I1 - boolean\n";
-        cst_init = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
+        cst_init = rewriter.create<ConstantOp>(loc, rewriter.getZeroAttr(elementType));
       }
-      else
-      {
-        llvm::errs() << __FILE__ << ":" << __LINE__ << "Not supported memory reference type. Supported element Types are F32, F64, Index \n";
-      }
+      // else if (elementType.isInteger(1))
+      // {
+      //   comet_debug() << "Element type I1 - boolean\n";
+      //   cst_init = rewriter.create<ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(0));
+      // }
+      // else
+      // {
+      //   llvm::errs() << __FILE__ << ":" << __LINE__ << "Not supported memory reference type. Supported element Types are F32, F64, Index \n";
+      // }
 
       rewriter.create<linalg::FillOp>(loc, ValueRange(cst_init), ValueRange(alloc_op));
 

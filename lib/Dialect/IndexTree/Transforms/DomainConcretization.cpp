@@ -88,8 +88,8 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
       } 
       else
       {
-        Value pos = rewriter.create<tensorAlgebra::SpTensorGetDimPos>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), tensor, rewriter.getI32IntegerAttr(dim));
-        Value crd = rewriter.create<tensorAlgebra::SpTensorGetDimCrd>(loc, RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType()), tensor, rewriter.getI32IntegerAttr(dim));
+        Value pos = rewriter.create<tensorAlgebra::SpTensorGetDimPos>(loc, tensor, rewriter.getI32IntegerAttr(dim));
+        Value crd = rewriter.create<tensorAlgebra::SpTensorGetDimCrd>(loc, tensor, rewriter.getI32IntegerAttr(dim));
         Value pos_size = rewriter.create<tensor::DimOp>(loc, pos, 0);
         Value crd_size = rewriter.create<tensor::DimOp>(loc, crd, 0);
         Value dim_size = rewriter.create<tensorAlgebra::SpTensorGetDimSize>(loc, rewriter.getIndexType(), tensor, rewriter.getI32IntegerAttr(dim));
