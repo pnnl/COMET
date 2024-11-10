@@ -174,14 +174,7 @@ struct ConvertDomainDeclarationOp
     Value pos_alloc_size = rewriter.create<index::AddOp>(loc, op.getNumRows(), inc);
     TypedValue<MemRefType> pos = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{pos_alloc_size}, ValueRange(), nullptr);
     Value zero_cast = zero;
-    if(!pos.getType().getElementType().isIndex())
-    {
-      zero_cast = rewriter.create<mlir::arith::IndexCastOp>(loc, rewriter.getI64Type(), zero);
-    }
-    if(!pos.getType().getElementType().isInteger(64))
-    {
-      zero_cast = rewriter.create<arith::TruncIOp>(loc, pos.getType().getElementType(), zero);
-    }
+    zero_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, pos.getType().getElementType(), zero);
 
     rewriter.create<memref::StoreOp>(loc, zero_cast, pos, zero);
     Value mark_array = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{op.getDimSize()}, ValueRange(), nullptr);
@@ -242,10 +235,6 @@ struct ConvertSparseTensorOp
           auto dense_domain_op = llvm::cast<indexTree::IndexTreeDenseDomainOp>(domain_op);
           Value dim_size = dense_domain_op.getDimSize(); // Always index type
           Value dim_size_cast;
-          if(!(spType.getIndicesType().isInteger(64) || spType.getIndicesType().isIndex()))
-          {
-            dim_size_cast = rewriter.create<arith::TruncIOp>(loc, spType.getIndicesType(), dim_size);
-          }
           dim_size_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, spType.getIndicesType(), dim_size);
 
 

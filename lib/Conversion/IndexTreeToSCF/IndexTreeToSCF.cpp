@@ -768,16 +768,8 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
         Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
         Value end_idx = rewriter.create<arith::AddIOp>(loc, index_type, start_idx, inc);
         Value lb = rewriter.create<tensor::ExtractOp>(loc, sparse_domain.getPos(), start_idx);
-        if(lb.getType().isInteger(32))
-        {
-          lb = rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(), lb);
-        }
         lb = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), lb);
         Value ub = rewriter.create<tensor::ExtractOp>(loc, sparse_domain.getPos(), end_idx);
-        if(ub.getType().isInteger(32))
-        {
-          ub = rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(), ub);
-        }
         ub = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), ub);
         Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
                                                         rewriter.getIndexAttr(1));
@@ -788,10 +780,6 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
         Value crd_idx = for_loop.getInductionVar();
         induction_var = crd_idx;
         crd = rewriter.create<tensor::ExtractOp>(loc, sparse_domain.getCrd(), crd_idx);
-        if(crd.getType().isInteger(32))
-        {
-          crd = rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(), crd);
-        }
         crd = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), crd);
 
         
@@ -817,10 +805,6 @@ LowerIndexTreeToSCFPass::convertIndexNode(Operation *op,
         Value crd_idx = sparse_domain.getParent();
         induction_var = crd_idx;
         crd = rewriter.create<tensor::ExtractOp>(loc, sparse_domain.getCrd(), crd_idx);
-        if(crd.getType().isInteger(32))
-        {
-          crd = rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(), crd);
-        }
         crd = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), crd);
         loop_end = rewriter.saveInsertionPoint();
         tensor_access_map.insert(std::make_pair(

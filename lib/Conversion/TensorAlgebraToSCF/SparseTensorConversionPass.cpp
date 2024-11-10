@@ -284,22 +284,7 @@ class ConvertSpTensorInsertOp
         RankedTensorType crd_tensorT = mlir::cast<RankedTensorType>(dim.crd.getType());
         if(crd.getType() != crd_tensorT.getElementType())
         {
-          if(crd.getType().isIndex())
-          {
-            if(crd_tensorT.getElementType().isInteger(64))
-            {
-              crd = rewriter.create<mlir::arith::IndexCastOp>(loc, crd_tensorT.getElementType(), crd);
-            }
-            else if(crd_tensorT.getElementType().isInteger(32))
-            {
-              crd = rewriter.create<mlir::arith::IndexCastOp>(loc, rewriter.getI64Type(), crd);
-              crd = rewriter.create<mlir::arith::TruncIOp>(loc, crd_tensorT.getElementType(), crd);
-            }
-          }
-          else 
-          {
-            assert(false && "Unexpected type");  
-          }
+          crd = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, crd_tensorT.getElementType(), crd);
         }
         Value crd_size = dim.crd_size;
         crd_tensor = rewriter.create<tensor::InsertOp>(
