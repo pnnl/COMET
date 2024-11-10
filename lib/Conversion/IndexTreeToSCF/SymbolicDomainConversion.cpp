@@ -137,7 +137,7 @@ struct ConvertDomainEndRowOp
 
     Value inc = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
     Value new_pos_size = rewriter.create<index::AddOp>(loc, index_type, domain.pos_size, inc);
-    Value crd_size_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, rewriter.getIntegerType(op.getResult().getType().getIndicesType()), domain.crd_size);
+    Value crd_size_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, rewriter.getIntegerType(op.getResult().getType().getIndicesBitwidth()), domain.crd_size);
     // TODO: Dynamically resize array?
     rewriter.create<memref::StoreOp>(loc, crd_size_cast, domain.pos, new_pos_size);
     Value materialized = getTypeConverter()->materializeArgumentConversion(
@@ -357,7 +357,7 @@ struct ConvertSymbolicDomainsPass
     typeConverter.addConversion(
       [](indexTree::SymbolicDomainType domainType, SmallVectorImpl<Type> &types) {
         auto context = domainType.getContext();
-        IntegerType indicesType = IntegerType::get(context, domainType.getIndicesType());
+        IntegerType indicesType = IntegerType::get(context, domainType.getIndicesBitwidth());
         Type index_type = IndexType::get(context);
         Type memref_type = MemRefType::get({ShapedType::kDynamic,}, indicesType);
         types.push_back(index_type);

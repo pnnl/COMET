@@ -732,7 +732,7 @@ class NewVisitor(ast.NodeVisitor):
                 })
             self.ops.append(
                 {
-                    "indices_type": [op_semantics['indices_type'][::-1]] * 2,
+                    "indices_type": [op_semantics['indices_type']] * 2,
                     "value_type": op_semantics['value_type'],
                     "op_type": "=",
                     "shapes": [op_semantics['shape'][::-1]] * 2,
