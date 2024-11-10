@@ -8,7 +8,7 @@ from ast import operator
 from cometpy.MLIRGen import types_mlir
 from cometpy.MLIRGen.types import *
 
-def get_tensor_type(datatype, shape, format):
+def get_tensor_type(datatype, shape, format, indices_type):
     if format != DENSE:
         tensor_formats = []
         if format == CSR:
@@ -21,8 +21,7 @@ def get_tensor_type(datatype, shape, format):
             tensor_formats.append("unk")
             tensor_formats.append("s")
             tensor_formats.append("unk")
-        print("Will return {}", "!ta.sparse_tensor<{}, [{}], [{}]>".format(datatype, ",".join(str(v) for v in shape), ",".join(f for f in tensor_formats)))
-        return "!ta.sparse_tensor<{}, [{}], [{}]>".format(datatype, ",".join(str(v) for v in shape), ",".join(f for f in tensor_formats))
+        return "!ta.sparse_tensor<{}, {}, [{}], [{}]>".format(datatype, indices_type,",".join(str(v) for v in shape), ",".join(f for f in tensor_formats))
     else:
         return "tensor<{}x{}>".format("x".join(str(v) for v in shape), datatype)
 
@@ -210,7 +209,7 @@ class TensorSumBuilder:
 
     def __init__(self, data): # lhs, operators, tensors_shapes, label_map):
         self.lhs = data["out_id"]
-        self.input_type = get_tensor_type(data['value_type'], data["shapes"][0],  data["formats"][0])
+        self.input_type = get_tensor_type(data['value_type'], data["shapes"][0],  data["formats"][0], data['indices_type'][0])
         self.output_type = data['value_type']
 
         self.operators = "({})".format(",".join("%t"+str(v) for v in data["operands"]))
@@ -242,10 +241,11 @@ class SetOp_Builder:
         self.tensors_shapes = data["shapes"]
         self.beta = "{:e}".format(data["beta"])
         self.type = data['value_type']
+        self.indices_type = data['indices_type']
 
 
     def build_op(self):
-        output_type = get_tensor_type(self.type, self.tensors_shapes[-1], self.formats[-1]) 
+        output_type = get_tensor_type(self.type, self.tensors_shapes[-1], self.formats[-1], self.indices_type[-1]) 
 
         return self.set_op_wrapper_text.render(
             dest = self.target,
@@ -405,11 +405,12 @@ class ArithOp_Builder:
             self.semiring = data["semiring"]
         self.beta = "{:e}".format(data["beta"])
         self.datatype = data["value_type"]
+        self.indices_type = data['indices_type']
 
     def build_op(self):
         input_type = []
-        for t,f in zip(self.tensors_shapes[:-1],self.formats[:-1]):
-            input_type.append(get_tensor_type(self.datatype, t, f))
+        for t,f,it in zip(self.tensors_shapes[:-1],self.formats[:-1], self.indices_type[:-1]):
+            input_type.append(get_tensor_type(self.datatype, t, f, it))
 
 
         for t in self.tensors_shapes:
@@ -418,7 +419,7 @@ class ArithOp_Builder:
         input_type = ",".join(input_type) 
         if self.mask_shape != None:
 
-            input_type += ", " + get_tensor_type(self.datatype, self.mask_shape, CSR) 
+            input_type += ", " + get_tensor_type(self.datatype, self.mask_shape, CSR, self.indices_type[-1]) 
         # beta_val = ArithOp_Builder.get_beta_val(self.op)
         
         iMap = {}
@@ -451,7 +452,7 @@ class ArithOp_Builder:
         indexing_map.append(temp)
         indexing_maps = []
 
-        output_type = get_tensor_type(self.datatype, [vMap[v] for v in self.op_ilabels[-1]], self.formats[-1]) 
+        output_type = get_tensor_type(self.datatype, [vMap[v] for v in self.op_ilabels[-1]], self.formats[-1], self.indices_type[-1]) 
 
         for imap in indexing_map:
             indexing_maps.append("affine_map<({})->({})>".format(",".join(["d"+str(l) for l in range(i)]) , ",".join(["d"+str(l) for l in imap])))
@@ -589,7 +590,7 @@ class Tensor_Decl_Builder:
     def __init__(self, data)->None:
         self.lhs = data["id"]
         self.format = data["format"]
-        self.inputtype = get_tensor_type(data["value_type"], data["shape"], self.format)
+        self.inputtype = get_tensor_type(data["value_type"], data["shape"], self.format, data["indices_type"])
 
         # self.decl_vars = data["dimsSSA"]
         self.decl_vars = []
@@ -644,7 +645,7 @@ class PrintBuilder:
         if data["shapes"] == 1 or data["shapes"] == [1]:
             self.outtype = data["value_type"]
         else:
-            self.outtype = get_tensor_type(data['value_type'], data['shapes'][0], data['formats'][0]) 
+            self.outtype = get_tensor_type(data['value_type'], data['shapes'][0], data['formats'][0], data['indices_type'][0]) 
 
     def build_op(self):
         return self.tensor_print_text.render(
@@ -666,7 +667,7 @@ class ReturnBuilder:
         if data["shapes"] == 1 or data["shapes"] == [1]:
             self.outtype = data["value_type"]
         else:
-            self.outtype = get_tensor_type(data['value_type'], data['shapes'][0], data['formats'][0]) 
+            self.outtype = get_tensor_type(data['value_type'], data['shapes'][0], data['formats'][0], data['indices_type'][0]) 
 
     def build_op(self):
         return self.tensor_print_text.render(
