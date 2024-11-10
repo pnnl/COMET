@@ -303,8 +303,7 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                         else:
                             out_type = output_csr_f32_i64
 
-                    llvm_args = [out] + llvm_args
-                    all_outputs.append(out)
+                    out = out_type(dim_sizes, 0, A1pos, 0, A2pos, A2crd, Aval)
                 elif ndarray.format == 'coo':
                     A1pos_temp = np.array([0, ndarray.nnz], dtype=ndarray.row.dtype)
                     aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
@@ -324,10 +323,12 @@ def generate_llvm_args_from_ndarrays(num_in, *ndargs):
                             out_type = output_coo_f32_i64
 
                     out = out_type(dim_sizes, 0, A1pos, A1crd, 0, A2crd, Aval)
-                    llvm_args_types = [POINTER(out_type)] + llvm_args_types
+                else :
+                    raise Exception("Unsupported sparse matrix type")
 
-                    llvm_args = [out] + llvm_args
-                    all_outputs.append(out)
+                llvm_args_types = [POINTER(out_type)] + llvm_args_types
+                llvm_args = [out] + llvm_args
+                all_outputs.append(out)
             else:
 
                 
