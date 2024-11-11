@@ -1093,7 +1093,7 @@ def SpTensorGetVals : TA_Op<"SpTensorGetVals", [Pure]>{
 }
 
 def SpTensorGetCrd : TA_Op<"SpTensorGetCrd", [Pure]>{
-  let arguments = (ins TA_AnyTensor:$tensor, Index:$idx, OptionalAttr<I32Attr>:$dim);
+  let arguments = (ins TA_AnyTensor:$tensor, Index:$idx, I32Attr:$dim);
   let results = (outs Index:$crd);
 }
 

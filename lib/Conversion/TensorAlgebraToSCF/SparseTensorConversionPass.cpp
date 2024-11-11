@@ -363,7 +363,7 @@ class ConvertSpTensorGetCrd
     if(!unpack_sparse_tensor(opAdaptor.getTensor(), sp_tensor)) {
       return failure();
     }
-    rewriter.replaceOpWithNewOp<tensor::ExtractOp>(op, op.getType(), sp_tensor.dims[op.getDim().value()].crd, op.getIdx());
+    rewriter.replaceOpWithNewOp<tensor::ExtractOp>(op, op.getType(), sp_tensor.dims[op.getDim()].crd, op.getIdx());
     return success();
   }
 };
@@ -922,17 +922,18 @@ class ConvertWorkspaceTensorExtractOp
     auto loc = op.getLoc();
     auto context = op.getContext();
     Value pos = opAdaptor.getPos();
-    Value mark_at_pos = rewriter.create<tensor::ExtractOp>(
+    Value crd = rewriter.create<tensor::ExtractOp>(loc, rewriter.getIndexType(), workspace.crds, pos);
+    Value mark_at_crd = rewriter.create<tensor::ExtractOp>(
       loc,
       rewriter.getI32Type(),
       workspace.mark_array,
-      pos      
+      crd      
     );
     Value seen = rewriter.create<arith::CmpIOp>(
       loc, 
       rewriter.getI1Type(),
       arith::CmpIPredicateAttr::get(context, arith::CmpIPredicate::eq),
-      mark_at_pos,
+      mark_at_crd,
       workspace.mark_value
     );
 
@@ -940,8 +941,8 @@ class ConvertWorkspaceTensorExtractOp
     Operation* if_op = rewriter.create<scf::IfOp>(
       loc,
       seen,
-      [op, workspace, pos] (OpBuilder& builder, Location loc) {
-        Value extracted = builder.create<tensor::ExtractOp>(loc, op->getResultTypes(), workspace.workspace, pos);
+      [&] (OpBuilder& builder, Location loc) {
+        Value extracted = builder.create<tensor::ExtractOp>(loc, op->getResultTypes(), workspace.workspace, crd);
         builder.create<scf::YieldOp>(loc, ArrayRef<Value>({extracted}));
       },
       [&] (OpBuilder& builder, Location loc) {
