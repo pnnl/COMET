@@ -921,8 +921,7 @@ class ConvertWorkspaceTensorExtractOp
 
     auto loc = op.getLoc();
     auto context = op.getContext();
-    Value pos = opAdaptor.getPos();
-    Value crd = rewriter.create<tensor::ExtractOp>(loc, rewriter.getIndexType(), workspace.crds, pos);
+    Value crd = opAdaptor.getCrds()[0];
     Value mark_at_crd = rewriter.create<tensor::ExtractOp>(
       loc,
       rewriter.getI32Type(),

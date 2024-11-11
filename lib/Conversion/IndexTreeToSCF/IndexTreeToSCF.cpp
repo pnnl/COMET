@@ -659,6 +659,11 @@ namespace
       }
 
       Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {
+        if(llvm::isa<SparseTensorType>(tensor.getType()))
+        {
+          auto loc = rewriter.getUnknownLoc();
+          return rewriter.create<TensorFindPos>(loc, rewriter.getIndexType(), tensor, nullptr, (int32_t)dim, true);
+        }
         return inductionVar;
       }
 
@@ -926,7 +931,7 @@ namespace
         if(semiring == "minxy"){
           zero = INFINITY;
         }
-        return rewriter.create<TensorExtractOp>(loc, element_type, tensor, pos, rewriter.getF64FloatAttr(zero));
+        return rewriter.create<TensorExtractOp>(loc, element_type, tensor, pos, crds, rewriter.getF64FloatAttr(zero));
       }
     }
 
@@ -948,7 +953,7 @@ namespace
         if(semiring == "minxy"){
           zero = INFINITY;
         }
-        return rewriter.create<TensorExtractOp>(loc, rewriter.getF64Type(), tensor, pos, rewriter.getF64FloatAttr(zero));
+        return rewriter.create<TensorExtractOp>(loc, rewriter.getF64Type(), tensor, pos, crds, rewriter.getF64FloatAttr(zero));
       }
     }
 
