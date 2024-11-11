@@ -1063,6 +1063,7 @@ def TensorExtractOp : TA_Op<"TAExtractOp", [Pure, SameVariadicOperandSize]>{
   let arguments = (
     ins TA_AnyTensor:$tensor, 
     Index:$pos,
+    Variadic<Index>:$crds,
     AnyAttrOf<[F32Attr, F64Attr]>:$zero
   );
 
@@ -1158,7 +1159,7 @@ def SpTensorGetNNZ : TA_Op<"SpTensorGetNNZ", [Pure]>{
 }
 
 def TensorFindPos : TA_Op<"TensorFindPos", [Pure]>{
-  let arguments = (ins TA_AnyTensor:$tensor, Index:$crd, I32Attr:$dim, DefaultValuedAttr<BoolAttr, "false">:$is_linear);
+  let arguments = (ins TA_AnyTensor:$tensor, Optional<Index>:$crd, I32Attr:$dim, DefaultValuedAttr<BoolAttr, "false">:$is_linear);
   let results = (outs Index:$result);
 }
 
