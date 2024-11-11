@@ -310,16 +310,16 @@ llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
 ::mlir::Type SparseTensorType::parse(::mlir::AsmParser &odsParser) {
   ::mlir::FailureOr<::mlir::Type> _result_element_type; 
   ::mlir::FailureOr<::mlir::IntegerType> indices_type;
-  SmallVector<int64_t> result_dims;
+  SmallVector<int64_t> _result_dims;
   SmallVector<TensorFormatEnum> result_formats;
 
   // Parse literal '<'
   if (odsParser.parseLess()) return {};
 
   // Parse variable 'element_type'
-  _result_element_type = ::mlir::FieldParser<::mlir::Type>::parse(odsParser);
-  if (::mlir::failed(_result_element_type)) {
-    odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'element_type' which is to be a `::mlir::Type`");
+  _result_element_type = FieldParser<Type>::parse(odsParser);
+  if (failed(_result_element_type)) {
+    odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'element_type' which is to be a `Type`");
     return {};
   }
 
@@ -332,35 +332,16 @@ llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
     odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'indices_type' which is to be a `::mlir::IntegerType`");
     return {};
   }
-
   // Parse literal ','
   if (odsParser.parseComma()) return {};
-  // Parse literal '['
-  if (odsParser.parseLSquare()) return {};
 
   // Parse variable 'dims'
-  do {
-    int64_t dim;
-    if (!odsParser.parseOptionalInteger(dim).has_value()){  // Parse each integer
-      if (odsParser.parseQuestion()){
-        return {};
-      }
-      else {
-        dim = ShapedType::kDynamic;
-      }
-    }
-
-    result_dims.push_back(dim);
-      
-  } while (odsParser.parseOptionalComma().succeeded()); 
-
-    // Parse literal ']'
-  if (odsParser.parseRSquare()) return {};
+  if(odsParser.parseDimensionList(_result_dims, true, false)) {
+    odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'dims' which is to be a `ArrayRef<int64_t>`");
+    return {};
+  }
   // Parse literal ','
   if (odsParser.parseComma()) return {};
-  // Parse literal '['
-  if (odsParser.parseLSquare()) return {};
-
 
   // Parse variable 'format'
   do {
@@ -378,7 +359,7 @@ llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
    return SparseTensorType::get(odsParser.getContext(),
       ::mlir::Type((*_result_element_type)),
       ::mlir::IntegerType((*indices_type)),
-      ::llvm::ArrayRef<int64_t>((result_dims)),
+      ::llvm::ArrayRef<int64_t>((_result_dims)),
       ::llvm::ArrayRef<TensorFormatEnum>((result_formats)));
 }
 
@@ -391,30 +372,14 @@ void SparseTensorType::print(::mlir::AsmPrinter &odsPrinter) const {
   odsPrinter << ' ';
   odsPrinter.printStrippedAttrOrType(getIndicesType());
   odsPrinter << ",";
-  odsPrinter << ' ' << "[";
-  for(size_t i = 0; i< getDims().size(); i++)
-  {
-    long long v = getDims()[i];
-    if(v == ShapedType::kDynamic)
-    {
-      odsPrinter << "?";
-    }  
-    else 
-    {
-      odsPrinter << v;    
-    }
-    if(i != getDims().size() - 1)
-    {
-      odsPrinter << ", ";
-    }
-  }
-  odsPrinter << "]";
+  odsPrinter << ' ';
+  odsPrinter.printDimensionList(getDims());
   odsPrinter << ",";
-  odsPrinter << ' ' << "[";
+  odsPrinter << ' ';
   odsPrinter.printStrippedAttrOrType(getFormat());
-  odsPrinter << "]";
   odsPrinter << ">";
 }
+
 
 //===----------------------------------------------------------------------===//
 /// TableGen'd type definitions
