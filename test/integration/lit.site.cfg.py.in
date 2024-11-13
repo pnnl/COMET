@@ -58,4 +58,4 @@ import lit.llvm
 lit.llvm.initialize(lit_config, config)
 
 # Let the main config do the real work.
-lit_config.load_config(config, "@COMET_SOURCE_DIR@/integration_test/lit.cfg.py")
+lit_config.load_config(config, "@COMET_SOURCE_DIR@/test/integration/lit.cfg.py")
