@@ -522,8 +522,10 @@ namespace
 
         Value inc = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
         Value end_idx = rewriter.create<arith::AddIOp>(loc, index_type, start_idx, inc);
-        Value lb = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), start_idx);
-        Value ub = rewriter.create<tensor::ExtractOp>(loc, index_type, sparse_domain.getPos(), end_idx);
+        Value lb = rewriter.create<tensor::ExtractOp>(loc, sparse_domain.getPos(), start_idx);
+        lb = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), lb);
+        Value ub = rewriter.create<tensor::ExtractOp>(loc, sparse_domain.getPos(), end_idx);
+        ub = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), ub);
         Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
                                                         rewriter.getIndexAttr(1));
         scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, inputs);
@@ -545,8 +547,9 @@ namespace
       Value getCrd(IRRewriter& rewriter) override {
         if(crd != nullptr) return crd;
         auto loc = controlTensor.getLoc();
-        SparseTensorType tt = cast<SparseTensorType>(controlTensor.getType());
-        crd = rewriter.create<SpTensorGetCrd>(loc, rewriter.getIndexType(), controlTensor, inductionVar, rewriter.getI32IntegerAttr(dim));
+        // SparseTensorType tt = cast<SparseTensorType>(controlTensor.getType());
+        crd = rewriter.create<SpTensorGetCrd>(loc, controlTensor, inductionVar, rewriter.getI32IntegerAttr(dim));
+        crd = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), crd);
         return crd;
       }
 
@@ -594,9 +597,11 @@ namespace
 
       Value getCrd(IRRewriter& rewriter) override {
         auto loc = rewriter.getUnknownLoc(); // This is not correct
-        auto tt = RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType());
-        Value crd_tensor = rewriter.create<SpTensorGetDimCrd>(loc, tt, tensor, rewriter.getI32IntegerAttr(dim));
-        return rewriter.create<tensor::ExtractOp>(loc, rewriter.getIndexType(), crd_tensor, inductionVar);
+        // auto tt = RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIndexType());
+        Value crd_tensor = rewriter.create<SpTensorGetDimCrd>(loc, tensor, rewriter.getI32IntegerAttr(dim));
+        Value crd = rewriter.create<tensor::ExtractOp>(loc, crd_tensor, inductionVar);
+        crd = rewriter.create<IndexCastOp>(loc, rewriter.getIndexType(), crd);
+        return crd;
       }
 
       Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {
@@ -656,7 +661,9 @@ namespace
         if(crd != nullptr) return crd;
         auto loc = workspaceTensor.getLoc();
         WorkspaceType tt = cast<WorkspaceType>(workspaceTensor.getType());
-        crd = rewriter.create<SpTensorGetCrd>(loc, rewriter.getIndexType(), workspaceTensor, inductionVar, rewriter.getI32IntegerAttr(0));
+        crd = rewriter.create<SpTensorGetCrd>(loc, workspaceTensor, inductionVar, rewriter.getI32IntegerAttr(0));
+        crd = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), crd);
+
         return crd;
       }
 
@@ -958,6 +965,7 @@ namespace
         if(semiring == "minxy"){
           zero = INFINITY;
         }
+
         return rewriter.create<TensorExtractOp>(loc, rewriter.getF64Type(), tensor, pos, crds, rewriter.getF64FloatAttr(zero));
       }
     }
