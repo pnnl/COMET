@@ -1135,7 +1135,25 @@ def SpTensorGetVals : TA_Op<"SpTensorGetVals", [Pure]>{
 
 def SpTensorGetCrd : TA_Op<"SpTensorGetCrd", [Pure]>{
   let arguments = (ins TA_AnyTensor:$tensor, Index:$idx, I32Attr:$dim);
-  let results = (outs Index:$crd);
+  let results = (outs AnySignlessIntegerOrIndex:$crd);
+
+  let builders = 
+  [OpBuilder<(ins "Value":$tensor, "Value":$idx, "IntegerAttr":$dim), [{
+    ::mlir::IntegerType indices_type;
+    if(auto spTensor = ::mlir::dyn_cast<SparseTensorType>(tensor.getType()))
+    {
+      indices_type = spTensor.getIndicesType();
+    }
+    else if(auto wsTensor = ::mlir::dyn_cast<WorkspaceType>(tensor.getType()))
+    {
+      indices_type = wsTensor.getIndicesType();
+    }
+    else
+    { 
+      assert(false && "Undexpected input type");
+    }
+    build($_builder, $_state, indices_type, tensor, idx, dim); 
+    }]>];
 }
 
 def SpTensorInsertCrd : TA_Op<"SpTensorInsertCrd", [Pure]>{

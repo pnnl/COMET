@@ -836,7 +836,6 @@ class ConvertWorkspaceGetCrds
     }
 
     Value new_op = rewriter.create<tensor::ExtractOp>(op->getLoc(), workspace.crds, opAdaptor.getIdx());
-    new_op = rewriter.create<mlir::arith::IndexCastOp>(op->getLoc(), rewriter.getIndexType(), new_op);
     rewriter.replaceOp(op, new_op);
 
     return success();
