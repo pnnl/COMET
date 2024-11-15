@@ -143,7 +143,7 @@ endif()
 add_subdirectory(include/comet)
 add_subdirectory(lib)
 add_subdirectory(frontends/comet_dsl)
-add_subdirectory(test)
+add_subdirectory(test/integration)
 
 
 option(COMET_INCLUDE_DOCS "Generate build targets for the COMET docs.")
