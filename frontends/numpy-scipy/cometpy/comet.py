@@ -1048,12 +1048,12 @@ def compile(flags, target:str = "cpu", with_jit=True):
                     if v.tsemantics[arg]['format'] == DENSE:
                         in_types.append(("%t"+str(arg), "tensor<{}x{}>".format("x".join(str(d) for d in v.tsemantics[arg]['shape']), v.tsemantics[arg]['value_type'])))
                     else:
-                        ssa = "!ta.sparse_tensor<{}, {}, [{}]".format(v.tsemantics[arg]['value_type'],v.tsemantics[arg]['indices_type'],",".join(str(d) for d in v.tsemantics[arg]['shape']))
+                        ssa = "!ta.sparse_tensor<{}, {}, {}".format(v.tsemantics[arg]['value_type'],v.tsemantics[arg]['indices_type'],"x".join(str(d) for d in v.tsemantics[arg]['shape']))
                         if v.tsemantics[arg]['format'] == CSR:
-                            ssa = ssa + ", [d, unk, cu, unk]>"
+                            ssa = ssa + ", d, unk, cu, unk>"
                             in_types.append(("%t"+str(arg), ssa))
                         elif v.tsemantics[arg]['format'] == COO:
-                            ssa = ssa + ", [cn, unk, s, unk]>"
+                            ssa = ssa + ", cn, unk, s, unk>"
                             in_types.append(("%t"+str(arg), ssa))
 
             ret = v.tsemantics[v.returns[0]]
@@ -1061,11 +1061,11 @@ def compile(flags, target:str = "cpu", with_jit=True):
             shape = ret['shape']
             return_types=[]
             if format != DENSE:
-                type = "!ta.sparse_tensor<{}, {}, [{}]".format(ret['value_type'], ret['indices_type'], ",".join(str(d) for d in ret['shape']))
+                type = "!ta.sparse_tensor<{}, {}, {}".format(ret['value_type'], ret['indices_type'], "x".join(str(d) for d in ret['shape']))
                 if format == CSR:
-                    type += ", [d, unk, cu, unk]>"
+                    type += ", d, unk, cu, unk>"
                 elif format == COO:
-                    type += ", [cn, unk, s, unk]>"
+                    type += ", cn, unk, s, unk>"
                 return_types.append(type)
             elif shape == 1:
                 type = ret['value_type']

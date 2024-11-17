@@ -21,7 +21,7 @@ def get_tensor_type(datatype, shape, format, indices_type):
             tensor_formats.append("unk")
             tensor_formats.append("s")
             tensor_formats.append("unk")
-        return "!ta.sparse_tensor<{}, {}, [{}], [{}]>".format(datatype, indices_type,",".join(str(v) for v in shape), ",".join(f for f in tensor_formats))
+        return "!ta.sparse_tensor<{}, {}, {}, {}>".format(datatype, indices_type,"x".join(str(v) for v in shape), ",".join(f for f in tensor_formats))
     else:
         return "tensor<{}x{}>".format("x".join(str(v) for v in shape), datatype)
 
