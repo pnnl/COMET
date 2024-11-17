@@ -351,8 +351,6 @@ llvm::ArrayRef<int64_t> SparseTensorType::getShape() const
     result_formats.push_back(*format);
   } while (odsParser.parseOptionalComma().succeeded()); 
 
-  // Parse literal ']'
-  if (odsParser.parseRSquare()) return {};
   // Parse literal '>'
   if (odsParser.parseGreater()) return {};
 
