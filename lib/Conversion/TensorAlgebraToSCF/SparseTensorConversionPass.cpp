@@ -275,6 +275,17 @@ class ConvertSpTensorConstructOp
   }
 };
 
+class ConvertSpTensorAliasOp
+    : public OpConversionPattern<SpTensorAliasOp> {
+  using OpConversionPattern<SpTensorAliasOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(SpTensorAliasOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOp(op, adaptor.getTensor());
+    return success();
+  }
+};
+
 class ConvertSpTensorInsertOp
     : public OpConversionPattern<TensorInsertOp> {
   using OpConversionPattern<TensorInsertOp>::OpConversionPattern;
@@ -1027,6 +1038,24 @@ class ConvertWorkspaceClearOp
   }
 };
 
+class ConvertWorkspaceTensorFindPos
+    : public OpConversionPattern<TensorFindPos> {
+  using OpConversionPattern<TensorFindPos>::OpConversionPattern;
+  ConvertWorkspaceTensorFindPos(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(TensorFindPos op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Workspace workspace;
+    if(!unpack_workspace(adaptor.getTensor(), workspace)) {
+      return failure();
+    }
+    rewriter.replaceOp(op, {workspace.num_crds});
+    
+    return success();
+  }
+};
+
 class PrintOpLowering : public OpConversionPattern<PrintOp> {
   using OpConversionPattern<PrintOp>::OpConversionPattern;
   PrintOpLowering(MLIRContext *context) : OpConversionPattern(context) {}
@@ -1243,8 +1272,8 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
     });
 
   patterns.add<PrintOpLowering, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
-  patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorGetCrd, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorGetDimCrd, ConvertSpTensorGetDimPos, ConvertSpTensorGetDimBlockCrd, ConvertSpTensorGetDimBlockPos, ConvertSpTensorGetVals, ConvertSpTensorFindPos>(typeConverter, context);
-  patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
+  patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorAliasOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorGetCrd, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorGetDimCrd, ConvertSpTensorGetDimPos, ConvertSpTensorGetDimBlockCrd, ConvertSpTensorGetDimBlockPos, ConvertSpTensorGetVals, ConvertSpTensorFindPos>(typeConverter, context);
+  patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceTensorFindPos, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
 }
 
 struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<SparseTensorConversionPass> {
@@ -1264,7 +1293,6 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
     
     // The following operations and dialects may be introduced by the
     // rewriting rules, and are therefore marked as legal.
-    // target.addLegalOp<TensorInsertOp, TensorExtractOp, SpTensorGetDimCrd, SpTensorInsertCrd, SpTensorGetDimPos, SpTensorGetDimSize, SpTensorGetVals, TensorFindPos, PrintOp, PrintElapsedTimeOp, GetTimeOp, tensor::ExtractOp, tensor::InsertOp>();
     target.addLegalOp<tensor::ExtractOp, tensor::InsertOp>();
     target.addLegalDialect<
         arith::ArithDialect, bufferization::BufferizationDialect,

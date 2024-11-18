@@ -40,4 +40,4 @@ def main() {
 
 # Print the result for verification.
 # CHECK: data = 
-# CHECK-NEXT: 5,
+# CHECK-NEXT: 5

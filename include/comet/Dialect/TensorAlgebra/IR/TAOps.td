@@ -1070,6 +1070,11 @@ def TensorExtractOp : TA_Op<"TAExtractOp", [Pure, SameVariadicOperandSize]>{
   let results = (outs AnyFloat);
 }
 
+def SpTensorAliasOp : TA_Op<"SpTensorAlias", [Pure]>{
+  let arguments = (ins TA_AnyTensor:$tensor);
+  let results = (outs TA_AnyTensor);
+}
+
 def SpTensorGetDimPos : TA_Op<"SpTensorGetDimPos", [Pure]>{
   let arguments = (ins TA_AnyTensor:$tensor, I32Attr:$dim);
   let results = (outs TensorOf<[AnyType]>);

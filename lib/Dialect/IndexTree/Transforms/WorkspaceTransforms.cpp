@@ -202,6 +202,7 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
       compute_op.getParent(),
       new_lhs,
       compute_op.getRhs(),
+      nullptr,
       compute_op.getSemiringAttr()
     );
 
@@ -240,6 +241,7 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
       compute_op.getParent(),
       compute_op.getLhs(),
       ValueRange{new_rhs,},
+      nullptr,
       "noop_noop"
     );
 

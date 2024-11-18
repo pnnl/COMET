@@ -246,6 +246,10 @@ mlir::LogicalResult generalIndexOperationRewrite(
   if (llvm::isa<TensorMultOp>(op))
   {
     mask_tensor = llvm::cast<TensorMultOp>(op).getMask();
+    if(mask_tensor && (mask_tensor == rhs1_tensor || mask_tensor == rhs2_tensor))
+    {
+      mask_tensor = rewriter.create<SpTensorAliasOp>(loc, mask_tensor.getType(), mask_tensor);
+    }
   }
 
   auto indexing_maps = mult_op.getIndexingMaps();
@@ -277,13 +281,12 @@ mlir::LogicalResult generalIndexOperationRewrite(
   }
 
   //Construct LHS Operand
-  if(mask_tensor != nullptr)
-  {
-    lhs_tensor = rewriter.create<indexTree::IndexTreeMaskOp>(loc, tensor_type, lhs_tensor, mask_tensor, MaskingTypeAttr);
-  }
   llvm::SmallVector<Value> pos;
   llvm::SmallVector<Value> crds;
   Value prev_dim = nullptr;
+  llvm::SmallVector<Value> mask_pos;
+  llvm::SmallVector<Value> mask_crds;
+  Value mask_prev_dim;
   auto access_type = rewriter.getIndexType();
   for (size_t i = 0; i < lhsMap.getNumResults(); i++)
   {
@@ -301,12 +304,35 @@ mlir::LogicalResult generalIndexOperationRewrite(
     crds.push_back(access_op.getCrd());
     prev_dim = pos[pos.size() - 1];
     comet_vdump(access_op);
+
+    if(mask_tensor != nullptr)
+    {
+      IndexTreeIndexToTensorOp access_op = rewriter.create<IndexTreeIndexToTensorOp>(
+        loc,
+        TypeRange({access_type, access_type}),
+        mask_tensor,
+        index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
+        rewriter.getUI32IntegerAttr((unsigned)i),
+        mask_prev_dim
+      );
+      mask_pos.push_back(access_op.getPos());
+      mask_crds.push_back(access_op.getCrd());
+      mask_prev_dim = mask_pos[mask_pos.size() - 1];
+    }
   }
+
   indexTree::OperandType operand_type = indexTree::OperandType::get(context);
   Value lhs_operand = rewriter.create<indexTree::IndexTreeLHSOperandOp>(loc, operand_type,
                                                                         lhs_tensor, pos,
                                                                         crds);
   comet_vdump(lhs_operand);
+  Value mask_operand = nullptr;
+  if(mask_tensor != nullptr)
+  {
+    mask_operand = rewriter.create<indexTree::IndexTreeOperandOp>(loc, operand_type,
+                                                                      mask_tensor, mask_pos,
+                                                                      mask_crds);
+  }
 
   //Construct RHS operands
   std::vector<Value> rhs_operands;
@@ -364,6 +390,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
       parent,
       lhs_operand,
       rhs_operands,
+      mask_operand,
       rewriter.getStringAttr(semiring),
       rewriter.getBoolAttr(compute_missing)
   );
@@ -424,6 +451,7 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
   mlir::ConversionTarget target(getContext());
 
   target.addLegalDialect<indexTree::IndexTreeDialect>();
+  target.addLegalOp<tensorAlgebra::SpTensorAliasOp>();
   target.addIllegalOp<tensorAlgebra::TensorMultOp, tensorAlgebra::TensorElewsMultOp,
                       tensorAlgebra::TensorAddOp, tensorAlgebra::TensorSubtractOp>();
 
