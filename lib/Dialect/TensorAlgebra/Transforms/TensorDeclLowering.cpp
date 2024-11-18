@@ -842,6 +842,11 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           /// do nothing!
           comet_debug() << " the tensor has use in a Index Tree\n";
         }
+        else if (isa<tensorAlgebra::SpTensorAliasOp>(u1))
+        {
+          /// do nothing!
+          comet_debug() << " the tensor has use in alias op\n";
+        }
         else
         {
           u1->dump();
@@ -1308,6 +1313,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::ScalarOp,
                         tensorAlgebra::SparseTensorConstructOp,
+                        tensorAlgebra::SpTensorAliasOp,
                         tensorAlgebra::SpTensorGetDimPos,
                         tensorAlgebra::SpTensorGetDimCrd,
                         tensorAlgebra::SpTensorGetVals,
@@ -1406,6 +1412,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::DenseConstantOp,
                         tensorAlgebra::TensorDimOp,
+                        tensorAlgebra::SpTensorAliasOp,
                         tensorAlgebra::SpTensorGetDimCrd,
                         tensorAlgebra::SpTensorGetDimPos,
                         tensorAlgebra::SpTensorGetDimSize,
@@ -1465,6 +1472,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::TensorDimOp,
                         tensorAlgebra::ScalarOp,
                         tensorAlgebra::AllocWorkspaceOp,
+                        tensorAlgebra::SpTensorAliasOp,
                         tensorAlgebra::SpTensorGetDimCrd,
                         tensorAlgebra::SpTensorGetDimPos,
                         tensorAlgebra::SpTensorGetDimSize,

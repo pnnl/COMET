@@ -256,6 +256,7 @@ namespace
                         tensorAlgebra::DenseConstantOp,
                         tensorAlgebra::TensorMultOp,
                         tensorAlgebra::ScalarOp,
+                        tensorAlgebra::SpTensorAliasOp,
                         tensorAlgebra::SpTensorGetDimSize,
                         tensorAlgebra::SpTensorGetDimPos,
                         tensorAlgebra::SpTensorGetDimCrd,

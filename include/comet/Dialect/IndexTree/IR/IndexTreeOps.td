@@ -92,15 +92,6 @@ def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
 
   let results = (outs IndexTree_IndexNodeType:$output);
 }
-
-def IndexTreeMaskOp : IndexTree_Op<"MaskOp", [Pure]>{
-  let summary = "";
-  let description = [{}];
-
-  let arguments = (ins TA_AnyTensor:$tensor, TA_AnyTensor:$mask, StrAttr:$mask_type);
-  let results = (outs TA_AnyTensor:$masked_tensor);
-}
-
 def IndexTreeLHSOperandOp : IndexTree_Op<"LHSOperandOp", [Pure, SameVariadicOperandSize]>{
   let summary = "";
   let description = [{}];
@@ -123,7 +114,7 @@ def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure, SameVariadicOperandSiz
   let results = (outs IndexTree_OperandType:$result);
 }
 
-def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
+def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure, AttrSizedOperandSegments]>{
   let summary = "";
   let description = [{
   }];
@@ -131,7 +122,14 @@ def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure]>{
   //TODO(gkestor): rethink the use of comp_worksp_opt, should we decouple that?
   //TODO(alokvk2): Rename semiring to operation to account for elementwise addition
   /// MaskType attribute: {push, pull, auto, none}
-  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_OperandType:$lhs, Variadic<IndexTree_OperandType>:$rhs, StrAttr:$semiring, DefaultValuedAttr<BoolAttr, "false">:$compute_missing);
+  let arguments = (ins 
+    IndexTree_NodeType:$parent, 
+    IndexTree_OperandType:$lhs, 
+    Variadic<IndexTree_OperandType>:$rhs,
+    Optional<IndexTree_OperandType>:$mask, 
+    StrAttr:$semiring, 
+    DefaultValuedAttr<BoolAttr, "false">:$compute_missing
+  );
 
   let results = (outs TA_AnyTensor);
 
