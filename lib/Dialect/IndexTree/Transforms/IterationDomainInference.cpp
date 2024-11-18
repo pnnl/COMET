@@ -94,16 +94,15 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
       // Check if compute op needs intersection
       auto itComputeOp = cast<indexTree::IndexTreeComputeOp>(compute_op);
       auto semiringParts = itComputeOp.getSemiring().split('_');
-      Value temp_domain;
-
       if(itComputeOp.getComputeMissing()){
         for(auto operand_op_val : itComputeOp.getRhs())
         {
           auto operand_op = operand_op_val.getDefiningOp();
           if(operands_to_domains.find(operand_op) != operands_to_domains.end())
-            temp_domain = operands_to_domains[operand_op];
+            domains.push_back(operands_to_domains[operand_op]);
         }
       } else {
+        Value temp_domain;
         SmallVector<Value, 4> intersection_domains;
         for(auto operand_op_val : itComputeOp.getRhs())
         {
@@ -115,21 +114,21 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
           temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(loc, domain_type, intersection_domains, nullptr);
         else
           temp_domain = intersection_domains[0];
-      }
 
-      if(itComputeOp.getMask()) {
-        auto operand_op = itComputeOp.getMask().getDefiningOp();
-        if(operands_to_domains.find(operand_op) != operands_to_domains.end())
-        {
-          temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(
-            loc, 
-            domain_type, 
-            ValueRange{temp_domain, operands_to_domains[operand_op]}, 
-            nullptr
-          );
+        if(itComputeOp.getMask()) {
+          auto operand_op = itComputeOp.getMask().getDefiningOp();
+          if(operands_to_domains.find(operand_op) != operands_to_domains.end())
+          {
+            temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(
+              loc, 
+              domain_type, 
+              ValueRange{temp_domain, operands_to_domains[operand_op]}, 
+              nullptr
+            );
+          }
         }
+        domains.push_back(temp_domain);
       }
-      domains.push_back(temp_domain);
     }
 
     Value final_domain;
