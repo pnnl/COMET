@@ -329,8 +329,11 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
                   mlir::PatternRewriter &rewriter) const override 
   {
     bool can_replace = false;
-    Operation* operand_op;
-    std::vector<Value> domains;
+    auto context = rewriter.getContext();
+    SmallVector<Value> domains;
+    SmallVector<Value> tensors;
+    SmallVector<Attribute> dims;
+    indexTree::DomainType domain_type = indexTree::DomainType::get(context);
     for(auto operand : op.getDomains())
     {
       domains.push_back(operand);
@@ -342,20 +345,25 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
         return failure();
       }
 
-      if((operand_op = operand.getDefiningOp<IndexTreeDenseDomainOp>())){
-        rewriter.replaceOp(op, {operand});
+      if(auto operand_op = operand.getDefiningOp<IndexTreeDenseDomainOp>()){
+        auto operand_tensors = operand_op.getTensors();
+        tensors.insert(tensors.end(), operand_tensors.begin(), operand_tensors.end());
+        auto tensor_dims = operand_op.getDimsAttr();
+        dims.insert(dims.end(), tensor_dims.begin(), tensor_dims.end());
         can_replace = true;
-        break;
+      } else if(auto operand_op = operand.getDefiningOp<IndexTreeSparseDomainOp>()) {
+        tensors.push_back(operand_op.getTensor());
+        dims.push_back(operand_op.getDimAttr());
       }
     }
 
     if(can_replace)
     {
+      Value dim_size = llvm::dyn_cast<ConcreteDomain>(domains[0].getDefiningOp()).getDimensionSize();
+      rewriter.replaceOpWithNewOp<IndexTreeDenseDomainOp>(op, domain_type, dim_size, tensors, rewriter.getArrayAttr(dims));
       for(auto operand: domains)
       {
-        operand_op = operand.getDefiningOp();
-        if(operand_op->use_empty())
-          rewriter.eraseOp(operand_op);
+        rewriter.eraseOp(operand.getDefiningOp());
       }
     } 
     else 
@@ -367,8 +375,6 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
 
       Value dim_size = llvm::dyn_cast<ConcreteDomain>(domains[0].getDefiningOp()).getDimensionSize();
       auto loc = op->getLoc();
-      auto context = rewriter.getContext();
-      indexTree::DomainType domain_type = indexTree::DomainType::get(context);
       Value new_op = rewriter.create<IndexTreeDomainUnionOp>(loc, domain_type, domains, dim_size);
       rewriter.replaceOp(op, {new_op});
     }
