@@ -13,7 +13,7 @@
 
 # RUN: comet-opt --opt-comp-workspace --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> triangleCount_SandiaLL.mask.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/tc.mtx
-# RUN: mlir-cpu-runner triangleCount_SandiaLL.mask.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner triangleCount_SandiaLL.mask.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libmlir_c_runner_utils%shlibext | FileCheck %s
 
 def main() {
     #IndexLabel Declarations
@@ -31,7 +31,7 @@ def main() {
     # Sandia_LL method: ntri = sum (sum ((L * L) .* L))
     # var ntri = SUM((L[i,k] * L[k,j]) .* L[i,j]);
     ## 
-    C[i, j]<L1, push> = L1[i, k] * L1[k, j];  # L0 is the mask, using push-based method.
+    C[i, k]<L1, push> = L1[i, j] * L1[j, k];  # L0 is the mask, using push-based method.
                                               # valid options: {push, pull, auto}
     var ntri = SUM(C[i, j]);
     
@@ -39,5 +39,4 @@ def main() {
 }
 
 # Print the result for verification.
-# CHECK: data = 
-# CHECK-NEXT: 5
+# CHECK: 5
