@@ -75,15 +75,11 @@ struct Dimension {
   TensorFormatEnum format;
 
   Value pos;
-  Value pos_size;
   Value crd;
-  Value crd_size;
 
   bool has_block;
   Value block_pos;
-  Value block_pos_size;
-  Value block_crd; 
-  Value block_crd_size;
+  Value block_crd;
    
 };
 
@@ -151,33 +147,6 @@ static bool unpack_sparse_tensor(Value sparse_tensor, SparseTensor& result)
     result.vals = *cur_arg;
     return true;
   }
-  else if(auto cast =
-          sparse_tensor.getDefiningOp<SparseTensorConstructOp>())
-  {
-    SparseTensorType type = llvm::dyn_cast<SparseTensorType>(sparse_tensor.getType());
-    if(!type)
-      return false;
-    OpBuilder builder(cast);
-
-    auto dims = cast.getDims();
-    auto crd = cast.getCrdIndices();
-    auto pos = cast.getPosIndices();
-    auto vals = cast.getVals();
-    unsigned rank = type.getDims().size();
-    result.dim_sizes = dims;
-    for(unsigned i = 0; i < rank; i++)
-    {
-      Dimension d;
-      d.format = (TensorFormatEnum) type.getFormat()[2 * i];
-      d.insert_pos = builder.create<index::ConstantOp>(cast.getLoc(), builder.getIndexType(), builder.getIndexAttr(0));
-      d.pos = pos[i];
-      d.crd = crd[i];
-      result.dims.push_back(d);
-    }
-
-    result.vals = vals;
-    return true;
-  }
 
   return false;
 }
@@ -216,6 +185,9 @@ static bool unpack_workspace(Value workspace_val, Workspace& result)
 {
   if (auto cast =
           workspace_val.getDefiningOp<UnrealizedConversionCastOp>()) {
+    if(!llvm::isa<WorkspaceType>(workspace_val.getType())){
+      return false;
+    }
     auto cur_arg = cast.getInputs().begin();
     result.workspace = *cur_arg;
     cur_arg++;
@@ -275,6 +247,17 @@ class ConvertSpTensorConstructOp
   }
 };
 
+class ConvertSpTensorAliasOp
+    : public OpConversionPattern<SpTensorAliasOp> {
+  using OpConversionPattern<SpTensorAliasOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(SpTensorAliasOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOp(op, adaptor.getTensor());
+    return success();
+  }
+};
+
 class ConvertSpTensorInsertOp
     : public OpConversionPattern<TensorInsertOp> {
   using OpConversionPattern<TensorInsertOp>::OpConversionPattern;
@@ -307,7 +290,7 @@ class ConvertSpTensorInsertOp
         {
           crd = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, crd_tensorT.getElementType(), crd);
         }
-        Value crd_size = dim.crd_size;
+        
         crd_tensor = rewriter.create<tensor::InsertOp>(
           loc,
           crd_tensor.getType(),
@@ -417,7 +400,6 @@ class ConvertSpTensorInsertCrd
       Value crd_idx = opAdaptor.getIdx();
       Value crd = opAdaptor.getCrd();
       Value crd_tensor = dim.crd;
-      Value crd_size = dim.crd_size;
       crd_tensor = rewriter.create<tensor::InsertOp>(loc,
                                                      crd_tensor.getType(),
                                                      crd,
@@ -1027,6 +1009,24 @@ class ConvertWorkspaceClearOp
   }
 };
 
+class ConvertWorkspaceTensorFindPos
+    : public OpConversionPattern<TensorFindPos> {
+  using OpConversionPattern<TensorFindPos>::OpConversionPattern;
+  ConvertWorkspaceTensorFindPos(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(TensorFindPos op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Workspace workspace;
+    if(!unpack_workspace(adaptor.getTensor(), workspace)) {
+      return failure();
+    }
+    rewriter.replaceOp(op, {workspace.num_crds});
+    
+    return success();
+  }
+};
+
 class PrintOpLowering : public OpConversionPattern<PrintOp> {
   using OpConversionPattern<PrintOp>::OpConversionPattern;
   PrintOpLowering(MLIRContext *context) : OpConversionPattern(context) {}
@@ -1243,8 +1243,8 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
     });
 
   patterns.add<PrintOpLowering, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
-  patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorGetCrd, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorGetDimCrd, ConvertSpTensorGetDimPos, ConvertSpTensorGetDimBlockCrd, ConvertSpTensorGetDimBlockPos, ConvertSpTensorGetVals, ConvertSpTensorFindPos>(typeConverter, context);
-  patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
+  patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorAliasOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorGetCrd, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorGetDimCrd, ConvertSpTensorGetDimPos, ConvertSpTensorGetDimBlockCrd, ConvertSpTensorGetDimBlockPos, ConvertSpTensorGetVals, ConvertSpTensorFindPos>(typeConverter, context);
+  patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceTensorFindPos, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
 }
 
 struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<SparseTensorConversionPass> {
@@ -1264,7 +1264,6 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
     
     // The following operations and dialects may be introduced by the
     // rewriting rules, and are therefore marked as legal.
-    // target.addLegalOp<TensorInsertOp, TensorExtractOp, SpTensorGetDimCrd, SpTensorInsertCrd, SpTensorGetDimPos, SpTensorGetDimSize, SpTensorGetVals, TensorFindPos, PrintOp, PrintElapsedTimeOp, GetTimeOp, tensor::ExtractOp, tensor::InsertOp>();
     target.addLegalOp<tensor::ExtractOp, tensor::InsertOp>();
     target.addLegalDialect<
         arith::ArithDialect, bufferization::BufferizationDialect,

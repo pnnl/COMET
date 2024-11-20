@@ -87,14 +87,13 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
         }          
     }
 
-    llvm::SmallVector<Value, 8> domains;
+    llvm::SmallVector<Value, 4> domains;
     Value zero = builder.create<index::ConstantOp>(loc, builder.getIndexType(), builder.getIndexAttr(0));
     for(auto compute_op : compute_ops)
     {
       // Check if compute op needs intersection
       auto itComputeOp = cast<indexTree::IndexTreeComputeOp>(compute_op);
       auto semiringParts = itComputeOp.getSemiring().split('_');
-
       if(itComputeOp.getComputeMissing()){
         for(auto operand_op_val : itComputeOp.getRhs())
         {
@@ -103,6 +102,7 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
             domains.push_back(operands_to_domains[operand_op]);
         }
       } else {
+        Value temp_domain;
         SmallVector<Value, 4> intersection_domains;
         for(auto operand_op_val : itComputeOp.getRhs())
         {
@@ -111,10 +111,23 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
             intersection_domains.push_back(operands_to_domains[operand_op]);
         }
         if(intersection_domains.size() > 1)
-          domains.push_back(builder.create<indexTree::IndexTreeDomainIntersectionOp>(
-                          loc, domain_type, intersection_domains, nullptr));
+          temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(loc, domain_type, intersection_domains, nullptr);
         else
-          domains.push_back(intersection_domains[0]);
+          temp_domain = intersection_domains[0];
+
+        if(itComputeOp.getMask()) {
+          auto operand_op = itComputeOp.getMask().getDefiningOp();
+          if(operands_to_domains.find(operand_op) != operands_to_domains.end())
+          {
+            temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(
+              loc, 
+              domain_type, 
+              ValueRange{temp_domain, operands_to_domains[operand_op]}, 
+              nullptr
+            );
+          }
+        }
+        domains.push_back(temp_domain);
       }
     }
 

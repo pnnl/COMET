@@ -847,7 +847,12 @@ namespace
         Value induction_var = body_block->getArgument(loop_carry_args - 1);
         auto step = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
         auto loop_ctr = rewriter.create<index::AddOp>(loc, index_type, induction_var, step);
-        auto yield_op = rewriter.create<scf::YieldOp>(loc, ValueRange(loop_args.begin(), loop_carry_args));
+        auto yield_op = rewriter.create<scf::YieldOp>(
+          loc, 
+          std::vector<Value>(
+            body_block->args_begin(),
+            body_block->args_begin() + if_op->getNumResults())
+        );
         yield_op->setOperand(loop_carry_args - 1, loop_ctr.getResult());
 
         // Increment each argument

@@ -55,7 +55,8 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
   Value copyDomain(Value domain, mlir::PatternRewriter &rewriter, 
                    Location loc, IRMapping& map, 
                    llvm::SmallDenseMap<std::pair<Value, int32_t>, Value>& tensor_to_node,
-                   Value parent_node = nullptr) const
+                   Value* parent,
+                   Value predecessor = nullptr) const
   {
     Value new_domain;
     Operation* domain_op = domain.getDefiningOp();
@@ -63,18 +64,36 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
     {
       auto intersection_domain_op = llvm::cast<IndexTreeDomainIntersectionOp>(domain_op);
       for(Value subdomain : intersection_domain_op.getDomains()){
-        copyDomain(subdomain, rewriter, loc, map, tensor_to_node, parent_node);
+        copyDomain(subdomain, rewriter, loc, map, tensor_to_node, parent, predecessor);
       }
     }
     else if(llvm::isa<IndexTreeDomainUnionOp>(domain_op))
     {
       auto union_domain_op = llvm::cast<IndexTreeDomainUnionOp>(domain_op);
       for(Value subdomain : union_domain_op.getDomains()){
-        copyDomain(subdomain, rewriter, loc, map, tensor_to_node, parent_node);
+        copyDomain(subdomain, rewriter, loc, map, tensor_to_node, parent, predecessor);
       }
     }
     
-    if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
+    if(llvm::isa<IndexTreeNestedDomainOp>(domain_op)){
+      auto nested_domain = llvm::cast<IndexTreeNestedDomainOp>(domain_op);
+      for(auto subdomain_itr = nested_domain.getDomains().begin(); subdomain_itr != nested_domain.getDomains().end();)
+      {
+        Value subdomain = *subdomain_itr;
+        new_domain = copyDomain(subdomain, rewriter, loc, map, tensor_to_node, parent, predecessor);
+        subdomain_itr++;
+        if(subdomain_itr != nested_domain.getDomains().end())
+        {
+          auto index_node_type = indexTree::IndexNodeType::get(rewriter.getContext());
+          indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, *parent, new_domain);
+          createMapping(index_node_op, subdomain, tensor_to_node);
+          *parent = index_node_op.getOutput();
+          predecessor = *parent;
+        } else {
+          map.map(nested_domain, new_domain);
+        }
+      }
+    } else if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
     {
       auto sparse_domain_op = llvm::cast<IndexTreeSparseDomainOp>(domain_op);
       auto tensor = sparse_domain_op.getTensor();
@@ -83,10 +102,10 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
       if(dim > 0){
         // TODO: Determine parent of this op
         // Will be needed for 3 dimensional sparse tensor outputs
-        if(!parent_node)
+        if(!predecessor)
         {
           assert(tensor_to_node[std::make_pair(tensor, dim-1)] != nullptr);
-          parent_node = tensor_to_node[std::make_pair(tensor, dim-1)];
+          predecessor = tensor_to_node[std::make_pair(tensor, dim-1)];
         }
         
         
@@ -94,7 +113,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
                                   loc,
                                   TypeRange({rewriter.getIndexType(), rewriter.getIndexType()}),
                                   tensor,
-                                  parent_node,
+                                  predecessor,
                                   dim-1,
                                   nullptr);
         parent = tensor_access_op.getPos();
@@ -133,7 +152,14 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
       for(Value subdomain : union_domain_op.getDomains()){
         createMapping(node, subdomain, tensor_to_node);
       }
-    } else if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
+    } else if (llvm::isa<IndexTreeNestedDomainOp>(domain_op))
+    {
+      auto nested_domain_op = llvm::cast<IndexTreeNestedDomainOp>(domain_op);
+      for(Value subdomain : nested_domain_op.getDomains()){
+        createMapping(node, subdomain, tensor_to_node);
+      }
+    }
+    else if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
     {
       auto sparse_domain_op = llvm::cast<IndexTreeSparseDomainOp>(domain_op);
       auto tensor = sparse_domain_op.getTensor();
@@ -246,24 +272,15 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
     for (Value domain : it_tensor_decl_op.getDomains())
     {
       Operation* domain_op = domain.getDefiningOp();
-      if(llvm::isa<IndexTreeNestedDomainOp>(domain_op)){
-        Value parent_node = nullptr; // By construction, nested domains are direct parents of each other?
-        auto nested_domain = llvm::cast<IndexTreeNestedDomainOp>(domain_op);
-        for(Value subdomain : nested_domain.getDomains()){
-          Value new_domain = copyDomain(subdomain, rewriter, loc, map, tensor_to_node, parent_node);
-          indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, new_domain);
-          createMapping(index_node_op, subdomain, tensor_to_node);
-          parent = index_node_op.getOutput();
-          parent_node = index_node_op.getOutput();
-        }
-        is_unique = false; // One reduction index variable means all future inserts are non-unique
-      } else 
+      Value prev_parent = parent;
+      Value new_domain = copyDomain(domain, rewriter, loc, map, tensor_to_node, &parent);
+      indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, new_domain);
+      createMapping(index_node_op, domain, tensor_to_node);
+      if(prev_parent != parent)
       {
-        Value new_domain = copyDomain(domain, rewriter, loc, map, tensor_to_node);
-        indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, new_domain);
-        createMapping(index_node_op, domain, tensor_to_node);
-        parent = index_node_op.getOutput();
+        is_unique = false;
       }
+      parent = index_node_op.getOutput();
 
       if(domain_op->hasTrait<UnknownDomain>())
       {
