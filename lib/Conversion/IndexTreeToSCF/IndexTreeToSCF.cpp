@@ -588,66 +588,69 @@ namespace
         rewriter.setInsertionPointToStart(for_loop.getBody());
 
         SmallVector<Value> input_slices;        
-        for(auto input : inputs)
+        for(auto& input : for_loop.getOutputsMutable())
         {
-          auto& os = output_sets.at(input);
-          RankedTensorType tt = llvm::cast<RankedTensorType>(input.getType());
+          auto& os = output_sets.at(input.get());
+          RankedTensorType tt = llvm::cast<RankedTensorType>(input.get().getType());
           int64_t nDims = tt.getRank();
           SmallVector<Value> sizes;
-          SmallVector<int64_t> shape;
           for(int i = 0; i < nDims; i++)
           {
-            if(i !=  os.dim) {
+            if(i != os.dim && tt.getDimSize(i) == ShapedType::kDynamic) {
               Value idx = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(i));
-              sizes.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), input, idx));
-              shape.push_back(tt.getDimSize(i));
-            } else {
-              sizes.push_back(rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1)));
+              sizes.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), input.get(), idx));
             }
           }
 
+          SmallVector<int64_t> static_offsets(nDims, 0);
+          SmallVector<int64_t> static_sizes(tt.getShape());
+          static_offsets[os.dim] = ShapedType::kDynamic;
+          static_sizes[os.dim] = 1;
+
           auto slice = rewriter.create<tensor::ExtractSliceOp>(
             loc,
-            RankedTensorType::get(shape, tt.getElementType()),
-            input,
-            ValueRange(),
+            RankedTensorType::get(static_sizes, tt.getElementType()),
+            for_loop.getTiedBlockArgument(&input),
+            ValueRange(inductionVar),
             sizes,
             ValueRange(),
-            rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, 0)),
-            rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, ShapedType::kDynamic)),
+            rewriter.getDenseI64ArrayAttr(static_offsets),
+            rewriter.getDenseI64ArrayAttr(static_sizes),
             rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, 1))
           );
           input_slices.push_back(slice->getResult(0));
         }
 
         SmallVector<Operation*> terminator_ops;
-        auto par_op = rewriter.create<scf::InParallelOp>(loc);
+        auto par_op = for_loop.getTerminator();
         auto slice = input_slices.begin();
-        for(auto input : inputs) {
+        for(auto& input : for_loop.getOutputsMutable()) {
           rewriter.setInsertionPoint(par_op);
-          auto& os = output_sets.at(input);
-          int64_t nDims = llvm::cast<RankedTensorType>(input.getType()).getRank();
+          auto& os = output_sets.at(input.get());
+          auto tt = cast<RankedTensorType>(slice->getType());
+          int64_t nDims = tt.getRank();
           SmallVector<Value> sizes;
           for(int i = 0; i < nDims; i++)
           {
-            if(i !=  os.dim) {
+            if(tt.getDimSize(i) == ShapedType::kDynamic) {
               Value idx = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(i));
-              sizes.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), input, idx));
-            } else {
-              sizes.push_back(rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1)));
+              sizes.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), input.get(), idx));
             }
           }
 
           rewriter.setInsertionPointToEnd(par_op.getBody());
+          SmallVector<int64_t> static_offsets(nDims, 0);
+          static_offsets[os.dim] = ShapedType::kDynamic;
+
           Operation* insert = rewriter.create<tensor::ParallelInsertSliceOp>(
             loc, 
             *slice,
-            input,
-            ValueRange(),
+            for_loop.getTiedBlockArgument(&input),
+            inductionVar,
             sizes,
             ValueRange(),
-            rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, 0)),
-            rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, ShapedType::kDynamic)),
+            rewriter.getDenseI64ArrayAttr(static_offsets),
+            rewriter.getDenseI64ArrayAttr(tt.getShape()),
             rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, 1))
           );
           terminator_ops.push_back(insert);
