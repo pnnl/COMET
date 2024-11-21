@@ -154,7 +154,7 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
         new_domain = rewriter.create<IndexTreeSparseDomainOp>(
           loc, domain_type, tensor, domain_op.getDimAttr(), 
           TensorFormatEnumAttr::get(context, format), 
-          pos, crd, pos_size, crd_size, dim_size, parent, rewriter.getBoolAttr(false), max);
+          pos, crd, pos_size, crd_size, dim_size, parent);
       }
     } 
     else if(llvm::isa<tensorAlgebra::WorkspaceType>(tensor.getType())) {
