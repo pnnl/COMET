@@ -394,14 +394,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     //   /// Apply partial fusion on index tree dialect for some compound expressions.
     //   optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
     // }
-
-    /// Dump index tree dialect.
-    if (emitIT)
-    {
-      if (mlir::failed(pm.run(*module)))
-        return 4;
-      return 0;
-    }
   }
 
   /// =============================================================================
@@ -464,6 +456,14 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     }
 
     optPM.addPass(mlir::comet::createIndexTreeSymbolicComputePass());
+
+    /// Dump index tree dialect.
+    if (emitIT)
+    {
+      if (mlir::failed(pm.run(*module)))
+        return 4;
+      return 0;
+    }
 
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
