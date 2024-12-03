@@ -619,6 +619,7 @@ namespace
             rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, 1))
           );
           input_slices.push_back(slice->getResult(0));
+          output_sets.insert(std::make_pair(slice->getResult(0), os));
         }
 
         SmallVector<Operation*> terminator_ops;
@@ -666,12 +667,12 @@ namespace
 
       Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {
         if(dyn_cast<TensorType>(tensor.getType())){
-          // TODO: Fix me. Right now, getCrd on the output tensor is just one becuase 
+          // TODO: Fix me. Right now, getCrd on the output tensor is just zero becuase 
           // we have already extracted the slice that we want. This will only work 
           // in very limited scenarios
-          if(output_sets.contains(tensor)){
-            Value one = rewriter.create<index::ConstantOp>(tensor.getLoc(), rewriter.getIndexType(), rewriter.getIndexAttr(1));
-            return one;
+          if(std::find(currentInputs.begin(), currentInputs.end(), tensor) != currentInputs.end()){
+            Value zero = rewriter.create<index::ConstantOp>(tensor.getLoc(), rewriter.getIndexType(), rewriter.getIndexAttr(0));
+            return zero;
           } else {
             return inductionVar;
           }
@@ -1130,7 +1131,7 @@ namespace
 
       TensorType tensor_type;
       if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
-        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, crds);
+        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, positions);
       } else {
         Type element_type;
         if(llvm::isa<SparseTensorType>(tensor.getType()))
@@ -1158,7 +1159,7 @@ namespace
 
       TensorType tensor_type;
       if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
-        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, crds);
+        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, positions);
       } else {
         // LHS may not be constant (i.e. if we are inserting into a tensor that we need to resize), 
         // so cannot directly lower like we can the RHS
