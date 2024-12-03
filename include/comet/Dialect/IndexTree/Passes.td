@@ -35,7 +35,7 @@ def IndexTreeKernelFusion : Pass<"indextree-kernel-fusion", "func::FuncOp"> {
   let description = [{}];
   let constructor = "comet::createIndexTreeKernelFusionPass()";
   let dependentDialects = [
-    "comet::IndexTreeDialect",
+    "indexTree::IndexTreeDialect",
     "memref::MemRefDialect",
     "scf::SCFDialect"
   ];
