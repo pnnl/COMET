@@ -237,6 +237,10 @@ mlir::LogicalResult generalIndexOperationRewrite(
   Value rhs2_tensor = getRealRhs(mult_op.getRhs2());
   Value lhs_tensor = getRealLhs(op);
 
+  comet_vdump(rhs1_tensor);
+  comet_vdump(rhs2_tensor);
+  comet_vdump(lhs_tensor);
+
   Value mask_tensor = nullptr;
   if(llvm::isa<TensorMultOp>(op)){
     mask_tensor = llvm::cast<TensorMultOp>(op).getMask();
