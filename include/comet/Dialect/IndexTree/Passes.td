@@ -35,7 +35,7 @@ def IndexTreeKernelFusion : Pass<"indextree-kernel-fusion", "func::FuncOp"> {
   let description = [{}];
   let constructor = "comet::createIndexTreeKernelFusionPass()";
   let dependentDialects = [
-    "comet::IndexTreeDialect",
+    "indexTree::IndexTreeDialect",
     "memref::MemRefDialect",
     "scf::SCFDialect"
   ];
@@ -50,7 +50,7 @@ def IndexTreeWorkspaceTranformations: Pass<"indextree-workspace-transformations"
                 "to produce sparse output";
   let description = [{}];
   let constructor = "comet::createIndexTreeWorkspaceTransformationsPass()";
-  let dependentDialects = ["comet::IndexTreeDialect"];
+  let dependentDialects = ["indexTree::IndexTreeDialect"];
 }
 
 def IndexTreeDomainInference : Pass<"indextree-domain-inference", "func::FuncOp"> {
@@ -61,6 +61,7 @@ def IndexTreeDomainInference : Pass<"indextree-domain-inference", "func::FuncOp"
     }];
 
     let constructor = "comet::createIndexTreeDomainInferencePass()";
+    let dependentDialects = ["indexTree::IndexTreeDialect"];
 }
 
 def IndexTreeDomainConcretization : Pass<"indextree-domain-concretization", "func::FuncOp"> {
@@ -70,6 +71,7 @@ def IndexTreeDomainConcretization : Pass<"indextree-domain-concretization", "fun
     }];
 
     let constructor = "comet::createIndexTreeDomainConcretizationPass()";
+    let dependentDialects = ["indexTree::IndexTreeDialect"];
 }
 
 def IndexTreeSymbolicComputePass : Pass<"indextree-symbolic-compute", "func::FuncOp"> {
@@ -82,12 +84,14 @@ def IndexTreeSymbolicComputePass : Pass<"indextree-symbolic-compute", "func::Fun
     }];
 
     let constructor = "comet::createIndexTreeSymbolicComputePass()";
+    let dependentDialects = ["indexTree::IndexTreeDialect"];
 }
 
 def IndexTreeInliningPass : Pass <"indextree-inlining", "func::FuncOp"> {
     let summary = "Inline index tree";
     let description = [{}];
     let constructor = "comet::createIndexTreeInliningPass()";
+    let dependentDialects = ["indexTree::IndexTreeDialect"];
 }
 
 #endif /// COMET_DIALECT_INDEXTREE_PASSES
