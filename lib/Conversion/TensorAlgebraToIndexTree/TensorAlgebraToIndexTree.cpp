@@ -238,6 +238,10 @@ mlir::LogicalResult generalIndexOperationRewrite(
   Value rhs2_tensor = getRealRhs(mult_op.getRhs2());
   Value lhs_tensor = getRealLhs(op);
 
+  comet_vdump(rhs1_tensor);
+  comet_vdump(rhs2_tensor);
+  comet_vdump(lhs_tensor);
+
   Value mask_tensor = nullptr;
   if (llvm::isa<TensorMultOp>(op))
   {
@@ -262,6 +266,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
 
   //Construct each index variable
   auto lhsMap = indexing_maps[2].template cast<AffineMapAttr>().getValue();
+  comet_vdump(lhsMap);
   indexTree::IndexNodeType index_node_type = indexTree::IndexNodeType::get(context);
   std::vector<Value> index_nodes;
   for (unsigned i = 0; i < lhsMap.getNumDims(); i++)

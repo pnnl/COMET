@@ -53,13 +53,17 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
       if(!llvm::isa<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op))
         continue;
 
+      comet_pdump(tensor_access_op);
       for(Operation* operand_op : tensor_access_op->getUsers())
       {
         if(!llvm::isa<indexTree::IndexTreeOperandOp>(operand_op))
           continue;
 
+        comet_pdump(operand_op);
         auto tensor_val = llvm::cast<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op).getTensor();
-        unsigned dim = llvm::cast<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op).getDim();;
+        unsigned dim = llvm::cast<indexTree::IndexTreeIndexToTensorOp>(tensor_access_op).getDim();
+        comet_vdump(tensor_val);
+        comet_debug() << "dim: " << dim << "\n";
         Value domain = builder.create<indexTree::IndexTreeTensorDomainOp>(loc,
             domain_type,
             tensor_val,
@@ -81,6 +85,7 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
       // Check if compute op needs intersection
       auto itComputeOp = cast<indexTree::IndexTreeComputeOp>(compute_op);
       auto semiringParts = itComputeOp.getSemiring().split('_');
+      comet_vdump(itComputeOp);
 
       if(itComputeOp.getComputeMissing()){
         for(auto operand_op_val : itComputeOp.getRhs())
@@ -94,6 +99,7 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
         for(auto operand_op_val : itComputeOp.getRhs())
         {
           auto operand_op = operand_op_val.getDefiningOp();
+          comet_pdump(operand_op);
           if(operands_to_domains.find(operand_op) != operands_to_domains.end())
             intersection_domains.push_back(operands_to_domains[operand_op]);
         }
@@ -126,7 +132,7 @@ void mlir::indexTree::populateDomainInferencePatterns(
   patterns.add<InferIndexDomain>(context);
 }
 
-void IndexTreeDomainInference::runOnOperation(){
+void IndexTreeDomainInference::runOnOperation() {
   mlir::RewritePatternSet domain_inference_patterns(&getContext());
   populateDomainInferencePatterns(&getContext(), domain_inference_patterns);
   if (mlir::failed(mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(domain_inference_patterns))))
