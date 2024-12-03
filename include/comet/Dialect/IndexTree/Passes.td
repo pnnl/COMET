@@ -30,18 +30,16 @@ include "mlir/Pass/PassBase.td"
 /// Kernel Fusion
 ///===----------------------------------------------------------------------===///
 
-//def IndexTreeKernelFusion : Pass<"indextree-kernel-fusion"> {
-//  let summary = "The redundancy-aware kernel fusion on index tree dialect for compound expressions";
-//  let description = [{
-
-//      }];
-//  let constructor = "comet::createIndexTreeKernelFusionPass()";
-//  let dependentDialects = [
-//    "comet::IndexTreeDialect",
-//    "memref::MemRefDialect",
-//    "scf::SCFDialect"
-//  ];
-//}
+def IndexTreeKernelFusion : Pass<"indextree-kernel-fusion", "func::FuncOp"> {
+  let summary = "The redundancy-aware kernel fusion on index tree dialect for compound expressions";
+  let description = [{}];
+  let constructor = "comet::createIndexTreeKernelFusionPass()";
+  let dependentDialects = [
+    "comet::IndexTreeDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect"
+  ];
+}
 
 ///===----------------------------------------------------------------------===///
 /// Workspace Transformations

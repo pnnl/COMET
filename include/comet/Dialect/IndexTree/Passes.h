@@ -49,7 +49,7 @@ namespace mlir
         std::unique_ptr<Pass> createIndexTreeWorkspaceTransformationsPass();
 
         /// Create a pass for the redundancy-aware kernel fusion on index tree dialect for some compound expressions
-        // std::unique_ptr<Pass> createIndexTreeKernelFusionPass();
+        std::unique_ptr<Pass> createIndexTreeKernelFusionPass();
     }
 
 }
