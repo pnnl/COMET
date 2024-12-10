@@ -801,6 +801,10 @@ namespace
       }
 
       Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {
+        if(llvm::isa<TensorType>(tensor.getType())) {
+          // For dense tensors, positions and crd should be the same.
+          return getCrd(rewriter);
+        }
         return inductionVar;
       }
 
