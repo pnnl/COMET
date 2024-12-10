@@ -433,9 +433,7 @@ namespace
               if(auto access = crd.getDefiningOp<IndexTreeIndexToTensorOp>()) {
                 auto node = access.getIndex().getDefiningOp<IndexTreeIndicesOp>();
                 TensorSubsetInfo slice = {dim, -1, -1};
-                if(output_sets.contains(node)){
-                  output_sets[node].insert(std::make_pair(input, slice));
-                }
+                output_sets[node].insert(std::make_pair(input, slice));
               }
               dim += 1; 
             }
@@ -1159,7 +1157,7 @@ namespace
 
       TensorType tensor_type;
       if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
-        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, positions);
+        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, crds);
       } else {
         // LHS may not be constant (i.e. if we are inserting into a tensor that we need to resize), 
         // so cannot directly lower like we can the RHS
