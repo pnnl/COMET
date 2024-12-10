@@ -52,7 +52,7 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/ADT/TypeSwitch.h"
-#include "llvm/Support/Debug.h"
+#include "llvm/Support/Casting.h"
 
 #include <iostream>
 #include <algorithm>
@@ -406,7 +406,62 @@ namespace
     return reduceResult;
   }
 
-  class LoopInfo {
+  struct TensorSubsetInfo {
+    int64_t dim;
+    int64_t tiles;
+    int64_t tile_size;
+  };
+
+
+  class IndexTreeInferOutputSets {
+    SmallDenseMap<IndexTreeIndicesOp, SmallDenseMap<Value, TensorSubsetInfo>> output_sets;
+
+    public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(IndexTreeInferOutputSets)
+
+    IndexTreeInferOutputSets(Operation* op)
+    {
+      // TODO: Will not work with workspace op or with sparse tensors!
+      // Also will not work with indices that don't align to tensor dims!
+
+      IndexTreeOp tree = llvm::cast<IndexTreeOp>(op);
+      for(Value input : tree.getInputs()) {
+        for(auto user : input.getUsers()) {
+          if(auto lhs = llvm::dyn_cast<IndexTreeLHSOperandOp>(user)) {
+            int64_t dim = 0;
+            for(Value crd : lhs.getCrds()) {
+              if(auto access = crd.getDefiningOp<IndexTreeIndexToTensorOp>()) {
+                auto node = access.getIndex().getDefiningOp<IndexTreeIndicesOp>();
+                TensorSubsetInfo slice = {dim, -1, -1};
+                output_sets[node].insert(std::make_pair(input, slice));
+              }
+              dim += 1; 
+            }
+          }
+        }
+      }
+    }
+
+    SmallDenseMap<Value, TensorSubsetInfo> getOutputSets(IndexTreeIndicesOp op)
+    {
+      if(output_sets.contains(op)){
+        return output_sets[op];
+      }
+
+      // This also will cause errors!!!
+      return SmallDenseMap<Value, TensorSubsetInfo>();
+    }
+
+  };
+
+  class IndexVar {
+    public:
+      virtual Value getCrd(IRRewriter& rewriter) = 0;
+      virtual Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) = 0;
+      virtual ~IndexVar(){};
+  };
+
+  class LoopInfo : public IndexVar {
     protected:
       SmallVector<Value> currentInputs;
       ValueRange results;
@@ -456,23 +511,27 @@ namespace
       scf::YieldOp terminator;
 
     public:
-      DenseLoopInfo(ValueRange inputs, ResultRange outputs, Operation* body, IRMapping ir_map, Value i, scf::YieldOp yield): 
-        LoopInfo(inputs, outputs, body, ir_map), inductionVar(i), terminator(yield) {}
+      DenseLoopInfo(ValueRange inputs, 
+                    ResultRange outputs,
+                    Operation* body,
+                    IRMapping ir_map,
+                    Value i, 
+                    scf::YieldOp yield): 
+        LoopInfo(inputs, outputs, body, ir_map), inductionVar(i), terminator(yield){}
 
       static LoopInfo* build(Operation* domain_op, IRRewriter& rewriter, ValueRange inputs)
       {
         auto loc = domain_op->getLoc();
+        Value inductionVar;
         Value lb = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(0));
         Value ub = domain_op->getOperand(0);
         Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
         scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, inputs);
-
-        IRMapping map;
         rewriter.setInsertionPointToStart(for_loop.getBody());
-        auto yield_op = rewriter.create<scf::YieldOp>(loc, for_loop.getRegionIterArgs());
+        scf::YieldOp terminator = rewriter.create<scf::YieldOp>(loc, for_loop.getRegionIterArgs());
         rewriter.setInsertionPointAfter(for_loop);
-
-        return new DenseLoopInfo(ValueRange(for_loop.getRegionIterArgs()), for_loop.getResults(), yield_op, map, for_loop.getInductionVar(), yield_op);
+        IRMapping map;
+        return new DenseLoopInfo(for_loop.getRegionIterArgs(), for_loop->getResults(), terminator, map, for_loop.getInductionVar(), terminator);
       }
 
       Value getCrd(IRRewriter& rewriter) override {return inductionVar;}
@@ -493,7 +552,144 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+       rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+      }
+  };
+
+  class DenseParallelLoopInfo : public LoopInfo {
+    private:
+      Value inductionVar;
+      SmallVector<Operation*> terminator_ops;
+      SmallDenseMap<Value, TensorSubsetInfo> output_sets;
+
+    public:
+      DenseParallelLoopInfo(ValueRange inputs, 
+                            ResultRange outputs,
+                            Operation* body,
+                            IRMapping ir_map,
+                            Value i,
+                            SmallVector<Operation*>& terminator_ops,
+                            SmallDenseMap<Value, TensorSubsetInfo> output_sets): 
+        LoopInfo(inputs, outputs, body, ir_map), inductionVar(i), terminator_ops(terminator_ops), output_sets(output_sets) {}
+
+      static LoopInfo* build(Operation* domain_op, IRRewriter& rewriter, ValueRange inputs, SmallDenseMap<Value, TensorSubsetInfo> output_sets)
+      {
+        auto loc = domain_op->getLoc();
+        Value ub = domain_op->getOperand(0);
+        scf::ForallOp for_loop = rewriter.create<scf::ForallOp>(
+          loc,
+          ArrayRef<OpFoldResult>(ub),
+          inputs,
+          std::nullopt,
+          nullptr);
+        Value inductionVar = for_loop.getInductionVar(0);
+        rewriter.setInsertionPointToStart(for_loop.getBody());
+
+        SmallVector<Value> input_slices;        
+        for(auto& input : for_loop.getOutputsMutable())
+        {
+          auto& os = output_sets.at(input.get());
+          RankedTensorType tt = llvm::cast<RankedTensorType>(input.get().getType());
+          int64_t nDims = tt.getRank();
+          SmallVector<Value> sizes;
+          for(int i = 0; i < nDims; i++)
+          {
+            if(i != os.dim && tt.getDimSize(i) == ShapedType::kDynamic) {
+              Value idx = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(i));
+              sizes.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), input.get(), idx));
+            }
+          }
+
+          SmallVector<int64_t> static_offsets(nDims, 0);
+          SmallVector<int64_t> static_sizes(tt.getShape());
+          static_offsets[os.dim] = ShapedType::kDynamic;
+          static_sizes[os.dim] = 1;
+
+          auto slice = rewriter.create<tensor::ExtractSliceOp>(
+            loc,
+            RankedTensorType::get(static_sizes, tt.getElementType()),
+            for_loop.getTiedBlockArgument(&input),
+            ValueRange(inductionVar),
+            sizes,
+            ValueRange(),
+            rewriter.getDenseI64ArrayAttr(static_offsets),
+            rewriter.getDenseI64ArrayAttr(static_sizes),
+            rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, 1))
+          );
+          input_slices.push_back(slice->getResult(0));
+          output_sets.insert(std::make_pair(slice->getResult(0), os));
+        }
+
+        SmallVector<Operation*> terminator_ops;
+        auto par_op = for_loop.getTerminator();
+        auto slice = input_slices.begin();
+        for(auto& input : for_loop.getOutputsMutable()) {
+          rewriter.setInsertionPoint(par_op);
+          auto& os = output_sets.at(input.get());
+          auto tt = cast<RankedTensorType>(slice->getType());
+          int64_t nDims = tt.getRank();
+          SmallVector<Value> sizes;
+          for(int i = 0; i < nDims; i++)
+          {
+            if(tt.getDimSize(i) == ShapedType::kDynamic) {
+              Value idx = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(i));
+              sizes.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), input.get(), idx));
+            }
+          }
+
+          rewriter.setInsertionPointToEnd(par_op.getBody());
+          SmallVector<int64_t> static_offsets(nDims, 0);
+          static_offsets[os.dim] = ShapedType::kDynamic;
+
+          Operation* insert = rewriter.create<tensor::ParallelInsertSliceOp>(
+            loc, 
+            *slice,
+            for_loop.getTiedBlockArgument(&input),
+            inductionVar,
+            sizes,
+            ValueRange(),
+            rewriter.getDenseI64ArrayAttr(static_offsets),
+            rewriter.getDenseI64ArrayAttr(tt.getShape()),
+            rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, 1))
+          );
+          terminator_ops.push_back(insert);
+          slice++;
+        }
+        rewriter.setInsertionPointAfter(for_loop);
+        
+        IRMapping map;
+        return new DenseParallelLoopInfo(input_slices, for_loop.getResults(), par_op, map, inductionVar, terminator_ops, output_sets);
+      }
+
+      Value getCrd(IRRewriter& rewriter) override {return inductionVar;}
+
+      Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {
+        if(dyn_cast<TensorType>(tensor.getType())){
+          // TODO: Fix me. Right now, getCrd on the output tensor is just zero becuase 
+          // we have already extracted the slice that we want. This will only work 
+          // in very limited scenarios
+          if(std::find(currentInputs.begin(), currentInputs.end(), tensor) != currentInputs.end()){
+            Value zero = rewriter.create<index::ConstantOp>(tensor.getLoc(), rewriter.getIndexType(), rewriter.getIndexAttr(0));
+            return zero;
+          } else {
+            return inductionVar;
+          }
+          
+        } else if(SparseTensorType tt = dyn_cast<SparseTensorType>(tensor.getType())){
+          if((TensorFormatEnum)(tt.getFormat()[2 * dim]) == TensorFormatEnum::D) {
+            return inductionVar;
+          }
+          assert(false && "Invalid type passed to DenseLoopInfo getPos");
+          return nullptr;
+        }
+        assert(false && "Invalid type passed to DenseLoopInfo getPos");
+        return nullptr;
+      }
+
+      void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
+        currentInputs[idx] = newOutput;
+        Operation* terminator = terminator_ops[idx];
+        rewriter.updateRootInPlace(terminator, [&](){terminator->setOperand(0, newOutput);});
       }
   };
 
@@ -605,6 +801,10 @@ namespace
       }
 
       Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {
+        if(llvm::isa<TensorType>(tensor.getType())) {
+          // For dense tensors, positions and crd should be the same.
+          return getCrd(rewriter);
+        }
         return inductionVar;
       }
 
@@ -933,7 +1133,7 @@ namespace
 
       TensorType tensor_type;
       if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
-        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, crds);
+        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, positions);
       } else {
         Type element_type;
         if(llvm::isa<SparseTensorType>(tensor.getType()))
@@ -1003,7 +1203,7 @@ namespace
       Value output_tensor;
       if(llvm::isa<mlir::TensorType>(old_tensor.getType()))
       {
-        output_tensor = rewriter.create<tensor::InsertOp>(loc, old_tensor.getType(), reduce_result, old_tensor, lhs.getCrds());
+        output_tensor = rewriter.create<tensor::InsertOp>(loc, old_tensor.getType(), reduce_result, old_tensor, lhs.getPos());
       } else {
         output_tensor = rewriter.create<tensorAlgebra::TensorInsertOp>(loc, old_tensor.getType(), old_tensor, lhs.getPos(), lhs.getCrds(), reduce_result);
       }
@@ -1098,6 +1298,7 @@ namespace
 
     mlir::LogicalResult convertIndexNode(IndexTreeIndicesOp index_node_op, IRRewriter &rewriter)
     {
+      IndexTreeOp tree = index_node_op->getParentOfType<IndexTreeOp>();
       Operation* domain_op = index_node_op.getDomain().getDefiningOp();
       Value index_node = index_node_op->getResult(0);
       LoopInfo* parent_info = nodeMap.find(index_node_op.getParent())->getSecond();
@@ -1105,6 +1306,17 @@ namespace
 
       LoopInfo* loop_info = llvm::TypeSwitch<Operation*, LoopInfo*>(domain_op) 
         .Case<IndexTreeDenseDomainOp>([&](IndexTreeDenseDomainOp op) {
+          if(index_node_op.getIsParallel()){
+            ValueRange inputs = parent_info->getInputs();
+            auto output_analysis = Pass::getChildAnalysis<IndexTreeInferOutputSets>(index_node_op->getParentOp());
+            auto output_sets = output_analysis.getOutputSets(index_node_op);
+            uint32_t i = 0;
+            for(Value v: inputs){
+              output_sets.insert(std::make_pair(v, output_sets[tree.getOperand(i)]));
+              i++;
+            }
+            return DenseParallelLoopInfo::build(op, rewriter, parent_info->getInputs(), output_sets);
+          }
           return DenseLoopInfo::build(op, rewriter, parent_info->getInputs());
         })
         .Case<IndexTreeSparseDomainOp>([&](IndexTreeSparseDomainOp op) {

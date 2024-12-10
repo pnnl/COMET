@@ -261,12 +261,23 @@ mlir::LogicalResult generalIndexOperationRewrite(
   Value parent = rewriter.create<indexTree::IndexTreeRootOp>(loc, tree_type);
 
   //Construct each index variable
-  auto lhsMap = indexing_maps[2].template cast<AffineMapAttr>().getValue();
+  auto lhsMap = cast<AffineMapAttr>(indexing_maps[2]).getValue();
   indexTree::IndexNodeType index_node_type = indexTree::IndexNodeType::get(context); 
   std::vector<Value> index_nodes;
+  bool is_parallel = true; // Outer-most, non-reduction dimensions are parallel
+
+  // TODO: For now, we do not support outputting sparse tensors from a parallel loop.
+  if(llvm::isa<SparseTensorType>(tensor_type))
+  {
+    is_parallel = false;
+  }
+  
   for (unsigned i = 0; i < lhsMap.getNumDims(); i++)
   {
-    parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent);
+    if(!lhsMap.isFunctionOfDim(i)){
+      is_parallel = false;
+    }
+    parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel);
     index_nodes.push_back(parent);
   }
 

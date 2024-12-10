@@ -88,7 +88,7 @@ def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
   let description = [{
   }];
 
-  let arguments = (ins IndexTree_NodeType:$parent, Optional<IndexTree_DomainType>:$domain);
+  let arguments = (ins IndexTree_NodeType:$parent, Optional<IndexTree_DomainType>:$domain, DefaultValuedAttr<BoolAttr, "false">:$IsParallel);
 
   let results = (outs IndexTree_IndexNodeType:$output);
 }
