@@ -383,17 +383,17 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// ===================================================================================
   if (IsLoweringtoIndexTree || emitIT || emitLoops || emitTriton_ || emitLLVM)
   {
-    /// Generate the index tree IR
-    optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass(CodegenTarget));
+//    /// Generate the index tree IR
+//    optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass(CodegenTarget));
+
+    if (OptKernelFusion)
+    {
+      /// Apply kernel fusion on index tree dialect for some compound expressions.
+      optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
+    }
 
     // Create new pass manager to optimize the index tree dialect
     optPM.addPass(mlir::comet::createIndexTreeDomainInferencePass());
-
-    // if (OptKernelFusion)
-    // {
-    //   /// Apply partial fusion on index tree dialect for some compound expressions.
-    //   optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
-    // }
 
     /// Dump index tree dialect.
     if (emitIT)
