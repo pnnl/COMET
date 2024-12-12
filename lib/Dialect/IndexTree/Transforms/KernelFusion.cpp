@@ -36,7 +36,7 @@ using namespace mlir;
 using namespace mlir::indexTree;
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 
@@ -57,7 +57,13 @@ void IndexTreeKernelFusion::runOnOperation()
 {
   comet_debug() << "IndexTreeKernelFusion::runOnOperation()\n";
   func::FuncOp funcOp = getOperation();
-  comet_vdump(funcOp->getParentOfType<ModuleOp>());
+//  comet_vdump(funcOp->getParentOfType<ModuleOp>());
+
+  std::vector<IndexTreeOp> iTrees;
+  funcOp.walk([&](IndexTreeOp op){
+    iTrees.push_back(op);
+    comet_vdump(op);
+  });
 }
 
 
