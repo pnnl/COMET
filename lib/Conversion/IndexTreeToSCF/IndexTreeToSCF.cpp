@@ -79,7 +79,7 @@ using llvm::SmallDenseMap;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-// #define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 
@@ -1160,7 +1160,10 @@ namespace
       auto positions = op.getPos();
 
       TensorType tensor_type;
-      if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
+      if (mlir::isa<mlir::FloatType>(tensor.getType()) || mlir::isa<mlir::IntegerType>(tensor.getType())) {
+        /// RHS operand is a constant value.
+        return tensor;
+      } else if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
         return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, crds);
       } else {
         // LHS may not be constant (i.e. if we are inserting into a tensor that we need to resize), 
