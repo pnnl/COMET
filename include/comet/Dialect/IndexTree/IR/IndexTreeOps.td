@@ -109,13 +109,8 @@ def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure, SameVariadicOperandSiz
   let description = [{}];
 
   let arguments = (ins 
-<<<<<<< HEAD
-    // TA_AnyTensor:$tensor,
-    AnyTypeOf<[TA_AnyTensor, AnyFloat]>:$tensor,
-=======
     // TA_AnyTensor:$tensor, 
     AnyType:$tensor,
->>>>>>> e49d40e ([WIP] trying fused Index Tree dialect)
     Variadic<Index>:$pos,
     Variadic<Index>:$crds);
   let results = (outs IndexTree_OperandType:$result);
