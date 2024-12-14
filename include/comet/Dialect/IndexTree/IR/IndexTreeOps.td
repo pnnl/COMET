@@ -97,7 +97,8 @@ def IndexTreeLHSOperandOp : IndexTree_Op<"LHSOperandOp", [Pure, SameVariadicOper
   let description = [{}];
 
   let arguments = (ins 
-    TA_AnyTensor:$tensor, 
+    // TA_AnyTensor:$tensor,
+    AnyTypeOf<[TA_AnyTensor, AnyFloat]>:$tensor,
     Variadic<Index>:$pos,
     Variadic<Index>:$crds);
   let results = (outs IndexTree_OperandType:$result);
@@ -108,8 +109,8 @@ def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure, SameVariadicOperandSiz
   let description = [{}];
 
   let arguments = (ins 
-    // TA_AnyTensor:$tensor, 
-    AnyType:$tensor,
+    // TA_AnyTensor:$tensor,
+    AnyTypeOf<[TA_AnyTensor, AnyFloat]>:$tensor,
     Variadic<Index>:$pos,
     Variadic<Index>:$crds);
   let results = (outs IndexTree_OperandType:$result);
@@ -132,7 +133,8 @@ def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure, AttrSizedOperandSegmen
     DefaultValuedAttr<BoolAttr, "false">:$compute_missing
   );
 
-  let results = (outs TA_AnyTensor);
+  // let results = (outs TA_AnyTensor);
+  let results = (outs AnyTypeOf<[TA_AnyTensor, AnyFloat]>);
 
    //TODO(gkestor): add verifier
   //let hasVerifier = 1;
