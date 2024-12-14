@@ -1132,7 +1132,10 @@ namespace
       auto positions = op.getPos();
 
       TensorType tensor_type;
-      if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
+      if (llvm::isa<mlir::FloatType>(tensor.getType()) || llvm::isa<mlir::IntegerType>(tensor.getType())) {
+        /// LHS operand is a constant value.
+        return tensor;
+      } else if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
         return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, positions);
       } else {
         Type element_type;
@@ -1160,7 +1163,7 @@ namespace
       auto positions = op.getPos();
 
       TensorType tensor_type;
-      if (mlir::isa<mlir::FloatType>(tensor.getType()) || mlir::isa<mlir::IntegerType>(tensor.getType())) {
+      if (llvm::isa<mlir::FloatType>(tensor.getType()) || llvm::isa<mlir::IntegerType>(tensor.getType())) {
         /// RHS operand is a constant value.
         return tensor;
       } else if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
@@ -1204,9 +1207,12 @@ namespace
 
       Value old_tensor = mapInputIntoLoop(lhs.getTensor(), parent_info);
       Value output_tensor;
-      if(llvm::isa<mlir::TensorType>(old_tensor.getType()))
-      {
-        output_tensor = rewriter.create<tensor::InsertOp>(loc, old_tensor.getType(), reduce_result, old_tensor, lhs.getPos());
+      if (llvm::isa<mlir::FloatType>(old_tensor.getType())) {
+        LLVM_DEBUG({logger.startLine() << __FILE__ << ":" << __LINE__ << " " << old_tensor << "\n";});
+        LLVM_DEBUG({logger.startLine() << __FILE__ << ":" << __LINE__ << " " << reduce_result << "\n";});
+        output_tensor = reduce_result;
+      } else if(llvm::isa<mlir::TensorType>(old_tensor.getType())) {
+        output_tensor = rewriter.create<tensor::InsertOp>(loc, old_tensor.getType(), reduce_result, old_tensor, lhs.getCrds());
       } else {
         output_tensor = rewriter.create<tensorAlgebra::TensorInsertOp>(loc, old_tensor.getType(), old_tensor, lhs.getPos(), lhs.getCrds(), reduce_result);
       }
