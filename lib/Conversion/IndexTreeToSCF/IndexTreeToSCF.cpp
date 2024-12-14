@@ -963,7 +963,7 @@ namespace
       auto positions = op.getPos();
 
       TensorType tensor_type;
-      if (mlir::isa<mlir::FloatType>(tensor.getType()) || mlir::isa<mlir::IntegerType>(tensor.getType())) {
+      if (llvm::isa<mlir::FloatType>(tensor.getType()) || llvm::isa<mlir::IntegerType>(tensor.getType())) {
         /// RHS operand is a constant value.
         return tensor;
       } else if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
