@@ -477,10 +477,20 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
       }
     }
 
-    // Get the LHSOperandOp which creates thise tensor
+    // Get the LHSOperandOp which creates this tensor
     Value tensor = op->getResult(0);
+    IndexTreeOp tree = nullptr;
+    BlockArgument tensor_arg = nullptr;
+    for(OpOperand& operand : tensor.getUses())
+    {
+      if((tree = llvm::dyn_cast<IndexTreeOp>(operand.getOwner()))){
+        tensor_arg = tree.getBody()->getArgument(operand.getOperandNumber());
+        break;
+      }
+    }
+
     IndexTreeLHSOperandOp lhs_op = nullptr;
-    for(Operation* op : tensor.getUsers())
+    for(Operation* op : tensor_arg.getUsers())
     {
       if(llvm::isa<IndexTreeLHSOperandOp>(op))
       {

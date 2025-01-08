@@ -108,6 +108,8 @@ class ConvertIndexTreeTypes : public OpConversionPattern<indexTree::IndexTreeOp>
     // Calls the actual converter implementation to convert the operation.
     auto newOp = rewriter.create<indexTree::IndexTreeOp>(op.getLoc(), dstTypes, unpacked);
     rewriter.inlineRegionBefore(op.getRegion(), newOp.getRegion(), newOp.getRegion().end());
+    if (failed(rewriter.convertRegionTypes(&newOp.getRegion(), *typeConverter)))
+      return failure();
 
     // Packs the return value.
     SmallVector<Value> packedRets;
@@ -147,7 +149,7 @@ class InlineIndexTreeOp : public OpConversionPattern<indexTree::IndexTreeOp>{
     Block& body = op.getRegion().front();
     Operation* terminator = body.getTerminator();
     rewriter.replaceOp(op, terminator->getOperands());
-    rewriter.inlineBlockBefore(&body, op);
+    rewriter.inlineBlockBefore(&body, op, op->getOperands());
     return success();
   }
 };
