@@ -1292,13 +1292,13 @@ namespace
 
     mlir::LogicalResult convertRoot(IndexTreeRootOp root_op, IRRewriter &rewriter) {
       IndexTreeOp tree = root_op->getParentOfType<IndexTreeOp>();
-      indexTree::YieldOp yield = cast<indexTree::YieldOp>(tree.getRegion().getBlocks().front().getTerminator());
+      indexTree::YieldOp yield = cast<indexTree::YieldOp>(tree.getBody()->getTerminator());
       IRMapping map;
-      LoopInfo* sentinel_info = SentinelLoopInfo::build(tree.getOperands(), tree.getResults(), root_op, map, yield);
+      LoopInfo* sentinel_info = SentinelLoopInfo::build(tree.getBody()->getArguments(), tree.getResults(), root_op, map, yield);
       nodeMap.insert(std::make_pair(root_op.getResult(), sentinel_info));
       
       uint32_t i = 0;
-      for(Value v: tree.getOperands()){
+      for(Value v: tree.getBody()->getArguments()){
         leafMap.insert(std::make_pair(v, i));
         i++;
       }

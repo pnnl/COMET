@@ -61,7 +61,7 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "tensor-decl-lowering"
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -566,21 +566,18 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           new_tensor = insertSparseTensorDeclOp(rewriter, op.getContext(), loc, rank_size, tensorload_sizes_vec, array_sizes_vec, allPerms, dimSizes, formats_str, op.getResult().getType());
           break;
         }
-        else if (isa<indexTree::IndexTreeLHSOperandOp>(u))
+        else if (isa<indexTree::IndexTreeOp>(u))
         {
-          comet_debug() << " Sparse output is used in it.LHSOperandOp\n";
+          comet_debug() << " Sparse output is modified in an index tree\n";
           // Tensor is created as the output of a sparse tensor operation
           // For now we defer to the index tree dialect by inserting a tensor decl
           // that just contains empty domains.
-          auto lhs_op = llvm::cast<indexTree::IndexTreeLHSOperandOp>(u);
-          rank_size = lhs_op.getCrds().size();
+          rank_size = spType.getRank();
           indexTree::DomainType domain_type = indexTree::DomainType::get(op.getContext()); 
           rewriter.setInsertionPoint(op);
           Value empty_domain = rewriter.create<indexTree::IndexTreeEmptyDomainOp>(loc, domain_type);
           llvm::SmallVector<Value> args = llvm::SmallVector<Value>(rank_size, empty_domain);
-
-          new_tensor = rewriter.create<indexTree::IndexTreeSparseTensorOp>(loc, op.getResult().getType(), args);
-
+          new_tensor = rewriter.create<indexTree::IndexTreeSparseTensorOp>(loc, spType, args);
 
           // Eventually, there are 2 cases:
           // Case 1: We can determine apriori the dimension of the sparse tensor
@@ -780,11 +777,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
             isOutputTensor = true;
           }
         }
-        else if (isa<indexTree::IndexTreeLHSOperandOp>(u1))
-        {
-          comet_debug() << " used in it.LHSOperand op\n";
-          isOutputTensor = true;
-        }
         else if (isa<indexTree::IndexTreeOperandOp>(u1))
         {
           comet_debug() << " used in it.Operand op\n";
@@ -839,8 +831,9 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         }
         else if (isa<indexTree::IndexTreeOp>(u1))
         {
-          /// do nothing!
+          /// Tensors that are modified are passed as arguments to the index tree
           comet_debug() << " the tensor has use in a Index Tree\n";
+          isOutputTensor = true;
         }
         else if (isa<tensorAlgebra::SpTensorAliasOp>(u1))
         {
