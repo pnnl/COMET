@@ -207,7 +207,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
 
     // Declare Sparse Domains and allocate position vectors for each dimension
     unsigned indicesBitwidth = it_tensor_decl_op->getResultTypes()[0].cast<SparseTensorType>().getIndicesType().getWidth();
-    llvm::SmallDenseMap<Value, Value> symbolic_domains;
+    llvm::SmallDenseMap<Value, int64_t> symbolic_domains;
 
     llvm::SmallVector<Value> input_domains;
 
@@ -237,7 +237,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
         auto concrete_domain = llvm::cast<indexTree::ConcreteDomain>(domain_op);
         Value dim_size = concrete_domain.getDimensionSize();
         Value symbolic_domain = rewriter.create<DeclDomainOp>(loc, domain_type, dim_size, num_rows, is_dynamic, rewriter.getI32IntegerAttr(indicesBitwidth));
-        symbolic_domains.insert(std::make_pair(domain, symbolic_domain));
+        symbolic_domains.insert(std::make_pair(domain, input_domains.size()));
         input_domains.push_back(symbolic_domain);
       }
       
@@ -258,7 +258,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
     auto itree_op = rewriter.create<IndexTreeOp>(loc, llvm::SmallVector<Type>(symbolic_domains.size(), domain_type), input_domains);
     Region* body = &itree_op.getRegion();
     loc = body->getLoc();
-    Block* block = rewriter.createBlock(body);
+    Block* block = rewriter.createBlock(body, {}, llvm::SmallVector<Type>(symbolic_domains.size(), domain_type), llvm::SmallVector<Location>(symbolic_domains.size(), loc));
     rewriter.setInsertionPointToStart(block);
 
     indexTree::IndexTreeType tree_type = indexTree::IndexTreeType::get(context);
@@ -284,7 +284,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
 
       if(domain_op->hasTrait<UnknownDomain>())
       {
-        Value symbolic_domain = symbolic_domains[domain];
+        Value symbolic_domain = block->getArgument(symbolic_domains[domain]);
         Value new_symbolic_domain = rewriter.create<indexTree::ComputeSymbolicDomainOp>(
                                       loc, 
                                       domain_type,

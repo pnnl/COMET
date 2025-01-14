@@ -383,8 +383,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// ===================================================================================
   if (IsLoweringtoIndexTree || emitIT || emitLoops || emitTriton_ || emitLLVM)
   {
-//    /// Generate the index tree IR
-//    optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass(CodegenTarget));
+   /// Generate the index tree IR
+   optPM.addPass(mlir::comet::createLowerTensorAlgebraToIndexTreePass(CodegenTarget));
 
     if (OptKernelFusion)
     {

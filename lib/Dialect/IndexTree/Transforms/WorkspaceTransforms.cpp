@@ -156,11 +156,19 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
     llvm::SmallVector<int64_t> dim_sizes(workspace_rank, ShapedType::kDynamic);
     Type workspace_type = WorkspaceType::get(compute_op.getContext(), spType.getElementType(), spType.getIndicesType(), dim_sizes);
     std::reverse(dims.begin(), dims.end());
-    Value workspace = rewriter.create<AllocWorkspaceOp>(loc, workspace_type, old_output, rewriter.getI32ArrayAttr(dims));
+
+    // Get the argument that corresponds to the tensor
+    // This may break if the tensor is part of a longer use def chain of computations
+    BlockArgument output_arg = llvm::cast<BlockArgument>(old_output);
+    Value original_tensor = tree_op->getOperand(output_arg.getArgNumber());
+    Value workspace = rewriter.create<AllocWorkspaceOp>(loc, workspace_type, original_tensor, rewriter.getI32ArrayAttr(dims));
     
+    // Modify the itree body to expect the workspace as a modifiable "tensor"
+    Value workspace_arg = tree_op.getBody()->addArgument(workspace_type, loc);    
+
     // Clean the workspace before use
     rewriter.setInsertionPoint(node);
-    Value clean_workspace = rewriter.create<IndexTreeCleanWorkspaceOp>(loc, workspace_type, node.getParent(), workspace);
+    Value clean_workspace = rewriter.create<IndexTreeCleanWorkspaceOp>(loc, workspace_type, node.getParent(), workspace_arg);
 
     // Create new compute op
     auto context = getContext();
