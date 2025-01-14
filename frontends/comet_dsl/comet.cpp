@@ -392,12 +392,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
     }
 
-    if (OptKernelFusion)
-    {
-      /// Apply kernel fusion on index tree dialect for some compound expressions.
-      optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
-    }
-
     // Create new pass manager to optimize the index tree dialect
     optPM.addPass(mlir::comet::createIndexTreeDomainInferencePass());
 
