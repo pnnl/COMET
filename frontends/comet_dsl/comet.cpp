@@ -54,6 +54,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/Extensions/InlinerExtension.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
@@ -102,6 +103,8 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #ifdef ENABLE_GPU_TARGET
+#include "comet/Conversion/BlockedGpuToTriton/BlockedGpuToTriton.h"
+#include "comet/Conversion/GpuToBlockedGpu/GpuToBlockedGpu.h"
 #include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
 #include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
@@ -603,7 +606,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if(CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringToTriton || isLoweringToLLVM))
   {
 
-    pm.addPass(mlir::comet::createConvertGpuKernelToTritonPass());
+    pm.nest<mlir::gpu::GPUModuleOp>().addNestedPass<mlir::gpu::GPUFuncOp>(mlir::comet::createConvertGpuToBlockedGpuPass());
+    pm.addPass(mlir::comet::createConvertBlockedGpuToTritonPass());
+    // pm.addPass(mlir::comet::createConvertGpuKernelToTritonPass());
 
     if (emitTriton_)
     {
