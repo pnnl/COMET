@@ -33,6 +33,7 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 
+#include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/ValueRange.h"
@@ -226,6 +227,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
     mlir::Operation* op,
     ArrayRef<mlir::Value> operands,
     mlir::ConversionPatternRewriter &rewriter,
+    TargetDevice device,
     bool compute_missing = false) {
   comet_pdump(op);
 
@@ -279,16 +281,38 @@ mlir::LogicalResult generalIndexOperationRewrite(
   {
     is_parallel = false;
   }
-  
-  for (unsigned i = 0; i < lhsMap.getNumDims(); i++)
+
+  std::map<int, Value> exprToIndex;
+
+  if(device == TargetDevice::GPU)
   {
-    if(!lhsMap.isFunctionOfDim(i)){
-      is_parallel = false;
+    for (unsigned i = 0; i < lhsMap.getNumResults() ; i++)
+    {
+      parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel);
+      exprToIndex[lhsMap.getResult(i).template cast<AffineDimExpr>().getPosition()] = parent;
     }
-    parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel);
-    index_nodes.push_back(parent);
-    comet_vdump(parent);
+
+    is_parallel = false;
+    for (unsigned ii = 0; ii < lhsMap.getNumDims(); ii++)
+    {
+      if(!lhsMap.isFunctionOfDim(ii)){
+        parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel);
+        exprToIndex[ii] = parent;
+      }
+    }
   }
+  else 
+  {
+    for (unsigned i = 0; i < lhsMap.getNumDims(); i++)
+    {
+      if(!lhsMap.isFunctionOfDim(i)){
+        is_parallel = false;
+      }
+      parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel);
+      exprToIndex[i] = parent;
+    }
+  }
+
 
   //Construct LHS Operand
   llvm::SmallVector<Value> pos;
@@ -305,8 +329,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
       loc,
       TypeRange({access_type, access_type}),
       lhs_tensor,
-//      index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
-      index_nodes[llvm::cast<AffineDimExpr>(expr).getPosition()],
+      exprToIndex[expr.template cast<AffineDimExpr>().getPosition()],
       rewriter.getUI32IntegerAttr((unsigned)i),
       prev_dim
     );
@@ -321,7 +344,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
         loc,
         TypeRange({access_type, access_type}),
         mask_tensor,
-        index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
+        exprToIndex[expr.template cast<AffineDimExpr>().getPosition()],
         rewriter.getUI32IntegerAttr((unsigned)i),
         mask_prev_dim
       );
@@ -357,8 +380,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
       loc,
       TypeRange({access_type, access_type}),
       rhs1_tensor,
-//      index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
-      index_nodes[llvm::cast<AffineDimExpr>(expr).getPosition()],
+      exprToIndex[expr.template cast<AffineDimExpr>().getPosition()],
       rewriter.getUI32IntegerAttr((unsigned)i),
       prev_dim
     );
@@ -381,8 +403,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
       loc,
       TypeRange({access_type, access_type}),
       rhs2_tensor,
-//      index_nodes[expr.template cast<AffineDimExpr>().getPosition()],
-      index_nodes[llvm::cast<AffineDimExpr>(expr).getPosition()],
+      exprToIndex[expr.template cast<AffineDimExpr>().getPosition()],
       rewriter.getUI32IntegerAttr((unsigned)i),
       prev_dim
     );
@@ -412,46 +433,48 @@ mlir::LogicalResult generalIndexOperationRewrite(
 }
 
 struct TensorMultOpLowering : public mlir::ConversionPattern {
-  TensorMultOpLowering(mlir::MLIRContext *ctx)
-      : mlir::ConversionPattern(TensorMultOp::getOperationName(), 1, ctx) {}
+  TensorMultOpLowering(mlir::MLIRContext *ctx, TargetDevice device)
+      : mlir::ConversionPattern(TensorMultOp::getOperationName(), 1, ctx), device(device) {}
+  TargetDevice device;
 
   mlir::LogicalResult
   matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    return generalIndexOperationRewrite<TensorMultOp>(op, operands, rewriter);
+    return generalIndexOperationRewrite<TensorMultOp>(op, operands, rewriter, this->device);
   }
 };
 
 struct TensorElewsMultOpLowering : public mlir::ConversionPattern {
-  TensorElewsMultOpLowering(mlir::MLIRContext *ctx)
-      : mlir::ConversionPattern(TensorElewsMultOp::getOperationName(), 1, ctx) {}
+  TensorElewsMultOpLowering(mlir::MLIRContext *ctx, TargetDevice device)
+      : mlir::ConversionPattern(TensorElewsMultOp::getOperationName(), 1, ctx), device(device) {}
+  TargetDevice device;
 
   mlir::LogicalResult
   matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    return generalIndexOperationRewrite<TensorElewsMultOp>(op, operands, rewriter);
+    return generalIndexOperationRewrite<TensorElewsMultOp>(op, operands, rewriter, this->device);
   }
 };
 
 struct TensorAddOpLowering : public mlir::ConversionPattern {
-  TensorAddOpLowering(mlir::MLIRContext *ctx)
-      : mlir::ConversionPattern(TensorAddOp::getOperationName(), 1, ctx) {}
-
+  TensorAddOpLowering(mlir::MLIRContext *ctx, TargetDevice device)
+      : mlir::ConversionPattern(TensorAddOp::getOperationName(), 1, ctx), device(device) {}
+  TargetDevice device;
   mlir::LogicalResult
   matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    return generalIndexOperationRewrite<TensorAddOp>(op, operands, rewriter, true);
+    return generalIndexOperationRewrite<TensorAddOp>(op, operands, rewriter, this->device, true);
   }
 };
 
 struct TensorSubtractOpLowering : public mlir::ConversionPattern {
-  TensorSubtractOpLowering(mlir::MLIRContext *ctx)
-      : mlir::ConversionPattern(TensorSubtractOp::getOperationName(), 1, ctx) {}
-
+  TensorSubtractOpLowering(mlir::MLIRContext *ctx, TargetDevice device)
+      : mlir::ConversionPattern(TensorSubtractOp::getOperationName(), 1, ctx), device(device) {}
+  TargetDevice device;
   mlir::LogicalResult
   matchAndRewrite(mlir::Operation *op, ArrayRef<mlir::Value> operands,
                   mlir::ConversionPatternRewriter &rewriter) const final {
-    return generalIndexOperationRewrite<TensorSubtractOp>(op, operands, rewriter, true);
+    return generalIndexOperationRewrite<TensorSubtractOp>(op, operands, rewriter, this->device, true);
   }
 };
 
@@ -469,7 +492,7 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
   patterns.add<TensorMultOpLowering,
                TensorElewsMultOpLowering,
                TensorAddOpLowering,
-               TensorSubtractOpLowering>(&getContext());
+               TensorSubtractOpLowering>(&getContext(), this->device);
 
   if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
     signalPassFailure();
