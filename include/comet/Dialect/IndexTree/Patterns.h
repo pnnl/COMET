@@ -26,11 +26,13 @@
 
 #include "mlir/Transforms/DialectConversion.h"
 
+#include "comet/Dialect/IndexTree/Analysis/CopiedDomainAnalysis.h"
+
 namespace mlir
 {
     namespace indexTree
     {
-        void populateDomainInferencePatterns(MLIRContext *context, RewritePatternSet &patterns);
+        void populateDomainInferencePatterns(MLIRContext *context, RewritePatternSet &patterns, CopiedDomainAnalysis &copiedDomains);
         void populateDomainConcretizationPatterns(MLIRContext *context, RewritePatternSet &patterns);
         void populateIndexTreeTypeConversionPatterns(MLIRContext *context, RewritePatternSet &patterns, TypeConverter &typeConverter, ConversionTarget& target);
         void populateIndexTreeInliningPatterns(MLIRContext *context, RewritePatternSet &patterns);
