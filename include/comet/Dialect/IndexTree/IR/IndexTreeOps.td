@@ -203,7 +203,7 @@ def IndexTreeDenseDomainOp : IndexTree_Op<"DenseDomainOp",
   let description = [{
   }];
 
-  let arguments = (ins AnyTypeOf<[UI32,Index]>:$dim_size, Variadic<TA_AnyTensor>:$tensors, I32ArrayAttr:$dims);
+  let arguments = (ins AnyTypeOf<[UI32,Index,I32]>:$dim_size, Variadic<TA_AnyTensor>:$tensors, I32ArrayAttr:$dims);
 
   let results = (outs IndexTree_DomainType:$domain);
 }
@@ -228,7 +228,7 @@ def IndexTreeDomainUnionOp : IndexTree_Op<"DomainUnionOp",
   let description = [{
   }];
 
-  let arguments = (ins Variadic<IndexTree_DomainType>:$domains, Optional<Index>:$dim_size);
+  let arguments = (ins Variadic<IndexTree_DomainType>:$domains, Optional<AnyTypeOf<[I32,Index]>>:$dim_size);
   let results = (outs IndexTree_DomainType:$domain);
 }
 

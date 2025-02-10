@@ -207,8 +207,6 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
       );
     } else {
       //Domain is dense
-      //TODO (alokvk2): Figure out if we need to take the root index variable or the allocation
-      //Right now I don't know how to get back to the root index variable.
       auto tensor_type = llvm::cast<TensorType>(tensor.getType());
       auto max = tensor_type.getShape()[dim];
       Value max_val;
