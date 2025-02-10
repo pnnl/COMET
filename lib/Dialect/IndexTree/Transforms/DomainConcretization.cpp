@@ -278,11 +278,17 @@ struct SimplifyIntersectionOp : public OpRewritePattern<IndexTreeDomainIntersect
       if(to_remove.size() > 1){
         auto loc = op->getLoc();
         auto context = rewriter.getContext();
-        Value max = maximums[0];
+        Value max;
         // TODO: Do we need this to check if the domains are compatible?
-        // for(Value new_max : maximums){
-        //   max = rewriter.create<index::MaxUOp>(loc, index_type, max, new_max);
-        // }
+        for(Value new_max : maximums){
+          if(arith::ConstantOp c = new_max.getDefiningOp<arith::ConstantOp>()){
+            if(llvm::cast<IntegerAttr>(c.getValue()).getValue() == -1){
+              continue;
+            }
+          }
+          max = new_max;
+          break;
+        }
         indexTree::DomainType domain_type = indexTree::DomainType::get(context);
         Value new_domain = rewriter.create<IndexTreeDenseDomainOp>(loc, domain_type, max, tensors, rewriter.getArrayAttr(dims));
         rewriter.replaceOp(op, {new_domain});
@@ -329,12 +335,16 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
     bool can_replace = false;
     auto context = rewriter.getContext();
     SmallVector<Value> domains;
+    llvm::SmallDenseSet<Value> domain_set;
     SmallVector<Value> tensors;
     SmallVector<Attribute> dims;
     indexTree::DomainType domain_type = indexTree::DomainType::get(context);
     for(auto operand : op.getDomains())
     {
-      domains.push_back(operand);
+      if(!domain_set.contains(operand)){
+        domains.push_back(operand);
+        domain_set.insert(operand);
+      }
     }
 
     for(auto operand : domains)
