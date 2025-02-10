@@ -28,7 +28,6 @@
 #include "comet/Dialect/IndexTree/Transforms/Tensor.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/IndexTree/Transforms/UnitExpression.h"
-#include "comet/Dialect/IndexTree/IR/IndexTree.h"
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"

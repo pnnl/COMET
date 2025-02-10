@@ -369,7 +369,8 @@ void IndexTreeWorkspaceTransformationsPass::runOnOperation()
   mlir::RewritePatternSet workspace_transformation_patterns(&getContext());
 
   workspace_transformation_patterns.add<TransformSparseOutput, MoveInvariantComputeOp>(&getContext());
-  indexTree::populateDomainInferencePatterns(&getContext(), workspace_transformation_patterns); //For new index variables
+  CopiedDomainAnalysis& copiedDomains = getAnalysis<CopiedDomainAnalysis>();
+  indexTree::populateDomainInferencePatterns(&getContext(), workspace_transformation_patterns, copiedDomains); //For new index variables
   indexTree::populateDomainConcretizationPatterns(&getContext(), workspace_transformation_patterns);
   mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(workspace_transformation_patterns));
   comet_debug() << __FILE__ << " " << __LINE__ << " ending CompressedWorkspaceTransforms pass \n";
