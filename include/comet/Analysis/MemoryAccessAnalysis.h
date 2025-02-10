@@ -14,6 +14,7 @@
 #define COMET_MEMORY_ACCESS_PATTERN_ANALYSIS_H
 
 #include <string>
+#include <vector>
 
 namespace mlir
 {

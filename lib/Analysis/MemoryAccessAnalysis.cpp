@@ -132,12 +132,14 @@ namespace mlir
       assert(factor.getKind() == Constant && "Error: the factor is not constant.");
 
       if (this->isConstantFloat() || factor.isConstantFloat())
+        /// Value is a floating point number
       {
         double old_value = std::stod(name_);
         double new_value = old_value + std::stod(factor.getName());
         name_ = std::to_string(new_value);
       }
       else
+        /// Value is an integer
       {
         auto old_value = std::stoull(name_);
         auto new_value = old_value + std::stoull(factor.getName());
@@ -151,12 +153,14 @@ namespace mlir
       assert(factor.getKind() == Constant && "Error: the factor is not constant.");
 
       if (this->isConstantFloat() || factor.isConstantFloat())
+        /// Value is a floating point number
       {
         double old_value = std::stod(name_);
         double new_value = old_value * std::stod(factor.getName());
         name_ = std::to_string(new_value);
       }
       else
+        /// Value is an integer
       {
         auto old_value = std::stoull(name_);
         auto new_value = old_value * std::stoull(factor.getName());
@@ -330,32 +334,6 @@ namespace mlir
           locMaxTerm_ = terms_.size() - 1;
         }
       }
-
-//      //////////////////
-//      /// If current time complexity only contains a single constant and the new term is also a single constant,
-//      /// then update the constant factor.
-//      if (terms_.size() == 1 && terms_.front().isSingleConstant() && term.isSingleConstant())
-//      {
-//        TimeFactor new_factor = terms_.front().getFactor(0);
-//        auto old_value = std::stoull(new_factor.getName());
-//        auto new_value = old_value + std::stoull(term.getFactors().front().getName());
-//        new_factor.setName(std::to_string(new_value));
-//        terms_.front().setFactor(0, new_factor);
-//        return;
-//      }
-//      terms_.push_back(term);
-//      /// locMaxTerm_ pointer to the largest term.
-//      if (terms_.size() == 1)
-//      {
-//        locMaxTerm_ = 0;
-//      }
-//      else
-//      {
-//        if (term > terms_[locMaxTerm_])
-//        {
-//          locMaxTerm_ = terms_.size() - 1;
-//        }
-//      }
     }
 
     std::string TimeComplexity::toString() const
@@ -383,8 +361,8 @@ namespace mlir
     }
 
     /// End class TimeComplexity
-  }
-}
+  }  /// End namespace comet
+}  /// End namespace mlir
 
 namespace
 {
@@ -580,9 +558,6 @@ namespace
     }
     else
     {
-//      llvm::errs() << __FILE__ << ":" << __LINE__ << " Error: Value `";
-//      value.print(llvm::errs());
-//      llvm::errs() << "` type is not supported yet.\n";
       std::string boundary_str = getValueName(value);
       comet_debug() << "boundary_str: " << boundary_str << "\n";
       return boundary_str;
@@ -853,58 +828,7 @@ namespace
     comet_vdump(write_TC);
   }
 } /// End anonymous namespace
-//void MemoryAccessFreqeuncyAnalysisPass::incrementAccessFrequency(Value memref, int64_t count)
-//{
-//  comet_debug() << "before adding incrementAccessFrequency:" << accessFrequencyMap[memref] << "\n";
-//  accessFrequencyMap[memref] += count;
-//  comet_debug() << "input incrementAccessFrequency:" << count << "\n";
-//  comet_debug() << "after adding incrementAccessFrequency:" << accessFrequencyMap[memref] << "\n";
-//}
 
-//int64_t MemoryAccessFreqeuncyAnalysisPass::calculateConditionFactor(Operation *op, int64_t iterations)
-//{
-//  int64_t conditionFactor = 1;
-//
-//  if (auto ifOp = op->getParentOfType<AffineIfOp>())
-//  {
-//    conditionFactor = iterations / 2;
-//  }
-//  else
-//  {
-//    conditionFactor = iterations;
-//  }
-//
-//  return conditionFactor;
-//}
-
-//// Estimate the effect of the affine map on access frequency.
-//int64_t MemoryAccessFreqeuncyAnalysisPass::estimateAccessMultiplierFromAffineMap(AffineMap affineMap)
-//{
-//  // TODO(gkestor): need better heuristics
-//  // Simple heuristic: This is a heuristic that assumes each result of the affine map corresponds to a distinct access.
-//  // The actual effect might be more complex, especially for multi-dimensional accesses, but this provides a basic approach.
-//  return affineMap.getNumResults();
-//}
-
-//// Estimate access frequency considering affine maps.
-//void MemoryAccessFreqeuncyAnalysisPass::estimateAccessFrequencyWithAffineMap(Value memref, Operation *op, AffineMap affineMap, int64_t iterations)
-//{
-//  int64_t conditionFactor = calculateConditionFactor(op, iterations);
-//
-//  // Consider the complexity of the affine map.
-//  int64_t accessMultiplier = 1;
-//  accessMultiplier = estimateAccessMultiplierFromAffineMap(affineMap);
-//  comet_vdump(memref);
-//  comet_debug() << "incrementAccessFrequency before calling:" << conditionFactor * accessMultiplier << " \n";
-//  incrementAccessFrequency(memref, conditionFactor * accessMultiplier);
-//}
-
-//// Estimate the access frequency for the given memory location considering conditions.
-//void MemoryAccessFreqeuncyAnalysisPass::estimateAccessFrequency(Value memref, Operation *op, int64_t iterations)
-//{
-//  int64_t conditionFactor = calculateConditionFactor(op, iterations);
-//  incrementAccessFrequency(memref, conditionFactor);
-//}
 
 void MemoryAccessFreqeuncyAnalysisPass::runOnOperation()
 {
@@ -982,80 +906,6 @@ void MemoryAccessFreqeuncyAnalysisPass::runOnOperation()
 
 }
 
-
-/// backup
-//void MemoryAccessFreqeuncyAnalysisPass::runOnOperation()
-//{
-//  accessFrequencyMap.clear();
-//
-//  // Get the current function.
-//  func::FuncOp function = getOperation();
-//  function.dump();
-//
-//  // Traverse each operation in the function.
-//  function.walk([&](Operation *op)
-//                {
-//    if (auto affineForOp = dyn_cast<AffineForOp>(op))
-//    {
-//      // Calculate number of iterations considering the step value
-//      int64_t lowerBound = affineForOp.getConstantLowerBound();
-//      int64_t upperBound = affineForOp.getConstantUpperBound();
-//      auto step = affineForOp.getStepAsInt();
-//      int64_t iterations = (upperBound - lowerBound + step - 1) / step;
-//
-//        affineForOp.getBody()->walk([&](Operation *nestedOp) {
-//        // AffineLoadOp and AffineStoreOp
-//        if (auto loadOp = dyn_cast<AffineLoadOp>(nestedOp))
-//        {
-//          comet_debug() << "Inside loop body\n";
-//          comet_vdump(loadOp);
-//          estimateAccessFrequencyWithAffineMap(loadOp.getMemRef(), nestedOp, loadOp.getAffineMap(), iterations);
-//        }
-//        else if (auto storeOp = dyn_cast<AffineStoreOp>(nestedOp))
-//        {
-//          estimateAccessFrequencyWithAffineMap(storeOp.getMemRef(), nestedOp, storeOp.getAffineMap(), iterations);
-//          // LoadOp and StoreOp
-//        }
-//        else if (auto loadOp = dyn_cast<memref::LoadOp>(nestedOp))
-//        {
-//          estimateAccessFrequency(loadOp.getMemRef(), nestedOp, iterations);
-//        }
-//        else if (auto storeOp = dyn_cast<memref::StoreOp>(nestedOp))
-//        {
-//          estimateAccessFrequency(storeOp.getMemRef(), nestedOp, iterations);
-//        }
-//        });
-//    }
-//    else
-//    {
-//      if (auto loadOp = dyn_cast<AffineLoadOp>(op))
-//      {
-//        comet_debug() << "Outside loop body\n";
-//        comet_vdump(loadOp);
-//        incrementAccessFrequency(loadOp.getMemRef(), 1);
-//      }
-//      else if (auto storeOp = dyn_cast<AffineStoreOp>(op))
-//      {
-//        incrementAccessFrequency(storeOp.getMemRef(), 1);
-//      }
-//      else if (auto loadOp = dyn_cast<memref::LoadOp>(op))
-//      {
-//        incrementAccessFrequency(loadOp.getMemRef(), 1);
-//      }
-//      else if (auto storeOp = dyn_cast<memref::StoreOp>(op))
-//      {
-//        incrementAccessFrequency(storeOp.getMemRef(), 1);
-//      }
-//    } });
-//
-//  // Print the access frequency of each memory location.
-//  for (auto &entry : accessFrequencyMap)
-//  {
-//    llvm::outs() << "Memory location ";
-//    entry.first.print(llvm::outs());
-//    llvm::outs() << " was accessed " << entry.second << " times.\n";
-//  }
-//}
 
 ///===----------------------------------------------------------------------===//
 /// Memory Access Pattern Analysis (sequential or random)
