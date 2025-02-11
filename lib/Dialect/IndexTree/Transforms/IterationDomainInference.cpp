@@ -74,7 +74,7 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
     llvm::SmallDenseMap<Operation*, Value, 8> operands_to_domains;
 
     // Set of tensors that we need to infer domain
-    llvm::SmallDenseSet<Value> intermediate_tensors;
+    llvm::SmallDenseSet<Value, 4> intermediate_tensors;
     
     // Set of all compute operands
     llvm::SmallPtrSet<Operation*, 4> compute_ops;
@@ -129,45 +129,43 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
       }
     }
 
-    llvm::SmallVector<Value, 4> domains;
+    llvm::SmallVector<Value> domains;
     Value zero = builder.create<index::ConstantOp>(loc, builder.getIndexType(), builder.getIndexAttr(0));
     auto tree_op = op->getParentOfType<IndexTreeOp>();
+    auto yield_op = llvm::cast<indexTree::YieldOp>(tree_op.getBody()->getTerminator());
+    llvm::SmallDenseSet<Value, 4> outputs(yield_op.getOperands().begin(), yield_op.getOperands().begin() + tree_op.getInputs().size());
     tree_op.getBody()->walk([&](IndexTreeComputeOp compute_op) {
+      // Check if compute op uses this index variable
       if(!compute_ops.contains(compute_op.getOperation())){
         return WalkResult::advance();
       }
+  
+      Value temp_domain;
       // Check if compute op needs intersection
-      auto itComputeOp = cast<indexTree::IndexTreeComputeOp>(compute_op);
-      auto semiringParts = itComputeOp.getSemiring().split('_');
-      comet_vdump(itComputeOp);
-
-      if(itComputeOp.getComputeMissing()){
+      if(compute_op.getComputeMissing()){
         SmallVector<Value, 4> union_domains;
-        for(auto operand_op_val : itComputeOp.getRhs())
+        for(auto operand_op_val : compute_op.getRhs())
         {
           auto operand_op = operand_op_val.getDefiningOp();
           if(operands_to_domains.find(operand_op) != operands_to_domains.end()) {
-            domains.push_back(operands_to_domains[operand_op]);
             union_domains.push_back(operands_to_domains[operand_op]);
           }
-
-          if(intermediate_tensors.contains(itComputeOp.getResult())){
-            Value new_domain = builder.create<IndexTreeDomainUnionOp>(
-              loc,
-              domain_type,
-              union_domains
-            );
-            for(auto user : itComputeOp.getResult().getUsers()) {
-              if(llvm::isa<IndexTreeOperandOp>(user)){
-                operands_to_domains.insert(std::make_pair(user, new_domain));
-              }
-            }
-          }
         }
+
+        if(union_domains.size() > 1){
+          temp_domain = builder.create<IndexTreeDomainUnionOp>(
+            loc,
+            domain_type,
+            union_domains
+          );
+        } else {
+          temp_domain = union_domains[0];
+        }
+        
+
       } else {
-        Value temp_domain;
         SmallVector<Value, 4> intersection_domains;
-        for(auto operand_op_val : itComputeOp.getRhs())
+        for(auto operand_op_val : compute_op.getRhs())
         {
           auto operand_op = operand_op_val.getDefiningOp();
           comet_pdump(operand_op);
@@ -178,32 +176,38 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
           temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(loc, domain_type, intersection_domains, nullptr);
         else
           temp_domain = intersection_domains[0];
+      }
 
-        if(itComputeOp.getMask()) {
-          auto operand_op = itComputeOp.getMask().getDefiningOp();
-          if(operands_to_domains.find(operand_op) != operands_to_domains.end())
-          {
-            temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(
-              loc, 
-              domain_type, 
-              ValueRange{temp_domain, operands_to_domains[operand_op]}, 
-              nullptr
-            );
+      if(compute_op.getMask()) {
+        auto operand_op = compute_op.getMask().getDefiningOp();
+        if(operands_to_domains.find(operand_op) != operands_to_domains.end())
+        {
+          temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(
+            loc, 
+            domain_type, 
+            ValueRange{temp_domain, operands_to_domains[operand_op]}, 
+            nullptr
+          );
+        }
+      }
+
+      
+      if(intermediate_tensors.contains(compute_op.getResult())){
+        for(auto user : compute_op.getResult().getUsers()) {
+          if(llvm::isa<IndexTreeOperandOp>(user)){
+            operands_to_domains.insert(std::make_pair(user, temp_domain));
           }
         }
+      }
 
-        if(intermediate_tensors.contains(itComputeOp.getResult())){
-          for(auto user : itComputeOp.getResult().getUsers()) {
-            if(llvm::isa<IndexTreeOperandOp>(user)){
-              operands_to_domains.insert(std::make_pair(user, temp_domain));
-            }
-          }
-        }
+      if(copiedDomains.isReductionVar(compute_op, op.getResult()) || outputs.contains(compute_op.getResult())) {
         domains.push_back(temp_domain);
       }
       return WalkResult::advance();
     });
 
+
+    // For each of the outputs, we need to union the non-zero entries
     Value final_domain;
     if(domains.size() > 1) {
       final_domain = builder.create<indexTree::IndexTreeDomainUnionOp>(loc,

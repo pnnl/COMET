@@ -255,12 +255,12 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
 
 
     // Update the index tree op
-    SmallVector<Value> tree_args(tree_op->getOperands());
+    SmallVector<Value> tree_temps(tree_op.getIntermediates());
     SmallVector<Type> tree_types(tree_op->getResultTypes());
-    tree_args.push_back(workspace);
+    tree_temps.push_back(workspace);
     tree_types.push_back(workspace_type);
     rewriter.setInsertionPoint(tree_op);
-    auto newOp = rewriter.create<IndexTreeOp>(loc, tree_types, tree_args);
+    auto newOp = rewriter.create<IndexTreeOp>(loc, tree_types, tree_op.getInputs(), tree_temps);
     rewriter.inlineRegionBefore(tree_op.getRegion(), newOp.getRegion(), newOp.getRegion().end());
     indexTree::YieldOp yield = cast<indexTree::YieldOp>(newOp.getRegion().getBlocks().front().getTerminator());
     rewriter.updateRootInPlace(yield, [&]() {

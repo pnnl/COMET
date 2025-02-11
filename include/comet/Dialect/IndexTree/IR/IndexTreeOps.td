@@ -53,11 +53,12 @@ class IndexTree_Op<string mnemonic, list<Trait> traits = []> :
 //===----------------------------------------------------------------------===//
 
 def IndexTreeOp : IndexTree_Op<"itree", 
-    [SingleBlockImplicitTerminator<"indexTree::YieldOp">]> {
+    [SingleBlockImplicitTerminator<"indexTree::YieldOp">, AttrSizedOperandSegments]> {
+      
   let summary = "Create a scope for index tree iteration";
   let description = [{}];
 
-  let arguments = (ins Variadic<AnyType>:$inputs);
+  let arguments = (ins Variadic<AnyType>:$inputs, Variadic<AnyType>:$intermediates);
   let results = (outs Variadic<AnyType>:$results);
   let regions = (region SizedRegion<1>:$region);
 }
