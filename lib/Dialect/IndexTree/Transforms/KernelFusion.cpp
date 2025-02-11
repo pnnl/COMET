@@ -37,7 +37,7 @@ using namespace mlir;
 using namespace mlir::indexTree;
 
 // *********** For debug purpose *********//
-#define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 
