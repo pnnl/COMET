@@ -106,7 +106,7 @@ class ConvertIndexTreeTypes : public OpConversionPattern<indexTree::IndexTreeOp>
     }
 
     // Calls the actual converter implementation to convert the operation.
-    auto newOp = rewriter.create<indexTree::IndexTreeOp>(op.getLoc(), dstTypes, unpacked);
+    auto newOp = rewriter.create<indexTree::IndexTreeOp>(op.getLoc(), dstTypes, unpacked, op->getAttrs());
     rewriter.inlineRegionBefore(op.getRegion(), newOp.getRegion(), newOp.getRegion().end());
     if (failed(rewriter.convertRegionTypes(&newOp.getRegion(), *typeConverter)))
       return failure();

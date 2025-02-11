@@ -282,9 +282,10 @@ struct SimplifyIntersectionOp : public OpRewritePattern<IndexTreeDomainIntersect
         // TODO: Do we need this to check if the domains are compatible?
         for(Value new_max : maximums){
           if(arith::ConstantOp c = new_max.getDefiningOp<arith::ConstantOp>()){
-            if(llvm::cast<IntegerAttr>(c.getValue()).getValue() == -1){
+            if(llvm::cast<IntegerAttr>(c.getValue()).getValue().isNegative()){
               continue;
             }
+            continue;
           }
           max = new_max;
           break;

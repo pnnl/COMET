@@ -35,6 +35,7 @@ for(Value rhs : compute_op.getRhs()){
     auto index_to_tensor = positions[dim].getDefiningOp<IndexTreeIndexToTensorOp>();
     Value index = index_to_tensor.getIndex();
     if(!output_vars.contains(index)) { // It's a reduction variable!
+        reductionVars.insert(std::make_pair(compute_op, index));
         candidates.erase(index);
         break;
     }
@@ -57,4 +58,9 @@ for(auto it = candidates.begin(); it != candidates.end(); it++) {
 bool CopiedDomainAnalysis::isCopiedDomain(Value tensor, unsigned dim)
 {
     return copiedDomains.contains(std::make_pair(tensor, dim));
+}
+
+bool CopiedDomainAnalysis::isReductionVar(IndexTreeComputeOp op, Value index_var)
+{
+    return reductionVars.contains(std::make_pair(op, index_var));
 }

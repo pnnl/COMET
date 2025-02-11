@@ -14,9 +14,11 @@ namespace mlir {
             public:
             CopiedDomainAnalysis(Operation* op);
             bool isCopiedDomain(Value tensor, unsigned dim);
+            bool isReductionVar(IndexTreeComputeOp op, Value index_var);
 
             private:
             llvm::SmallDenseSet<std::pair<Value, uint32_t>> copiedDomains;
+            llvm::SmallDenseSet<std::pair<IndexTreeComputeOp, Value>> reductionVars;
             void analyzeDomains(IndexTreeComputeOp compute_op);
         };
         
