@@ -28,24 +28,38 @@ for(Value pos : lhs.getPos()){
     candidates.insert(std::make_pair(index_to_tensor.getIndex(), index_to_tensor.getDim()));
 }
 
+llvm::SmallDenseSet<Value> appeared_once;
+for(Value rhs : compute_op.getRhs()){
+    auto positions = rhs.getDefiningOp<IndexTreeOperandOp>().getPos();
+    for(auto pos : positions) {
+        auto index_to_tensor = pos.getDefiningOp<IndexTreeIndexToTensorOp>();
+        Value index = index_to_tensor.getIndex();
+
+        // Reduction variable appears twice in the same expression, and not in the output
+        if(!output_vars.contains(index) && appeared_once.contains(index)) { 
+            reductionVars.insert(std::make_pair(compute_op, index));
+        }
+        appeared_once.insert(index);
+    }
+}
+
 for(Value rhs : compute_op.getRhs()){
     auto positions = rhs.getDefiningOp<IndexTreeOperandOp>().getPos();
     uint32_t dim = 0;
-    for(; dim < positions.size(); dim += 1){
-    auto index_to_tensor = positions[dim].getDefiningOp<IndexTreeIndexToTensorOp>();
-    Value index = index_to_tensor.getIndex();
-    if(!output_vars.contains(index)) { // It's a reduction variable!
-        reductionVars.insert(std::make_pair(compute_op, index));
-        candidates.erase(index);
-        break;
-    }
+    for(; dim < positions.size(); dim += 1) {
+        auto index_to_tensor = positions[dim].getDefiningOp<IndexTreeIndexToTensorOp>();
+        Value index = index_to_tensor.getIndex();
+        if(reductionVars.contains(std::make_pair(compute_op, index))) { 
+            candidates.erase(index);
+            break;
+        }
     }
 
     // Erase everything that comes after a reduction variable
-    for(dim += 1; dim < positions.size(); dim += 1){
-    auto index_to_tensor = positions[dim].getDefiningOp<IndexTreeIndexToTensorOp>();
-    Value index = index_to_tensor.getIndex();
-    candidates.erase(index);
+    for(dim += 1; dim < positions.size(); dim += 1) {
+        auto index_to_tensor = positions[dim].getDefiningOp<IndexTreeIndexToTensorOp>();
+        Value index = index_to_tensor.getIndex();
+        candidates.erase(index);
     }
 }
 

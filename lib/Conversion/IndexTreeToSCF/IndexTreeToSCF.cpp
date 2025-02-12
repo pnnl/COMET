@@ -545,7 +545,7 @@ namespace
       }
 
       Value getCrd(IRRewriter& rewriter) override {
-        if(crd != nullptr) return crd;
+        // if(crd != nullptr) return crd;
         auto loc = controlTensor.getLoc();
         // SparseTensorType tt = cast<SparseTensorType>(controlTensor.getType());
         crd = rewriter.create<SpTensorGetCrd>(loc, controlTensor, inductionVar, rewriter.getI32IntegerAttr(dim));
@@ -566,6 +566,8 @@ namespace
           }
         }
         auto loc = controlTensor.getLoc();
+        Value crd = rewriter.create<SpTensorGetCrd>(loc, controlTensor, inductionVar, rewriter.getI32IntegerAttr(dim));
+        crd = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), crd);
         Value pos = rewriter.create<tensorAlgebra::TensorFindPos>(loc, rewriter.getIndexType(), tensor, crd, rewriter.getI32IntegerAttr(dim), rewriter.getBoolAttr(true));
         return pos;
       }
@@ -1063,7 +1065,19 @@ namespace
 
     mlir::LogicalResult convertTensorAccessOp(IndexTreeIndexToTensorOp access_op, IRRewriter &rewriter)
     {
-      // TODO: Figure out how to find the right position to insert these operations!!!!
+      // Find the position to insert these operations based off the nearest use.
+      // TODO: figure out order of users?
+      for(auto user : access_op->getUsers()){
+        if(auto node = llvm::dyn_cast<IndexTreeNode>(user)) {
+          Value parent = node.getParentNode();
+          auto parent_iterator = nodeMap.find(parent);
+          if(parent_iterator != nodeMap.end()){
+            // Jump out of inner loop if necessary
+            rewriter.setInsertionPoint(parent_iterator->getSecond()->loopBody);
+          }
+          break;
+        }
+      }
       LoopInfo* parent_info = nodeMap.find(access_op.getIndex())->getSecond();
       Value tensor = mapInputIntoLoop(access_op.getTensor(), parent_info);
       auto dim = access_op.getDim();

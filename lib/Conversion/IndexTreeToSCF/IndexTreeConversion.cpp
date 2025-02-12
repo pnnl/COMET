@@ -96,7 +96,7 @@ class ConvertIndexTreeTypes : public OpConversionPattern<indexTree::IndexTreeOp>
     }
 
     SmallVector<Type> dstTypes;
-    SmallVector<unsigned> offsets;
+    SmallVector<uint32_t> offsets;
     offsets.push_back(0);
     // Do the type conversion and record the offsets.
     for (Type type : op.getResultTypes()) {
@@ -105,8 +105,17 @@ class ConvertIndexTreeTypes : public OpConversionPattern<indexTree::IndexTreeOp>
       offsets.push_back(dstTypes.size());
     }
 
+    uint32_t input_size = offsets[adaptor.getInputs().size()];
+    uint32_t intermediates_size = unpacked.size() - input_size;
+    ValueRange new_args = ValueRange(unpacked);
+
     // Calls the actual converter implementation to convert the operation.
-    auto newOp = rewriter.create<indexTree::IndexTreeOp>(op.getLoc(), dstTypes, unpacked, op->getAttrs());
+    auto newOp = rewriter.create<indexTree::IndexTreeOp>(
+      op.getLoc(),
+      dstTypes,
+      new_args.slice(0, input_size),
+      new_args.slice(input_size, intermediates_size)
+    );
     rewriter.inlineRegionBefore(op.getRegion(), newOp.getRegion(), newOp.getRegion().end());
     if (failed(rewriter.convertRegionTypes(&newOp.getRegion(), *typeConverter)))
       return failure();

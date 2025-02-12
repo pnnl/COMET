@@ -76,6 +76,23 @@ def YieldOp : IndexTree_Op<"yield", [Pure, ReturnLike, Terminator,
       [{  attr-dict ($results^ `:` type($results))? }];
 }
 
+def IndexTreeNodeInterface : OpInterface<"IndexTreeNode"> {
+  let description = [{
+    Describes any operation which is attached to specific point in the tree.
+  }];
+  let cppNamespace = "::mlir::indexTree";
+
+  let methods = [
+    InterfaceMethod<
+      [{Method to get the dimension size of a concrete dimension.}],
+      "mlir::Value", "getParentNode", (ins), /*methodBody=*/[{}],
+      /*defaultImplementation=*/[{
+        return $_op.getParent();
+      }]
+    >,
+  ];
+}
+
 def IndexTreeRootOp : IndexTree_Op<"RootOp", [
     HasParent<"IndexTreeOp">, Pure]> {
   let summary = "Create the base of the iteration tree";
@@ -84,7 +101,7 @@ def IndexTreeRootOp : IndexTree_Op<"RootOp", [
   let results = (outs IndexTree_TreeType:$output);
 }
 
-def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
+def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure, IndexTreeNodeInterface]>{
   let summary = "Create an index variable bound to a specific computation.";
   let description = [{
   }];
@@ -93,7 +110,7 @@ def IndexTreeIndicesOp : IndexTree_Op<"IndexOp", [Pure]>{
 
   let results = (outs IndexTree_IndexNodeType:$output);
 }
-def IndexTreeLHSOperandOp : IndexTree_Op<"LHSOperandOp", [Pure, SameVariadicOperandSize]>{
+def IndexTreeLHSOperandOp : IndexTree_Op<"LHSOperandOp", [Pure, SameVariadicOperandSize, IndexTreeNodeInterface]>{
   let summary = "";
   let description = [{}];
 
@@ -103,9 +120,20 @@ def IndexTreeLHSOperandOp : IndexTree_Op<"LHSOperandOp", [Pure, SameVariadicOper
     Variadic<Index>:$pos,
     Variadic<Index>:$crds);
   let results = (outs IndexTree_OperandType:$result);
+
+  let extraClassDeclaration = [{
+    Value getParentNode() { 
+      for(Operation* user : getOperation()->getUsers()) {
+        if(auto compute_op = llvm::dyn_cast<IndexTreeComputeOp>(user)) {
+          return compute_op.getParentNode();
+        }
+      }
+      return nullptr;
+    }
+  }];
 }
 
-def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure, SameVariadicOperandSize]>{
+def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure, SameVariadicOperandSize, IndexTreeNodeInterface]>{
   let summary = "";
   let description = [{}];
 
@@ -115,9 +143,20 @@ def IndexTreeOperandOp : IndexTree_Op<"OperandOp", [Pure, SameVariadicOperandSiz
     Variadic<Index>:$pos,
     Variadic<Index>:$crds);
   let results = (outs IndexTree_OperandType:$result);
+
+  let extraClassDeclaration = [{
+    Value getParentNode() { 
+      for(Operation* user : getOperation()->getUsers()) {
+        if(auto compute_op = llvm::dyn_cast<IndexTreeComputeOp>(user)) {
+          return compute_op.getParentNode();
+        }
+      }
+      return nullptr;
+    }
+  }];
 }
 
-def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure, AttrSizedOperandSegments]>{
+def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure, AttrSizedOperandSegments, IndexTreeNodeInterface]>{
   let summary = "";
   let description = [{
   }];
@@ -141,7 +180,22 @@ def IndexTreeComputeOp : IndexTree_Op<"ComputeOp", [Pure, AttrSizedOperandSegmen
   //let hasVerifier = 1;
 }
 
-def IndexTreeTensorDomainOp : IndexTree_Op<"DomainOp", [Pure]>{
+class IndexTreeDomain_Op<string mnemonic, list<Trait> traits = []> :
+    IndexTree_Op<mnemonic, traits>{
+
+  let extraClassDeclaration = [{
+    Value getParentNode() { 
+      for(Operation* user : getOperation()->getUsers()) {
+        if(auto index_node = llvm::dyn_cast<IndexTreeNode>(user)) {
+          return index_node.getParentNode();
+        }
+      }
+      return nullptr;
+    }
+  }];
+}
+
+def IndexTreeTensorDomainOp : IndexTreeDomain_Op<"DomainOp", [Pure, IndexTreeNodeInterface]>{
   let summary = "";
   let description = [{
   }];
@@ -151,7 +205,7 @@ def IndexTreeTensorDomainOp : IndexTree_Op<"DomainOp", [Pure]>{
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeEmptyDomainOp : IndexTree_Op<"EmptyDomain", [Pure]>{
+def IndexTreeEmptyDomainOp : IndexTreeDomain_Op<"EmptyDomain", [Pure, IndexTreeNodeInterface]>{
   let summary = "";
   let description = [{
   }];
@@ -177,8 +231,8 @@ def ConcreteDomainInterface : OpInterface<"ConcreteDomain"> {
   ];
 }
 
-def IndexTreeSparseDomainOp : IndexTree_Op<"SparseDomainOp", 
-    [Pure, ConcreteDomainInterface]>{
+def IndexTreeSparseDomainOp : IndexTreeDomain_Op<"SparseDomainOp", 
+    [Pure, ConcreteDomainInterface, IndexTreeNodeInterface]>{
 
   let summary = "";
   let description = [{
@@ -198,8 +252,8 @@ def IndexTreeSparseDomainOp : IndexTree_Op<"SparseDomainOp",
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeDenseDomainOp : IndexTree_Op<"DenseDomainOp", 
-    [Pure, SameVariadicOperandSize, ConcreteDomainInterface]>{
+def IndexTreeDenseDomainOp : IndexTreeDomain_Op<"DenseDomainOp", 
+    [Pure, SameVariadicOperandSize, ConcreteDomainInterface, IndexTreeNodeInterface]>{
   let summary = "";
   let description = [{
   }];
@@ -209,8 +263,8 @@ def IndexTreeDenseDomainOp : IndexTree_Op<"DenseDomainOp",
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeWorkspaceDomainOp : IndexTree_Op<"WorkspaceDomainOp", 
-    [Pure, ConcreteDomainInterface]>{
+def IndexTreeWorkspaceDomainOp : IndexTreeDomain_Op<"WorkspaceDomainOp", 
+    [Pure, ConcreteDomainInterface, IndexTreeNodeInterface]>{
   let summary = "";
   let description = [{}];
 
@@ -223,8 +277,8 @@ def IndexTreeWorkspaceDomainOp : IndexTree_Op<"WorkspaceDomainOp",
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeDomainUnionOp : IndexTree_Op<"DomainUnionOp", 
-    [Pure, UnknownDomain, ConcreteDomainInterface, AttrSizedOperandSegments]>{
+def IndexTreeDomainUnionOp : IndexTreeDomain_Op<"DomainUnionOp", 
+    [Pure, UnknownDomain, ConcreteDomainInterface, AttrSizedOperandSegments, IndexTreeNodeInterface]>{
   let summary = "";
   let description = [{
   }];
@@ -233,8 +287,8 @@ def IndexTreeDomainUnionOp : IndexTree_Op<"DomainUnionOp",
   let results = (outs IndexTree_DomainType:$domain);
 }
 
-def IndexTreeDomainIntersectionOp : IndexTree_Op<"DomainIntersectionOp",
-    [Pure, UnknownDomain, ConcreteDomainInterface, AttrSizedOperandSegments]>{
+def IndexTreeDomainIntersectionOp : IndexTreeDomain_Op<"DomainIntersectionOp",
+    [Pure, UnknownDomain, ConcreteDomainInterface, AttrSizedOperandSegments, IndexTreeNodeInterface]>{
   let summary = "";
   let description = [{
   }];
