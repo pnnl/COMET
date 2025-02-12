@@ -155,7 +155,8 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
             Value new_domain = builder.create<IndexTreeDomainUnionOp>(
               loc,
               domain_type,
-              union_domains
+              union_domains,
+              nullptr
             );
             for(auto user : itComputeOp.getResult().getUsers()) {
               if(llvm::isa<IndexTreeOperandOp>(user)){
