@@ -156,7 +156,8 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
           temp_domain = builder.create<IndexTreeDomainUnionOp>(
             loc,
             domain_type,
-            union_domains
+            union_domains,
+            nullptr
           );
         } else {
           temp_domain = union_domains[0];
