@@ -43,5 +43,6 @@ mlir::comet::TritonConversionTarget::TritonConversionTarget(MLIRContext &context
     addLegalDialect<arith::ArithDialect, scf::SCFDialect, triton::TritonDialect, mlir::BuiltinDialect>();
     addLegalOp<tensor::CastOp, bufferization::ToTensorOp, gpu::GPUModuleOp>();
     addIllegalDialect<gpu::GPUDialect>();
+    addLegalOp<gpu::GPUFuncOp, gpu::GPUModuleOp>();
     addIllegalOp<tensor::InsertSliceOp, tensor::ExtractSliceOp>();
 }
