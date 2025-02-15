@@ -30,13 +30,14 @@ set(LIBS
   COMETUtils
   COMETTensorAlgebraDialect
   COMETIndexTreeDialect
+  COMETParallelLoopsToGpu
+  COMETGpuToOCLSPIRV
   # COMETIndexTreeToSCF
 )
 
 if(ENABLE_GPU_TARGET)
   set(LIBS
     ${LIBS}
-    COMETParallelLoopsToGpu
     COMETGpuToTriton
     COMETTritonToCuda
     ${triton_libs}

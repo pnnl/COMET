@@ -502,24 +502,24 @@ public:
         }
         /// Collapse Memrefs (and their respective load/store operations) to 1D (indexing)
 
-        /// First, Memrefs which are function arguments
+        // /// First, Memrefs which are function arguments
         mlir::OpBuilder builder(funcOp);
-        for(auto arg: funcOp.getArguments())
-        {
-            if(arg.getType().isa<mlir::MemRefType>())
-            {
-                builder.setInsertionPointToStart(&funcOp.getBody().getBlocks().front());
-                collapseMemrefAndUsers(arg, builder);
-            }
-        }  
+        // for(auto arg: funcOp.getArguments())
+        // {
+        //     if(arg.getType().isa<mlir::MemRefType>())
+        //     {
+        //         builder.setInsertionPointToStart(&funcOp.getBody().getBlocks().front());
+        //         collapseMemrefAndUsers(arg, builder);
+        //     }
+        // }  
 
-        /// Next, memrefs from allocations
-        auto memref_allocs = funcOp.getOps<mlir::memref::AllocOp>();
-        for(auto memref: memref_allocs)
-        {
-            builder.setInsertionPointAfter(memref);
-            collapseMemrefAndUsers(memref, builder);
-        }
+        // /// Next, memrefs from allocations
+        // auto memref_allocs = funcOp.getOps<mlir::memref::AllocOp>();
+        // for(auto memref: memref_allocs)
+        // {
+        //     builder.setInsertionPointAfter(memref);
+        //     collapseMemrefAndUsers(memref, builder);
+        // }
 
         mlir::SmallVector<mlir::scf::ForallOp> forAllLoops;
         funcOp->walk([&forAllLoops](mlir::scf::ForallOp forAllOp){forAllLoops.push_back(forAllOp);});
@@ -583,29 +583,29 @@ public:
             }
         });
 
-        mlir::RewritePatternSet patterns2(context);
-        mlir::ConversionTarget target2(*context);
+        // mlir::RewritePatternSet patterns2(context);
+        // mlir::ConversionTarget target2(*context);
 
-        target2.addLegalDialect<mlir::memref::MemRefDialect, mlir::arith::ArithDialect,  mlir::affine::AffineDialect, mlir::scf::SCFDialect>();
+        // target2.addLegalDialect<mlir::memref::MemRefDialect, mlir::arith::ArithDialect,  mlir::affine::AffineDialect, mlir::scf::SCFDialect>();
 
-        target2.addLegalOp<mlir::scf::YieldOp>();
-        patterns2.insert<DetectReduction>(context, blockX, blockY, blockR);
-        target2.addDynamicallyLegalOp<mlir::scf::ForOp>([](mlir::scf::ForOp op) -> bool {
-            mlir::scf::ParallelOp parent = llvm::dyn_cast_or_null<mlir::scf::ParallelOp>(op->getParentOp());
-            if(parent && !op->hasAttr("reduceDim"))
-            {
-                return false;
-            }
-            else
-            {
-                return true;
-            }
-        });
+        // target2.addLegalOp<mlir::scf::YieldOp>();
+        // patterns2.insert<DetectReduction>(context, blockX, blockY, blockR);
+        // target2.addDynamicallyLegalOp<mlir::scf::ForOp>([](mlir::scf::ForOp op) -> bool {
+        //     mlir::scf::ParallelOp parent = llvm::dyn_cast_or_null<mlir::scf::ParallelOp>(op->getParentOp());
+        //     if(parent && !op->hasAttr("reduceDim"))
+        //     {
+        //         return false;
+        //     }
+        //     else
+        //     {
+        //         return true;
+        //     }
+        // });
 
-        if (mlir::failed(mlir::applyPartialConversion(funcOp, target2, std::move(patterns2))))
-        {
-            signalPassFailure();
-        }
+        // if (mlir::failed(mlir::applyPartialConversion(funcOp, target2, std::move(patterns2))))
+        // {
+        //     signalPassFailure();
+        // }
     }
 }; 
 }

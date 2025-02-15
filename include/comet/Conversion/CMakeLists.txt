@@ -1,5 +1,6 @@
-if(ENABLE_GPU_TARGET)
 add_subdirectory(ParallelLoopsToGpu)
+add_subdirectory(GpuToOCLSPIRV)
+if(ENABLE_GPU_TARGET)
 add_subdirectory(GpuToTriton)
 add_subdirectory(TritonToCuda)
 endif()
