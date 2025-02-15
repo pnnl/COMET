@@ -284,7 +284,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
 
   std::map<int, Value> exprToIndex;
 
-  if(device == TargetDevice::GPU)
+  if(device == TargetDevice::GPU || device == TargetDevice::FPGA)
   {
     for (unsigned i = 0; i < lhsMap.getNumResults() ; i++)
     {

@@ -25,6 +25,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "comet/Conversion/GpuToOCLSPIRV/GpuToOCLSPIRVPass.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
@@ -36,6 +37,12 @@
 #include "MLIRGen.h"
 #include "Parser.h"
 
+#include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
+#include "mlir/Conversion/GPUCommon/GPUCommonPass.h"
+#include "mlir/Conversion/GPUToSPIRV/GPUToSPIRVPass.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
+#include "mlir/Dialect/SPIRV/Transforms/Passes.h"
 #include "mlir/Support/TypeID.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
@@ -82,14 +89,14 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
-#ifdef ENABLE_GPU_TARGET
 #include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
+#include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
+#ifdef ENABLE_GPU_TARGET
 #include "comet/Conversion/GpuToTriton/GpuToTritonPass.h"
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Conversion/TritonToTritonGPU/Passes.h"
-#include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
-#include "mlir/Dialect/GPU/Transforms/Passes.h"
 #endif
 
 #include "mlir/Target/LLVMIR/Dialect/All.h"
@@ -172,18 +179,19 @@ static cl::opt<bool> emitLLVM("emit-llvm", cl::desc("output the LLVM dialect dum
 
 static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Code generation target"), 
     cl::values(
-      clEnumVal(CPU, "Codegen target is CPU")
+      clEnumVal(CPU, "Codegen target is CPU"),
       #ifdef ENABLE_GPU_TARGET
       , 
       clEnumVal(GPU, "Codegen target is GPU")
       #endif
+      clEnumVal(FPGA, "Codegen target is FPGA")
     )
   );
 
+  static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::init(32), cl::desc("GPU Block size in X direction"));
+  static cl::opt<int> GPUBlockSizeY("gpu-block-y-size", cl::init(8), cl::desc("GPU Block size in Y direction"));
+  static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::init(32), cl::desc("GPU Block size in R direction"));
 #ifdef ENABLE_GPU_TARGET
-static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::init(32), cl::desc("GPU Block size in X direction"));
-static cl::opt<int> GPUBlockSizeY("gpu-block-y-size", cl::init(8), cl::desc("GPU Block size in Y direction"));
-static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::init(32), cl::desc("GPU Block size in R direction"));
 static cl::opt<int> GPUComputeCapability("gpu-compute-capability", cl::init(CUDA_COMPUTE_CAPABILITY), cl::desc("GPU compute capability"));
 static cl::opt<int> GPUNumWarps("gpu-num-warps", cl::init(4), cl::desc("GPU number of warps"));
 static cl::opt<int> GPUThreadsPerWarp("gpu-threads-per-warp", cl::init(32), cl::desc("GPU threads per warp"));
@@ -570,7 +578,23 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     }
 
   }
-#endif
+  #endif
+  if (CodegenTarget == TargetDevice::FPGA)
+  {
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
+    pm.addPass(mlir::createLoopInvariantCodeMotionPass());
+    pm.addPass(mlir::createParallelLoopToGpuPass());
+    pm.addPass(mlir::createGpuKernelOutliningPass()); 
+    pm.addPass(mlir::createCanonicalizerPass());
+    pm.addPass(mlir::createLowerAffinePass());
+    pm.addPass(mlir::comet::createConvertGPUKernelToOCLSPIRVPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
+    // pm.addPass(mlir::createConvertGPUToSPIRVPass());
+    // mlir::OpPassManager &modulePM = pm.nest<mlir::gpu::GPUModuleOp>().nest<mlir::spirv::ModuleOp>();
+    // modulePM.addPass(mlir::spirv::createSPIRVLowerABIAttributesPass());
+    // modulePM.addPass(mlir::spirv::createSPIRVUpdateVCEPass());
+
+  }
+
   pm.addPass(mlir::createCanonicalizerPass());
 
   /// =============================================================================
