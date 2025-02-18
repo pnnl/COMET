@@ -229,6 +229,8 @@ static cl::opt<bool> OptWorkspace("opt-comp-workspace", cl::init(false),
 ///  =============================================================================
 static cl::opt<bool> OptKernelFusion("opt-fusion", cl::init(false),
                                      cl::desc("Output IT dialect after redundancy-aware fusion"));
+static cl::opt<bool> OptDimensionReduction("opt-dimension-reduction", cl::init(false),
+                                     cl::desc("Reduce intermediate tensors' dimension after kernel fusion"));
 
 /// =============================================================================
 /// TTGT reformulation for tensor contraction operations
@@ -395,11 +397,19 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // Create new pass manager to optimize the index tree dialect
     optPM.addPass(mlir::comet::createIndexTreeDomainInferencePass());
 
-    // if (OptKernelFusion)
-    // {
-    //   /// Apply partial fusion on index tree dialect for some compound expressions.
-    //   optPM.addPass(mlir::comet::createIndexTreeKernelFusionPass());
-    // }
+    if (OptKernelFusion || OptDimensionReduction)
+    {
+      /// Reduce intermediate tensors' dimension after kernel fusion
+      optPM.addPass(mlir::comet::createIndexTreeDimensionReductionPass());
+    }
+
+    /// Dump index tree dialect.
+    if (emitIT)
+    {
+      if (mlir::failed(pm.run(*module)))
+        return 4;
+      return 0;
+    }
   }
 
   /// =============================================================================

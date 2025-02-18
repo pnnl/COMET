@@ -32,8 +32,97 @@ include "mlir/Pass/PassBase.td"
 
 def IndexTreeKernelFusion : Pass<"indextree-kernel-fusion", "func::FuncOp"> {
   let summary = "The redundancy-aware kernel fusion on index tree dialect for compound expressions";
-  let description = [{}];
+  let description = [{
+    This pass fuses multiple index trees into one to reduce the memory footprint 
+    and time complexity if possible.
+
+    For example, for GNN kernel A = B * C * D where B is sparse, C and D are
+    dense, the DSL may be
+    T[i, h] = B[i, k] * C[k, h];
+    A[i, j] = T[i, h] * D[h, j];
+
+    The original pseudo code is
+    void no_fution_index_tree()
+    {
+        for (h = 0 to NH) {
+            for (i = 0 to NI) {
+                for (k = 0 to NK) {
+                    T[i, h] += B[i, k] * C[k, h];
+                }
+            }
+        }
+        for (h = 0 to NH) {
+            for (i = 0 to NI) {
+                for (j = 0 to NJ) {
+                    A[i, j] += T[i, h] * D[h, j];
+                }
+            }
+        }
+    }
+
+    The fused version would be
+    void partial_fusion_index_tree()
+    {
+        for (h = 0 to NH) {
+            for (i = 0 to NI) {
+                for (k = 0 to NK) {
+                    T[i, h] += B[i, k] * C[k, h];
+                }
+                for (j = 0 to NJ) {
+                    A[i, j] += T[i, h] * D[h, j];
+                }
+            }
+        }
+    }
+
+  }];
   let constructor = "comet::createIndexTreeKernelFusionPass()";
+  let dependentDialects = [
+    "indexTree::IndexTreeDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect"
+  ];
+}
+
+def IndexTreeDimensionReduction : Pass<"indextree-dimension-reduction", "func::FuncOp"> {
+  let summary = "Reduce the dimensions of intermediate tensors after indextree-kernel-fusion";
+  let description = [{
+    After the index tree kernel fusion, the dimensions of intermediate tensors 
+    could be reduced. For example, for the fused GNN kernel 
+    void partial_fusion_index_tree()
+    {
+        for (h = 0 to NH) {
+            for (i = 0 to NI) {
+                for (k = 0 to NK) {
+                    T[i, h] += B[i, k] * C[k, h];
+                }
+                for (j = 0 to NJ) {
+                    A[i, j] += T[i, h] * D[h, j];
+                }
+            }
+        }
+    }
+
+    The dimension of T could be reduced from 2 to 0, making it a scalar.
+    void partial_fusion_index_tree()
+    {
+        for (h = 0 to NH) {
+            for (i = 0 to NI) {
+                for (k = 0 to NK) {
+                    t += B[i, k] * C[k, h];
+                }
+                for (j = 0 to NJ) {
+                    A[i, j] += t * D[h, j];
+                }
+                t = 0;
+            }
+        }
+    }
+
+    The reduced dimensions are the shared dimensions of the two compute nodes.
+
+  }];
+  let constructor = "comet::createIndexTreeDimensionReductionPass()";
   let dependentDialects = [
     "indexTree::IndexTreeDialect",
     "memref::MemRefDialect",
