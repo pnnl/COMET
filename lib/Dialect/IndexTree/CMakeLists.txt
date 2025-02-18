@@ -7,6 +7,7 @@ add_mlir_dialect_library(COMETIndexTreeDialect
   Transforms/SymbolicCompute.cpp
   Transforms/WorkspaceTransforms.cpp
   Transforms/KernelFusion.cpp
+  Transforms/DimensionReductionAfterKernelFusion.cpp
 
   Analysis/CopiedDomainAnalysis.cpp
 

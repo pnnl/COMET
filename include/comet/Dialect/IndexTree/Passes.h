@@ -50,6 +50,9 @@ namespace mlir
 
         /// Create a pass for the redundancy-aware kernel fusion on index tree dialect for some compound expressions
         std::unique_ptr<Pass> createIndexTreeKernelFusionPass();
+
+        /// Create a pass for reducing the dimensions of intermediate tensors after indextree-kernel-fusion
+        std::unique_ptr<Pass> createIndexTreeDimensionReductionPass();
     }
 
 }
