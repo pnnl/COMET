@@ -72,6 +72,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
+#include "mlir/IR/DialectRegistry.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
@@ -622,6 +623,9 @@ int main(int argc, char **argv)
 
   mlir::MLIRContext context;
   mlir::registerAllDialects(context);
+  mlir::DialectRegistry registry;
+  mlir::tensorAlgebra::registerBufferizableOpInterfaceExternalModels(registry);
+  context.appendDialectRegistry(registry);
 
   mlir::registerPassManagerCLOptions();
   cl::ParseCommandLineOptions(argc, argv, "Tensor Algebra compiler\n");

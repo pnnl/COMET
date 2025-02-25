@@ -36,6 +36,8 @@
 #include "mlir/Interfaces/CallInterfaces.h"
 #include "mlir/Interfaces/CastInterfaces.h"
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/Interfaces/DestinationStyleOpInterface.h"
+#include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h"
 
 /// Include the auto-generated header file containing the declaration of the Tensor Algebra
 /// dialect.
@@ -73,7 +75,9 @@ namespace mlir
         RewritePatternSet &patterns, MLIRContext *context);
 
     void populateSTCRemoveDeadOpsPatterns(
-        RewritePatternSet &patterns, MLIRContext *context);    
+        RewritePatternSet &patterns, MLIRContext *context);
+
+    void registerBufferizableOpInterfaceExternalModels(DialectRegistry &registry);
   } /// end namespace tensorAlgebra
 } /// end namespace mlir
 

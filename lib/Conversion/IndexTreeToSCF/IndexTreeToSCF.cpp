@@ -839,24 +839,31 @@ namespace
         auto workspace_domain_op = llvm::cast<IndexTreeWorkspaceDomainOp>(domain_op);
         auto index_type = rewriter.getIndexType();
         
-        /** TODO: Sort crd array? **/
+        Value workspace = workspace_domain_op.getTensor();
+        Type workspace_type = workspace.getType();
+        Value sorted_workspace = rewriter.create<tensorAlgebra::SortCrdOp>(loc, workspace_type, workspace);
         Value lb = rewriter.create<arith::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
-        Value ub = rewriter.create<tensorAlgebra::SpTensorGetNNZ>(loc, index_type, workspace_domain_op.getTensor());
+        Value ub = rewriter.create<tensorAlgebra::SpTensorGetNNZ>(loc, index_type, sorted_workspace);
         Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), 
                                                         rewriter.getIndexAttr(1));
-        scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, inputs);
+        int32_t workspace_idx = -1;
+        SmallVector<Value, 4> mutable_inputs = SmallVector<Value>(inputs.begin(), inputs.end());
+        for(unsigned i = 0; i < mutable_inputs.size(); i++) {
+          if(mutable_inputs[i] == workspace){
+            mutable_inputs[i] = sorted_workspace;
+            workspace_idx = i;
+            break;
+          }
+        }
+        scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, ValueRange(mutable_inputs));
         Block* loop_body = for_loop.getBody();
+        Value loop_workspace = for_loop.getRegionIterArg(workspace_idx);
 
         rewriter.setInsertionPointToStart(loop_body);
         IRMapping map;
-        unsigned init_arg_idx = 0;
-        for(Value init_arg : inputs){
-          map.map(init_arg, for_loop.getRegionIterArg(init_arg_idx));
-          init_arg_idx += 1;
-        }
         auto yield_op = rewriter.create<scf::YieldOp>(loc, for_loop.getRegionIterArgs());
         rewriter.setInsertionPointAfter(for_loop);
-        return new WorkspaceLoopInfo(ValueRange(for_loop.getRegionIterArgs()), for_loop.getResults(), yield_op, map, for_loop.getInductionVar(), yield_op, workspace_domain_op.getTensor());
+        return new WorkspaceLoopInfo(ValueRange(for_loop.getRegionIterArgs()), for_loop.getResults(), yield_op, map, for_loop.getInductionVar(), yield_op, loop_workspace);
       }
 
       Value getCrd(IRRewriter& rewriter) override {

@@ -1027,6 +1027,35 @@ class ConvertWorkspaceTensorFindPos
   }
 };
 
+class ConvertWorkspaceSrtCrd
+    : public OpConversionPattern<SortCrdOp> {
+
+  using OpConversionPattern<SortCrdOp>::OpConversionPattern;
+  ConvertWorkspaceSrtCrd(MLIRContext *context)
+      : OpConversionPattern(context) {}
+
+  LogicalResult
+  matchAndRewrite(SortCrdOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Workspace workspace;
+    if(!unpack_workspace(adaptor.getTensor(), workspace)) {
+      return failure();
+    }
+
+    auto loc = op.getLoc();
+    Value crd = workspace.crds;
+    Type crdType = crd.getType();
+    Value zero = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(0));
+    workspace.crds = rewriter.create<TensorSortOp>(loc, crdType, crd, zero, workspace.num_crds);
+    
+    SmallVector<Value, 6> cast_args;
+    WorkspaceType workspace_type = llvm::cast<WorkspaceType>(adaptor.getTensor().getType());
+    pack_workspace(workspace_type, workspace, cast_args);
+    rewriter.replaceOpWithNewOp<UnrealizedConversionCastOp>(op, workspace_type, cast_args);
+    return success();
+  }
+};
+
 class PrintOpLowering : public OpConversionPattern<PrintOp> {
   using OpConversionPattern<PrintOp>::OpConversionPattern;
   PrintOpLowering(MLIRContext *context) : OpConversionPattern(context) {}
@@ -1244,7 +1273,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
 
   patterns.add<PrintOpLowering, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
   patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorAliasOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorGetCrd, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorGetDimCrd, ConvertSpTensorGetDimPos, ConvertSpTensorGetDimBlockCrd, ConvertSpTensorGetDimBlockPos, ConvertSpTensorGetVals, ConvertSpTensorFindPos>(typeConverter, context);
-  patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceTensorFindPos, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp>(typeConverter, context);
+  patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceTensorFindPos, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp, ConvertWorkspaceSrtCrd>(typeConverter, context);
 }
 
 struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<SparseTensorConversionPass> {
@@ -1279,6 +1308,7 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
     target.addDynamicallyLegalOp<tensorAlgebra::PrintOp>([&](tensorAlgebra::PrintOp op) {
       return typeConverter.isLegal(op->getOperandTypes());
     });
+    target.addLegalOp<TensorSortOp>();
 
     typeConverter.addConversion([](Type type) { return type; });
    
