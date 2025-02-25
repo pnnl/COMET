@@ -8,6 +8,7 @@ add_llvm_library(COMETTensorAlgebraDialect
 
   Transforms/CheckImplicitTensorDecls.cpp
   Transforms/TensorDeclLowering.cpp
+  Transforms/WorkspaceOptimizations.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${COMET_MAIN_INCLUDE_DIR}/comet/Dialect/TensorAlgebra

@@ -1027,6 +1027,109 @@ class ConvertWorkspaceTensorFindPos
   }
 };
 
+class ConvertWorkspaceAccumulateOp
+    : public OpConversionPattern<WorkspaceAccumulateOp> {
+  using OpConversionPattern<WorkspaceAccumulateOp>::OpConversionPattern;
+  ConvertWorkspaceAccumulateOp(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(WorkspaceAccumulateOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    Workspace workspace;
+    if(!unpack_workspace(adaptor.getTensor(), workspace)) {
+      return failure();
+    }
+
+    auto loc = op.getLoc();
+    auto context = op.getContext();
+    Value crd = adaptor.getCrds()[0];
+    WorkspaceType workspace_type = llvm::cast<WorkspaceType>(adaptor.getTensor().getType());
+
+    crd = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), crd);
+    Value mark_at_crd = rewriter.create<tensor::ExtractOp>(
+      loc,
+      workspace.mark_array,
+      crd      
+    );
+    Value seen = rewriter.create<arith::CmpIOp>(
+      loc, 
+      rewriter.getI1Type(),
+      arith::CmpIPredicateAttr::get(context, arith::CmpIPredicate::eq),
+      mark_at_crd,
+      workspace.mark_value
+    );
+
+
+    Operation* if_op = rewriter.create<scf::IfOp>(
+      loc,
+      seen,
+      [&] (OpBuilder& builder, Location loc) {
+        Value extracted = builder.create<tensor::ExtractOp>(loc, workspace_type.getElementType(), workspace.workspace, crd);
+        Value new_value = builder.create<arith::AddFOp>(loc, extracted.getType(), extracted, adaptor.getValue());
+        Value new_workspace = rewriter.create<tensor::InsertOp>(
+          loc,
+          workspace.workspace.getType(),
+          new_value,
+          workspace.workspace,
+          crd
+        );
+        builder.create<scf::YieldOp>(loc, ArrayRef<Value>({workspace.mark_array, workspace.num_crds, workspace.crds, new_workspace}));
+      },
+      [&] (OpBuilder& builder, Location loc) {
+        Type index_type = builder.getIndexType();
+        Value new_mark = builder.create<tensor::InsertOp>(loc, workspace.mark_value, workspace.mark_array, crd);
+        Value crd_cast = crd;
+        RankedTensorType crdT = mlir::cast<RankedTensorType>(workspace.crds.getType());
+        if(crdT.getElementType() != crd.getType())
+        {
+          crd_cast = builder.create<mlir::arith::IndexCastOp>(loc, crdT.getElementType(), crd);
+        }
+        Value new_crds = builder.create<tensor::InsertOp>(loc, crd_cast, workspace.crds, workspace.num_crds);
+        Value inc = builder.create<index::ConstantOp>(loc, index_type, builder.getIndexAttr(1));
+        Value new_crd_size = builder.create<index::AddOp>(loc, index_type, workspace.num_crds, inc);
+        Value new_workspace = rewriter.create<tensor::InsertOp>(
+          loc,
+          workspace.workspace.getType(),
+          adaptor.getValue(),
+          workspace.workspace,
+          crd
+        );
+        builder.create<scf::YieldOp>(loc, ArrayRef<Value>({new_mark, new_crd_size, new_crds, new_workspace}));
+      }
+    );
+    workspace.mark_array = if_op->getResult(0);
+    workspace.num_crds = if_op->getResult(1);
+    workspace.crds = if_op->getResult(2);
+    workspace.workspace = if_op->getResult(3);
+
+    SmallVector<Value, 6> cast_args;
+    pack_workspace(workspace_type, workspace, cast_args);
+    rewriter.replaceOpWithNewOp<UnrealizedConversionCastOp>(op, workspace_type, cast_args);
+    return success();
+
+    rewriter.replaceOp(op, if_op->getResults());
+  }
+};
+
+class ConvertWorkspaceRead
+    : public OpConversionPattern<WorkspaceReadOp> {
+  using OpConversionPattern<WorkspaceReadOp>::OpConversionPattern;
+  ConvertWorkspaceRead(MLIRContext *context)
+      : OpConversionPattern(context) {}
+  LogicalResult
+  matchAndRewrite(WorkspaceReadOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Workspace workspace;
+    if(!unpack_workspace(adaptor.getTensor(), workspace)) {
+      return failure();
+    }
+
+    rewriter.replaceOpWithNewOp<tensor::ExtractOp>(op, workspace.workspace, adaptor.getCrd());
+    return success();
+  }
+};
+
 class ConvertWorkspaceSrtCrd
     : public OpConversionPattern<SortCrdOp> {
 
@@ -1273,7 +1376,7 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
 
   patterns.add<PrintOpLowering, GetTimeLowering, PrintElapsedTimeLowering>(typeConverter, context);
   patterns.add<ConvertSpTensorConstructOp, ConvertSpTensorAliasOp, ConvertSpTensorInsertOp, ConvertSpTensorExtractOp, ConvertSpTensorGetCrd, ConvertSpTensorInsertCrd, ConvertSpTensorGetDimSize, ConvertSpTensorGetDimCrd, ConvertSpTensorGetDimPos, ConvertSpTensorGetDimBlockCrd, ConvertSpTensorGetDimBlockPos, ConvertSpTensorGetVals, ConvertSpTensorFindPos>(typeConverter, context);
-  patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceTensorFindPos, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp, ConvertWorkspaceSrtCrd>(typeConverter, context);
+  patterns.add<ConvertAllocWorkspaceOp, ConvertWorkspaceGetNNZ, ConvertWorkspaceGetCrds, ConvertWorkspaceTensorInsertOp, ConvertWorkspaceTensorExtractOp, ConvertWorkspaceTensorFindPos, ConvertWorkspaceGetDimSize, ConvertWorkspaceClearOp, ConvertWorkspaceAccumulateOp, ConvertWorkspaceRead, ConvertWorkspaceSrtCrd>(typeConverter, context);
 }
 
 struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<SparseTensorConversionPass> {

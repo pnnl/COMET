@@ -76,6 +76,9 @@ namespace mlir
         /// Create a pass for lowering tensor fill operation to linalg.fill
         std::unique_ptr<Pass> createTensorFillLoweringPass();
 
+        // Create a pass for merging and optimizing operations on workspaces.
+        std::unique_ptr<Pass> createWorkspaceOptimizationsPass();
+
         /// Create a pass for lowering to the rest of the operations in `Std` dialects,
         /// such as printOp, constantOp, ReturnOp..
         std::unique_ptr<mlir::Pass> createLateLoweringPass();

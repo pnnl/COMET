@@ -1227,4 +1227,25 @@ def TensorSortOp : TA_Op<"TensorSortOp", [Pure, DestinationStyleOpInterface]> {
     MutableOperandRange getDpsInitsMutable() { return getTensorMutable(); }
   }];
 }
+
+def WorkspaceAccumulateOp : TA_Op<"WorkspaceAccumulateOp", [Pure]> {
+  let summary = "Merged extract, accumulate, insert operation for a workspace";
+  let description = [{}];
+
+  let arguments = (
+    ins WorkspaceTensor:$tensor,
+    Index:$pos,
+    Variadic<Index>:$crds,
+    AnyTypeOf<[F32,F64]>:$value
+  );
+  let results = (outs WorkspaceTensor:$result);
+}
+
+def WorkspaceReadOp : TA_Op<"WorkspaceReadOp", [Pure]> {
+  let summary = "Read from a workspace without checking the mark array";
+  let description = [{}];
+
+  let arguments = (ins WorkspaceTensor:$tensor, Index:$pos, Index:$crd);
+  let results = (outs AnyFloat:$result);
+}
 #endif /// TA_OPS
