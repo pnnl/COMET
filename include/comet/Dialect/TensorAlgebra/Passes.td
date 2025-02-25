@@ -96,5 +96,13 @@ def TensorAlgebraBufferizeFunc : Pass<"ta-bufferize-func"> {
   ];
 }
 
+def TensorAlgebraWorkspaceOptimizations : Pass<"ta-workspace-optimizations", "func::FuncOp"> {
+    let summary = "Substitute merged workspace operations where possible";
+    let description = [{}];
+
+    let constructor = "comet::createWorkspaceOptimizationPass()";
+    let dependentDialects = ["tensorAlgebra::TADialect"];
+}
+
 
 #endif /// COMET_DIALECT_TENSORALGEBRA_PASSES
