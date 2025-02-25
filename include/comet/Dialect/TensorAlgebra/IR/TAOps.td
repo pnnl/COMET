@@ -35,6 +35,8 @@ include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/Interfaces/DestinationStyleOpInterface.td"
+include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.td"
 
 include "comet/Dialect/TensorAlgebra/IR/TABase.td"
 include "comet/Dialect/TensorAlgebra/IR/TATypes.td"
@@ -1204,5 +1206,25 @@ def WorkspaceClearOp : TA_Op<"WorkspaceClear", [Pure]>{
 
   let arguments = (ins WorkspaceTensor:$tensor);
   let results = (outs WorkspaceTensor:$result);
+}
+
+def SortCrdOp : TA_Op<"SortCrdOp", [Pure]> {
+  let summary = "Sort the coordinates of a tensor";
+  let description = [{}];
+
+  let arguments = (ins TA_AnyTensor:$tensor);
+  let results = (outs TA_AnyTensor:$result);
+}
+
+def TensorSortOp : TA_Op<"TensorSortOp", [Pure, DestinationStyleOpInterface]> {
+  let summary = "Sort a tensor";
+  let description = [{}];
+
+  let arguments = (ins TensorRankOf<[AnyInteger], [1]>:$tensor, Index:$start, Index:$end);
+  let results = (outs TensorRankOf<[AnyInteger], [1]>:$result);
+
+  let extraClassDeclaration = [{
+    MutableOperandRange getDpsInitsMutable() { return getTensorMutable(); }
+  }];
 }
 #endif /// TA_OPS

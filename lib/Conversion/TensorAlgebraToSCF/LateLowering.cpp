@@ -290,7 +290,6 @@ namespace
       return success();
     }
   };
-
 } /// end anonymous namespace.
 
 /// This is a partial lowering to linear algebra of the tensor algebra operations that are
@@ -349,7 +348,7 @@ void LateLoweringPass::runOnOperation()
   patterns.insert<PrintOpLowering,
                   GetTimeLowering,
                   PrintElapsedTimeLowering>(&getContext());
-
+                  
   /// With the target and rewrite patterns defined, we can now attempt the
   /// conversion. The conversion will signal failure if any of our `illegal`
   /// operations were not converted successfully.

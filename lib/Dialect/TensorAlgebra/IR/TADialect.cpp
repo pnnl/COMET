@@ -28,6 +28,8 @@
 #include <iostream>
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -35,6 +37,8 @@
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Support/LogicalResult.h"
+#include "mlir/Dialect/Bufferization/IR/DstBufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;
@@ -267,6 +271,62 @@ void TensorDimOp::build(mlir::OpBuilder &builder, mlir::OperationState &result,
   build(builder, result, builder.getIndexType(), source, indexValue);
 }
 
+
+/// Sort Op
+bool hasFuncDeclaration(ModuleOp &module, std::string funcName)
+  {
+    for (auto func : module.getOps<func::FuncOp>())
+    {
+      StringAttr func_name = func.getSymNameAttr();
+      if (funcName == func_name.getValue())
+        return true;
+    }
+    return false;
+  }
+
+struct SortOpInterface
+    : public bufferization::DstBufferizableOpInterfaceExternalModel<SortOpInterface,
+                                                     TensorSortOp> {
+  LogicalResult bufferize(Operation *op, RewriterBase &rewriter,
+                          const bufferization::BufferizationOptions &options) const {
+    auto sortOp = cast<tensorAlgebra::TensorSortOp>(op);
+    auto loc = op->getLoc();
+    auto ctx = rewriter.getContext();
+    auto module = op->getParentOfType<ModuleOp>();
+
+    FailureOr<Value> destMemref = getBuffer(rewriter, sortOp.getTensor(), options);
+    if (failed(destMemref))
+      return failure();
+
+    auto inputType = op->getOperand(0).getType();
+    ShapedType shaped_type = mlir::cast<ShapedType>(inputType);
+
+    /// Declare comet_sort_index()
+    Type elemType = shaped_type.getElementType();
+    Type indexType = rewriter.getIndexType();
+    auto sort_func = FunctionType::get(ctx, {UnrankedMemRefType::get(elemType, 0), indexType, indexType}, {});
+    std::string func_name = "comet_sort";
+    if (!hasFuncDeclaration(module, func_name))
+    {
+      func::FuncOp func_declare = func::FuncOp::create(loc,
+                                                      func_name,
+                                                      sort_func,
+                                                      ArrayRef<NamedAttribute>{});
+      func_declare.setPrivate();
+      module.push_back(func_declare);
+    }
+    
+    
+    auto unrankedMemrefType = mlir::UnrankedMemRefType::get(shaped_type.getElementType(), 0);
+    auto indexMemrefType = mlir::UnrankedMemRefType::get(rewriter.getIndexType(), 0);
+    auto unrankedMemref = rewriter.create<memref::CastOp>(loc, unrankedMemrefType, *destMemref);
+    rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{}, ValueRange{unrankedMemref, sortOp.getStart(), sortOp.getEnd()});
+    bufferization::replaceOpWithBufferizedValues(rewriter, op, *destMemref);
+
+    return success();
+  }
+};
+
 //===----------------------------------------------------------------------===//
 /// TA Types
 //===----------------------------------------------------------------------===//
@@ -419,4 +479,17 @@ void TADialect::initialize()
 #define GET_OP_LIST
 #include "comet/Dialect/TensorAlgebra/IR/TAOps.cpp.inc"
       >();
+
+  declarePromisedInterface<SortOpInterface, DestinationStyleOpInterface>();
+}
+
+namespace mlir {
+  namespace tensorAlgebra {
+    void registerBufferizableOpInterfaceExternalModels(DialectRegistry &registry)
+    {
+      registry.addExtension(+[](MLIRContext *ctx, TADialect *dialect) {
+        TensorSortOp::attachInterface<SortOpInterface>(*ctx);
+      });
+    }
+  }
 }

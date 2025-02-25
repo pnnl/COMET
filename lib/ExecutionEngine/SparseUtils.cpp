@@ -2627,3 +2627,9 @@ extern "C" void comet_sort_index(int64_t rank, void *ptr, int64_t index_first, i
   UnrankedMemRefType<int64_t> descriptor = {rank, ptr};
   _milr_ciface_comet_sort(&descriptor, index_first, index_last);
 }
+
+extern "C" void comet_sort(int64_t rank, void *ptr, int64_t index_first, int64_t index_last)
+{
+  UnrankedMemRefType<int64_t> descriptor = {rank, ptr};
+  _milr_ciface_comet_sort(&descriptor, index_first, index_last);
+}
