@@ -7,3 +7,15 @@
 [submodule "triton"]
 	path = triton
 	url = https://github.com/triton-lang/triton.git
+[submodule "tools/llvm-spirv"]
+	path = tools/llvm-spirv
+	url = https://github.com/llvm/llvm-project.git
+	branch = release/7.x
+[submodule "tools/spirv-llvm-tranlate"]
+	path = tools/spirv-llvm-tranlate
+	url = https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git
+	branch = llvm_release_70
+[submodule "tools/spirv-llvm-translate"]
+	path = tools/spirv-llvm-translate
+	url = https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git
+	branch = llvm_release_70
