@@ -472,10 +472,12 @@ Value replaceOldComputeOp(IndexTreeOp itree_op,
 /// 3) Replace the old ComputeOp with the new one with correct return type (shrunk tensor type).
 IndexTreeOp createNewITree(IndexTreeOp host_itree,
                            const llvm::SmallVector<Type> &tree_types,
-                           const llvm::SmallVector<Value> &itree_arguments,
+//                           const llvm::SmallVector<Value> &itree_arguments,
+                           const llvm::SmallVector<Value> &itree_arguments_inputs,
+                           const llvm::SmallVector<Value> &itree_arguments_intermediates,
                            llvm::SmallVector<llvm::SmallVector<DimCompound>> &itree_to_lhs_dims,
                            llvm::SmallVector<llvm::SmallVector<uint32_t>> &itree_to_lhs_index_idx,
-                           const std::unordered_map<uint32_t, llvm::SmallVector<uint32_t>> &itree_to_common_indices,
+//                           const std::unordered_map<uint32_t, llvm::SmallVector<uint32_t>> &itree_to_common_indices,
                            llvm::SmallVector<Value> &itree_to_new_compute_op /*out*/,
                            MLIRContext *context,
                            mlir::IRRewriter &rewriter,
@@ -486,36 +488,47 @@ IndexTreeOp createNewITree(IndexTreeOp host_itree,
   rewriter.setInsertionPoint(host_itree);
   /// Create the new itree
   llvm::SmallVector<Location> locs;
-  for (Value arg : itree_arguments) {
+//  for (Value arg : itree_arguments) {
+//    locs.push_back(arg.getLoc());
+//  }
+  for (Value arg : itree_arguments_inputs) {
     locs.push_back(arg.getLoc());
   }
-  IndexTreeOp new_itree = rewriter.create<indexTree::IndexTreeOp>(loc, tree_types, itree_arguments);
+  for (Value arg : itree_arguments_intermediates) {
+    locs.push_back(arg.getLoc());
+  }
+  IndexTreeOp new_itree = rewriter.create<indexTree::IndexTreeOp>(loc, tree_types, itree_arguments_inputs,
+                                                                  itree_arguments_intermediates);
   Region *body = &new_itree.getRegion();
   Block *block = rewriter.createBlock(body, {}, TypeRange(tree_types), locs);
-  YieldOp dummy_yield = rewriter.create<indexTree::YieldOp>(loc, TypeRange(), itree_arguments);  /// create a dummy YieldOp to make the following inlineBlockBefore() work.
+  YieldOp dummy_yield = rewriter.create<indexTree::YieldOp>(loc, TypeRange(), itree_arguments_inputs);  /// create a dummy YieldOp to make the following inlineBlockBefore() work.
   comet_vdump(new_itree);
-  /// Move the host itree's block to the new itree. The host itree's argument happens to be the first argument of new_itree.
+  /// Move the host itree's block to the new itree. The host itree's argument happens to be the first `intermediates` argument of new_itree.
+  /// An itree's arguments are it.itree($inputs, $intermediates)
   rewriter.inlineBlockBefore(&host_itree.getRegion().front(),
                              block->getTerminator(),
-                             {block->getArgument(tree_i)} /*argValues to replace host itree's block arguments*/);
+                             {block->getArgument(itree_arguments_inputs.size())} /*argValues to replace host itree (the source)'s block arguments*/);
 
-  /// Replace the old LHS
-  replaceOldLHSOperand(new_itree,
-                       block->getArgument(tree_i),
-                       itree_to_lhs_dims,
-                       itree_to_lhs_index_idx,
-                       itree_to_common_indices,
-                       context,
-                       rewriter,
-                       loc);
-
-  /// Replace the old ComputeOp
-  Value new_compute_op = replaceOldComputeOp(new_itree,
-                                tree_types[tree_i],
-                                rewriter,
-                                loc);
-  itree_to_new_compute_op.push_back(new_compute_op);
-
+//  /// Replace the old LHS
+//  replaceOldLHSOperand(new_itree,
+//                       block->getArgument(tree_i),
+//                       itree_to_lhs_dims,
+//                       itree_to_lhs_index_idx,
+//                       itree_to_common_indices,
+//                       context,
+//                       rewriter,
+//                       loc);
+//
+//  /// Replace the old ComputeOp
+//  Value new_compute_op = replaceOldComputeOp(new_itree,
+//                                tree_types[tree_i],
+//                                rewriter,
+//                                loc);
+//  itree_to_new_compute_op.push_back(new_compute_op);
+  body->walk([&](IndexTreeComputeOp computOp) {
+    itree_to_new_compute_op.push_back(computOp);
+  });
+  assert(itree_to_new_compute_op.size() == 1 && "Expect only one computeOp in the itree.");
 
   rewriter.eraseOp(dummy_yield);  /// delete the dummy YieldOp, so the block will contain only one YieldOp.
   comet_vdump(new_itree);
@@ -558,7 +571,7 @@ Value createLHSOperand(
     Value lhs_tensor,
     llvm::SmallVector<llvm::SmallVector<DimCompound>> &itree_to_lhs_dims,
     llvm::SmallVector<llvm::SmallVector<uint32_t>> &itree_to_lhs_index_idx,
-    const std::unordered_map<uint32_t, llvm::SmallVector<uint32_t>> &itree_to_common_indices,
+//    const std::unordered_map<uint32_t, llvm::SmallVector<uint32_t>> &itree_to_common_indices,
     MLIRContext *context,
     mlir::IRRewriter &rewriter,
     mlir::Location &loc)
@@ -570,9 +583,9 @@ Value createLHSOperand(
   llvm::SmallVector<DimCompound> &lhs_dims = itree_to_lhs_dims[tree_i];
   llvm::SmallVector<uint32_t> &lhs_index_idx = itree_to_lhs_index_idx[tree_i];
   uint32_t dim_base = 0;
-  if (itree_to_common_indices.find(tree_i + 1) != itree_to_common_indices.end()) {
-    dim_base = itree_to_common_indices.at(tree_i + 1).size();
-  }
+//  if (itree_to_common_indices.find(tree_i + 1) != itree_to_common_indices.end()) {
+//    dim_base = itree_to_common_indices.at(tree_i + 1).size();
+//  }
   for (uint32_t d_i = dim_base; d_i < lhs_dims.size(); ++d_i)
   {
     Value index_node = index_ops[lhs_index_idx[d_i]];
@@ -608,7 +621,7 @@ llvm::SmallVector<Value> createRHSOperands(
     llvm::SmallVector<llvm::SmallVector<Value>> &itree_to_rhs_tensors,
     llvm::SmallVector<llvm::SmallVector<llvm::SmallVector<DimCompound>>> &itree_to_rhs_dims,
     llvm::SmallVector<llvm::SmallVector<llvm::SmallVector<uint32_t>>> &itree_to_rhs_index_idx,
-    const std::unordered_map<uint32_t, llvm::SmallVector<uint32_t>> &itree_to_common_indices,
+//    const std::unordered_map<uint32_t, llvm::SmallVector<uint32_t>> &itree_to_common_indices,
     MLIRContext *context,
     mlir::IRRewriter &rewriter,
     mlir::Location &loc)
@@ -630,9 +643,9 @@ llvm::SmallVector<Value> createRHSOperands(
     if (rhs_i == intermediate_idx) {
       /// This RHS operand is an intermediate tensor
       rhs_tensor = prev_computeOp;
-      if (itree_to_common_indices.find(tree_i) != itree_to_common_indices.end()) {
-        dim_base = itree_to_common_indices.at(tree_i).size();
-      }
+//      if (itree_to_common_indices.find(tree_i) != itree_to_common_indices.end()) {
+//        dim_base = itree_to_common_indices.at(tree_i).size();
+//      }
     }
     for (uint32_t d_i = dim_base; d_i < rhs_dims.size(); ++d_i) {
       Value index_node = index_ops[rhs_index_idx[d_i]];
@@ -815,13 +828,23 @@ void fuseITrees(IndexTreeOp new_itree,
     comet_vdump(new_itree);
 
     /// Create LHS
-    Value lhs_tensor = new_itree.getRegion().getBlocks().front().getArgument(tree_i);
+    /// An itree's arguments are it.itree($inputs, $intermediates)
+//    Value lhs_tensor = new_itree.getRegion().getBlocks().front().getArgument(tree_i);
+    Value lhs_tensor;
+    if (tree_i == num_itrees - 1) {
+      /// It is the final itree, generating the output
+      lhs_tensor = new_itree.getRegion().getBlocks().front().getArgument(0);
+    } else {
+      /// It is to generate an intermediate
+      uint32_t num_inputs = llvm::SmallVector{new_itree.getInputs()}.size();
+      lhs_tensor = new_itree.getRegion().getBlocks().front().getArgument(num_inputs + tree_i);
+    }
     Value lhs_operand = createLHSOperand(tree_i,
                                          index_ops,
                                          lhs_tensor,
                                          itree_to_lhs_dims,
                                          itree_to_lhs_index_idx,
-                                         itree_to_common_indices,
+//                                         itree_to_common_indices,
                                          context,
                                          rewriter,
                                          loc);
@@ -838,7 +861,7 @@ void fuseITrees(IndexTreeOp new_itree,
                                                               itree_to_rhs_tensors,
                                                               itree_to_rhs_dims,
                                                               itree_to_rhs_index_idx,
-                                                              itree_to_common_indices,
+//                                                              itree_to_common_indices,
                                                               context,
                                                               rewriter,
                                                               loc);
@@ -859,28 +882,35 @@ void fuseITrees(IndexTreeOp new_itree,
     comet_vdump(new_itree);
     comet_debug() << "\n";
 
-    /// Create Compute Op to reset the intermediate tensor to 0
-    /// The element type of the intermediate tensor.
-    mlir::Type element_type =
-        llvm::cast<mlir::TensorType>(itree_to_rhs_tensors[tree_i][intermediate_idx].getType()).getElementType();
-    Value compute_op_reset = createComputeOpReset(
-        tree_i,
-        intermediate_idx,
-        /*tensor_type=*/tree_types[tree_i - 1],
-        /*element_type=*/element_type,
-        index_ops,
-        /*lhs_tensor=*/itree_to_new_compute_op[tree_i - 1],
-        itree_to_common_indices,
-        itree_to_rhs_dims,
-        itree_to_rhs_index_idx,
-        context,
-        rewriter,
-        loc);
-    itree_to_new_compute_op[tree_i - 1] = compute_op_reset;  /// Will be operands of the YieldOp.
+//    /// Create Compute Op to reset the intermediate tensor to 0
+//    /// The element type of the intermediate tensor.
+//    mlir::Type element_type =
+//        llvm::cast<mlir::TensorType>(itree_to_rhs_tensors[tree_i][intermediate_idx].getType()).getElementType();
+//    Value compute_op_reset = createComputeOpReset(
+//        tree_i,
+//        intermediate_idx,
+//        /*tensor_type=*/tree_types[tree_i - 1],
+//        /*element_type=*/element_type,
+//        index_ops,
+//        /*lhs_tensor=*/itree_to_new_compute_op[tree_i - 1],
+//        itree_to_common_indices,
+//        itree_to_rhs_dims,
+//        itree_to_rhs_index_idx,
+//        context,
+//        rewriter,
+//        loc);
+//    itree_to_new_compute_op[tree_i - 1] = compute_op_reset;  /// Will be operands of the YieldOp.
   }
 
   /// Create yield op
-  rewriter.create<indexTree::YieldOp>(loc, TypeRange(), itree_to_new_compute_op);
+  assert(itree_to_new_compute_op.size() == num_itrees && "Expect each itree has one ComputeOp.");
+  llvm::SmallVector<Value> yieldOpArgs;
+  /// Inputs go first
+  yieldOpArgs.push_back(itree_to_new_compute_op.back());
+  /// Then are intemediates
+  yieldOpArgs.insert(yieldOpArgs.end(), itree_to_new_compute_op.begin(), itree_to_new_compute_op.begin() + num_itrees - 1);
+
+  rewriter.create<indexTree::YieldOp>(loc, TypeRange(), yieldOpArgs);
   rewriter.eraseOp(yield_op);
   comet_vdump(new_itree);
 }
@@ -888,7 +918,9 @@ void fuseITrees(IndexTreeOp new_itree,
 
 void createITree(
     uint32_t num_itrees,
-    const llvm::SmallVector<Value> &itree_arguments,
+//    const llvm::SmallVector<Value> &itree_arguments,
+    const llvm::SmallVector<Value> &itree_arguments_inputs,
+    const llvm::SmallVector<Value> &itree_arguments_intermediates,
     llvm::SmallVector<IndexTreeOp> &itree_list,
     const llvm::SmallVector<uint32_t> &itree_to_num_indexOps,
     std::unordered_map<uint32_t, llvm::SmallVector<uint32_t>> &itree_to_common_indices,
@@ -909,19 +941,28 @@ void createITree(
   mlir::IRRewriter rewriter(builder);
   MLIRContext *context = rewriter.getContext();
   llvm::SmallVector<Type> tree_types;
-  for (Value arg : itree_arguments) {
+//  for (Value arg : itree_arguments) {
+//    tree_types.push_back(arg.getType());
+//  }
+  for (Value arg : itree_arguments_inputs) {
     tree_types.push_back(arg.getType());
   }
+  for (Value arg : itree_arguments_intermediates) {
+    tree_types.push_back(arg.getType());
+  }
+
   auto loc = host_itree->getLoc();
 
   /// Create the new itree.
   llvm::SmallVector<Value> itree_to_new_compute_op;
   IndexTreeOp new_itree = createNewITree(host_itree,
                                          tree_types,
-                                         itree_arguments,
+//                                         itree_arguments,
+                                         itree_arguments_inputs,
+                                         itree_arguments_intermediates,
                                          itree_to_lhs_dims,
                                          itree_to_lhs_index_idx,
-                                         itree_to_common_indices,
+//                                         itree_to_common_indices,
                                          itree_to_new_compute_op /*out*/,
                                          context,
                                          rewriter,
@@ -948,10 +989,9 @@ void createITree(
 
   /// Update the usage of results of itree
   /// Erase uses of output of kernels other than the last kernel
-  uint32_t new_r_i = 0;
+
   for (uint32_t tree_i = 0; tree_i < num_itrees - 1; ++tree_i) {
     for (auto result : itree_list[tree_i].getResults()) {
-      ++new_r_i;
       for (auto user : result.getUsers()) {
         if (auto set_op = dyn_cast<tensorAlgebra::TensorSetOp>(user)) {
           rewriter.eraseOp(set_op);
@@ -960,10 +1000,12 @@ void createITree(
     }
   }
   /// Replace the use of output of the last kernel
+  uint32_t new_r_i = 0;
   uint32_t tree_i = num_itrees - 1;
   for (auto old_result : itree_list[tree_i].getResults()) {
     rewriter.replaceAllUsesWith(old_result, new_itree.getResult(new_r_i++));
   }
+  assert(new_r_i == 1 && "Expect to output only one tensor");
 
   /// Delete the old itrees
   for (auto itree : itree_list) {
@@ -1026,14 +1068,28 @@ void IndexTreeKernelFusion::runOnOperation()
     return;
   }
 
-  /// Collect all itrees' arguments
-  llvm::SmallVector<Value> itree_arguments;
-  for (IndexTreeOp &itree : itree_list) {
+//  /// Collect all itrees' arguments
+//  llvm::SmallVector<Value> itree_arguments;
+//  for (IndexTreeOp &itree : itree_list) {
+//    for (Value arg : itree.getInputs()) {
+//      comet_vdump(arg);
+//      itree_arguments.push_back(arg);
+//    }
+//  }
+  /// Collect all itrees' arguments. The last itree's inputs will be the final `inputs`. Other itrees' inputs will be the
+  /// final `intermediates`. The new fused itree's arguments will be it.itree($inputs, $intermediates).
+  llvm::SmallVector<Value> itree_arguments_inputs;
+  llvm::SmallVector<Value> itree_arguments_intermediates;
+  for (uint32_t tree_i = 0; tree_i < num_itrees - 1; ++tree_i) {
+    IndexTreeOp &itree = itree_list[tree_i];
     for (Value arg : itree.getInputs()) {
-      comet_vdump(arg);
-      itree_arguments.push_back(arg);
+      itree_arguments_intermediates.push_back(arg);
     }
   }
+  for (Value arg : itree_list.back().getInputs()) {
+    itree_arguments_inputs.push_back(arg);
+  }
+
 
   /// Collect all LHS and RHS operands
 
@@ -1088,17 +1144,17 @@ void IndexTreeKernelFusion::runOnOperation()
                                                                itree_to_rhs_tensors[tree_i] /*current rhs*/);
   }
 
-  /// Create new lhs tensors with decreased dimensions
-  std::unordered_map<uint32_t, Value> itree_to_new_lhs_tensors =
-      createNewLhsTensors(num_itrees,
-                          itree_to_lhs_tensors,
-                          itree_to_common_indices);
-  /// Update itrees' arguments
-  for (uint32_t tree_i = 0; tree_i < num_itrees - 1; ++tree_i) {
-    if (itree_to_new_lhs_tensors.find(tree_i) != itree_to_new_lhs_tensors.end()) {
-      itree_arguments[tree_i] = itree_to_new_lhs_tensors[tree_i];
-    }
-  }
+//  /// Create new lhs tensors with decreased dimensions
+//  std::unordered_map<uint32_t, Value> itree_to_new_lhs_tensors =
+//      createNewLhsTensors(num_itrees,
+//                          itree_to_lhs_tensors,
+//                          itree_to_common_indices);
+//  /// Update itrees' arguments
+//  for (uint32_t tree_i = 0; tree_i < num_itrees - 1; ++tree_i) {
+//    if (itree_to_new_lhs_tensors.find(tree_i) != itree_to_new_lhs_tensors.end()) {
+//      itree_arguments[tree_i] = itree_to_new_lhs_tensors[tree_i];
+//    }
+//  }
 
   /// Collect ComputeOp's information: semiring, and compute_missing.
   llvm::SmallVector<mlir::StringRef> itree_to_semiring(num_itrees);
@@ -1111,7 +1167,9 @@ void IndexTreeKernelFusion::runOnOperation()
 
   /// Build the new itree
   createITree(num_itrees,
-              itree_arguments,
+//              itree_arguments,
+              itree_arguments_inputs,
+              itree_arguments_intermediates,
               itree_list,
               itree_to_num_indexOps,
               itree_to_common_indices,
@@ -1124,16 +1182,16 @@ void IndexTreeKernelFusion::runOnOperation()
               itree_to_semiring,
               itree_to_compute_missing);
 
-  /// Remove old lhs tensors
-  for (uint32_t tree_i = 0; tree_i < num_itrees - 1; ++tree_i) {
-    if (itree_to_new_lhs_tensors.find(tree_i) != itree_to_new_lhs_tensors.end()) {
-      Value old_tensor = itree_to_lhs_tensors[tree_i];
-      for (auto user : old_tensor.getUsers()) {
-        user->erase();
-      }
-      old_tensor.getDefiningOp()->erase();
-    }
-  }
+//  /// Remove old lhs tensors
+//  for (uint32_t tree_i = 0; tree_i < num_itrees - 1; ++tree_i) {
+//    if (itree_to_new_lhs_tensors.find(tree_i) != itree_to_new_lhs_tensors.end()) {
+//      Value old_tensor = itree_to_lhs_tensors[tree_i];
+//      for (auto user : old_tensor.getUsers()) {
+//        user->erase();
+//      }
+//      old_tensor.getDefiningOp()->erase();
+//    }
+//  }
 
   comet_vdump(funcOp->getParentOfType<ModuleOp>());
 }

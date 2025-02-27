@@ -1,0 +1,44 @@
+# Sampled dense-dense matrix product (SDDMM)
+# A[i,j] = B[i,j] .* (C[i,k] * D[k,j]); 
+# A and B are sparse; C and D are dense.
+
+# --opt-fusion pass performs the redundancy-aware fusion on SDDMM kernels
+# RUN: comet-opt --convert-ta-to-it --opt-fusion --convert-to-loops  --convert-to-llvm %s &> sddmm.llvm
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2_small.mtx
+# RUN: mlir-cpu-runner sddmm.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+
+def main() {
+    #IndexLabel Declarations
+    IndexLabel [i] = [?];
+    IndexLabel [j] = [?];
+    IndexLabel [k] = [4];
+
+    #Tensor Declarations
+    Tensor<double> B([i, j], {CSR});
+    Tensor<double> C([i, k], {Dense});
+    Tensor<double> D([k, j], {Dense});
+    Tensor<double> A([i, j], {CSR});
+    Tensor<double> T([i, j], {Dense});
+
+    #Tensor Data Initialization
+    B[i, j] = comet_read(0);
+    C[i, k] = 1.2;
+    D[k, j] = 3.4;
+    T[i, j] = 0.0;
+
+    T[i, j] = C[i, k] * D[k, j];
+    A[i, j] = B[i, j] .* T[i, j];
+    print(A);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 5,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: -1,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,2,4,4,5,7,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 0,3,0,1,1,2,3,
+# CHECK-NEXT: data = 
+# CHECK-NEXT: 16.32,32.64,48.96,65.28,81.6,97.92,114.24,
