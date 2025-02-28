@@ -664,8 +664,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       {
         /// if is_filled is true, only allocate memory and let ta.fill initializes tensors
         init_alloc = rewriter.create<memref::AllocOp>(loc, resultMemTy, ValueRange(cur_indices));
-//        init_alloc.getDefiningOp()->setAttr("allocator", rewriter.getStringAttr("default"));
-//        init_alloc.getDefiningOp()->setAttr("allocator", rewriter.getStringAttr("rapid"));
         comet_vdump(init_alloc);
       }
       else
@@ -674,6 +672,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         init_alloc = insertAllocAndInitialize(loc, resultMemTy, ValueRange(cur_indices), rewriter);
         comet_vdump(init_alloc);
       }
+      init_alloc.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
 
       cast<memref::AllocOp>(init_alloc.getDefiningOp()).setAlignmentAttr(rewriter.getI64IntegerAttr(32));
 
@@ -880,8 +879,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         comet_debug() << "sp_decl.getParameterCount(): " << sp_decl.getParameterCount() << "\n";
         MemRefType memTy_alloc_sizes = MemRefType::get({sp_decl.getParameterCount()}, indexType);
         Value alloc_sizes = rewriter.create<memref::AllocOp>(loc, memTy_alloc_sizes);
-//        init_alloc.getDefiningOp()->setAttr("allocator", rewriter.getStringAttr("default"));
-//        alloc_sizes.getDefiningOp()->setAttr("allocator", rewriter.getStringAttr("rapid"));
+        alloc_sizes.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
         comet_debug() << " ";
         comet_vdump(alloc_sizes);
 

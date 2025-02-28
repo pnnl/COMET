@@ -47,9 +47,9 @@
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopedHashTable.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdint>
-#include <iostream>
 #include <map>
 #include <numeric>
 #include <cstdlib> /// for random num generation
@@ -1478,6 +1478,11 @@ namespace
       std::vector<int64_t> dims_sizes;
       std::vector<mlir::Value> labels;
       auto tensor_format = tensordecl.getFormat();
+      std::string allocator = tensordecl.getAllocator();
+      if ("" == allocator)
+      {
+        allocator = "default";
+      }
       for (const auto &lbl_str : dim_lbls)
       {
         if (lbl_str == "?")
@@ -1533,7 +1538,9 @@ namespace
         }
         auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), dims_sizes, format);
         value = builder.create<SparseTensorDeclOp>(loc(tensordecl.loc()),
-                                                   sp_tensor_type, labels, tensor_format, false);
+                                                   sp_tensor_type, labels, builder.getStringAttr(tensor_format),
+                                                   builder.getBoolAttr(false),
+                                                   builder.getStringAttr(allocator));
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
         comet_vdump(value);
 
@@ -1550,7 +1557,8 @@ namespace
       else
       {
         value = builder.create<DenseTensorDeclOp>(loc(tensordecl.loc()),
-                                                  tensor_type, labels, tensor_format);
+                                                  tensor_type, labels, builder.getStringAttr(tensor_format),
+                                                  builder.getStringAttr(allocator));
         comet_debug() << "MLIRGen DenseTensorDeclaration creation\n";
         comet_vdump(value);
       }
@@ -1687,6 +1695,13 @@ namespace
       comet_debug() << "TransposeExprAST with no lhs labeled tensor \n";
 
       mlir::Value rhs_tensor = symbolTable.lookup(transpose.getName());
+      mlir::StringAttr allocator = llvm::TypeSwitch<mlir::Operation *, mlir::StringAttr>(rhs_tensor.getDefiningOp())
+          .Case<DenseTensorDeclOp, SparseTensorDeclOp>([&](auto op) {
+            return op.getAllocatorAttr();
+          })
+          .Default([&](mlir::Operation *) {
+            return builder.getStringAttr("default");
+          });
 
       comet_vdump(rhs_tensor);
 
@@ -1830,7 +1845,11 @@ namespace
         mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
         mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
 
-        lhs_tensor = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, shapedT.getElementType()), indices, formatAttr);
+        lhs_tensor = builder.create<DenseTensorDeclOp>(loc(transpose.loc()),
+                                                       mlir::RankedTensorType::get(shape, shapedT.getElementType()),
+                                                       indices,
+                                                       formatAttr,
+                                                       allocator);
 
         /// populate formats
         /// assumes lhs and rhs formats are same
@@ -1852,7 +1871,12 @@ namespace
         /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
         auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), shape, format);
 
-        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), sp_tensor_type, indices, formatAttr, builder.getBoolAttr(true));
+        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()),
+                                                        sp_tensor_type,
+                                                        indices,
+                                                        formatAttr,
+                                                        true,
+                                                        allocator);
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
         comet_vdump(lhs_tensor);
 
