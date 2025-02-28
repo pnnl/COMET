@@ -1045,6 +1045,8 @@ namespace tensorAlgebra
       std::vector<std::string> dims;
       std::string format;
       std::vector<std::string> formatattr;
+      std::string allocator = "";
+
       if (lexer.getCurToken() == '(')
       {
         lexer.getNextToken(); /// eat (
@@ -1128,6 +1130,50 @@ namespace tensorAlgebra
           comet_debug() << "format: " << format << "\n";
         }
 
+        /// ... , {allocator = "default"}
+        /// ... , {allocator = "rapid"}
+        if (lexer.getCurToken() == ',')
+        {
+          lexer.getNextToken(); /// eat ,
+
+          if (lexer.getCurToken() != '{') {
+            return parseError<TensorDeclExprAST>(
+                "{", "declare 'Tensor' allocator");
+          }
+          lexer.getNextToken(); /// eat {
+
+          if (lexer.getCurToken() != tok_identifier) {
+            return parseError<TensorDeclExprAST>(
+                "identifier", "expect `allocator` for `Tensor` declaration");
+          }
+          std::string id_str = lexer.getId().str();
+          if (id_str != "allocator") {
+            return parseError<TensorDeclExprAST>(
+                "allocator", "expect `allocator` for `Tensor` declaration");
+          }
+          lexer.getNextToken(); /// eat allocator
+
+          if (lexer.getCurToken() != '=') {
+            return parseError<TensorDeclExprAST>(
+                "=", "expect `=` after `allocator` identifier");
+          }
+          lexer.getNextToken(); /// eat =
+
+          if (lexer.getCurToken() != tok_identifier) {
+            return parseError<TensorDeclExprAST>(
+                "identifier", "expect the allocator name");
+          }
+          allocator = lexer.getId().str();
+          comet_debug() << "allocator: " << allocator << "\n";
+          lexer.getNextToken();  /// eat allocator
+
+          if (lexer.getCurToken() != '}') {
+            return parseError<TensorDeclExprAST>(
+                "}", "after 'Tensor' dimension declaration");
+          }
+          lexer.getNextToken(); /// eat }
+        }
+
         if (lexer.getCurToken() != ')')
           return parseError<TensorDeclExprAST>(
               ")", "after 'Tensor' format declaration");
@@ -1135,7 +1181,8 @@ namespace tensorAlgebra
       }
 
       return std::make_unique<TensorDeclExprAST>(std::move(loc), std::move(id),
-                                                 std::move(*type), dims, format);
+                                                 std::move(*type), dims, format,
+                                                 allocator);
     }
 
     /// Parse "transpose(A[i, j], {j, i})" operation in DSL
@@ -1669,7 +1716,7 @@ namespace tensorAlgebra
     std::unique_ptr<R> parseError(T &&expected, U &&context = "")
     {
       auto curToken = lexer.getCurToken();
-      llvm::errs() << __FILE__ << ":" << __LINE__ << "Parse error (" << lexer.getLastLocation().line << ", "
+      llvm::errs() << __FILE__ << ":" << __LINE__ << " Parse error (" << lexer.getLastLocation().line << ", "
                    << lexer.getLastLocation().col << "): expected '" << expected
                    << "' " << context << " but has Token " << curToken;
       if (isprint(curToken))

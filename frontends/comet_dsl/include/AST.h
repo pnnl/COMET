@@ -252,18 +252,22 @@ namespace tensorAlgebra
     std::vector<std::string> dims;
     std::string format;
     ExprASTList values;
+    std::string allocator;
 
   public:
     TensorDeclExprAST(Location loc, const std::string &name, VarType element_type,
-                      const std::vector<std::string> &dims, const std::string &format)
+                      const std::vector<std::string> &dims, const std::string &format,
+                      const std::string &allocator)
         : ExprAST(Expr_TensorDecl, loc), name(name), element_type(element_type),
-          dims(dims), format(format) {}
+          dims(dims), format(format),
+          allocator(allocator) {}
 
     llvm::StringRef getName() { return name; }
     VarType &getElementType() { return element_type; }
     std::vector<std::string> &getDims() { return dims; }
     std::string &getFormat() { return format; }
     ExprASTList &getValues() { return values; }
+    std::string &getAllocator() { return allocator; }
 
     /// LLVM style RTTI
     static bool classof(const ExprAST *C)

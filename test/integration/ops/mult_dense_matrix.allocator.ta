@@ -1,5 +1,5 @@
-# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_dense_matrix.llvm
-# RUN: mlir-cpu-runner mult_dense_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> mult_dense_matrix.allocator.llvm
+# RUN: mlir-cpu-runner mult_dense_matrix.allocator.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
 
 
 def main() {
@@ -9,7 +9,8 @@ def main() {
 	IndexLabel [k] = [2];           
 
 	#Tensor Declarations
-	Tensor<double> A([i, j], {Dense});
+	# if `allocator` is not set, it will be `default` by default
+	Tensor<double> A([i, j], {Dense}, {allocator = "default"});
 	Tensor<double> B([j, k], {Dense});
 	Tensor<double> C([i, k], {Dense});
 

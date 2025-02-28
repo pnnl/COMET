@@ -133,9 +133,6 @@ namespace mlir
       /// Memory allocation and initialization
       Value alloc_op = rewriter.create<memref::AllocOp>(loc, memtype, allocValueRange);
 
-//      alloc_op.getDefiningOp()->setAttr("allocator", rewriter.getStringAttr("default"));
-//      alloc_op.getDefiningOp()->setAttr("allocator", rewriter.getStringAttr("rapid"));
-
       comet_debug() << "Alloc Op for initialization: ";
       comet_vdump(alloc_op);
       auto elementType = memtype.getElementType();
