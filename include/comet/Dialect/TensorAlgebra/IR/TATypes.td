@@ -67,7 +67,8 @@ def WorkspaceTensor : TensorAlgebra_Type<"Workspace", "workspace", [DeclareTypeI
         "::mlir::IntegerType":$indices_type,
         ArrayRefParameter<"int64_t", "Dimensions of workspace">:$dims
     );
-    let assemblyFormat = "`<` $element_type `,` $indices_type `,` $dims `>`";
+    // let assemblyFormat = "`<` $element_type `,` $indices_type `,` $dims `>`";
+    let hasCustomAssemblyFormat = 1;
 }
 
 /// Provide a definition of the types that are used within the TA dialect.

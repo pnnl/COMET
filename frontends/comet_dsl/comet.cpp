@@ -490,6 +490,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createIndexTreeInliningPass());
     optPM.addPass(mlir::createCanonicalizerPass());
     optPM.addPass(mlir::createLoopInvariantCodeMotionPass());
+    optPM.addPass(mlir::createLoopInvariantSubsetHoistingPass());
 
     if (OptDenseTransposeOp) /// Optimize Dense Transpose operation
     {
