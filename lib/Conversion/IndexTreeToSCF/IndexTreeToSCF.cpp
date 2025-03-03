@@ -907,6 +907,128 @@ namespace
       }
   };
 
+  class MaskedLoopInfo : LoopInfo {
+    private:
+      scf::YieldOp terminator;
+      LoopInfo* internal_loop;
+    public:
+      MaskedLoopInfo(ValueRange inputs, ValueRange outputs, Operation* body, IRMapping ir_map, scf::YieldOp yield, LoopInfo* internal) : 
+          LoopInfo(inputs, outputs, body, ir_map), terminator(yield), internal_loop(internal) {}
+
+      static LoopInfo* build(Operation* domain_op, IRRewriter& rewriter, ValueRange inputs)
+      {
+        auto loc = domain_op->getLoc();
+        auto masked_domain = llvm::cast<IndexTreeMaskedDomainOp>(domain_op);
+        auto index_type = rewriter.getIndexType();
+        auto context = rewriter.getContext();
+
+        // Create bit tensor
+        auto bit_tensor_type = RankedTensorType::get({ShapedType::kDynamic}, rewriter.getI1Type());
+        Value bit_tensor = rewriter.create<bufferization::AllocTensorOp>(loc, bit_tensor_type, ValueRange(masked_domain.getDimSize()), (Value) nullptr);
+        
+        // Create loop to fill mask
+        Operation* mask = masked_domain.getMask().getDefiningOp();
+        ValueRange fill_loop_inputs(bit_tensor);
+        LoopInfo* fill_loop = llvm::TypeSwitch<Operation*, LoopInfo*>(mask) 
+        .Case<IndexTreeDenseDomainOp>([&](IndexTreeDenseDomainOp op) {
+          return DenseLoopInfo::build(op, rewriter, fill_loop_inputs);
+        })
+        .Case<IndexTreeSparseDomainOp>([&](IndexTreeSparseDomainOp op) {
+          switch((TensorFormatEnum)op.getFormat()){
+            case TensorFormatEnum::CN:
+            case TensorFormatEnum::CU:
+              return SparseLoopInfo::build(op, rewriter, fill_loop_inputs);
+            case TensorFormatEnum::S:
+              assert(false && "Singleton loop inside a mask is not supported.");
+              // return SingletonLoopInfo::build(op, rewriter, inputs, parent_info);
+          }
+        })
+        .Case<IndexTreeWorkspaceDomainOp>([&](IndexTreeWorkspaceDomainOp op) {
+          return WorkspaceLoopInfo::build(op, rewriter, fill_loop_inputs);
+        })
+        .Case<IndexTreeDomainIntersectionOp>([&](IndexTreeDomainIntersectionOp op) {
+          return IntersectionLoopInfo::build(op, rewriter, fill_loop_inputs);
+        })
+        .Default([](Operation *op) {
+          assert(false && "IndexNode not given a valid domain");
+          return nullptr;
+        });
+
+        // Fill in bit tensor
+        auto after_fill_loop = rewriter.saveInsertionPoint();
+        rewriter.setInsertionPoint(fill_loop->loopBody);
+        Value crd = fill_loop->getCrd(rewriter);
+        Value t = rewriter.create<arith::ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(true));
+        Value updated_tensor = rewriter.create<tensor::InsertOp>(loc, fill_loop->getInput(0).getType(), t, fill_loop->getInput(0), crd);
+        fill_loop->updateOutput(rewriter, 0, updated_tensor);
+        rewriter.restoreInsertionPoint(after_fill_loop);
+        bit_tensor = fill_loop->getResults()[0];
+        delete fill_loop;
+
+        // Create internal loop
+        Operation* child = masked_domain.getBase().getDefiningOp();
+        LoopInfo* loop_info = llvm::TypeSwitch<Operation*, LoopInfo*>(child) 
+        .Case<IndexTreeDenseDomainOp>([&](IndexTreeDenseDomainOp op) {
+          return DenseLoopInfo::build(op, rewriter, inputs);
+        })
+        .Case<IndexTreeSparseDomainOp>([&](IndexTreeSparseDomainOp op) {
+          switch((TensorFormatEnum)op.getFormat()){
+            case TensorFormatEnum::CN:
+            case TensorFormatEnum::CU:
+              return SparseLoopInfo::build(op, rewriter, inputs);
+            case TensorFormatEnum::S:
+              assert(false && "Singleton loop inside a mask is not supported.");
+              // return SingletonLoopInfo::build(op, rewriter, inputs, parent_info);
+          }
+        })
+        .Case<IndexTreeWorkspaceDomainOp>([&](IndexTreeWorkspaceDomainOp op) {
+          return WorkspaceLoopInfo::build(op, rewriter, inputs);
+        })
+        .Case<IndexTreeDomainIntersectionOp>([&](IndexTreeDomainIntersectionOp op) {
+          return IntersectionLoopInfo::build(op, rewriter, inputs);
+        })
+        .Default([](Operation *op) {
+          assert(false && "IndexNode not given a valid domain");
+          return nullptr;
+        });
+
+        // Create if op
+        rewriter.setInsertionPoint(loop_info->loopBody);
+        SmallVector<Type> if_types;
+        for(Value input : loop_info->getInputs())
+        {
+          if_types.push_back(input.getType());
+        }
+        Value cond = rewriter.create<tensor::ExtractOp>(loc, bit_tensor, loop_info->getCrd(rewriter));
+        auto if_op = rewriter.create<scf::IfOp>(loc, if_types, cond, true);
+        rewriter.setInsertionPointToStart(if_op.elseBlock());
+        rewriter.create<scf::YieldOp>(loc, loop_info->getInputs());
+        rewriter.setInsertionPointToStart(if_op.thenBlock());
+        SmallVector<Value> new_inputs = SmallVector<Value>(loop_info->getInputs().begin(), loop_info->getInputs().end());
+        scf::YieldOp terminator = rewriter.create<scf::YieldOp>(loc, new_inputs);
+        uint32_t i = 0;
+        for(Value output : if_op.getResults()){
+          loop_info->updateOutput(rewriter, i, output);
+          i += 1;
+        }
+
+        return new MaskedLoopInfo(new_inputs, loop_info->getResults(), terminator, loop_info->map, terminator, loop_info);
+      }
+
+      Value getCrd(IRRewriter& rewriter) override {
+        return internal_loop->getCrd(rewriter);
+      }
+
+      Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {
+        return internal_loop->getPos(rewriter, tensor, dim);
+      }
+
+      void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
+        currentInputs[idx] = newOutput;
+        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+      }
+  };
+
   struct LowerIndexTreeToSCFPass
       : public PassWrapper<LowerIndexTreeToSCFPass, OperationPass<func::FuncOp>>
   {
@@ -1152,6 +1274,9 @@ namespace
         })
         .Case<IndexTreeDomainIntersectionOp>([&](IndexTreeDomainIntersectionOp op) {
           return IntersectionLoopInfo::build(op, rewriter, parent_info->getInputs());
+        })
+        .Case<IndexTreeMaskedDomainOp>([&](IndexTreeMaskedDomainOp op) {
+          return MaskedLoopInfo::build(op, rewriter, parent_info->getInputs());
         })
         .Default([](Operation *op) {
           assert(false && "IndexNode not given a valid domain");

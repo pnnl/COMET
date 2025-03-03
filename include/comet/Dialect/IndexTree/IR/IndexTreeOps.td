@@ -297,6 +297,19 @@ def IndexTreeDomainIntersectionOp : IndexTreeDomain_Op<"DomainIntersectionOp",
   let results = (outs IndexTree_DomainType:$domain);
 }
 
+def IndexTreeMaskedDomainOp : IndexTreeDomain_Op<"MaskedDomainOp",
+    [Pure, UnknownDomain, ConcreteDomainInterface, IndexTreeNodeInterface]>{
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins 
+    IndexTree_DomainType:$mask,
+    IndexTree_DomainType:$base,
+    Optional<Index>:$dim_size);
+  let results = (outs IndexTree_DomainType:$domain);
+}
+
 def IndexTreeNestedDomainOp : IndexTree_Op<"NestedDomainOp",
     [Pure, UnknownDomain, ConcreteDomainInterface]>{
   let summary = "";

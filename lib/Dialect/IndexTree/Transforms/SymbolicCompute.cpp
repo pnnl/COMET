@@ -74,6 +74,12 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
         copyDomain(subdomain, rewriter, loc, map, tensor_to_node, parent, predecessor);
       }
     }
+    else if(llvm::isa<IndexTreeMaskedDomainOp>(domain_op))
+    {
+      auto masked_domain_op = llvm::cast<IndexTreeMaskedDomainOp>(domain_op);
+      copyDomain(masked_domain_op.getMask(), rewriter, loc, map, tensor_to_node, parent, predecessor);
+      copyDomain(masked_domain_op.getBase(), rewriter, loc, map, tensor_to_node, parent, predecessor);
+    }
     
     if(llvm::isa<IndexTreeNestedDomainOp>(domain_op)){
       auto nested_domain = llvm::cast<IndexTreeNestedDomainOp>(domain_op);
@@ -152,6 +158,11 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
       for(Value subdomain : union_domain_op.getDomains()){
         createMapping(node, subdomain, tensor_to_node);
       }
+    } else if(llvm::isa<IndexTreeMaskedDomainOp>(domain_op))
+    {
+      auto masked_domain_op = llvm::cast<IndexTreeMaskedDomainOp>(domain_op);
+      createMapping(node, masked_domain_op.getMask(), tensor_to_node);
+      createMapping(node, masked_domain_op.getBase(), tensor_to_node);
     } else if (llvm::isa<IndexTreeNestedDomainOp>(domain_op))
     {
       auto nested_domain_op = llvm::cast<IndexTreeNestedDomainOp>(domain_op);

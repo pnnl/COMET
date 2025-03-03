@@ -438,6 +438,63 @@ void SparseTensorType::print(::mlir::AsmPrinter &odsPrinter) const {
   odsPrinter << ">";
 }
 
+::mlir::Type WorkspaceType::parse(::mlir::AsmParser &odsParser) {
+  ::mlir::FailureOr<::mlir::Type> _result_element_type; 
+  ::mlir::FailureOr<::mlir::IntegerType> indices_type;
+  SmallVector<int64_t> _result_dims;
+  SmallVector<TensorFormatEnum> result_formats;
+
+  // Parse literal '<'
+  if (odsParser.parseLess()) return {};
+
+  // Parse variable 'element_type'
+  _result_element_type = FieldParser<Type>::parse(odsParser);
+  if (failed(_result_element_type)) {
+    odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'element_type' which is to be a `Type`");
+    return {};
+  }
+
+    // Parse literal ','
+  if (odsParser.parseComma()) return {};
+
+  // Parse variable 'indices_type'
+  indices_type = ::mlir::FieldParser<::mlir::IntegerType>::parse(odsParser);
+  if (::mlir::failed(indices_type)) {
+    odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'indices_type' which is to be a `::mlir::IntegerType`");
+    return {};
+  }
+  // Parse literal ','
+  if (odsParser.parseComma()) return {};
+
+  // Parse variable 'dims'
+  if(odsParser.parseDimensionList(_result_dims, true, false)) {
+    odsParser.emitError(odsParser.getCurrentLocation(), "failed to parse SparseTensor parameter 'dims' which is to be a `ArrayRef<int64_t>`");
+    return {};
+  }
+
+  // Parse literal '>'
+  if (odsParser.parseGreater()) return {};
+
+   return WorkspaceType::get(odsParser.getContext(),
+      ::mlir::Type((*_result_element_type)),
+      ::mlir::IntegerType((*indices_type)),
+      ::llvm::ArrayRef<int64_t>((_result_dims)));
+}
+
+
+void WorkspaceType::print(::mlir::AsmPrinter &odsPrinter) const {
+  ::mlir::Builder odsBuilder(getContext());
+  odsPrinter << "<";
+  odsPrinter.printStrippedAttrOrType(getElementType());
+  odsPrinter << ",";
+  odsPrinter << ' ';
+  odsPrinter.printStrippedAttrOrType(getIndicesType());
+  odsPrinter << ",";
+  odsPrinter << ' ';
+  odsPrinter.printDimensionList(getDims());
+  odsPrinter << ">";
+}
+
 
 //===----------------------------------------------------------------------===//
 /// TableGen'd type definitions

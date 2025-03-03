@@ -183,12 +183,19 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
         auto operand_op = compute_op.getMask().getDefiningOp();
         if(operands_to_domains.find(operand_op) != operands_to_domains.end())
         {
-          temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(
+          temp_domain = builder.create<indexTree::IndexTreeMaskedDomainOp>(
             loc, 
             domain_type, 
-            ValueRange{temp_domain, operands_to_domains[operand_op]}, 
+            operands_to_domains[operand_op],
+            temp_domain, 
             nullptr
           );
+          // temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(
+          //   loc, 
+          //   domain_type, 
+          //   ValueRange({operands_to_domains[operand_op], temp_domain}), 
+          //   nullptr
+          // );
         }
       }
 

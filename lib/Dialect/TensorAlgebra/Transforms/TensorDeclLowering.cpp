@@ -1316,6 +1316,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::SpTensorGetDimPos,
                         tensorAlgebra::SpTensorGetDimCrd,
                         tensorAlgebra::SpTensorGetVals,
+                        tensorAlgebra::TensorSortOp,
                         tensorAlgebra::SpTensorGetDimSize>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
@@ -1361,6 +1362,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::TensorSetOp,
                         tensorAlgebra::DenseTensorDeclOp,
                         tensorAlgebra::IndexLabelOp,
+                        tensorAlgebra::TensorSortOp,
                         // tensorAlgebra::IndexLabelDynamicOp,
                         func::CallOp>();
 
@@ -1419,6 +1421,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::ScalarOp,
                         tensorAlgebra::AllocWorkspaceOp,
                         tensorAlgebra::TensorMultOp, // Should this be dynamically legal to only work with dense tensors?
+                        tensorAlgebra::TensorSortOp,
                         func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
@@ -1477,6 +1480,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::SpTensorGetDimSize,
                         tensorAlgebra::SpTensorGetVals,
                         tensorAlgebra::TensorMultOp, // Should this be dynamically legal to only work with dense tensors?
+                        tensorAlgebra::TensorSortOp,
                         func::CallOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
