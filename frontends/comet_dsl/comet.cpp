@@ -25,8 +25,14 @@
 ///
 //===----------------------------------------------------------------------===//
 
+
+#ifdef ENABLE_FPGA_TARGET
 #include "comet/Conversion/GpuToOCLSPIRV/GpuToOCLSPIRVPass.h"
 #include "comet/Conversion/GpuHostToMCLRT/GpuHostToMCLRTPass.h"
+#include "mlir/Conversion/GPUToSPIRV/GPUToSPIRVPass.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
+#endif
+
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
@@ -40,9 +46,7 @@
 
 #include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
 #include "mlir/Conversion/GPUCommon/GPUCommonPass.h"
-#include "mlir/Conversion/GPUToSPIRV/GPUToSPIRVPass.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
-#include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
 #include "mlir/Dialect/SPIRV/Transforms/Passes.h"
 #include "mlir/Support/TypeID.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -179,21 +183,28 @@ static cl::opt<bool> emitLLVM("emit-llvm", cl::desc("output the LLVM dialect dum
 /// =============================================================================
 
 static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Code generation target"), 
-    cl::values(
-      clEnumVal(CPU, "Codegen target is CPU"),
+  cl::values(
+      clEnumVal(CPU, "Codegen target is CPU")
       #ifdef ENABLE_GPU_TARGET
       , 
       clEnumVal(GPU, "Codegen target is GPU")
       #endif
+      #ifdef ENABLE_FPGA_TARGET
+      , 
       clEnumVal(FPGA, "Codegen target is FPGA")
-    )
-  );
+      #endif
+  )
+);
 
-  static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::init(32), cl::desc("GPU Block size in X direction"));
-  static cl::opt<int> GPUBlockSizeY("gpu-block-y-size", cl::init(8), cl::desc("GPU Block size in Y direction"));
-  static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::init(32), cl::desc("GPU Block size in R direction"));
-  static cl::opt<std::string> xclbinPath("xclbin_path", cl::init("-"), cl::desc("Path to xclbin"));
-  static cl::opt<std::string> sprirvBinOutPath("spirv_bin_path", cl::init("-"), cl::desc("Path to output SPIRV binary"));
+#if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
+static cl::opt<int> GPUBlockSizeX("kernel-block-x-size", cl::init(32), cl::desc("Kernel Block size in X direction"));
+static cl::opt<int> GPUBlockSizeY("kernel-block-y-size", cl::init(8), cl::desc("Kernel Block size in Y direction"));
+static cl::opt<int> GPUBlockSizeR("kernel-block-r-size", cl::init(32), cl::desc("Kernel Block size in R direction"));
+#endif
+#ifdef ENABLE_FPGA_TARGET
+static cl::opt<std::string> xclbinPath("xclbin_path", cl::init("-"), cl::desc("Path to xclbin"));
+static cl::opt<std::string> sprirvBinOutPath("spirv_bin_path", cl::init("-"), cl::desc("Path to output SPIRV binary"));
+#endif
 #ifdef ENABLE_GPU_TARGET
 static cl::opt<int> GPUComputeCapability("gpu-compute-capability", cl::init(CUDA_COMPUTE_CAPABILITY), cl::desc("GPU compute capability"));
 static cl::opt<int> GPUNumWarps("gpu-num-warps", cl::init(4), cl::desc("GPU number of warps"));
@@ -563,14 +574,20 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   pm.addPass(mlir::memref::createFoldMemRefAliasOpsPass());
   pm.addPass(mlir::createCanonicalizerPass());
 
-#ifdef ENABLE_GPU_TARGET
-  if (CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringtoTriton))
+#if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
+  if (CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA && (emitTriton_ || emitLLVM || IsLoweringtoTriton || isLoweringToLLVM))
   {
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
     pm.addPass(mlir::createParallelLoopToGpuPass());
     pm.addPass(mlir::createGpuKernelOutliningPass());
     pm.addPass(mlir::createCanonicalizerPass());
+  }
+
+  #ifdef ENABLE_GPU_TARGET
+  if(CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringtoTriton || isLoweringToLLVM))
+  {
+
     pm.addPass(mlir::comet::createConvertGpuKernelToTritonPass());
 
     if (emitTriton_)
@@ -582,13 +599,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   }
   #endif
-  if (CodegenTarget == TargetDevice::FPGA)
+
+#endif
+  
+#ifdef ENABLE_FPGA_TARGET
+
+  if (CodegenTarget == TargetDevice::FPGA && (isLoweringToLLVM || emitLLVM))
   {
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
-    pm.addPass(mlir::createLoopInvariantCodeMotionPass());
-    pm.addPass(mlir::createParallelLoopToGpuPass());
-    pm.addPass(mlir::createGpuKernelOutliningPass()); 
-    pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createLowerAffinePass());
     pm.addPass(mlir::comet::createConvertGpuHostToMCLRTPass(xclbinPath.c_str()));
     if(sprirvBinOutPath == "-")
@@ -599,12 +616,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     {
       pm.addPass(mlir::comet::createConvertGPUKernelToOCLSPIRVPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, sprirvBinOutPath.c_str()));
     }
-    // pm.addPass(mlir::createConvertGPUToSPIRVPass());
-    // mlir::OpPassManager &modulePM = pm.nest<mlir::gpu::GPUModuleOp>().nest<mlir::spirv::ModuleOp>();
-    // modulePM.addPass(mlir::spirv::createSPIRVLowerABIAttributesPass());
-    // modulePM.addPass(mlir::spirv::createSPIRVUpdateVCEPass());
 
   }
+#endif
 
   pm.addPass(mlir::createCanonicalizerPass());
 

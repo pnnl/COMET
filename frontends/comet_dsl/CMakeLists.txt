@@ -30,11 +30,15 @@ set(LIBS
   COMETUtils
   COMETTensorAlgebraDialect
   COMETIndexTreeDialect
-  COMETParallelLoopsToGpu
-  COMETGpuToOCLSPIRV
-  COMETGpuHostToMCLRT
   # COMETIndexTreeToSCF
 )
+
+if(ENABLE_GPU_TARGET OR ENABLE_FPGA_TARGET)
+  set(LIBS
+    ${LIBS}
+    COMETParallelLoopsToGpu
+  )
+endif()
 
 if(ENABLE_GPU_TARGET)
   set(LIBS
@@ -42,6 +46,14 @@ if(ENABLE_GPU_TARGET)
     COMETGpuToTriton
     COMETTritonToCuda
     ${triton_libs}
+  )
+endif()
+
+if(ENABLE_FPGA_TARGET)
+  set(LIBS
+    ${LIBS}
+    COMETGpuToOCLSPIRV
+    COMETGpuHostToMCLRT
   )
 endif()
 
