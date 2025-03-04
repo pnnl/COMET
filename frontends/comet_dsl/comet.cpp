@@ -26,6 +26,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "comet/Conversion/GpuToOCLSPIRV/GpuToOCLSPIRVPass.h"
+#include "comet/Conversion/GpuHostToMCLRT/GpuHostToMCLRTPass.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
@@ -191,6 +192,8 @@ static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Co
   static cl::opt<int> GPUBlockSizeX("gpu-block-x-size", cl::init(32), cl::desc("GPU Block size in X direction"));
   static cl::opt<int> GPUBlockSizeY("gpu-block-y-size", cl::init(8), cl::desc("GPU Block size in Y direction"));
   static cl::opt<int> GPUBlockSizeR("gpu-block-r-size", cl::init(32), cl::desc("GPU Block size in R direction"));
+  static cl::opt<std::string> xclbinPath("xclbin_path", cl::init("-"), cl::desc("Path to xclbin"));
+  static cl::opt<std::string> sprirvBinOutPath("spirv_bin_path", cl::init("-"), cl::desc("Path to output SPIRV binary"));
 #ifdef ENABLE_GPU_TARGET
 static cl::opt<int> GPUComputeCapability("gpu-compute-capability", cl::init(CUDA_COMPUTE_CAPABILITY), cl::desc("GPU compute capability"));
 static cl::opt<int> GPUNumWarps("gpu-num-warps", cl::init(4), cl::desc("GPU number of warps"));
@@ -587,7 +590,15 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(mlir::createGpuKernelOutliningPass()); 
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createLowerAffinePass());
-    pm.addPass(mlir::comet::createConvertGPUKernelToOCLSPIRVPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
+    pm.addPass(mlir::comet::createConvertGpuHostToMCLRTPass(xclbinPath.c_str()));
+    if(sprirvBinOutPath == "-")
+    {
+      pm.addPass(mlir::comet::createConvertGPUKernelToOCLSPIRVPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, inputFilename.c_str()));
+    }
+    else 
+    {
+      pm.addPass(mlir::comet::createConvertGPUKernelToOCLSPIRVPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, sprirvBinOutPath.c_str()));
+    }
     // pm.addPass(mlir::createConvertGPUToSPIRVPass());
     // mlir::OpPassManager &modulePM = pm.nest<mlir::gpu::GPUModuleOp>().nest<mlir::spirv::ModuleOp>();
     // modulePM.addPass(mlir::spirv::createSPIRVLowerABIAttributesPass());

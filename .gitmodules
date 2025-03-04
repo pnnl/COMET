@@ -19,3 +19,6 @@
 	path = tools/spirv-llvm-translate
 	url = https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git
 	branch = llvm_release_70
+[submodule "runtimes/mcl"]
+	path = runtimes/mcl
+	url = https://github.com/pnnl/mcl.git

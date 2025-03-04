@@ -1,5 +1,4 @@
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
-#include "mlir/Conversion/GPUToSPIRV/GPUToSPIRVPass.h"
 #include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
 #include "mlir/Dialect/SPIRV/IR/TargetAndABI.h"
 #include "mlir/Dialect/SPIRV/Transforms/Passes.h"
@@ -8,6 +7,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
+#include "mlir/Dialect/SPIRV/Transforms/SPIRVConversion.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <fstream>
 #include "comet/Conversion/GpuToOCLSPIRV/GpuToOCLSPIRVPass.h"
+#include "comet/Conversion/GpuToOCLSPIRV/GPUToSPIRVPass.h"
 
 #define GEN_PASS_CLASSES
 #include "comet/Conversion/GpuToOCLSPIRV/Passes.h.inc"
@@ -29,10 +30,11 @@ class ConvertGpuToOCLSPIRV
     : public ConvertGpuKernelToOCLSPIRVPassBase<ConvertGpuToOCLSPIRV> {
 public:
   ConvertGpuToOCLSPIRV() = default;
-  ConvertGpuToOCLSPIRV(int block_size_x, int block_size_y, int block_size_z) {
+  ConvertGpuToOCLSPIRV(int block_size_x, int block_size_y, int block_size_z, const char* outpath) {
         this->blockX = block_size_x;
         this->blockY = block_size_y;
         this->blockZ = block_size_z;
+        this->spirv_bin_path = outpath;
     }
   void runOnOperation() override {
     mlir::MLIRContext *context = &getContext
@@ -47,11 +49,11 @@ public:
     }
     mlir::SmallVector<int32_t, 3> workgroupSizeVec = {this->blockX , this->blockY , this->blockZ};
     gpuFunc->setAttr(attrName,
-      mlir::spirv::getEntryPointABIAttr(context));
+      mlir::spirv::getEntryPointABIAttr(context, workgroupSizeVec));
     });
 
     mlir::PassManager pm(context);
-    pm.addPass(mlir::createConvertGPUToSPIRVPass(true));
+    pm.addPass(mlir::createConvertGPUToSPIRVPass2(true, true));
     
     if (failed(pm.run(module))) {
       signalPassFailure();
@@ -78,7 +80,7 @@ public:
       mlir::SmallVector<uint32_t, 0> binary;
       if (!failed(mlir::spirv::serialize(module, binary)))
       {
-        std::string pathname("spirv_comet_");
+        std::string pathname(this->spirv_bin_path);
         pathname += module.getName()->data();
         pathname += ".bin";
         std::ofstream binout(pathname, std::ios::binary);
@@ -89,6 +91,6 @@ public:
 };
 
 std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>>
-mlir::comet::createConvertGPUKernelToOCLSPIRVPass(int block_size_x, int block_size_y, int block_size_z) {
-  return std::make_unique<::ConvertGpuToOCLSPIRV>(block_size_x, block_size_y, block_size_z);
+mlir::comet::createConvertGPUKernelToOCLSPIRVPass(int block_size_x, int block_size_y, int block_size_z, const char* spirv_bin_path) {
+  return std::make_unique<::ConvertGpuToOCLSPIRV>(block_size_x, block_size_y, block_size_z,spirv_bin_path);
 }

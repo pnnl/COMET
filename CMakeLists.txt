@@ -85,6 +85,11 @@ set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
   find_package(BLAS REQUIRED)
 
 #-------------------------------------------------------------------------------
+# MCL include paths
+#-------------------------------------------------------------------------------
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/runtimes/mcl/build/include/")
+
+#-------------------------------------------------------------------------------
 # COMET configuration
 #-------------------------------------------------------------------------------
 
