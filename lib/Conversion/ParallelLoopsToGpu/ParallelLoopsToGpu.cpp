@@ -36,6 +36,7 @@
 #include "mlir/Transforms/Passes.h"
 
 
+#include "comet/Dialect/Utils/Utils.h"
 #include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
 #include "comet/Conversion/ParallelLoopsToGpu/Passes.h"
 
@@ -487,10 +488,11 @@ struct DetectReduction
 class ConvertParallelLoopsToGpu: public CometParallelLoopsToGpuBase<ConvertParallelLoopsToGpu> {
 public:
     ConvertParallelLoopsToGpu() = default;
-    ConvertParallelLoopsToGpu(int blockX, int blockY, int blockR) {
+    ConvertParallelLoopsToGpu(int blockX, int blockY, int blockR, mlir::tensorAlgebra::TargetDevice target_device) {
         this->blockX = blockX;
         this->blockY = blockY;
         this->blockR = blockR;
+        this->target_device = target_device;
     }
 
     void runOnOperation() override {
@@ -504,22 +506,25 @@ public:
 
         // /// First, Memrefs which are function arguments
         mlir::OpBuilder builder(funcOp);
-        // for(auto arg: funcOp.getArguments())
-        // {
-        //     if(arg.getType().isa<mlir::MemRefType>())
-        //     {
-        //         builder.setInsertionPointToStart(&funcOp.getBody().getBlocks().front());
-        //         collapseMemrefAndUsers(arg, builder);
-        //     }
-        // }  
+        if(target_device == mlir::tensorAlgebra::TargetDevice::GPU)
+        {
+            for(auto arg: funcOp.getArguments())
+            {
+                if(arg.getType().isa<mlir::MemRefType>())
+                {
+                    builder.setInsertionPointToStart(&funcOp.getBody().getBlocks().front());
+                    collapseMemrefAndUsers(arg, builder);
+                }
+            }  
 
-        // /// Next, memrefs from allocations
-        // auto memref_allocs = funcOp.getOps<mlir::memref::AllocOp>();
-        // for(auto memref: memref_allocs)
-        // {
-        //     builder.setInsertionPointAfter(memref);
-        //     collapseMemrefAndUsers(memref, builder);
-        // }
+            // /// Next, memrefs from allocations
+            auto memref_allocs = funcOp.getOps<mlir::memref::AllocOp>();
+            for(auto memref: memref_allocs)
+            {
+                builder.setInsertionPointAfter(memref);
+                collapseMemrefAndUsers(memref, builder);
+            }
+        }
 
         mlir::SmallVector<mlir::scf::ForallOp> forAllLoops;
         funcOp->walk([&forAllLoops](mlir::scf::ForallOp forAllOp){forAllLoops.push_back(forAllOp);});
@@ -583,29 +588,32 @@ public:
             }
         });
 
-        // mlir::RewritePatternSet patterns2(context);
-        // mlir::ConversionTarget target2(*context);
+        if(target_device == mlir::tensorAlgebra::TargetDevice::GPU)
+        {
+            mlir::RewritePatternSet patterns2(context);
+            mlir::ConversionTarget target2(*context);
 
-        // target2.addLegalDialect<mlir::memref::MemRefDialect, mlir::arith::ArithDialect,  mlir::affine::AffineDialect, mlir::scf::SCFDialect>();
+            target2.addLegalDialect<mlir::memref::MemRefDialect, mlir::arith::ArithDialect,  mlir::affine::AffineDialect, mlir::scf::SCFDialect>();
 
-        // target2.addLegalOp<mlir::scf::YieldOp>();
-        // patterns2.insert<DetectReduction>(context, blockX, blockY, blockR);
-        // target2.addDynamicallyLegalOp<mlir::scf::ForOp>([](mlir::scf::ForOp op) -> bool {
-        //     mlir::scf::ParallelOp parent = llvm::dyn_cast_or_null<mlir::scf::ParallelOp>(op->getParentOp());
-        //     if(parent && !op->hasAttr("reduceDim"))
-        //     {
-        //         return false;
-        //     }
-        //     else
-        //     {
-        //         return true;
-        //     }
-        // });
+            target2.addLegalOp<mlir::scf::YieldOp>();
+            patterns2.insert<DetectReduction>(context, blockX, blockY, blockR);
+            target2.addDynamicallyLegalOp<mlir::scf::ForOp>([](mlir::scf::ForOp op) -> bool {
+                mlir::scf::ParallelOp parent = llvm::dyn_cast_or_null<mlir::scf::ParallelOp>(op->getParentOp());
+                if(parent && !op->hasAttr("reduceDim"))
+                {
+                    return false;
+                }
+                else
+                {
+                    return true;
+                }
+            });
 
-        // if (mlir::failed(mlir::applyPartialConversion(funcOp, target2, std::move(patterns2))))
-        // {
-        //     signalPassFailure();
-        // }
+            if (mlir::failed(mlir::applyPartialConversion(funcOp, target2, std::move(patterns2))))
+            {
+                signalPassFailure();
+            }
+        }
     }
 }; 
 }
@@ -616,7 +624,7 @@ std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> mlir::comet::createConv
 }
 
 
-std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> mlir::comet::createConvertParallelLoopsToGpuPass(int blockX, int blockY, int blockR) {
-    return std::make_unique<ConvertParallelLoopsToGpu>(blockX, blockY, blockR);
+std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> mlir::comet::createConvertParallelLoopsToGpuPass(int blockX, int blockY, int blockR, mlir::tensorAlgebra::TargetDevice target_device) {
+    return std::make_unique<ConvertParallelLoopsToGpu>(blockX, blockY, blockR, target_device);
 }
 

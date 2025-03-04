@@ -22,6 +22,8 @@ set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
 #-------------------------------------------------------------------------------
 # Options and settings
 #-------------------------------------------------------------------------------
+  option(ENABLE_GPU_TARGET OFF) 
+  option(ENABLE_FPGA_TARGET OFF) 
   
   option(LLVM_INCLUDE_TOOLS "Generate build targets for the LLVM tools." ON)
   option(LLVM_BUILD_TOOLS "Build the LLVM tools. If OFF, just generate build targets." ON)
@@ -31,6 +33,15 @@ if (MSVC)
 else ()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
 endif ()
+
+if(${ENABLE_GPU_TARGET})
+  add_definitions(-DENABLE_GPU_TARGET)
+endif()
+
+if(${ENABLE_FPGA_TARGET})
+  add_definitions(-DENABLE_FPGA_TARGET)
+endif()
+
 
 #-------------------------------------------------------------------------------
 # MLIR/LLVM Configuration
@@ -87,7 +98,27 @@ set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
 #-------------------------------------------------------------------------------
 # MCL include paths
 #-------------------------------------------------------------------------------
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/runtimes/mcl/build/include/")
+if(${ENABLE_FPGA_TARGET})
+  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/runtimes/mcl/build/include/")
+endif()
+
+#-------------------------------------------------------------------------------
+# Triton Setup
+#-------------------------------------------------------------------------------
+if(${ENABLE_GPU_TARGET})
+  set(TRITON_PATH "" CACHE PATH "Path to Triton")
+  set(TRITON_BUILD_PATH "${CMAKE_BINARY_DIR}/triton" CACHE INTERNAL "Path to Triton Build")
+  if(NOT DEFINED CUDA_COMPUTE_CAPABILITY)
+    message(FATAL_ERROR "Please specify cuda compute capability requested")
+  endif()
+  add_compile_definitions(CUDA_COMPUTE_CAPABILITY=${CUDA_COMPUTE_CAPABILITY})
+
+  add_subdirectory(${TRITON_PATH} ${TRITON_BUILD_PATH})
+  get_property(triton_libs GLOBAL PROPERTY TRITON_LIBS)
+  include_directories("${TRITON_PATH}")
+  include_directories("${TRITON_PATH}/include/")
+  include_directories("${TRITON_BUILD_PATH}/include/")
+endif()
 
 #-------------------------------------------------------------------------------
 # COMET configuration
@@ -127,23 +158,7 @@ include_directories(${COMET_INCLUDE_DIR})
 # Directory setup
 #-------------------------------------------------------------------------------
 
-option(ENABLE_GPU_TARGET OFF) 
 
-if(${ENABLE_GPU_TARGET})
-  set(TRITON_PATH "" CACHE PATH "Path to Triton")
-  set(TRITON_BUILD_PATH "${CMAKE_BINARY_DIR}/triton" CACHE INTERNAL "Path to Triton Build")
-  if(NOT DEFINED CUDA_COMPUTE_CAPABILITY)
-    message(FATAL_ERROR "Please specify cuda compute capability requested")
-  endif()
-  add_compile_definitions(CUDA_COMPUTE_CAPABILITY=${CUDA_COMPUTE_CAPABILITY})
-
-  add_subdirectory(${TRITON_PATH} ${TRITON_BUILD_PATH})
-  get_property(triton_libs GLOBAL PROPERTY TRITON_LIBS)
-  include_directories("${TRITON_PATH}")
-  include_directories("${TRITON_PATH}/include/")
-  include_directories("${TRITON_BUILD_PATH}/include/")
-  add_definitions(-DENABLE_GPU_TARGET)
-endif()
 
 add_subdirectory(include/comet)
 add_subdirectory(lib)
