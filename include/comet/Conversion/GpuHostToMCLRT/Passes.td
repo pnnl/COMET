@@ -19,21 +19,25 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef COMET_CONVERSION_GPUKERNELTOOCLSPIRV_H
-#define COMET_CONVERSION_GPUKERNELTOOCLSPIRV_H
+#ifndef GPUHOST_TO_MCLRT_CONVERSION_PASSES
+#define GPUHOST_TO_MCLRT_CONVERSION_PASSES
 
-#include <memory>
-namespace mlir {
-class ModuleOp;
-namespace func{
-class FuncOp;
-}
+include "mlir/Pass/PassBase.td"
 
-template <typename T> class OperationPass;
-namespace comet {
-std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>> createConvertGPUKernelToOCLSPIRVPass();
-std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>> createConvertGPUKernelToOCLSPIRVPass(int blockX, int blockY, int blockZ, const char* spirv_bin_path);
-}
-}
+def ConvertGpuHostToMCLRTPass: Pass<"convert-gpu-host-to-mcl-rt", "mlir::ModuleOp"> {
+    let summary = "Convert Gpu Host to MCR Runtime Calls";
+    let description = [{
 
+    }];
+    let constructor = "mlir::comet::createConvertGpuHostToMCLRTPass()";
+
+    let dependentDialects = ["mlir::gpu::GPUDialect", "mlir::LLVM::LLVMDialect", "mlir::memref::MemRefDialect", "mlir::scf::SCFDialect",
+                             "mlir::spirv::SPIRVDialect"];
+
+    let options = [
+       Option<"xclbin_path", "xclbin-path",
+              "const char*", /*default*/"\"-\"",
+              "Path to xclbin">,
+   ];
+}
 #endif

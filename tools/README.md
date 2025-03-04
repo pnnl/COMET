@@ -4,7 +4,7 @@
 ## SPIRV-LLVM Translator
 1. If not already done, initialize the relevant submodules
 ```bash
-git submodule update --init
+git submodule update --init .
 ```
 2. Create a link from spirv-llvm-translate to llvm-spirv projects directory
 ```bash

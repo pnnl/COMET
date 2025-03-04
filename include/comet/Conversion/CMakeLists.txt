@@ -1,5 +1,6 @@
 add_subdirectory(ParallelLoopsToGpu)
 add_subdirectory(GpuToOCLSPIRV)
+add_subdirectory(GpuHostToMCLRT)
 if(ENABLE_GPU_TARGET)
 add_subdirectory(GpuToTriton)
 add_subdirectory(TritonToCuda)

@@ -19,8 +19,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef COMET_CONVERSION_GPUKERNELTOOCLSPIRV_H
-#define COMET_CONVERSION_GPUKERNELTOOCLSPIRV_H
+#ifndef COMET_CONVERSION_GPUHOSTTOMCLRT_H
+#define COMET_CONVERSION_GPUHOSTTOMCLRT_H
 
 #include <memory>
 namespace mlir {
@@ -31,8 +31,8 @@ class FuncOp;
 
 template <typename T> class OperationPass;
 namespace comet {
-std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>> createConvertGPUKernelToOCLSPIRVPass();
-std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>> createConvertGPUKernelToOCLSPIRVPass(int blockX, int blockY, int blockZ, const char* spirv_bin_path);
+std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>> createConvertGpuHostToMCLRTPass();
+std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>> createConvertGpuHostToMCLRTPass(const char* xclbin_path);
 }
 }
 

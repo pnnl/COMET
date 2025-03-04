@@ -48,6 +48,10 @@ def ConvertGpuKernelToOCLSPIRVPass: Pass<"convert-gpu-kernel-to-spirv", "mlir::M
        "int32_t", /*default*/"32",
        "opencl block size for reduction dim Z">,
 
+       Option<"spirv_bin_path", "spirv-bin-path",
+       "const char*", "\"spirv_comet_\"",
+       "Path to SPIRV output binary">
+
    ];
 }
 #endif

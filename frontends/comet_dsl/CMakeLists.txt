@@ -32,6 +32,7 @@ set(LIBS
   COMETIndexTreeDialect
   COMETParallelLoopsToGpu
   COMETGpuToOCLSPIRV
+  COMETGpuHostToMCLRT
   # COMETIndexTreeToSCF
 )
 
