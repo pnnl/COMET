@@ -199,7 +199,11 @@ static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Co
 #if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
 static cl::opt<int> GPUBlockSizeX("kernel-block-x-size", cl::init(32), cl::desc("Kernel Block size in X direction"));
 static cl::opt<int> GPUBlockSizeY("kernel-block-y-size", cl::init(8), cl::desc("Kernel Block size in Y direction"));
+#if defined(ENABLE_FPGA_TARGET)
+static cl::opt<int> GPUBlockSizeR("kernel-block-r-size", cl::init(1), cl::desc("Kernel Block size in R direction"));
+#else
 static cl::opt<int> GPUBlockSizeR("kernel-block-r-size", cl::init(32), cl::desc("Kernel Block size in R direction"));
+#endif
 #endif
 #ifdef ENABLE_FPGA_TARGET
 static cl::opt<std::string> xclbinPath("xclbin_path", cl::init("-"), cl::desc("Path to xclbin"));
@@ -575,7 +579,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   pm.addPass(mlir::createCanonicalizerPass());
 
 #if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
-  if (CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA && (emitTriton_ || emitLLVM || IsLoweringtoTriton || isLoweringToLLVM))
+  if ((CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA) && (emitTriton_ || emitLLVM || isLoweringToLLVM))
   {
     pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
