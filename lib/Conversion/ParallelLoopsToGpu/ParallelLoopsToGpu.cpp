@@ -240,6 +240,13 @@ bool is_reduction(mlir::scf::ForOp forOp)
     return is_reduction_(forOp.getBodyRegion(), forOp.getBody()->getArgument(0));
 }
 
+mlir::Operation* CeilDivUIOp(mlir::ConversionPatternRewriter &rewriter, mlir::Location loc, mlir::Value lhs, mlir::Value rhs)
+{
+    auto c1 = rewriter.create<mlir::arith::ConstantIndexOp>(loc, 1);
+    auto temp = rewriter.create<mlir::arith::AddIOp>(loc, lhs, rewriter.create<mlir::arith::SubIOp>(loc, rhs, c1));
+    return rewriter.create<mlir::arith::DivUIOp>(loc, temp, rhs);
+}
+
 class ParallelOpToGpu: public mlir::OpConversionPattern<mlir::scf::ParallelOp> {
 private:
     int blockX, blockY, blockR;
@@ -270,8 +277,8 @@ public:
             auto block_size_y = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), blockY );
             auto block_size_x = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), blockX );
             auto c1 = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), 1);
-            auto upperBound0 = rewriter.create<mlir::arith::CeilDivUIOp>(parOp->getLoc(), parOp.getUpperBound().front(), block_size_y);
-            auto upperBound1 = rewriter.create<mlir::arith::CeilDivUIOp>(parOp->getLoc(), parOp.getUpperBound().back(), block_size_x);
+            auto upperBound0 = CeilDivUIOp(rewriter, parOp->getLoc(), parOp.getUpperBound().front(), block_size_y);
+            auto upperBound1 = CeilDivUIOp(rewriter, parOp->getLoc(), parOp.getUpperBound().back(), block_size_x);
             
             comet_debug() << upperBound0;
             auto y_loop_grid = rewriter.create<mlir::scf::ParallelOp>(parOp->getLoc(), parOp.getLowerBound().front(), upperBound0->getResult(0), c1->getResult(0));
@@ -337,33 +344,32 @@ public:
             rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(1), newIndexX->getResult(0));
             
             // auto newIndexX = rewriter.create<mlir::arith::AddIOp>(parOp->getLoc(),rewriter.create<mlir::arith::MulIOp>(parOp->getLoc(), x_loop_grid.getBody()->getArgument(0), block_size_x), x_loop_block.getBody()->getArgument(0));
-            rewriter.setInsertionPoint(newIndexX);
+            rewriter.setInsertionPointAfter(newIndexX);
             rewriter.eraseOp(parOp.getBody()->getTerminator());
-            
-            // if(target == mlir::tensorAlgebra::TargetDevice::GPU)
-            // {
+            if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            {
                 rewriter.inlineBlockBefore(parOp.getBody(), x_loop_block.getBody()->getTerminator(), {newIndexY->getResult(0), newIndexX->getResult(0)});
-            // }
-            // else 
-            // {
-            //     auto withinY = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexY->getResult(0), parOp.getUpperBound().front());
-            //     auto withinX = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexX->getResult(0), parOp.getUpperBound().back());
-            //     auto withinXandY = rewriter.create<mlir::arith::AndIOp>(parOp.getLoc(), withinY, withinX);
+            }
+            else 
+            {
+                auto withinY = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexY->getResult(0), parOp.getUpperBound().front());
+                auto withinX = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexX->getResult(0), parOp.getUpperBound().back());
+                auto withinXandY = rewriter.create<mlir::arith::AndIOp>(parOp.getLoc(), withinY, withinX);
 
-            //     auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinXandY);
-            //     rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexY->getResult(0), newIndexX->getResult(0)});
-            // }
+                auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinXandY);
+                rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexY->getResult(0), newIndexX->getResult(0)});
+            }
 
 
             rewriter.eraseOp(parOp);
             return mlir::success();
         }
-        else if (!mlir::isa<mlir::scf::ForOp,mlir::scf::ParallelOp>(parOp->getParentOp())) // Y level loop
+        else if (!mlir::isa<mlir::scf::ForOp,mlir::scf::ParallelOp>(parOp->getParentOp()) && !(parOp->getParentOp() && parOp->getParentOp()->hasAttrOfType<mlir::UnitAttr>("GuardY"))) // Y level loop
         {
             // auto block_size_x = rewriter.create<mlir::arith::ConstantOp>(forOp->getLoc(), rewriter.getIndexType() , rewriter.getIndexAttr(blockX) );
             auto block_size_y = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), blockY );
             auto c1 = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), 1);
-            auto upperBound0 = rewriter.create<mlir::arith::CeilDivUIOp>(parOp->getLoc(), parOp.getUpperBound().front(), block_size_y);
+            auto upperBound0 = CeilDivUIOp(rewriter,parOp->getLoc(), parOp.getUpperBound().front(), block_size_y);
             comet_debug() << upperBound0;
             // auto upperBound1 = rewriter.create<mlir::arith::CeilDivUIOp>(forOp->getLoc(), forOp.getUpperBound(), block_size_x);
             auto y_loop_grid = rewriter.create<mlir::scf::ParallelOp>(parOp->getLoc(), parOp.getLowerBound().front(), upperBound0->getResult(0), c1->getResult(0));
@@ -396,38 +402,53 @@ public:
             }
             // auto newIndexY = rewriter.create<mlir::affine::AffineApplyOp>(forOp->getLoc(), affineIndex, range);
             // auto newIndexY = rewriter.create<mlir::arith::AddIOp>(forOp->getLoc(),rewriter.create<mlir::arith::MulIOp>(forOp->getLoc(), y_loop_grid.getBody()->getArgument(0), block_size_y), y_loop_block.getBody()->getArgument(0));
-            rewriter.setInsertionPoint(newIndexY);
+            rewriter.setInsertionPointAfter(newIndexY);
 
             rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(0), newIndexY->getResult(0));
             rewriter.eraseOp(parOp.getBody()->getTerminator());
-            // if(target == mlir::tensorAlgebra::TargetDevice::GPU)
-            // {
+            if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            {
                 rewriter.inlineBlockBefore(parOp.getBody(), y_loop_block.getBody()->getTerminator(), newIndexY->getResult(0));
-            // }
-            // else 
-            // {
-            //     auto withinY = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexY->getResult(0), parOp.getUpperBound().front());
-            //     auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinY);
-            //     rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexY->getResult(0)});
-            // }
+            }
+            else 
+            {
+                auto withinY = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexY->getResult(0), parOp.getUpperBound().front());
+                auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinY);
+                ifOp->setAttr("GuardY", rewriter.getUnitAttr());
+                rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexY->getResult(0)});
+            }
             rewriter.eraseOp(parOp);
             return mlir::success();
         }
-        else if ((mlir::isa<mlir::scf::ParallelOp>(parOp->getParentOp()) && mlir::cast<mlir::scf::ParallelOp>(parOp->getParentOp())->getAttrOfType<mlir::StringAttr>("parallelDim").getValue().equals("dimY_block")))  // X level loop
+        else if ((parOp->getParentOp() && parOp->getParentOp()->hasAttrOfType<mlir::UnitAttr>("GuardY")) || (mlir::isa<mlir::scf::ParallelOp>(parOp->getParentOp()) && mlir::cast<mlir::scf::ParallelOp>(parOp->getParentOp())->getAttrOfType<mlir::StringAttr>("parallelDim").getValue().equals("dimY_block")))  // X level loop
         { 
+            mlir::Value lower_bound;
+            mlir::Value upper_bound;
+            if(parOp->getParentOp()->hasAttrOfType<mlir::UnitAttr>("GuardY"))
+            {
+                rewriter.setInsertionPoint(parOp->getParentOp());
+                lower_bound = parOp.getLowerBound().front().getDefiningOp() ? rewriter.clone(*parOp.getLowerBound().front().getDefiningOp())->getResult(0) : parOp.getLowerBound().front();
+                upper_bound = parOp.getUpperBound().front().getDefiningOp() ? rewriter.clone(*parOp.getUpperBound().front().getDefiningOp())->getResult(0) : parOp.getUpperBound().front();
+            }
+            else 
+            {
+                lower_bound = parOp.getLowerBound().front();
+                upper_bound = parOp.getUpperBound().front(); 
+            }
             auto block_size_x = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), blockX );
             auto c1 = rewriter.create<mlir::arith::ConstantIndexOp>(parOp->getLoc(), 1);
             // auto upperBound0 = rewriter.create<mlir::arith::CeilDivUIOp>(parOp->getLoc(), parOp.getUpperBound(), block_size_y);
-            auto upperBound1 = rewriter.create<mlir::arith::CeilDivUIOp>(parOp->getLoc(), parOp.getUpperBound().front(), block_size_x);
+
+            auto upperBound1 = CeilDivUIOp(rewriter, parOp->getLoc(), upper_bound, block_size_x);
             // auto y_loop_grid = rewriter.create<mlir::scf::ParallelOp>(parOp->getLoc(), parOp.getLowerBound(), upperBound0->getResult(0), c1->getResult(0));
-            auto x_loop_grid = rewriter.create<mlir::scf::ParallelOp>(parOp->getLoc(), parOp.getLowerBound().front(), upperBound1->getResult(0), c1->getResult(0));
+            auto x_loop_grid = rewriter.create<mlir::scf::ParallelOp>(parOp->getLoc(), lower_bound, upperBound1->getResult(0), c1->getResult(0));
             x_loop_grid->setAttr("parallelDim", rewriter.getAttr<mlir::StringAttr>("dimX_grid"));
             newAttr = mlir::gpu::ParallelLoopDimMappingAttr::get(rewriter.getContext(), ::mlir::gpu::Processor::BlockX, map, map);
             x_loop_grid->setAttr("mapping", mlir::ArrayAttr::get(parOp->getContext(),  newAttr) );
 
             rewriter.setInsertionPointToStart(x_loop_grid.getBody());
             // auto y_loop_block = rewriter.create<mlir::scf::ParallelOp>(parOp->getLoc(), parOp.getLowerBound(), block_size_y->getResult(0), c1->getResult(0));
-            auto x_loop_block = rewriter.create<mlir::scf::ParallelOp>(parOp->getLoc(), parOp.getLowerBound().front(), block_size_x->getResult(0), c1->getResult(0));
+            auto x_loop_block = rewriter.create<mlir::scf::ParallelOp>(parOp->getLoc(), lower_bound, block_size_x->getResult(0), c1->getResult(0));
             x_loop_block->setAttr("parallelDim", rewriter.getAttr<mlir::StringAttr>("dimX_block"));
             newAttr = mlir::gpu::ParallelLoopDimMappingAttr::get(rewriter.getContext(), ::mlir::gpu::Processor::ThreadX, map, map);
             x_loop_block->setAttr("mapping", mlir::ArrayAttr::get(parOp->getContext(),  newAttr) );
@@ -443,24 +464,39 @@ public:
                 newIndexX = rewriter.create<mlir::arith::MinUIOp>(parOp->getLoc(), newIndexX->getResult(0), parOp.getUpperBound().front());
                 newIndexX->setAttr("GuardX", rewriter.getUnitAttr());
             }
-
+            
             
             // auto newIndexX = rewriter.create<mlir::arith::AddIOp>(parOp->getLoc(),rewriter.create<mlir::arith::MulIOp>(parOp->getLoc(), x_loop_grid.getBody()->getArgument(0), block_size_x), x_loop_block.getBody()->getArgument(0));
-            rewriter.setInsertionPoint(newIndexX);
+            // rewriter.setInsertionPoint(newIndexX);
             rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(0), newIndexX->getResult(0));
-
+            
             rewriter.eraseOp(parOp.getBody()->getTerminator());
-            // if(target == mlir::tensorAlgebra::TargetDevice::GPU)
-            // {
+            parOp->getParentOfType<mlir::ModuleOp>()->dump();
+            if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            {
                 rewriter.inlineBlockBefore(parOp.getBody(), x_loop_block.getBody()->getTerminator(), newIndexX->getResult(0));
-            // }
-            // else 
-            // {
-            //     auto withinX = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexX->getResult(0), parOp.getUpperBound().back());
+            }
+            else 
+            {
+                auto withinX = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexX->getResult(0), upper_bound);
+                if(auto par_if = mlir::dyn_cast<mlir::scf::IfOp>(parOp->getParentOp()))
+                {
+                    // auto newBlock = rewriter.splitBlock(par_if.getBody(), parOp->getIterator()); 
+                    mlir::Value condition = par_if.getCondition();
+                    auto new_Y_if = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), condition);
+                    parOp->getParentOfType<mlir::ModuleOp>()->dump();
+                    
+                    rewriter.eraseOp(par_if.getBody()->getTerminator());
+                    
+                    rewriter.inlineBlockBefore(par_if.getBody(), new_Y_if);
+                    rewriter.eraseOp(par_if);
+                    rewriter.setInsertionPoint(new_Y_if.getBody()->getTerminator());
+                }
+                auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinX);
+                rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexX->getResult(0)});
+                parOp->getParentOfType<mlir::ModuleOp>()->dump();
 
-            //     auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinX);
-            //     rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexX->getResult(0)});
-            // }
+            }
             rewriter.eraseOp(parOp);
 
             return mlir::success();
@@ -497,7 +533,7 @@ struct DetectReduction
             auto c1 = rewriter.create<mlir::arith::ConstantIndexOp>(forOp->getLoc(), 1);
             // auto upperBound0 = rewriter.create<mlir::arith::CeilDivUIOp>(forOp->getLoc(), forOp.getUpperBound(), block_size_y);
             auto outer_lower_bound = rewriter.create<mlir::arith::ConstantIndexOp>(forOp->getLoc(), 0);
-            auto outer_upper_bound = rewriter.create<mlir::arith::CeilDivUIOp>(forOp->getLoc(), rewriter.create<mlir::arith::SubIOp>(forOp->getLoc(), forOp.getUpperBound(), forOp.getLowerBound()), block_size_r);
+            auto outer_upper_bound = CeilDivUIOp(rewriter,forOp->getLoc(), rewriter.create<mlir::arith::SubIOp>(forOp->getLoc(), forOp.getUpperBound(), forOp.getLowerBound()), block_size_r);
 
             // auto upperBound1 = rewriter.create<mlir::arith::CeilDivUIOp>(forOp->getLoc(), forOp.getUpperBound(), block_size_r);
             // auto y_loop_grid = rewriter.create<mlir::scf::ParallelOp>(forOp->getLoc(), forOp.getLowerBound(), upperBound0->getResult(0), c1->getResult(0));

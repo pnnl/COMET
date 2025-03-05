@@ -109,12 +109,12 @@ def generate_xclbin(input, output, kernel, platform):
         print(f'Error in linking {output}.xpirbc ')
         return
     
-    ret = subprocess.call([f'{vpp_path}/v++', '--platform', platform, '-c', '-k', kernel, '--temp_dir', './temp', '-o', f'{output}.linked.xo', f'{output}.linked.xpirbc'], env=my_env)
+    ret = subprocess.call([f'{vpp_path}/v++', '--platform', platform, '-c', '-k', kernel, '--temp_dir', f'./{output}.temp', '-o', f'{output}.linked.xo', f'{output}.linked.xpirbc'], env=my_env)
     if ret != 0 :
         print('Error in v++ compilation ')
         return
         
-    ret = subprocess.call([f'{vpp_path}/v++', '--platform', platform, '-l', '--temp_dir', './temp_link', '-o', f'{output}.linked.xclbin', f'{output}.linked.xo'], env=my_env)
+    ret = subprocess.call([f'{vpp_path}/v++', '--platform', platform, '-l', '--temp_dir', f'./{output}.temp_link', '-o', f'{output}.linked.xclbin', f'{output}.linked.xo'], env=my_env)
     if ret != 0 :
         print('Error in v++ linking')
         return
