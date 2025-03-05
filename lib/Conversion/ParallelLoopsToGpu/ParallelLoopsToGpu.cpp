@@ -243,9 +243,10 @@ bool is_reduction(mlir::scf::ForOp forOp)
 class ParallelOpToGpu: public mlir::OpConversionPattern<mlir::scf::ParallelOp> {
 private:
     int blockX, blockY, blockR;
+    mlir::tensorAlgebra::TargetDevice target;
 public:
     using mlir::OpConversionPattern<mlir::scf::ParallelOp>::OpConversionPattern;
-    ParallelOpToGpu(mlir::MLIRContext* ctx, int blockX, int blockY, int blockR) : mlir::OpConversionPattern<mlir::scf::ParallelOp>(ctx), blockX(blockX), blockY(blockY), blockR(blockR) {}
+    ParallelOpToGpu(mlir::MLIRContext* ctx, int blockX, int blockY, int blockR, mlir::tensorAlgebra::TargetDevice target) : mlir::OpConversionPattern<mlir::scf::ParallelOp>(ctx), blockX(blockX), blockY(blockY), blockR(blockR), target(target) {}
     mlir::LogicalResult
     matchAndRewrite(mlir::scf::ParallelOp parOp, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
@@ -295,13 +296,17 @@ public:
             auto affineIndex = mlir::AffineMap::get(1, 2, {res}, parOp->getContext());
             comet_debug() << affineIndex;
             std::vector<mlir::Value> range = { y_loop_grid.getBody()->getArgument(0), block_size_y->getResult(0),  y_loop_block.getBody()->getArgument(0)};
-            auto newIndexY = rewriter.create<mlir::arith::MinUIOp>(parOp->getLoc(), rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range), parOp.getUpperBound().front());
-            newIndexY->setAttr("GuardY", rewriter.getUnitAttr());
-            // auto newIndexY = rewriter.create<mlir::affine::AffineApplyOp>(forOp->getLoc(), affineIndex, range);
-            // auto newIndexY = rewriter.create<mlir::arith::AddIOp>(forOp->getLoc(),rewriter.create<mlir::arith::MulIOp>(forOp->getLoc(), y_loop_grid.getBody()->getArgument(0), block_size_y), y_loop_block.getBody()->getArgument(0));
-            // rewriter.setInsertionPoint(newIndexY);
-            rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(0), newIndexY);
-
+            mlir::Operation* newIndexY = rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range);
+            if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            {
+                newIndexY = rewriter.create<mlir::arith::MinUIOp>(parOp->getLoc(), newIndexY->getResult(0), parOp.getUpperBound().front());
+                newIndexY->setAttr("GuardY", rewriter.getUnitAttr());
+                // auto newIndexY = rewriter.create<mlir::affine::AffineApplyOp>(forOp->getLoc(), affineIndex, range);
+                // auto newIndexY = rewriter.create<mlir::arith::AddIOp>(forOp->getLoc(),rewriter.create<mlir::arith::MulIOp>(forOp->getLoc(), y_loop_grid.getBody()->getArgument(0), block_size_y), y_loop_block.getBody()->getArgument(0));
+                // rewriter.setInsertionPoint(newIndexY);
+            }
+            
+            rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(0), newIndexY->getResult(0));
 
             // auto upperBound0 = rewriter.create<mlir::arith::CeilDivUIOp>(parOp->getLoc(), parOp.getUpperBound(), block_size_y);
             // auto y_loop_grid = rewriter.create<mlir::scf::ParallelOp>(parOp->getLoc(), parOp.getLowerBound(), upperBound0->getResult(0), c1->getResult(0));
@@ -322,16 +327,34 @@ public:
             affineIndex = mlir::AffineMap::get(1, 2, {res}, parOp->getContext());
             range = { x_loop_grid.getBody()->getArgument(0), block_size_x->getResult(0),  x_loop_block.getBody()->getArgument(0)};
             // auto newIndexX = rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range);
-            auto newIndexX = rewriter.create<mlir::arith::MinUIOp>(parOp->getLoc(), rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range), parOp.getUpperBound().back());
-            newIndexX->setAttr("GuardX", rewriter.getUnitAttr());
-
+            mlir::Operation* newIndexX = rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range);
+            if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            {
+                newIndexX = rewriter.create<mlir::arith::MinUIOp>(parOp->getLoc(), newIndexX->getResult(0), parOp.getUpperBound().back());
+                newIndexX->setAttr("GuardX", rewriter.getUnitAttr());
+            }
+            
+            rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(1), newIndexX->getResult(0));
             
             // auto newIndexX = rewriter.create<mlir::arith::AddIOp>(parOp->getLoc(),rewriter.create<mlir::arith::MulIOp>(parOp->getLoc(), x_loop_grid.getBody()->getArgument(0), block_size_x), x_loop_block.getBody()->getArgument(0));
             rewriter.setInsertionPoint(newIndexX);
-            rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(1), newIndexX);
-
             rewriter.eraseOp(parOp.getBody()->getTerminator());
-            rewriter.inlineBlockBefore(parOp.getBody(), x_loop_block.getBody()->getTerminator(), {newIndexY->getResult(0), newIndexX->getResult(0)});
+            
+            // if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            // {
+                rewriter.inlineBlockBefore(parOp.getBody(), x_loop_block.getBody()->getTerminator(), {newIndexY->getResult(0), newIndexX->getResult(0)});
+            // }
+            // else 
+            // {
+            //     auto withinY = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexY->getResult(0), parOp.getUpperBound().front());
+            //     auto withinX = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexX->getResult(0), parOp.getUpperBound().back());
+            //     auto withinXandY = rewriter.create<mlir::arith::AndIOp>(parOp.getLoc(), withinY, withinX);
+
+            //     auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinXandY);
+            //     rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexY->getResult(0), newIndexX->getResult(0)});
+            // }
+
+
             rewriter.eraseOp(parOp);
             return mlir::success();
         }
@@ -365,15 +388,28 @@ public:
             auto affineIndex = mlir::AffineMap::get(1, 2, {res}, parOp->getContext());
             comet_debug() << affineIndex;
             std::vector<mlir::Value> range = { y_loop_grid.getBody()->getArgument(0), block_size_y->getResult(0),  y_loop_block.getBody()->getArgument(0)};
-            auto newIndexY = rewriter.create<mlir::arith::MinUIOp>(parOp->getLoc(), rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range), parOp.getUpperBound().front());
-            newIndexY->setAttr("GuardY", rewriter.getUnitAttr());
+            mlir::Operation* newIndexY = rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range);
+            if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            {
+                newIndexY = rewriter.create<mlir::arith::MinUIOp>(parOp->getLoc(), newIndexY->getResult(0), parOp.getUpperBound().front());
+                newIndexY->setAttr("GuardY", rewriter.getUnitAttr());
+            }
             // auto newIndexY = rewriter.create<mlir::affine::AffineApplyOp>(forOp->getLoc(), affineIndex, range);
             // auto newIndexY = rewriter.create<mlir::arith::AddIOp>(forOp->getLoc(),rewriter.create<mlir::arith::MulIOp>(forOp->getLoc(), y_loop_grid.getBody()->getArgument(0), block_size_y), y_loop_block.getBody()->getArgument(0));
             rewriter.setInsertionPoint(newIndexY);
 
-            rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(0), newIndexY);
+            rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(0), newIndexY->getResult(0));
             rewriter.eraseOp(parOp.getBody()->getTerminator());
-            rewriter.inlineBlockBefore(parOp.getBody(), y_loop_block.getBody()->getTerminator(), newIndexY->getResult(0));
+            // if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            // {
+                rewriter.inlineBlockBefore(parOp.getBody(), y_loop_block.getBody()->getTerminator(), newIndexY->getResult(0));
+            // }
+            // else 
+            // {
+            //     auto withinY = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexY->getResult(0), parOp.getUpperBound().front());
+            //     auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinY);
+            //     rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexY->getResult(0)});
+            // }
             rewriter.eraseOp(parOp);
             return mlir::success();
         }
@@ -401,16 +437,30 @@ public:
             auto affineIndex = mlir::AffineMap::get(1, 2, {res}, parOp->getContext());
             std::vector<mlir::Value> range = { x_loop_grid.getBody()->getArgument(0), block_size_x->getResult(0),  x_loop_block.getBody()->getArgument(0)};
             // auto newIndexX = rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range);
-            auto newIndexX = rewriter.create<mlir::arith::MinUIOp>(parOp->getLoc(), rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range), parOp.getUpperBound().front());
-            newIndexX->setAttr("GuardX", rewriter.getUnitAttr());
+            mlir::Operation* newIndexX = rewriter.create<mlir::affine::AffineApplyOp>(parOp->getLoc(), affineIndex, range);
+            if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            {
+                newIndexX = rewriter.create<mlir::arith::MinUIOp>(parOp->getLoc(), newIndexX->getResult(0), parOp.getUpperBound().front());
+                newIndexX->setAttr("GuardX", rewriter.getUnitAttr());
+            }
 
             
             // auto newIndexX = rewriter.create<mlir::arith::AddIOp>(parOp->getLoc(),rewriter.create<mlir::arith::MulIOp>(parOp->getLoc(), x_loop_grid.getBody()->getArgument(0), block_size_x), x_loop_block.getBody()->getArgument(0));
             rewriter.setInsertionPoint(newIndexX);
-            rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(0), newIndexX);
+            rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(0), newIndexX->getResult(0));
 
             rewriter.eraseOp(parOp.getBody()->getTerminator());
-            rewriter.inlineBlockBefore(parOp.getBody(), x_loop_block.getBody()->getTerminator(), newIndexX->getResult(0));
+            // if(target == mlir::tensorAlgebra::TargetDevice::GPU)
+            // {
+                rewriter.inlineBlockBefore(parOp.getBody(), x_loop_block.getBody()->getTerminator(), newIndexX->getResult(0));
+            // }
+            // else 
+            // {
+            //     auto withinX = rewriter.create<mlir::arith::CmpIOp>(parOp.getLoc(), mlir::arith::CmpIPredicate::slt, newIndexX->getResult(0), parOp.getUpperBound().back());
+
+            //     auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinX);
+            //     rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexX->getResult(0)});
+            // }
             rewriter.eraseOp(parOp);
 
             return mlir::success();
@@ -546,7 +596,7 @@ public:
         }
 
         mlir::RewritePatternSet patterns(context);
-        patterns.insert<ParallelOpToGpu>(context, blockX, blockY, blockR);
+        patterns.insert<ParallelOpToGpu>(context, blockX, blockY, blockR, this->target_device);
         
         mlir::ConversionTarget target(*context);
         target.addLegalDialect<mlir::memref::MemRefDialect, mlir::arith::ArithDialect,  mlir::affine::AffineDialect, mlir::scf::SCFDialect>();
