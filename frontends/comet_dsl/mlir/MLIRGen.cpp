@@ -967,18 +967,18 @@ namespace
         comet_debug() << __LINE__ << " formats.size(): " << formats.size() << "\n";
         assert(formats.size() == 2 && " less than 2 input tensors\n");
         mlir::Type ret_tensor_type;
-        if (formats[0].compare("CSR") == 0 && formats[1].compare("CSR") == 0)
-        {
-          formats.push_back("CSR");
-          std::vector format_array = getFormats("CSR", result_dims.size(), builder.getContext());
-          ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), result_dims, format_array);
-        }
-        else if (formats[0].compare("Dense") == 0 && formats[1].compare("Dense") == 0)
-        {
-          formats.push_back("Dense");
-          ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
-        }
-        else if (out_format.length() > 0) // non-empty format string provided.
+        // if (formats[0].compare("CSR") == 0 && formats[1].compare("CSR") == 0)
+        // {
+        //   formats.push_back("CSR");
+        //   std::vector format_array = getFormats("CSR", result_dims.size(), builder.getContext());
+        //   ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), result_dims, format_array);
+        // }
+        // else if (formats[0].compare("Dense") == 0 && formats[1].compare("Dense") == 0)
+        // {
+        //   formats.push_back("Dense");
+        //   ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
+        // }
+        if (out_format.length() > 0) // non-empty format string provided.
         {
           comet_debug() << " Output Format: " << out_format << "\n";
           formats.push_back(out_format);
@@ -988,6 +988,33 @@ namespace
           } else {
             std::vector format_array = getFormats(out_format, result_dims.size(), builder.getContext());
             ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), result_dims, format_array);
+          }
+        }
+        else if (formats[0].compare("CSR") == 0)
+        {
+          if(formats[1].compare("CSR") == 0)
+          {
+            formats.push_back("CSR");
+            std::vector format_array = getFormats("CSR", result_dims.size(), builder.getContext());
+            ret_tensor_type = SparseTensorType::get(builder.getContext(), result_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), result_dims, format_array);
+          }
+          else if(formats[1].compare("Dense") == 0)
+          {
+            formats.push_back("Dense");
+            ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
+          }
+        }
+        else if (formats[0].compare("Dense") == 0)
+        {
+          if(formats[1].compare("CSR") == 0) // Redundant but shows the intention
+          {
+            formats.push_back("Dense");
+            ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
+          }
+          else if(formats[1].compare("Dense") == 0) // Redundant but shows the intention
+          {
+            formats.push_back("Dense");
+            ret_tensor_type = mlir::RankedTensorType::get(result_dims, result_type);
           }
         }
         else
