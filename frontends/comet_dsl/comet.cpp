@@ -564,6 +564,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   // pm.addPass(mlir::bufferization::createEmptyTensorToAllocTensorPass());
   pm.addPass(mlir::comet::createTABufferizeFunc());
   pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(mlir::createLowerAffinePass());
 
   mlir::bufferization::OneShotBufferizationOptions opts;
   opts.allowUnknownOps = true;
