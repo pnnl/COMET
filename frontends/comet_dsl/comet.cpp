@@ -594,7 +594,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     }
     else
     {
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
     }
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
     pm.addPass(mlir::createParallelLoopToGpuPass());
