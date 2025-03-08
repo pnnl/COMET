@@ -67,14 +67,12 @@ mlir::comet::TritonTypeConverter::TritonTypeConverter(MLIRContext *context)
     }); 
 
     addSourceMaterialization([](OpBuilder &builder, Type type, ValueRange inputs, Location loc) -> std::optional<Value>   {
-        llvm::errs() << "Called\n";
         if (inputs.size() != 1)
             return std::nullopt;
         return builder.create<arith::IndexCastOp>(loc, type, inputs)->getResult(0);
     });
 
     addTargetMaterialization([](OpBuilder &builder, Type type, ValueRange inputs, Location loc) -> std::optional<Value>   {
-        llvm::errs() << "Called\n";
         if (inputs.size() != 1)
             return std::nullopt;
         return builder.create<arith::IndexCastOp>(loc, type, inputs)->getResult(0);

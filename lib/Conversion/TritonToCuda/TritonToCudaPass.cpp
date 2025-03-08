@@ -183,7 +183,6 @@ public:
 
   void runOnOperation() override {
     mlir::ModuleOp modOp = getOperation();
-    modOp->dump();
     std::vector<mlir::triton::FuncOp> TTFuncs;
     modOp->walk([&TTFuncs](mlir::triton::FuncOp op) { TTFuncs.push_back(op); });
 
@@ -325,6 +324,25 @@ TypedValue<MemRefType> collapseMemref(TypedValue<MemRefType> val, mlir::OpBuilde
   return collapsedMemref;
 }
 
+mlir::Value get_memref_num_elements(mlir::MLIRContext* ctx, mlir::OpBuilder& builder, mlir::Location loc, mlir::Value memref) 
+{
+    mlir::Value rank = builder.create<mlir::memref::RankOp>(loc, memref);
+    mlir::Value zero = builder.create<mlir::arith::ConstantIndexOp>(loc, 0);
+    mlir::Value one = builder.create<mlir::arith::ConstantIndexOp>(loc, 1);
+
+    mlir::scf::ForOp forOp = builder.create<mlir::scf::ForOp>(loc, zero, rank, one, mlir::ValueRange({one}));
+    mlir::Block* body = forOp.getBody();
+    mlir::Value inductionvar = forOp.getInductionVar();
+    mlir::IRRewriter::InsertPoint ip  = builder.saveInsertionPoint();
+    builder.setInsertionPointToStart(body);
+    mlir::Value dim = builder.create<mlir::memref::DimOp>(loc, memref, inductionvar);
+    auto mul = builder.create<mlir::arith::MulIOp>(loc, forOp.getRegionIterArg(0), dim);
+    builder.create<mlir::scf::YieldOp>(loc, mlir::ValueRange({mul}));
+    builder.restoreInsertionPoint(ip);
+    
+    return forOp.getResult(0);
+}
+
 class LowerGpuHostToCuda
     : public mlir::comet::LowerHostToCudaBase<LowerGpuHostToCuda> {
 public:
@@ -341,12 +359,11 @@ public:
       gpu::GPUModuleOp gpuModuleOp = TTFuncOp->getParentOfType<gpu::GPUModuleOp>();
       gpu_to_triton_kernel[gpuModuleOp.getName().str() +"::"+ TTFuncOp.getName().substr(3).str()] = TTFuncOp.getName().str();
       triton_name_to_triton_func_op[TTFuncOp.getName().str()] = TTFuncOp;
-      llvm::errs() << "Created " << gpuModuleOp.getName().str() +"::"+ TTFuncOp.getName().substr(3).str() << "\n";
+      // llvm::errs() << "Created " << gpuModuleOp.getName().str() +"::"+ TTFuncOp.getName().substr(3).str() << "\n";
       // TTFuncOp.erase();
     });
     modOp.walk([&](gpu::LaunchFuncOp launchOp){
       builder.setInsertionPoint(launchOp);
-      launchOp->dump();
       SmallVector<mlir::Value, 8> newValues;
       for(auto& operand: llvm::make_early_inc_range(launchOp.getKernelOperandsMutable()))
       {
@@ -359,7 +376,6 @@ public:
       }
       auto newLaunchOp = builder.create<gpu::LaunchFuncOp>(launchOp->getLoc(), launchOp.getKernel(), launchOp.getGridSizeOperandValues(), launchOp.getBlockSizeOperandValues(), launchOp.getDynamicSharedMemorySize(), newValues);
       launchOp->erase();
-      newLaunchOp->dump();
     });
 
     auto memrefI32 =
@@ -589,10 +605,10 @@ public:
         allocSize = builder
                         .create<mlir::arith::ConstantIndexOp>(
                             gpuAlloc->getLoc(),
-                            gpuAlloc.getMemref().getType().getShape()[0])
+                            gpuAlloc.getMemref().getType().getNumElements())
                         .getResult();
       } else {
-        allocSize = gpuAlloc->getOperand(0);
+        allocSize = get_memref_num_elements(builder.getContext(), builder, gpuAlloc.getLoc(), gpuAlloc.getMemref());
       }
 
       // builder.create<memref::DimOp>(gpuAlloc.getLoc(), gpuAlloc.getMemref(),

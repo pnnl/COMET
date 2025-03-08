@@ -337,7 +337,6 @@ std::pair<scf::ParallelOp, llvm::SmallVector<scf::ForOp, 2>> tileParallelLoop(Co
         innerLoops.push_back(innerLoop);
         rewriter.setInsertionPointToStart(innerLoop.getBody());
         auto new_arg = rewriter.create<arith::AddIOp>(op.getLoc(), innerLoop.getBody()->getArgument(0), outerLoop.getBody()->getArgument(i));
-        innerLoop.getBody()->getArgument(0).dump();
         newArgs.push_back(new_arg);
         inductionVars.push_back(innerLoop.getInductionVar());
     }

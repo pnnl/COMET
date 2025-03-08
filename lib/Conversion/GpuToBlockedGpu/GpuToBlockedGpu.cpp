@@ -264,7 +264,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             needCheck.insert(castSliceShape);
         }
 
-        funcOp.dump();
         size_t size_before;
         SmallVector<Operation*, 4> newOpsToCheck;
         do 
@@ -275,13 +274,12 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             {
                 for(mlir::Operation* user: llvm::make_early_inc_range(op->getUsers()))
                 {
-                    user->dump();
                     // If inputs and outputs should have the same shape
                     // This includes most of `arith` operations. Instead of handling each operation
                     // explicitly, we handle them based on whether they have the specific trait
                     if(user->hasTrait<mlir::OpTrait::SameOperandsAndResultType>())
                     {
-                        llvm::errs() << "Has SameOperandsAmdResultTypeType trait\n";
+                        // llvm::errs() << "Has SameOperandsAmdResultTypeType trait\n";
                         bool operandsSameShape = checkOperandsSameType(user);
                         // If input operands do not have the same type/shape
                         if(!operandsSameShape)
@@ -336,8 +334,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             }
             newOpsToCheck.clear();
         }while(needCheck.size() != size_before);
-
-        funcOp.dump();
 
         for(auto insert: inserts)
         {

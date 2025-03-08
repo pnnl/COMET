@@ -65,7 +65,6 @@ class ConvertGpuFuncToTritonFunc : public OpConversionPattern<mlir::gpu::GPUFunc
         auto tritonFunc = rewriter.create<triton::FuncOp>(gpuFunc->getLoc(), "tt_"+gpuFunc.getName().str(), tritonFuncType);
         auto ttFuncBlock = tritonFunc.addEntryBlock();
         rewriter.setInsertionPointToStart(ttFuncBlock);
-        ttFuncBlock->dump();
         size_t prev = 0;
         for(size_t i = 0; i <  gpuFunc.getBody().getArguments().size(); i++)
         {
@@ -94,9 +93,6 @@ class ConvertGpuFuncToTritonFunc : public OpConversionPattern<mlir::gpu::GPUFunc
         newFunc->setAttr(gpu::GPUDialect::getKernelFuncAttrName(),
                            rewriter.getUnitAttr());
         
-        tritonFunc->dump();
-        llvm::errs() <<"RAN ConvertGPUFUNC\n";
-
         return success();
     }
 
@@ -214,7 +210,6 @@ class ConvertInsertSlice : public OpConversionPattern<mlir::tensor::InsertSliceO
     matchAndRewrite(mlir::tensor::InsertSliceOp insertSliceOp, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
 
-        llvm::errs() <<"RUNNING InsertSlice\n";
         Value dest = adaptor.getDest();
         Value ttSource = adaptor.getSource();
         Value ttDest;
@@ -363,7 +358,6 @@ class ConvertExtractSlice : public OpConversionPattern<mlir::tensor::ExtractSlic
     mlir::LogicalResult
     matchAndRewrite(mlir::tensor::ExtractSliceOp extractSliceOp, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
-        llvm::errs() <<"RUNNING ExtractSlice\n";
         Value source = adaptor.getSource();
         Value ttSource;
         bufferization::ToTensorOp toTensor = mlir::dyn_cast<bufferization::ToTensorOp>(source.getDefiningOp());
@@ -533,10 +527,10 @@ class ConvertToTensor : public OpConversionPattern<mlir::bufferization::ToTensor
         }
         else
         {
-            for(auto user: toTensor->getUsers())
-            {
-                user->dump();
-            }
+            // for(auto user: toTensor->getUsers())
+            // {
+            //     user->dump();
+            // }
         }
 
         return failure();
@@ -550,7 +544,6 @@ class ConvertUnrealizedCast : public OpConversionPattern<mlir::UnrealizedConvers
     mlir::LogicalResult
     matchAndRewrite(mlir::UnrealizedConversionCastOp cast, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
-        cast->dump();
         if(cast->getUsers().empty())
         {
             rewriter.eraseOp(cast);
@@ -600,7 +593,6 @@ class ConvertArithIndex : public OpConversionPattern<T> {
         }
 
         Value new_arith_op = rewriter.create<T>(op->getLoc(), newOperands);
-        new_arith_op.dump();
         rewriter.replaceOp(arith_op, converter->materializeSourceConversion(rewriter, op->getLoc(), op->getResultTypes()[0], new_arith_op));
 
         return success();
@@ -694,7 +686,6 @@ class ConvertBlockedGpuToTriton: public CometBlockedGpuToTritonBase<ConvertBlock
 
     void runOnOperation() override 
     {
-        llvm::errs() << "Running ConvertBlockedGpuToTriton\n";
         gpu::GPUModuleOp gpuModule = *getOperation().getOps<gpu::GPUModuleOp>().begin();
         
         RewritePatternSet patterns(&getContext());
@@ -731,7 +722,6 @@ class ConvertBlockedGpuToTriton: public CometBlockedGpuToTritonBase<ConvertBlock
         
         RewritePatternSet patternsClean2(&getContext());
         target.addIllegalOp<UnrealizedConversionCastOp>();
-        llvm::errs() << "RUNNING UnrealizedConversionCastOp\n";
         patternsClean2.insert<ConvertUnrealizedCast>(&getContext());
 
         if (failed(applyPartialConversion(gpuModule, target, std::move(patternsClean2))))
@@ -742,9 +732,9 @@ class ConvertBlockedGpuToTriton: public CometBlockedGpuToTritonBase<ConvertBlock
         RewritePatternSet patternsClean3(&getContext());
         target.addDynamicallyLegalOp<index::ConstantOp, arith::AddIOp, arith::MulIOp, arith::SubIOp>([&](Operation *op) {
             return llvm::all_of(op->getOperandTypes(),
-                                [&](Type type) { type.dump(); llvm::errs() <<  converter.isLegal(type) << "\n"; return converter.isLegal(type); }) &&
+                                [&](Type type) { return converter.isLegal(type); }) &&
                    llvm::all_of(op->getResultTypes(),
-                                [&](Type type) { type.dump(); llvm::errs() <<  converter.isLegal(type) << "\n"; return converter.isLegal(type); });
+                                [&](Type type) { return converter.isLegal(type); });
         });
 
         patternsClean3.insert<ConvertIndexConstant, ConvertArithIndex<arith::AddIOp>, ConvertArithIndex<arith::MulIOp>, ConvertArithIndex<arith::SubIOp> >(converter, &getContext());
@@ -757,9 +747,9 @@ class ConvertBlockedGpuToTriton: public CometBlockedGpuToTritonBase<ConvertBlock
         RewritePatternSet patternsClean4(&getContext());
         target.addDynamicallyLegalOp<arith::AddIOp, arith::MulIOp, arith::SubIOp, arith::AddFOp, arith::MulFOp, arith::SubFOp>([&](Operation *op) {
             return llvm::all_of(op->getOperandTypes(),
-                                [&](Type type) { type.dump(); if(RankedTensorType shapedType = mlir::dyn_cast<RankedTensorType>(type)){return shapedType.hasStaticShape(); } return true; }) &&
+                                [&](Type type) { if(RankedTensorType shapedType = mlir::dyn_cast<RankedTensorType>(type)){return shapedType.hasStaticShape(); } return true; }) &&
                    llvm::all_of(op->getResultTypes(),
-                                [&](Type type) { type.dump(); if(RankedTensorType shapedType = mlir::dyn_cast<RankedTensorType>(type)){return shapedType.hasStaticShape(); } return true; });
+                                [&](Type type) { if(RankedTensorType shapedType = mlir::dyn_cast<RankedTensorType>(type)){return shapedType.hasStaticShape(); } return true; });
         });
 
         patternsClean4.insert<ConvertArithDynamicShape<arith::AddIOp>, ConvertArithDynamicShape<arith::MulIOp>, ConvertArithDynamicShape<arith::SubIOp>, ConvertArithDynamicShape<arith::AddFOp>, ConvertArithDynamicShape<arith::MulFOp>, ConvertArithDynamicShape<arith::SubFOp> >(&getContext());
@@ -768,10 +758,6 @@ class ConvertBlockedGpuToTriton: public CometBlockedGpuToTritonBase<ConvertBlock
         {
             return signalPassFailure();
         }
-
-        
-
-        llvm::errs() << "Completed!!\n";
     }
 };
 
