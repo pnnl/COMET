@@ -170,54 +170,7 @@ namespace
     CSR_DIM2_SIZE = 19
   };
 
-  /// MASKING_TYPE to indicate what type of masking is used.
-  enum MASKING_TYPE
-  {
-    NO_MASKING = 0,
-    PUSH_BASED_MASKING = 1,
-    PULL_BASED_MASKING = 2
-  };
-
-  /// class MaksingInfo, passed as a parameter to the formSemiringLoopBody() to indicate if using masking or not.
-  struct MaskingInfo
-  {
-  public:
-    MASKING_TYPE mask_type;
-
-    mlir::Value mask_tensor;
-    mlir::Value mask_rowptr;
-    mlir::Value mask_col;
-    mlir::Value mask_val;
-
-    /// TODO(zhen.peng): Pull-based mask info and auxiliary variables.
-
-  public:
-    MaskingInfo() : mask_type(NO_MASKING) {}
-
-    ///  MaskingInfo(MASKING_TYPE type_, mlir::Value states_) : maskType(type_), states(states_) { }
-
-    void dump()
-    {
-      switch (mask_type)
-      {
-      case NO_MASKING:
-        std::cout << "maskType: NO_MASKING\n";
-        break;
-      case PUSH_BASED_MASKING:
-        std::cout << "maskType: PUSH_BASED_MASKING "
-                  << "mask_tensor: ";
-        mask_tensor.dump();
-        ///        std::cout << "maskType: PUSH_BASED_MASKING " << "states: ";
-        ///        states.dump();
-        break;
-      case PULL_BASED_MASKING:
-        std::cout << "maskType: PULL_BASED_MASKING ... Not supported";
-        break;
-      }
-    }
-  };
-
-   /// ----------------- ///
+  /// ----------------- ///
   /// Add declaration of the function comet_index_func;
   /// ----------------- ///
   void declareSortFunc(ModuleOp &module,
@@ -1122,10 +1075,14 @@ namespace
         auto index_type = rewriter.getIndexType();
         auto context = rewriter.getContext();
 
-        // Create bit tensor
+        // Create bit tensor outside of index tree
+        auto cur = rewriter.saveInsertionPoint();
+        rewriter.setInsertionPoint(domain_op->getParentOfType<IndexTreeOp>());
         auto bit_tensor_type = RankedTensorType::get({ShapedType::kDynamic}, rewriter.getI1Type());
-        Value bit_tensor = rewriter.create<bufferization::AllocTensorOp>(loc, bit_tensor_type, ValueRange(masked_domain.getDimSize()), (Value) nullptr);
-        
+        Value f = rewriter.create<arith::ConstantOp>(loc, rewriter.getI1Type(), rewriter.getBoolAttr(false));
+        Value bit_tensor = rewriter.create<tensor::SplatOp>(loc, bit_tensor_type, f, ValueRange(masked_domain.getDimSize()));
+        rewriter.restoreInsertionPoint(cur);
+
         // Create loop to fill mask
         Operation* mask = masked_domain.getMask().getDefiningOp();
         ValueRange fill_loop_inputs(bit_tensor);
