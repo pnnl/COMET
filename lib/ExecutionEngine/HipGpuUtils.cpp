@@ -156,3 +156,10 @@ HipLaunchKernel(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ,
                                   blocksPerGridZ, tritonBlockX, tritonBlockY,
                                   tritonBlockZ, sharedMem, NULL, cast_args, NULL));
 }
+
+extern "C" __attribute__((visibility("default"))) void HipFinit() 
+{
+  hipModuleUnload(hipModule);
+  hipModule = NULL;
+  moduleImg = NULL;
+}
