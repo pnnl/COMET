@@ -4,6 +4,7 @@
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
+#include "llvm/ADT/STLExtras.h"
 
 using namespace mlir;
 
@@ -26,8 +27,12 @@ public:
     for(auto gpuModuleOp: gpuModules)
     {
         auto funcOps = gpuModuleOp.getOps<mlir::func::FuncOp>();
-        for(func::FuncOp funcOp: funcOps)
+        for(func::FuncOp funcOp: llvm::make_early_inc_range(funcOps))
         {
+            if(!funcOp->hasAttr(gpu::GPUDialect::getKernelFuncAttrName()))
+            {
+                continue;
+            }
             builder.setInsertionPoint(funcOp);
             SmallVector<Type, 4> newTypes;
             for(auto argType: funcOp.getArgumentTypes())

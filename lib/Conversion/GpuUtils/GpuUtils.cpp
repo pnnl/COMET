@@ -11,8 +11,6 @@ using namespace mlir;
 mlir::LogicalResult specializeGpuHost(mlir::OpBuilder& builder, mlir::ModuleOp modOp, std::string vendor_prefix)
 {
     std::map<std::string, Value> funcs;
-    std::map<std::string, std::string> gpu_to_triton_kernel;
-    std::map<std::string, triton::FuncOp> triton_name_to_triton_func_op;
     std::vector<mlir::gpu::LaunchFuncOp> launchOps;
     modOp->walk([&launchOps](mlir::gpu::LaunchFuncOp launchOp) {
       launchOps.push_back(launchOp);
@@ -22,10 +20,6 @@ mlir::LogicalResult specializeGpuHost(mlir::OpBuilder& builder, mlir::ModuleOp m
     std::vector<Value> toAlloc;
 
     for (auto launchOp : launchOps) {
-      auto name =
-          gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
-                                "::" + launchOp.getKernelName().strref())
-                                   .str()];
 
       if (initFuncs.find(launchOp->getParentOfType<mlir::func::FuncOp>()) ==
           initFuncs.end()) {
@@ -242,10 +236,7 @@ mlir::LogicalResult specializeGpuHost(mlir::OpBuilder& builder, mlir::ModuleOp m
             builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), i)
                 .getResult());
       }
-      std::string &funcName =
-          gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
-                                "::" + launchOp.getKernelName().strref())
-                                   .str()];
+      std::string funcName = "tt_"+launchOp.getKernelName().strref().str();
       if (funcs.find(funcName) == funcs.end()) {
         // We need the global string to include the \0 character so that it is
         // correctly read by the cuda lib Hence the StringRef(funcName.c_str(),
@@ -255,11 +246,6 @@ mlir::LogicalResult specializeGpuHost(mlir::OpBuilder& builder, mlir::ModuleOp m
             StringRef(funcName.c_str(), funcName.size() + 1),
             LLVM::linkage::Linkage::Private);
       }
-
-      auto name =
-          gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
-                                "::" + launchOp.getKernelName().strref())
-                                   .str()];
       builder.create<mlir::func::CallOp>(
           launchOp->getLoc(), vendor_prefix+"LaunchKernel", TypeRange(),
           ValueRange({launchOp.getGridSizeX(), launchOp.getGridSizeY(),
