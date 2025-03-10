@@ -103,6 +103,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #ifdef ENABLE_GPU_TARGET
+#include "comet/Conversion/PrepareGpuHost/PrepareGpuHostPass.h"
 #include "comet/Conversion/BlockedGpuToTriton/BlockedGpuToTriton.h"
 #include "comet/Conversion/GpuToBlockedGpu/GpuToBlockedGpu.h"
 #include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
@@ -661,6 +662,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   if ((isLoweringToLLVM || emitLLVM) && CodegenTarget == TargetDevice::GPU)
   {
+    pm.addPass(mlir::comet::createPrepareGpuHostPass());
     if (GPUComputeCapability.getValue().find("sm_") != std::string::npos ||
         GPUComputeCapability.getValue().find("compute_") != std::string::npos) 
     {

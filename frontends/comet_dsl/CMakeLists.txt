@@ -52,12 +52,14 @@ endif()
 if(ENABLE_GPU_TARGET)
   set(LIBS
     ${LIBS}
+    COMETGPUUtils
     COMETParallelLoopsToGpu
     COMETGpuToBlockedGpu
     COMETBlockedGpuToTriton
     COMETGpuToTriton
     COMETTritonToCuda
     COMETTritonToHIP
+    COMETPrepareGpuHost
     ${triton_libs}
   )
 endif()

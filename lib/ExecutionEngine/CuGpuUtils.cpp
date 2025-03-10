@@ -154,7 +154,7 @@ const int64_t MAX_NUM_BLOCKS_X = 2147483647;
 const int64_t MAX_NUM_BLOCKS_Y = 65535;
 const int64_t MAX_NUM_BLOCKS_Z = 65535;
 
-extern "C" __attribute__((visibility("default"))) void cudaLaunchKernel(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ, int64_t tritonBlockX, int64_t tritonBlockY, int64_t tritonBlockZ, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, char* kernel, int64_t kernel_name_size, int64_t sharedMem, int64_t numWraps, int64_t threadsPerWarp) 
+extern "C" __attribute__((visibility("default"))) void cudaLaunchKernel(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ, int64_t tritonBlockX, int64_t tritonBlockY, int64_t tritonBlockZ, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, char* kernel, int64_t kernel_name_size, int64_t sharedMem) 
 {
     initCudaCtx();
     CUfunction cuFunction = NULL;
@@ -163,7 +163,7 @@ extern "C" __attribute__((visibility("default"))) void cudaLaunchKernel(int64_t 
     unsigned blocksPerGridZ = std::min(realblocksZ, MAX_NUM_BLOCKS_Z);
     CU_CHECK(cuModuleGetFunction(&cuFunction, cuModule, kernel));
     void** cast_args = (void**)aligned_ptr;
-    CU_CHECK(cuLaunchKernel(cuFunction, blocksPerGridX, blocksPerGridY, blocksPerGridZ, numWraps* threadsPerWarp, 1, 1, sharedMem, 0, cast_args, 0));
+    CU_CHECK(cuLaunchKernel(cuFunction, blocksPerGridX, blocksPerGridY, blocksPerGridZ, tritonBlockX, tritonBlockY, tritonBlockZ, sharedMem, 0, cast_args, 0));
 }
 
 extern "C" __attribute__((visibility("default"))) void cudaFinit() 

@@ -22,6 +22,7 @@
 #include <list>
 #include <memory>
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
+#include "comet/Conversion/GpuUtils/GpuUtils.h"
 #include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
@@ -303,45 +304,11 @@ mlir::comet::createLowerTritonDeviceToCudaPass(
 
 
 
-TypedValue<MemRefType> collapseMemref(TypedValue<MemRefType> val, mlir::OpBuilder& builder)
-{
-    
-  auto memref = mlir::cast<mlir::MemRefType>(val.getType());
-  if (memref.getRank() == 1)
-  {
-      return val;
-  }
 
-  llvm::SmallVector<llvm::SmallVector<int64_t,2>,1> indices;
-  indices.push_back(llvm::SmallVector<int64_t,2>());
-  for(int64_t i = 0; i < memref.getRank(); i++)
-  {
-      indices[0].push_back(i);
-  }
 
-    /// Collapse memref to 1D
-  auto collapsedMemref = builder.create<mlir::memref::CollapseShapeOp>(val.getLoc(), val, mlir::ArrayRef(indices)).getResult();
-  return collapsedMemref;
-}
 
-mlir::Value get_memref_num_elements(mlir::MLIRContext* ctx, mlir::OpBuilder& builder, mlir::Location loc, mlir::Value memref) 
-{
-    mlir::Value rank = builder.create<mlir::memref::RankOp>(loc, memref);
-    mlir::Value zero = builder.create<mlir::arith::ConstantIndexOp>(loc, 0);
-    mlir::Value one = builder.create<mlir::arith::ConstantIndexOp>(loc, 1);
 
-    mlir::scf::ForOp forOp = builder.create<mlir::scf::ForOp>(loc, zero, rank, one, mlir::ValueRange({one}));
-    mlir::Block* body = forOp.getBody();
-    mlir::Value inductionvar = forOp.getInductionVar();
-    mlir::IRRewriter::InsertPoint ip  = builder.saveInsertionPoint();
-    builder.setInsertionPointToStart(body);
-    mlir::Value dim = builder.create<mlir::memref::DimOp>(loc, memref, inductionvar);
-    auto mul = builder.create<mlir::arith::MulIOp>(loc, forOp.getRegionIterArg(0), dim);
-    builder.create<mlir::scf::YieldOp>(loc, mlir::ValueRange({mul}));
-    builder.restoreInsertionPoint(ip);
-    
-    return forOp.getResult(0);
-}
+
 
 class LowerGpuHostToCuda
     : public mlir::comet::LowerHostToCudaBase<LowerGpuHostToCuda> {
@@ -351,501 +318,289 @@ public:
   void runOnOperation() override {
     mlir::ModuleOp modOp = getOperation();
     OpBuilder builder(modOp);
-    std::map<std::string, Value> funcs;
-    std::map<std::string, std::string> gpu_to_triton_kernel;
-    std::map<std::string, triton::FuncOp> triton_name_to_triton_func_op;
+    declare_vendor_funcs(builder, modOp, "cuda");
 
-    modOp->walk([&gpu_to_triton_kernel, &triton_name_to_triton_func_op](mlir::triton::FuncOp TTFuncOp) {
-      gpu::GPUModuleOp gpuModuleOp = TTFuncOp->getParentOfType<gpu::GPUModuleOp>();
-      gpu_to_triton_kernel[gpuModuleOp.getName().str() +"::"+ TTFuncOp.getName().substr(3).str()] = TTFuncOp.getName().str();
-      triton_name_to_triton_func_op[TTFuncOp.getName().str()] = TTFuncOp;
-      // llvm::errs() << "Created " << gpuModuleOp.getName().str() +"::"+ TTFuncOp.getName().substr(3).str() << "\n";
-      // TTFuncOp.erase();
-    });
-    modOp.walk([&](gpu::LaunchFuncOp launchOp){
-      builder.setInsertionPoint(launchOp);
-      SmallVector<mlir::Value, 8> newValues;
-      for(auto& operand: llvm::make_early_inc_range(launchOp.getKernelOperandsMutable()))
-      {
-        newValues.push_back(operand.get());
-        if(MemRefType memref = mlir::dyn_cast<MemRefType>(operand.get().getType()))
-        {
-          auto metadata = builder.create<memref::ExtractStridedMetadataOp>(launchOp->getLoc(), operand.get());
-          newValues.insert(newValues.end(), metadata.getResults().begin()+1, metadata.getResults().end()); // Skip the memref
-        }
-      }
-      auto newLaunchOp = builder.create<gpu::LaunchFuncOp>(launchOp->getLoc(), launchOp.getKernel(), launchOp.getGridSizeOperandValues(), launchOp.getBlockSizeOperandValues(), launchOp.getDynamicSharedMemorySize(), newValues);
-      launchOp->erase();
-    });
-
-    auto memrefI32 =
-        MemRefType::get({ShapedType::kDynamic}, builder.getIntegerType(32));
-    auto memrefF32 =
-        MemRefType::get({ShapedType::kDynamic}, builder.getF32Type());
-    auto memrefI64 =
-        MemRefType::get({ShapedType::kDynamic}, builder.getIntegerType(64));
-    auto memrefIndex =
-        MemRefType::get({ShapedType::kDynamic}, builder.getIndexType());
-    auto memrefF64 =
-        MemRefType::get({ShapedType::kDynamic}, builder.getF64Type());
-    builder.clearInsertionPoint();
-    auto mallocI32Type = builder.getFunctionType({builder.getIndexType()},
-                                                 builder.getIndexType());
-    auto mallocI32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocI32", mallocI32Type);
-    mallocI32.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(mallocI32);
-
-    auto mallocI64Type = builder.getFunctionType({builder.getIndexType()},
-                                                 builder.getIndexType());
-    auto mallocI64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocI64", mallocI64Type);
-    mallocI64.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(mallocI64);
-
-    auto mallocF32Type = builder.getFunctionType({builder.getIndexType()},
-                                                 builder.getIndexType());
-    auto mallocF32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocF32", mallocF32Type);
-    mallocF32.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(mallocF32);
-
-    auto mallocF64Type = builder.getFunctionType({builder.getIndexType()},
-                                                 builder.getIndexType());
-    auto mallocF64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocF64", mallocF64Type);
-    mallocF64.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(mallocF64);
-
-    auto cudaMemcpyI32Type = builder.getFunctionType(
-        {builder.getIndexType(), memrefI32, builder.getIndexType()}, {});
-    auto cudaMemcpyI32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyI32", cudaMemcpyI32Type);
-    cudaMemcpyI32.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyI32);
-
-    auto cudaMemcpyI64Type = builder.getFunctionType(
-        {builder.getIndexType(), memrefI64, builder.getIndexType()}, {});
-    auto cudaMemcpyI64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyI64", cudaMemcpyI64Type);
-    cudaMemcpyI64.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyI64);
-
-    auto cudaMemcpyIndexType = builder.getFunctionType(
-        {builder.getIndexType(), memrefIndex, builder.getIndexType()}, {});
-    auto cudaMemcpyIndex = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyIndex", cudaMemcpyIndexType);
-    cudaMemcpyIndex.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyIndex);
-
-    auto cudaMemcpyF32Type = builder.getFunctionType(
-        {builder.getIndexType(), memrefF32, builder.getIndexType()}, {});
-    auto cudaMemcpyF32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyF32", cudaMemcpyF32Type);
-    cudaMemcpyF32.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyF32);
-
-    auto cudaMemcpyF64Type = builder.getFunctionType(
-        {builder.getIndexType(), memrefF64, builder.getIndexType()}, {});
-    auto cudaMemcpyF64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyF64", cudaMemcpyF64Type);
-    cudaMemcpyF64.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyF64);
-
-    auto cudaLaunchKernelT = builder.getFunctionType(
-        {builder.getIndexType(), builder.getIndexType(), builder.getIndexType(),
-         builder.getIndexType(), builder.getIndexType(), builder.getIndexType(),
-         MemRefType::get({ShapedType::kDynamic}, builder.getIndexType()),
-         LLVM::LLVMPointerType::get(builder.getContext()),
-         builder.getIndexType(), builder.getIntegerType(32),
-         builder.getIndexType(), builder.getIndexType()},
-        {});
-    auto cudaLaunchKernel = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaLaunchKernel", cudaLaunchKernelT);
-    cudaLaunchKernel.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaLaunchKernel);
-
-    auto cudaSetModuleImageT = builder.getFunctionType(
-        {LLVM::LLVMPointerType::get(builder.getContext())}, {});
-    auto cudaSetModuleImage = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaSetModuleImage", cudaSetModuleImageT);
-    cudaSetModuleImage.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaSetModuleImage);
-
-    auto cudaFreeT = builder.getFunctionType({builder.getIndexType()}, {});
-    auto cudaFree = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(),
-                                                       "cudaFree", cudaFreeT);
-    cudaFree.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaFree);
-    
-    auto cudaFinitT = builder.getFunctionType({}, {});
-    auto cudaFinit = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(), "cudaFinit", cudaFinitT);
-    cudaFinit.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaFinit);
-
-
-    std::vector<mlir::gpu::LaunchFuncOp> launchOps;
-
-    modOp->walk([&launchOps](mlir::gpu::LaunchFuncOp launchOp) {
-      launchOps.push_back(launchOp);
-    });
-
-    std::set<mlir::func::FuncOp> initFuncs;
-    std::vector<Value> toAlloc;
-    // auto symbols = SymbolTable(modOp);
-
-    for (auto launchOp : launchOps) {
-      auto name =
-          gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
-                                "::" + launchOp.getKernelName().strref())
-                                   .str()];
-
-      if (initFuncs.find(launchOp->getParentOfType<mlir::func::FuncOp>()) ==
-          initFuncs.end()) {
-        builder.setInsertionPointToStart(
-            &launchOp->getParentOfType<mlir::func::FuncOp>()
-                 .getFunctionBody()
-                 .front());
-        Value gpu_code = builder.create<mlir::LLVM::AddressOfOp>(
-            launchOp->getLoc(), LLVM::LLVMPointerType::get(&getContext()),
-            "gpu_code");
-        builder.create<mlir::func::CallOp>(launchOp.getLoc(),
-                                           "cudaSetModuleImage", TypeRange(),
-                                           ValueRange({gpu_code}));
-
-        initFuncs.insert(launchOp->getParentOfType<mlir::func::FuncOp>());
-      }
-      builder.setInsertionPoint(launchOp);
-      auto ttFunc = triton_name_to_triton_func_op[name];
-      Value sharedMem = builder.create<arith::ConstantIntOp>(
-          launchOp->getLoc(),
-          ttFunc->getAttrOfType<IntegerAttr>("triton_gpu.shared").getInt(), 32);
-      launchOp.getDynamicSharedMemorySizeMutable().assign(sharedMem);
-      for (auto &operand : launchOp->getOpOperands()) {
-        // if(!isa<IndexType>(operand.get().getType()) )
-        // {
-        // //   auto i32Operand =
-        // builder.create<arith::IndexCastOp>(operand.get().getLoc(),
-        // builder.getIntegerType(32), operand.get());
-        // //   // operand.set(i32Operand);
-        // //   cudaCallArgs.push_back(i32Operand);
-        // }
-        // else
-        if (isa<MemRefType>(operand.get().getType())) {
-          toAlloc.push_back(operand.get());
-        }
-      }
+    if(failed(specializeGpuHost(builder, modOp, std::string("cuda"))))
+    {
+      return signalPassFailure();
     }
+  //   std::map<std::string, Value> funcs;
+  //   std::map<std::string, std::string> gpu_to_triton_kernel;
+  //   std::map<std::string, triton::FuncOp> triton_name_to_triton_func_op;
 
-    auto cmp = [](Value a, Value b) {
-      return a.getAsOpaquePointer() < b.getAsOpaquePointer();
-    };
-    std::set<Value, bool (*)(Value, Value)> uniqueGpuAllocs(toAlloc.begin(),
-                                                            toAlloc.end(), cmp);
-    for (Value alloc : uniqueGpuAllocs) {
-      MemRefType allocType = mlir::cast<MemRefType>(alloc.getType());
-      mlir::gpu::AllocOp gpuAlloc;
-      if (auto defOp = alloc.getDefiningOp()) {
-        builder.setInsertionPointAfter(defOp);
-      } else if (mlir::isa<BlockArgument>(alloc)) {
-        builder.setInsertionPointToStart(alloc.getParentBlock());
-      } else {
-        assert(false &&
-               "Value has not defining Op and is not a block argument.");
-      }
+  //   std::vector<mlir::gpu::LaunchFuncOp> launchOps;
+  //   modOp->walk([&launchOps](mlir::gpu::LaunchFuncOp launchOp) {
+  //     launchOps.push_back(launchOp);
+  //   });
 
-      if (allocType.hasStaticShape()) {
-        gpuAlloc = builder.create<mlir::gpu::AllocOp>(
-            alloc.getLoc(), allocType, ValueRange(), ValueRange(),
-            ValueRange());
-      } else {
-        std::vector<Value> dynDims;
-        for (size_t i = 0; i < allocType.getShape().size(); i++) {
-          if (allocType.isDynamicDim(i)) {
-            dynDims.push_back(
-                builder.create<memref::DimOp>(alloc.getLoc(), alloc, i));
-          }
-        }
-        gpuAlloc = builder.create<mlir::gpu::AllocOp>(
-            alloc.getLoc(), allocType, ValueRange(), dynDims, ValueRange());
-      }
+  //   std::set<mlir::func::FuncOp> initFuncs;
+  //   std::vector<Value> toAlloc;
 
-      auto op = alloc.getDefiningOp() != NULL
-                    ? alloc.getDefiningOp()->getResult(0)
-                    : alloc;
-      for (auto &use : llvm::make_early_inc_range(op.getUses())) {
-        if (mlir::gpu::LaunchFuncOp launchOp =
-                dyn_cast<mlir::gpu::LaunchFuncOp>(use.getOwner())) {
-          builder.setInsertionPoint(launchOp);
-          builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
-                                              ValueRange(),
-                                              gpuAlloc.getMemref(), alloc);
-          use.set(gpuAlloc.getMemref());
-          builder.setInsertionPointAfter(launchOp);
-          builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
-                                              ValueRange(), alloc,
-                                              gpuAlloc.getMemref());
-        }
-      }
-    }
+  //   for (auto launchOp : launchOps) {
+  //     auto name =
+  //         gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
+  //                               "::" + launchOp.getKernelName().strref())
+  //                                  .str()];
 
-    std::vector<mlir::gpu::AllocOp> gpuAllocs;
-    modOp->walk([&gpuAllocs](mlir::gpu::AllocOp gpuAllocOp) {
-      gpuAllocs.push_back(gpuAllocOp);
-    });
+  //     if (initFuncs.find(launchOp->getParentOfType<mlir::func::FuncOp>()) ==
+  //         initFuncs.end()) {
+  //       builder.setInsertionPointToStart(
+  //           &launchOp->getParentOfType<mlir::func::FuncOp>()
+  //                .getFunctionBody()
+  //                .front());
+  //       Value gpu_code = builder.create<mlir::LLVM::AddressOfOp>(
+  //           launchOp->getLoc(), LLVM::LLVMPointerType::get(&getContext()),
+  //           "gpu_code");
+  //       builder.create<mlir::func::CallOp>(launchOp.getLoc(),
+  //                                          "cudaSetModuleImage", TypeRange(),
+  //                                          ValueRange({gpu_code}));
 
-    for (auto gpuAlloc : gpuAllocs) {
-      builder.setInsertionPoint(gpuAlloc->getBlock()->getTerminator());
-      builder.create<mlir::gpu::DeallocOp>(gpuAlloc->getLoc(), ValueRange(),
-                                           gpuAlloc.getResult(0));
+  //       initFuncs.insert(launchOp->getParentOfType<mlir::func::FuncOp>());
+  //     }
+  //   }
 
-      builder.setInsertionPointAfter(gpuAlloc);
-      Value allocSize;
-      if (gpuAlloc.getMemref().getType().hasStaticShape()) {
-        allocSize = builder
-                        .create<mlir::arith::ConstantIndexOp>(
-                            gpuAlloc->getLoc(),
-                            gpuAlloc.getMemref().getType().getNumElements())
-                        .getResult();
-      } else {
-        allocSize = get_memref_num_elements(builder.getContext(), builder, gpuAlloc.getLoc(), gpuAlloc.getMemref());
-      }
+  //   std::vector<mlir::gpu::AllocOp> gpuAllocs;
+  //   modOp->walk([&gpuAllocs](mlir::gpu::AllocOp gpuAllocOp) {
+  //     gpuAllocs.push_back(gpuAllocOp);
+  //   });
 
-      // builder.create<memref::DimOp>(gpuAlloc.getLoc(), gpuAlloc.getMemref(),
-      // 0);
-      if (FloatType floatType = mlir::dyn_cast<FloatType>(
-              gpuAlloc.getMemref().getType().getElementType())) {
-        int width = floatType.getWidth();
-        auto cudaOp = builder.create<mlir::func::CallOp>(
-            gpuAlloc->getLoc(), "cudaMallocF" + std::to_string(width),
-            TypeRange(builder.getIndexType()), ValueRange(allocSize));
-        gpuAlloc->replaceAllUsesWith(cudaOp);
-      } else if (IntegerType intType = mlir::dyn_cast<IntegerType>(
-                     gpuAlloc.getMemref().getType().getElementType())) {
-        int width = intType.getWidth();
-        auto cudaOp = builder.create<mlir::func::CallOp>(
-            gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(width),
-            TypeRange(builder.getIndexType()), ValueRange(allocSize));
-        gpuAlloc->replaceAllUsesWith(cudaOp);
-      } else if (IndexType intType = mlir::dyn_cast<IndexType>(
-                     gpuAlloc.getMemref().getType().getElementType())) {
-        auto cudaOp = builder.create<mlir::func::CallOp>(
-            gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(64),
-            TypeRange(builder.getIndexType()), ValueRange(allocSize));
-        gpuAlloc->replaceAllUsesWith(cudaOp);
-      }
-      gpuAlloc->erase();
-    }
+  //   for (auto gpuAlloc : gpuAllocs) {
+  //     builder.setInsertionPoint(gpuAlloc->getBlock()->getTerminator());
+  //     builder.create<mlir::gpu::DeallocOp>(gpuAlloc->getLoc(), ValueRange(),
+  //                                          gpuAlloc.getResult(0));
 
-    std::vector<mlir::gpu::MemcpyOp> gpuCopies;
-    modOp->walk([&gpuCopies](mlir::gpu::MemcpyOp gpuCopy) {
-      gpuCopies.push_back(gpuCopy);
-    });
+  //     builder.setInsertionPointAfter(gpuAlloc);
+  //     Value allocSize;
+  //     if (gpuAlloc.getMemref().getType().hasStaticShape()) {
+  //       allocSize = builder
+  //                       .create<mlir::arith::ConstantIndexOp>(
+  //                           gpuAlloc->getLoc(),
+  //                           gpuAlloc.getMemref().getType().getNumElements())
+  //                       .getResult();
+  //     } else {
+  //       allocSize = get_memref_num_elements(builder.getContext(), builder, gpuAlloc.getLoc(), gpuAlloc.getMemref());
+  //     }
 
-    llvm::SmallMapVector<TypedValue<BaseMemRefType>, TypedValue<BaseMemRefType>, 4> memref_to_collapsed_memref;
-    for (auto cpy : gpuCopies) {
-      builder.setInsertionPoint(cpy);
-      auto hToD = builder.create<arith::ConstantIndexOp>(cpy->getLoc(), 0);
-      auto dToH = builder.create<arith::ConstantIndexOp>(cpy->getLoc(), 1);
+  //     // builder.create<memref::DimOp>(gpuAlloc.getLoc(), gpuAlloc.getMemref(),
+  //     // 0);
+  //     if (FloatType floatType = mlir::dyn_cast<FloatType>(
+  //             gpuAlloc.getMemref().getType().getElementType())) {
+  //       int width = floatType.getWidth();
+  //       auto cudaOp = builder.create<mlir::func::CallOp>(
+  //           gpuAlloc->getLoc(), "cudaMallocF" + std::to_string(width),
+  //           TypeRange(builder.getIndexType()), ValueRange(allocSize));
+  //       gpuAlloc->replaceAllUsesWith(cudaOp);
+  //     } else if (IntegerType intType = mlir::dyn_cast<IntegerType>(
+  //                    gpuAlloc.getMemref().getType().getElementType())) {
+  //       int width = intType.getWidth();
+  //       auto cudaOp = builder.create<mlir::func::CallOp>(
+  //           gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(width),
+  //           TypeRange(builder.getIndexType()), ValueRange(allocSize));
+  //       gpuAlloc->replaceAllUsesWith(cudaOp);
+  //     } else if (IndexType intType = mlir::dyn_cast<IndexType>(
+  //                    gpuAlloc.getMemref().getType().getElementType())) {
+  //       auto cudaOp = builder.create<mlir::func::CallOp>(
+  //           gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(64),
+  //           TypeRange(builder.getIndexType()), ValueRange(allocSize));
+  //       gpuAlloc->replaceAllUsesWith(cudaOp);
+  //     }
+  //     gpuAlloc->erase();
+  //   }
 
-      if (cpy.getOperand(0).getDefiningOp() &&
-          (isa<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()) &&
-           cast<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp())
-               .getCallee()
-               .starts_with("cudaMalloc"))) {
-        if(memref_to_collapsed_memref.find(mlir::cast<TypedValue<BaseMemRefType>>(cpy.getSrc())) == memref_to_collapsed_memref.end())
-        {
-          TypedValue<MemRefType> collapsedMemref = collapseMemref(cpy.getSrc(), builder);
-          auto cast = builder.create<mlir::memref::CastOp>(
-              cpy->getLoc(),
-              MemRefType::get({ShapedType::kDynamic},
-                              collapsedMemref.getType().getElementType()),
-              collapsedMemref);
-          memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getSrc())] = cast.getResult();
-        }
-        mlir::Value cast = memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getSrc())];
+  //   std::vector<mlir::gpu::MemcpyOp> gpuCopies;
+  //   modOp->walk([&gpuCopies](mlir::gpu::MemcpyOp gpuCopy) {
+  //     gpuCopies.push_back(gpuCopy);
+  //   });
+
+  //   llvm::SmallMapVector<TypedValue<BaseMemRefType>, TypedValue<BaseMemRefType>, 4> memref_to_collapsed_memref;
+  //   for (auto cpy : gpuCopies) {
+  //     builder.setInsertionPoint(cpy);
+  //     auto hToD = builder.create<arith::ConstantIndexOp>(cpy->getLoc(), 0);
+  //     auto dToH = builder.create<arith::ConstantIndexOp>(cpy->getLoc(), 1);
+
+  //     if (cpy.getOperand(0).getDefiningOp() &&
+  //         (isa<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()) &&
+  //          cast<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp())
+  //              .getCallee()
+  //              .starts_with("cudaMalloc"))) {
+  //       if(memref_to_collapsed_memref.find(mlir::cast<TypedValue<BaseMemRefType>>(cpy.getSrc())) == memref_to_collapsed_memref.end())
+  //       {
+  //         TypedValue<MemRefType> collapsedMemref = mlir::tensorAlgebra::collapseMemref(cpy.getSrc(), builder);
+  //         auto cast = builder.create<mlir::memref::CastOp>(
+  //             cpy->getLoc(),
+  //             MemRefType::get({ShapedType::kDynamic},
+  //                             collapsedMemref.getType().getElementType()),
+  //             collapsedMemref);
+  //         memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getSrc())] = cast.getResult();
+  //       }
+  //       mlir::Value cast = memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getSrc())];
 
 
-        if (IntegerType intType = mlir::dyn_cast<IntegerType>(
-                mlir::cast<MemRefType>(cpy.getOperand(1).getType())
-                    .getElementType())) {
-          int width = intType.getWidth();
-          builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
-              ValueRange({cpy.getOperand(0), cast, hToD}));
-        } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
-                       mlir::cast<MemRefType>(cpy.getOperand(1).getType())
-                           .getElementType())) {
-          int width = floatType.getWidth();
-          builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
-              ValueRange({cpy.getOperand(0), cast, hToD}));
-        } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
-                       mlir::cast<MemRefType>(cpy.getOperand(1).getType())
-                           .getElementType())) {
-          builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
-              ValueRange({cpy.getOperand(0), cast, hToD}));
-        }
-      } else if (cpy.getOperand(1).getDefiningOp() &&
-                 (isa<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()) &&
-                  cast<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp())
-                      .getCallee()
-                      .starts_with("cudaMalloc"))) {
-        if(memref_to_collapsed_memref.find(mlir::cast<TypedValue<BaseMemRefType>>(cpy.getDst())) == memref_to_collapsed_memref.end())
-        {
-          TypedValue<MemRefType> collapsedMemref = collapseMemref(cpy.getDst(), builder);
-          auto cast = builder.create<mlir::memref::CastOp>(
-              cpy->getLoc(),
-              MemRefType::get({ShapedType::kDynamic},
-                              collapsedMemref.getType().getElementType()),
-              collapsedMemref);
-          memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getDst())] = cast.getResult();
-        }
-        mlir::Value cast = memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getDst())];
+  //       if (IntegerType intType = mlir::dyn_cast<IntegerType>(
+  //               mlir::cast<MemRefType>(cpy.getOperand(1).getType())
+  //                   .getElementType())) {
+  //         int width = intType.getWidth();
+  //         builder.create<mlir::func::CallOp>(
+  //             cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
+  //             ValueRange({cpy.getOperand(0), cast, hToD}));
+  //       } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
+  //                      mlir::cast<MemRefType>(cpy.getOperand(1).getType())
+  //                          .getElementType())) {
+  //         int width = floatType.getWidth();
+  //         builder.create<mlir::func::CallOp>(
+  //             cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
+  //             ValueRange({cpy.getOperand(0), cast, hToD}));
+  //       } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
+  //                      mlir::cast<MemRefType>(cpy.getOperand(1).getType())
+  //                          .getElementType())) {
+  //         builder.create<mlir::func::CallOp>(
+  //             cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
+  //             ValueRange({cpy.getOperand(0), cast, hToD}));
+  //       }
+  //     } else if (cpy.getOperand(1).getDefiningOp() &&
+  //                (isa<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()) &&
+  //                 cast<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp())
+  //                     .getCallee()
+  //                     .starts_with("cudaMalloc"))) {
+  //       if(memref_to_collapsed_memref.find(mlir::cast<TypedValue<BaseMemRefType>>(cpy.getDst())) == memref_to_collapsed_memref.end())
+  //       {
+  //         TypedValue<MemRefType> collapsedMemref = mlir::tensorAlgebra::collapseMemref(cpy.getDst(), builder);
+  //         auto cast = builder.create<mlir::memref::CastOp>(
+  //             cpy->getLoc(),
+  //             MemRefType::get({ShapedType::kDynamic},
+  //                             collapsedMemref.getType().getElementType()),
+  //             collapsedMemref);
+  //         memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getDst())] = cast.getResult();
+  //       }
+  //       mlir::Value cast = memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getDst())];
 
-        if (IntegerType intType = mlir::dyn_cast<IntegerType>(
-                mlir::cast<MemRefType>(cpy.getOperand(0).getType())
-                    .getElementType())) {
-          int width = intType.getWidth();
-          builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
-              ValueRange({cpy.getOperand(1), cast, dToH}));
-        } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
-                       mlir::cast<MemRefType>(cpy.getOperand(0).getType())
-                           .getElementType())) {
-          int width = floatType.getWidth();
-          builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
-              ValueRange({cpy.getOperand(1), cast, dToH}));
-        } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
-                       mlir::cast<MemRefType>(cpy.getOperand(0).getType())
-                           .getElementType())) {
-          builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
-              ValueRange({cpy.getOperand(1), cast, dToH}));
-        }
-      }
+  //       if (IntegerType intType = mlir::dyn_cast<IntegerType>(
+  //               mlir::cast<MemRefType>(cpy.getOperand(0).getType())
+  //                   .getElementType())) {
+  //         int width = intType.getWidth();
+  //         builder.create<mlir::func::CallOp>(
+  //             cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
+  //             ValueRange({cpy.getOperand(1), cast, dToH}));
+  //       } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
+  //                      mlir::cast<MemRefType>(cpy.getOperand(0).getType())
+  //                          .getElementType())) {
+  //         int width = floatType.getWidth();
+  //         builder.create<mlir::func::CallOp>(
+  //             cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
+  //             ValueRange({cpy.getOperand(1), cast, dToH}));
+  //       } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
+  //                      mlir::cast<MemRefType>(cpy.getOperand(0).getType())
+  //                          .getElementType())) {
+  //         builder.create<mlir::func::CallOp>(
+  //             cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
+  //             ValueRange({cpy.getOperand(1), cast, dToH}));
+  //       }
+  //     }
 
-      cpy->erase();
-    }
+  //     cpy->erase();
+  //   }
 
-    for (auto launchOp : launchOps) {
-      builder.setInsertionPoint(launchOp);
-      auto zeroIndex =
-          builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), 0);
+  //   for (auto launchOp : launchOps) {
+  //     builder.setInsertionPoint(launchOp);
+  //     auto zeroIndex =
+  //         builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), 0);
 
-      int64_t numOps = launchOp.getNumKernelOperands();
-      std::vector<Value> ptr_ops;
-      // memref::AllocaOp temp = builder.create<mlir::memref::AllocaOp>(
-      //     launchOp->getLoc(),
-      //     MemRefType::get({1}, launchOp.getGridSizeX().getType()));
-      // builder.create<memref::StoreOp>(launchOp->getLoc(),
-      //                                 launchOp.getGridSizeY(), temp,
-      //                                 ValueRange({zeroIndex}));
-      // ptr_ops.push_back(
-      //     builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
-      //         launchOp->getLoc(), temp));
-      // temp = builder.create<mlir::memref::AllocaOp>(
-      //     launchOp->getLoc(),
-      //     MemRefType::get({1}, launchOp.getGridSizeY().getType()));
-      // builder.create<memref::StoreOp>(launchOp->getLoc(),
-      //                                 launchOp.getGridSizeX(), temp,
-      //                                 ValueRange({zeroIndex}));
-      // ptr_ops.push_back(
-      //     builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
-      //         launchOp->getLoc(), temp));
+  //     int64_t numOps = launchOp.getNumKernelOperands();
+  //     std::vector<Value> ptr_ops;
+  //     // memref::AllocaOp temp = builder.create<mlir::memref::AllocaOp>(
+  //     //     launchOp->getLoc(),
+  //     //     MemRefType::get({1}, launchOp.getGridSizeX().getType()));
+  //     // builder.create<memref::StoreOp>(launchOp->getLoc(),
+  //     //                                 launchOp.getGridSizeY(), temp,
+  //     //                                 ValueRange({zeroIndex}));
+  //     // ptr_ops.push_back(
+  //     //     builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
+  //     //         launchOp->getLoc(), temp));
+  //     // temp = builder.create<mlir::memref::AllocaOp>(
+  //     //     launchOp->getLoc(),
+  //     //     MemRefType::get({1}, launchOp.getGridSizeY().getType()));
+  //     // builder.create<memref::StoreOp>(launchOp->getLoc(),
+  //     //                                 launchOp.getGridSizeX(), temp,
+  //     //                                 ValueRange({zeroIndex}));
+  //     // ptr_ops.push_back(
+  //     //     builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
+  //     //         launchOp->getLoc(), temp));
 
-      for (auto op : launchOp.getKernelOperands()) {
-        if (mlir::isa<MemRefType>(op.getType())) {
-          ptr_ops.push_back(
-              builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
-                  launchOp->getLoc(), op));
-        } else {
-          auto temp = builder.create<mlir::memref::AllocaOp>(
-              launchOp->getLoc(), MemRefType::get({1}, op.getType()));
-          builder.create<memref::StoreOp>(launchOp->getLoc(), op, temp,
-                                          ValueRange({zeroIndex}));
-          ptr_ops.push_back(
-              builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
-                  launchOp->getLoc(), temp));
-        }
-      }
+  //     for (auto op : launchOp.getKernelOperands()) {
+  //       if (mlir::isa<MemRefType>(op.getType())) {
+  //         ptr_ops.push_back(
+  //             builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
+  //                 launchOp->getLoc(), op));
+  //       } else {
+  //         auto temp = builder.create<mlir::memref::AllocaOp>(
+  //             launchOp->getLoc(), MemRefType::get({1}, op.getType()));
+  //         builder.create<memref::StoreOp>(launchOp->getLoc(), op, temp,
+  //                                         ValueRange({zeroIndex}));
+  //         ptr_ops.push_back(
+  //             builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
+  //                 launchOp->getLoc(), temp));
+  //       }
+  //     }
 
-      auto args = builder.create<memref::AllocaOp>(
-          launchOp->getLoc(),
-          MemRefType::get({numOps}, builder.getIndexType()));
-      auto args_dynamic = builder.create<memref::CastOp>(
-          launchOp->getLoc(),
-          MemRefType::get({ShapedType::kDynamic},
-                          args.getType().getElementType()),
-          args);
-      for (size_t i = 0; i < ptr_ops.size(); i++) {
-        Value op = ptr_ops[i];
-        builder.create<memref::StoreOp>(
-            launchOp->getLoc(), op, args,
-            builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), i)
-                .getResult());
-      }
-      std::string &funcName =
-          gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
-                                "::" + launchOp.getKernelName().strref())
-                                   .str()];
-      if (funcs.find(funcName) == funcs.end()) {
-        // We need the global string to include the \0 character so that it is
-        // correctly read by the cuda lib Hence the StringRef(funcName.c_str(),
-        // funcName.size()+1)
-        funcs[funcName] = LLVM::createGlobalString(
-            modOp->getLoc(), builder, funcName + "_str",
-            StringRef(funcName.c_str(), funcName.size() + 1),
-            LLVM::linkage::Linkage::Private);
-      }
+  //     auto args = builder.create<memref::AllocaOp>(
+  //         launchOp->getLoc(),
+  //         MemRefType::get({numOps}, builder.getIndexType()));
+  //     auto args_dynamic = builder.create<memref::CastOp>(
+  //         launchOp->getLoc(),
+  //         MemRefType::get({ShapedType::kDynamic},
+  //                         args.getType().getElementType()),
+  //         args);
+  //     for (size_t i = 0; i < ptr_ops.size(); i++) {
+  //       Value op = ptr_ops[i];
+  //       builder.create<memref::StoreOp>(
+  //           launchOp->getLoc(), op, args,
+  //           builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), i)
+  //               .getResult());
+  //     }
+  //     std::string &funcName =
+  //         gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
+  //                               "::" + launchOp.getKernelName().strref())
+  //                                  .str()];
+  //     if (funcs.find(funcName) == funcs.end()) {
+  //       // We need the global string to include the \0 character so that it is
+  //       // correctly read by the cuda lib Hence the StringRef(funcName.c_str(),
+  //       // funcName.size()+1)
+  //       funcs[funcName] = LLVM::createGlobalString(
+  //           modOp->getLoc(), builder, funcName + "_str",
+  //           StringRef(funcName.c_str(), funcName.size() + 1),
+  //           LLVM::linkage::Linkage::Private);
+  //     }
 
-      auto name =
-          gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
-                                "::" + launchOp.getKernelName().strref())
-                                   .str()];
-      auto ttFunc = triton_name_to_triton_func_op[name];
-      Value numWarps = builder.create<arith::ConstantIndexOp>(
-          launchOp->getLoc(),
-          ttFunc->getAttrOfType<IntegerAttr>("triton_gpu.num-warps").getInt());
-      Value threadsPerWarp = builder.create<arith::ConstantIndexOp>(
-          launchOp->getLoc(),
-          ttFunc->getAttrOfType<IntegerAttr>("triton_gpu.threads-per-warp")
-              .getInt());
-      builder.create<mlir::func::CallOp>(
-          launchOp->getLoc(), "cudaLaunchKernel", TypeRange(),
-          ValueRange({launchOp.getGridSizeX(), launchOp.getGridSizeY(),
-                      launchOp.getGridSizeZ(), launchOp.getBlockSizeX(),
-                      launchOp.getBlockSizeY(), launchOp.getBlockSizeZ(),
-                      args_dynamic, funcs[funcName],
-                      builder.create<arith::ConstantIndexOp>(launchOp->getLoc(),
-                                                             funcName.size()),
-                      launchOp.getDynamicSharedMemorySize(), numWarps,
-                      threadsPerWarp}));
-      launchOp->erase();
-    }
+  //     auto name =
+  //         gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
+  //                               "::" + launchOp.getKernelName().strref())
+  //                                  .str()];
+  //     builder.create<mlir::func::CallOp>(
+  //         launchOp->getLoc(), "cudaLaunchKernel", TypeRange(),
+  //         ValueRange({launchOp.getGridSizeX(), launchOp.getGridSizeY(),
+  //                     launchOp.getGridSizeZ(), launchOp.getBlockSizeX(),
+  //                     launchOp.getBlockSizeY(), launchOp.getBlockSizeZ(),
+  //                     args_dynamic, funcs[funcName],
+  //                     builder.create<arith::ConstantIndexOp>(launchOp->getLoc(),
+  //                                                            funcName.size()),
+  //                     launchOp.getDynamicSharedMemorySize()}));
+  //     launchOp->erase();
+  //   }
 
-    std::vector<mlir::gpu::DeallocOp> gpuDeallocs;
-    modOp->walk([&gpuDeallocs](mlir::gpu::DeallocOp gpuDeallocOp) {
-      gpuDeallocs.push_back(gpuDeallocOp);
-    });
+  //   std::vector<mlir::gpu::DeallocOp> gpuDeallocs;
+  //   modOp->walk([&gpuDeallocs](mlir::gpu::DeallocOp gpuDeallocOp) {
+  //     gpuDeallocs.push_back(gpuDeallocOp);
+  //   });
 
-    for (auto dealloc : gpuDeallocs) {
-      builder.setInsertionPoint(dealloc);
-      builder.create<mlir::func::CallOp>(dealloc->getLoc(), "cudaFree",
-                                         TypeRange(),
-                                         ValueRange(dealloc->getOperand(0)));
-      dealloc.erase();
-    }
-    func::FuncOp funcOp = *initFuncs.begin();
-    builder.setInsertionPoint(funcOp.getBody().front().getTerminator());
-
-    builder.create<mlir::func::CallOp>(funcOp.getBody().front().getTerminator()->getLoc(), "cudaFinit", TypeRange(), ValueRange());
-    modOp->walk([](mlir::triton::FuncOp TTFuncOp) {
-      TTFuncOp.erase();
-    });
-    modOp->walk([](mlir::gpu::GPUModuleOp gpuMod) {gpuMod.erase();});
+  //   for (auto dealloc : gpuDeallocs) {
+  //     builder.setInsertionPoint(dealloc);
+  //     builder.create<mlir::func::CallOp>(dealloc->getLoc(), "cudaFree",
+  //                                        TypeRange(),
+  //                                        ValueRange(dealloc->getOperand(0)));
+  //     dealloc.erase();
+  //   }
+  //   modOp->walk([](mlir::triton::FuncOp TTFuncOp) { TTFuncOp.erase(); });
+  //   modOp->walk([](mlir::gpu::GPUModuleOp gpuMod) { gpuMod.erase(); });
   }
 };
 

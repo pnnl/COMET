@@ -2265,6 +2265,45 @@ namespace mlir
       return reassociation;
     }
 
+    TypedValue<MemRefType> collapseMemref(TypedValue<MemRefType> val, mlir::OpBuilder& builder)
+    {
+        
+      auto memref = mlir::cast<mlir::MemRefType>(val.getType());
+      if (memref.getRank() == 1)
+      {
+          return val;
+      }
+
+      llvm::SmallVector<llvm::SmallVector<int64_t,2>,1> indices;
+      indices.push_back(llvm::SmallVector<int64_t,2>());
+      for(int64_t i = 0; i < memref.getRank(); i++)
+      {
+          indices[0].push_back(i);
+      }
+
+        /// Collapse memref to 1D
+      auto collapsedMemref = builder.create<mlir::memref::CollapseShapeOp>(val.getLoc(), val, mlir::ArrayRef(indices)).getResult();
+      return collapsedMemref;
+    }
+
+    mlir::Value get_memref_num_elements(mlir::MLIRContext* ctx, mlir::OpBuilder& builder, mlir::Location loc, mlir::Value memref) 
+    {
+        mlir::Value rank = builder.create<mlir::memref::RankOp>(loc, memref);
+        mlir::Value zero = builder.create<mlir::arith::ConstantIndexOp>(loc, 0);
+        mlir::Value one = builder.create<mlir::arith::ConstantIndexOp>(loc, 1);
+
+        mlir::scf::ForOp forOp = builder.create<mlir::scf::ForOp>(loc, zero, rank, one, mlir::ValueRange({one}));
+        mlir::Block* body = forOp.getBody();
+        mlir::Value inductionvar = forOp.getInductionVar();
+        mlir::IRRewriter::InsertPoint ip  = builder.saveInsertionPoint();
+        builder.setInsertionPointToStart(body);
+        mlir::Value dim = builder.create<mlir::memref::DimOp>(loc, memref, inductionvar);
+        auto mul = builder.create<mlir::arith::MulIOp>(loc, forOp.getRegionIterArg(0), dim);
+        builder.create<mlir::scf::YieldOp>(loc, mlir::ValueRange({mul}));
+        builder.restoreInsertionPoint(ip);
+        
+        return forOp.getResult(0);
+    }
   } //// namespace tensorAlgebra
 } //// namespace mlir
 

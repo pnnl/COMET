@@ -145,8 +145,7 @@ HipLaunchKernel(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ,
                 int64_t tritonBlockX, int64_t tritonBlockY,
                 int64_t tritonBlockZ, void *ptr, void *aligned_ptr,
                 int64_t offset, int64_t size, int64_t stride, char *kernel,
-                int64_t kernel_name_size, int64_t sharedMem, int64_t numWraps,
-                int64_t threadsPerWarp) {
+                int64_t kernel_name_size, int64_t sharedMem) {
   hipFunction_t hipFunction = NULL;
   unsigned blocksPerGridX = std::min(realblocksX, MAX_NUM_BLOCKS_X);
   unsigned blocksPerGridY = std::min(realblocksY, MAX_NUM_BLOCKS_Y);
@@ -154,6 +153,6 @@ HipLaunchKernel(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ,
   HIP_CHECK(hipModuleGetFunction(&hipFunction, hipModule, kernel));
   void **cast_args = (void **)aligned_ptr;
   HIP_CHECK(hipModuleLaunchKernel(hipFunction, blocksPerGridX, blocksPerGridY,
-                                  blocksPerGridZ, numWraps * threadsPerWarp, 1,
-                                  1, sharedMem, NULL, cast_args, NULL));
+                                  blocksPerGridZ, tritonBlockX, tritonBlockY,
+                                  tritonBlockZ, sharedMem, NULL, cast_args, NULL));
 }

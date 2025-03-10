@@ -231,6 +231,8 @@ namespace mlir
                         std::vector<std::string> &formats);
 
     void replaceOperands(Operation *itComputeOp, std::vector<Value> newComputeOps);
+    TypedValue<MemRefType> collapseMemref(TypedValue<MemRefType> val, mlir::OpBuilder& builder);
+    mlir::Value get_memref_num_elements(mlir::MLIRContext* ctx, mlir::OpBuilder& builder, mlir::Location loc, mlir::Value memref);
 
     // For TTGT transformations
     struct ContractionPlan
