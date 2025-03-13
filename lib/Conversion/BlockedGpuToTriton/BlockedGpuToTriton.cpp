@@ -66,7 +66,7 @@ class ConvertGpuFuncToTritonFunc : public OpConversionPattern<mlir::gpu::GPUFunc
         }
 
         auto tritonFuncType = rewriter.getFunctionType(TypeRange(tritonFuncTypes), gpuFunc.getFunctionType().getResults());
-        auto tritonFunc = rewriter.create<triton::FuncOp>(gpuFunc->getLoc(), "tt_"+gpuFunc.getName().str(), tritonFuncType);
+        auto tritonFunc = rewriter.create<triton::FuncOp>(gpuFunc->getLoc(), "tt_"+ gpuModuleOp.getName().str() +gpuFunc.getName().str(), tritonFuncType);
         auto ttFuncBlock = tritonFunc.addEntryBlock();
         rewriter.setInsertionPointToStart(ttFuncBlock);
         size_t prev = 0;

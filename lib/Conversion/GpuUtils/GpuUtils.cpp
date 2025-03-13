@@ -1,10 +1,14 @@
 #include "comet/Dialect/Utils/Utils.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
+#include <functional>
 #include <map>
 using namespace mlir;
 
@@ -236,7 +240,8 @@ mlir::LogicalResult specializeGpuHost(mlir::OpBuilder& builder, mlir::ModuleOp m
             builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), i)
                 .getResult());
       }
-      std::string funcName = "tt_"+launchOp.getKernelName().strref().str();
+      
+      std::string funcName = "tt_"+ launchOp.getKernelModuleName().str() + launchOp.getKernelName().strref().str();
       if (funcs.find(funcName) == funcs.end()) {
         // We need the global string to include the \0 character so that it is
         // correctly read by the cuda lib Hence the StringRef(funcName.c_str(),
@@ -387,4 +392,117 @@ void declare_vendor_funcs(OpBuilder& builder, ModuleOp modOp, std::string vendor
   auto cudaFinit = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(), vendor_prefix+"Finit", cudaFinitT);
   cudaFinit.setVisibility(mlir::SymbolTable::Visibility::Private);
   modOp.push_back(cudaFinit);
+}
+
+mlir::LogicalResult specializeGpuKernel(mlir::OpBuilder& builder, mlir::ModuleOp modOp, mlir::tensorAlgebra::GPUCompilationFormat codeFormat, Attribute target, std::function<bool (ModuleOp& mod)> add_ttir_passes, std::function<bool (ModuleOp& mod)> add_ttgir_passes, std::function<bool (ModuleOp& mod)> add_llir_passes)
+{
+  std::vector<mlir::triton::FuncOp> TTFuncs;
+  modOp->walk([&TTFuncs](mlir::triton::FuncOp op) { TTFuncs.push_back(op); });
+
+  auto tempMod = builder.create<mlir::gpu::GPUModuleOp>(modOp->getLoc(), "gpu_module", target);
+  std::vector<ModuleOp> tempMods;
+  if (TTFuncs.empty()) {
+    return failure();
+  }
+  for (auto ttFunc : TTFuncs) {
+    auto tempMod = ModuleOp::create(modOp.getLoc());
+    OpBuilder builder(tempMod.getBodyRegion());
+    builder.clone(*ttFunc.getOperation());
+
+    if (!add_ttir_passes(tempMod)) {
+      return failure();
+    }
+
+    if (!add_ttgir_passes(tempMod)) {
+      return failure();
+    }
+
+    if (!add_llir_passes(tempMod)) {
+      return failure();
+    }
+
+    auto oldAttrs = ttFunc->getAttrs().vec();
+
+    oldAttrs.insert(oldAttrs.end(), tempMod->getAttrs().begin(),
+                    tempMod->getAttrs().end());
+    // ttFunc->setAttrs(tempMod->getAttrs());
+    ttFunc->setAttrs(oldAttrs);
+    tempMods.push_back(tempMod);
+  }
+
+  llvm::SmallMapVector<StringRef, bool, 4> glob_symbols;
+  // We have lowered Triton kernels to LLVM, now we need to add them to the
+  // gpu.module
+  builder.setInsertionPointToStart(&tempMod.getBodyRegion().front());
+  for (auto mod : tempMods) {
+    for (auto &op : *mod.getBody()) {
+      // Triton will insert one "global_smem" symbol per module so we have to only keep the first
+      if(LLVM::GlobalOp glob = mlir::dyn_cast<LLVM::GlobalOp>(op))
+      {
+        if(glob_symbols.find(glob.getSymName()) == glob_symbols.end() )
+        {
+          glob_symbols[glob.getSymName()] = true;
+          builder.clone(op);
+        }
+        else
+        {
+          assert(glob.getSymName() == "global_smem");
+        }
+      }
+      else
+      {
+        builder.clone(op);
+      }
+    }
+  }
+
+  // GPU dialect verifier expects this
+  modOp->setAttr("gpu.container_module", builder.getUnitAttr());
+
+  // The function transformGpuModulesToBinaries expects a module that contains
+  // gpu.module(s), so we create one with the kernels we want to convert to
+  // cubin
+  auto tempOuterMod = ModuleOp::create(modOp.getLoc());
+  OpBuilder gbuilder(tempOuterMod.getBodyRegion());
+  gbuilder.clone(*tempMod);
+  gpu::TargetOptions opts;
+  if (codeFormat ==
+      mlir::tensorAlgebra::GPUCompilationFormat::Assembly) {
+    opts = gpu::TargetOptions({}, {}, {}, gpu::CompilationTarget::Assembly);
+  } else if (codeFormat ==
+             mlir::tensorAlgebra::GPUCompilationFormat::Binary) {
+    opts = gpu::TargetOptions({}, {}, {}, gpu::CompilationTarget::Binary);
+  } else if (codeFormat ==
+             mlir::tensorAlgebra::GPUCompilationFormat::Fatbin) {
+    opts = gpu::TargetOptions({}, {}, {}, gpu::CompilationTarget::Fatbin);
+  } else {
+    assert(false && "Unexpected gpu compilation code format");
+  }
+  auto res =
+      mlir::gpu::transformGpuModulesToBinaries(tempOuterMod, nullptr, opts);
+  if (res.failed()) 
+  {
+    return failure();
+  }
+
+  builder.setInsertionPointToStart(modOp.getBody());
+
+  // GPU kernels are now converted to cubin, add them to the main module as
+  // global strings
+  for (auto &op : *tempOuterMod.getBody()) {
+    if (auto binOp = dyn_cast<mlir::gpu::BinaryOp>(op)) {
+      auto result = mlir::cast<gpu::ObjectAttr>(*binOp.getObjects().begin())
+                        .getObject()
+                        .str();
+      auto type = LLVM::LLVMArrayType::get(
+          IntegerType::get(builder.getContext(), 8), result.size());
+      builder.setInsertionPointToStart(modOp.getBody());
+      builder.create<LLVM::GlobalOp>(
+          modOp->getLoc(), type, /*isConstant=*/false,
+          LLVM::Linkage::Internal, "gpu_code", builder.getStringAttr(result),
+          /*alignment=*/32);
+    }
+  }
+
+  return success();
 }

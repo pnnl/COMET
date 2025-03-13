@@ -30,6 +30,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/NVVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Builders.h"
@@ -77,27 +78,12 @@
 
 using namespace mlir;
 
-class LowerTritonDeviceToCuda
-    : public mlir::comet::LowerTritonDeviceToCudaBase<LowerTritonDeviceToCuda> {
-public:
-  LowerTritonDeviceToCuda() = default;
+namespace cuda_device {
 
-  LowerTritonDeviceToCuda(
-      int numWarps, int threadsPerWarp, int numCTAs, int numStages,
-      int computeCapability,
-      mlir::tensorAlgebra::GPUCompilationFormat codeFormat) {
-
-    this->numWarps = numWarps;
-    this->threadsPerWarp = threadsPerWarp;
-    this->numCTAs = numCTAs;
-    this->numStages = numStages;
-    this->computeCapability = computeCapability;
-    this->codeFormat = codeFormat;
-  }
-
-  bool add_ttir_passes(ModuleOp &mod) {
+  bool add_ttir_passes(ModuleOp &mod) 
+  {
     PassManager pm(mod.getContext());
-
+    
     pm.addPass(createInlinerPass());
     pm.addPass(triton::createRewriteTensorPointerPass());
     pm.addPass(triton::createCombineOpsPass());
@@ -107,18 +93,18 @@ public:
     pm.addPass(createLoopInvariantCodeMotionPass());
     pm.addPass(triton::createLoopUnrollPass());
     if (failed(pm.run(mod))) {
-      signalPassFailure();
       return false;
     }
     return true;
   }
 
-  bool add_ttgir_passes(ModuleOp &mod) {
+  bool add_ttgir_passes(ModuleOp &mod, int32_t numWarps, int32_t threadsPerWarp, int32_t numStages, int32_t numCTAs, int32_t computeCapability) 
+  {
     PassManager pm(mod.getContext());
-
+  
     pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass(
-        "cuda:" + std::to_string(computeCapability), numWarps.getValue(),
-        threadsPerWarp.getValue(), numCTAs.getValue()));
+    "cuda:" + std::to_string(computeCapability), numWarps,
+    threadsPerWarp, numCTAs));
     pm.addPass(triton::gpu::createTritonGPUCoalesce());
     if (computeCapability / 10 >= 8) {
       pm.addPass(triton::gpu::createTritonGPUF32DotTC());
@@ -150,17 +136,17 @@ public:
       pm.addPass(createTritonNvidiaGPUTMALoweringPass());
     }
     pm.addPass(createCanonicalizerPass());
-
+    
     if (failed(pm.run(mod))) {
-      signalPassFailure();
       return false;
     }
     return true;
   }
-
-  bool add_llir_passes(ModuleOp &mod) {
+  
+  bool add_llir_passes(ModuleOp &mod, int32_t computeCapability) 
+  {
     PassManager pm(mod.getContext());
-
+    
     pm.addPass(triton::NVIDIA::createDecomposeUnsupportedConversionsPass());
     pm.addPass(triton::gpu::createTritonGPUCombineTensorSelectAndIf());
     pm.addPass(createConvertSCFToCFPass());
@@ -168,123 +154,48 @@ public:
     pm.addPass(triton::gpu::createAllocateSharedMemoryPass());
     pm.addPass(mlir::triton::createRewriteTensorPointerPass());
     pm.addPass(
-        triton::createConvertTritonGPUToLLVMPass(computeCapability.getValue()));
-    pm.addPass(triton::createConvertNVGPUToLLVMPass());
-    pm.addPass(createArithToLLVMConversionPass());
-    pm.addPass(createCanonicalizerPass());
-    pm.addPass(createCSEPass());
-    pm.addPass(createSymbolDCEPass());
+      triton::createConvertTritonGPUToLLVMPass(computeCapability));
+      pm.addPass(triton::createConvertNVGPUToLLVMPass());
+      pm.addPass(createArithToLLVMConversionPass());
+      pm.addPass(createCanonicalizerPass());
+      pm.addPass(createCSEPass());
+      pm.addPass(createSymbolDCEPass());
+      
+      if (failed(pm.run(mod))) {
+        return false;
+      }
+      return true;
+  }  
+}
+class LowerTritonDeviceToCuda
+    : public mlir::comet::LowerTritonDeviceToCudaBase<LowerTritonDeviceToCuda> {
+public:
+  LowerTritonDeviceToCuda() = default;
 
-    if (failed(pm.run(mod))) {
-      signalPassFailure();
-      return false;
-    }
-    return true;
+  LowerTritonDeviceToCuda(
+      int numWarps, int threadsPerWarp, int numCTAs, int numStages,
+      int computeCapability,
+      mlir::tensorAlgebra::GPUCompilationFormat codeFormat) {
+
+    this->numWarps = numWarps;
+    this->threadsPerWarp = threadsPerWarp;
+    this->numCTAs = numCTAs;
+    this->numStages = numStages;
+    this->computeCapability = computeCapability;
+    this->codeFormat = codeFormat;
   }
 
   void runOnOperation() override {
     mlir::ModuleOp modOp = getOperation();
-    std::vector<mlir::triton::FuncOp> TTFuncs;
-    modOp->walk([&TTFuncs](mlir::triton::FuncOp op) { TTFuncs.push_back(op); });
-
-    // Triton expects one kernel per module so we create temporary modules
-    std::vector<ModuleOp> tempMods;
     OpBuilder builder(modOp);
     std::string chip = "sm_" + std::to_string(computeCapability.getValue());
-    // The pass that converts LLVM kernels to cubin expects all such kernels to
-    // be within gpu.module, so we create such a module to insert the kernels
-    // lowered by Triton
-    auto tempMod = builder.create<mlir::gpu::GPUModuleOp>(
-        modOp->getLoc(), "gpu_module",
-        mlir::NVVM::NVVMTargetAttr::get(modOp->getContext(), 3,
-                                        "nvptx64-nvidia-cuda", chip));
-
-    if (TTFuncs.empty()) {
+    auto target = mlir::NVVM::NVVMTargetAttr::get(modOp->getContext(), 3,
+                                        "nvptx64-nvidia-cuda", chip);
+    auto add_ttgir_passes = [this](ModuleOp& modOp) { return cuda_device::add_ttgir_passes(modOp, numWarps, threadsPerWarp, numStages, numCTAs, computeCapability); };
+    auto add_llir_passes = [this](ModuleOp& modOp) { return cuda_device::add_llir_passes(modOp, computeCapability); };
+    if(failed(specializeGpuKernel(builder, modOp, this->codeFormat, target, cuda_device::add_ttir_passes, add_ttgir_passes, add_llir_passes)))
+    {
       return signalPassFailure();
-    }
-
-    for (auto ttFunc : TTFuncs) {
-      auto tempMod = ModuleOp::create(modOp.getLoc());
-      OpBuilder builder(tempMod.getBodyRegion());
-      builder.clone(*ttFunc.getOperation());
-
-      if (!add_ttir_passes(tempMod)) {
-        return;
-      }
-
-      if (!add_ttgir_passes(tempMod)) {
-        return;
-      }
-
-      if (!add_llir_passes(tempMod)) {
-        return;
-      }
-
-      auto oldAttrs = ttFunc->getAttrs().vec();
-      // tempMod->dump();
-
-      oldAttrs.insert(oldAttrs.end(), tempMod->getAttrs().begin(),
-                      tempMod->getAttrs().end());
-      // ttFunc->setAttrs(tempMod->getAttrs());
-      ttFunc->setAttrs(oldAttrs);
-      tempMods.push_back(tempMod);
-    }
-
-    // We have lowered Triton kernels to LLVM, now we need to add them to the
-    // gpu.module
-    builder.setInsertionPointToStart(&tempMod.getBodyRegion().front());
-    for (auto mod : tempMods) {
-      for (auto &op : *mod.getBody()) {
-        builder.clone(op);
-      }
-    }
-
-    // GPU dialect verifier expects this
-    modOp->setAttr("gpu.container_module", builder.getUnitAttr());
-
-    // The function transformGpuModulesToBinaries expects a module that contains
-    // gpu.module(s), so we create one with the kernels we want to convert to
-    // cubin
-    auto tempOuterMod = ModuleOp::create(modOp.getLoc());
-    OpBuilder gbuilder(tempOuterMod.getBodyRegion());
-    gbuilder.clone(*tempMod);
-    gpu::TargetOptions opts;
-    if (this->codeFormat ==
-        mlir::tensorAlgebra::GPUCompilationFormat::Assembly) {
-      opts = gpu::TargetOptions({}, {}, {}, gpu::CompilationTarget::Assembly);
-    } else if (this->codeFormat ==
-               mlir::tensorAlgebra::GPUCompilationFormat::Binary) {
-      opts = gpu::TargetOptions({}, {}, {}, gpu::CompilationTarget::Binary);
-    } else if (this->codeFormat ==
-               mlir::tensorAlgebra::GPUCompilationFormat::Fatbin) {
-      opts = gpu::TargetOptions({}, {}, {}, gpu::CompilationTarget::Fatbin);
-    } else {
-      assert(false && "Unexpected gpu compilation code format");
-    }
-    auto res =
-        mlir::gpu::transformGpuModulesToBinaries(tempOuterMod, nullptr, opts);
-    if (res.failed()) {
-      signalPassFailure();
-      return;
-    }
-
-    builder.setInsertionPointToStart(modOp.getBody());
-
-    // GPU kernels are now converted to cubin, add them to the main module as
-    // global strings
-    for (auto &op : *tempOuterMod.getBody()) {
-      if (auto binOp = dyn_cast<mlir::gpu::BinaryOp>(op)) {
-        auto result = mlir::cast<gpu::ObjectAttr>(*binOp.getObjects().begin())
-                          .getObject()
-                          .str();
-        auto type = LLVM::LLVMArrayType::get(
-            IntegerType::get(builder.getContext(), 8), result.size());
-        builder.setInsertionPointToStart(modOp.getBody());
-        builder.create<LLVM::GlobalOp>(
-            modOp->getLoc(), type, /*isConstant=*/false,
-            LLVM::Linkage::Internal, "gpu_code", builder.getStringAttr(result),
-            /*alignment=*/32);
-      }
     }
   }
 };
@@ -302,14 +213,6 @@ mlir::comet::createLowerTritonDeviceToCudaPass(
       numWarps, threadsPerWarp, numCTAs, numStages, computeCapability, format);
 }
 
-
-
-
-
-
-
-
-
 class LowerGpuHostToCuda
     : public mlir::comet::LowerHostToCudaBase<LowerGpuHostToCuda> {
 public:
@@ -324,289 +227,10 @@ public:
     {
       return signalPassFailure();
     }
-  //   std::map<std::string, Value> funcs;
-  //   std::map<std::string, std::string> gpu_to_triton_kernel;
-  //   std::map<std::string, triton::FuncOp> triton_name_to_triton_func_op;
-
-  //   std::vector<mlir::gpu::LaunchFuncOp> launchOps;
-  //   modOp->walk([&launchOps](mlir::gpu::LaunchFuncOp launchOp) {
-  //     launchOps.push_back(launchOp);
-  //   });
-
-  //   std::set<mlir::func::FuncOp> initFuncs;
-  //   std::vector<Value> toAlloc;
-
-  //   for (auto launchOp : launchOps) {
-  //     auto name =
-  //         gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
-  //                               "::" + launchOp.getKernelName().strref())
-  //                                  .str()];
-
-  //     if (initFuncs.find(launchOp->getParentOfType<mlir::func::FuncOp>()) ==
-  //         initFuncs.end()) {
-  //       builder.setInsertionPointToStart(
-  //           &launchOp->getParentOfType<mlir::func::FuncOp>()
-  //                .getFunctionBody()
-  //                .front());
-  //       Value gpu_code = builder.create<mlir::LLVM::AddressOfOp>(
-  //           launchOp->getLoc(), LLVM::LLVMPointerType::get(&getContext()),
-  //           "gpu_code");
-  //       builder.create<mlir::func::CallOp>(launchOp.getLoc(),
-  //                                          "cudaSetModuleImage", TypeRange(),
-  //                                          ValueRange({gpu_code}));
-
-  //       initFuncs.insert(launchOp->getParentOfType<mlir::func::FuncOp>());
-  //     }
-  //   }
-
-  //   std::vector<mlir::gpu::AllocOp> gpuAllocs;
-  //   modOp->walk([&gpuAllocs](mlir::gpu::AllocOp gpuAllocOp) {
-  //     gpuAllocs.push_back(gpuAllocOp);
-  //   });
-
-  //   for (auto gpuAlloc : gpuAllocs) {
-  //     builder.setInsertionPoint(gpuAlloc->getBlock()->getTerminator());
-  //     builder.create<mlir::gpu::DeallocOp>(gpuAlloc->getLoc(), ValueRange(),
-  //                                          gpuAlloc.getResult(0));
-
-  //     builder.setInsertionPointAfter(gpuAlloc);
-  //     Value allocSize;
-  //     if (gpuAlloc.getMemref().getType().hasStaticShape()) {
-  //       allocSize = builder
-  //                       .create<mlir::arith::ConstantIndexOp>(
-  //                           gpuAlloc->getLoc(),
-  //                           gpuAlloc.getMemref().getType().getNumElements())
-  //                       .getResult();
-  //     } else {
-  //       allocSize = get_memref_num_elements(builder.getContext(), builder, gpuAlloc.getLoc(), gpuAlloc.getMemref());
-  //     }
-
-  //     // builder.create<memref::DimOp>(gpuAlloc.getLoc(), gpuAlloc.getMemref(),
-  //     // 0);
-  //     if (FloatType floatType = mlir::dyn_cast<FloatType>(
-  //             gpuAlloc.getMemref().getType().getElementType())) {
-  //       int width = floatType.getWidth();
-  //       auto cudaOp = builder.create<mlir::func::CallOp>(
-  //           gpuAlloc->getLoc(), "cudaMallocF" + std::to_string(width),
-  //           TypeRange(builder.getIndexType()), ValueRange(allocSize));
-  //       gpuAlloc->replaceAllUsesWith(cudaOp);
-  //     } else if (IntegerType intType = mlir::dyn_cast<IntegerType>(
-  //                    gpuAlloc.getMemref().getType().getElementType())) {
-  //       int width = intType.getWidth();
-  //       auto cudaOp = builder.create<mlir::func::CallOp>(
-  //           gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(width),
-  //           TypeRange(builder.getIndexType()), ValueRange(allocSize));
-  //       gpuAlloc->replaceAllUsesWith(cudaOp);
-  //     } else if (IndexType intType = mlir::dyn_cast<IndexType>(
-  //                    gpuAlloc.getMemref().getType().getElementType())) {
-  //       auto cudaOp = builder.create<mlir::func::CallOp>(
-  //           gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(64),
-  //           TypeRange(builder.getIndexType()), ValueRange(allocSize));
-  //       gpuAlloc->replaceAllUsesWith(cudaOp);
-  //     }
-  //     gpuAlloc->erase();
-  //   }
-
-  //   std::vector<mlir::gpu::MemcpyOp> gpuCopies;
-  //   modOp->walk([&gpuCopies](mlir::gpu::MemcpyOp gpuCopy) {
-  //     gpuCopies.push_back(gpuCopy);
-  //   });
-
-  //   llvm::SmallMapVector<TypedValue<BaseMemRefType>, TypedValue<BaseMemRefType>, 4> memref_to_collapsed_memref;
-  //   for (auto cpy : gpuCopies) {
-  //     builder.setInsertionPoint(cpy);
-  //     auto hToD = builder.create<arith::ConstantIndexOp>(cpy->getLoc(), 0);
-  //     auto dToH = builder.create<arith::ConstantIndexOp>(cpy->getLoc(), 1);
-
-  //     if (cpy.getOperand(0).getDefiningOp() &&
-  //         (isa<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()) &&
-  //          cast<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp())
-  //              .getCallee()
-  //              .starts_with("cudaMalloc"))) {
-  //       if(memref_to_collapsed_memref.find(mlir::cast<TypedValue<BaseMemRefType>>(cpy.getSrc())) == memref_to_collapsed_memref.end())
-  //       {
-  //         TypedValue<MemRefType> collapsedMemref = mlir::tensorAlgebra::collapseMemref(cpy.getSrc(), builder);
-  //         auto cast = builder.create<mlir::memref::CastOp>(
-  //             cpy->getLoc(),
-  //             MemRefType::get({ShapedType::kDynamic},
-  //                             collapsedMemref.getType().getElementType()),
-  //             collapsedMemref);
-  //         memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getSrc())] = cast.getResult();
-  //       }
-  //       mlir::Value cast = memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getSrc())];
-
-
-  //       if (IntegerType intType = mlir::dyn_cast<IntegerType>(
-  //               mlir::cast<MemRefType>(cpy.getOperand(1).getType())
-  //                   .getElementType())) {
-  //         int width = intType.getWidth();
-  //         builder.create<mlir::func::CallOp>(
-  //             cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
-  //             ValueRange({cpy.getOperand(0), cast, hToD}));
-  //       } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
-  //                      mlir::cast<MemRefType>(cpy.getOperand(1).getType())
-  //                          .getElementType())) {
-  //         int width = floatType.getWidth();
-  //         builder.create<mlir::func::CallOp>(
-  //             cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
-  //             ValueRange({cpy.getOperand(0), cast, hToD}));
-  //       } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
-  //                      mlir::cast<MemRefType>(cpy.getOperand(1).getType())
-  //                          .getElementType())) {
-  //         builder.create<mlir::func::CallOp>(
-  //             cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
-  //             ValueRange({cpy.getOperand(0), cast, hToD}));
-  //       }
-  //     } else if (cpy.getOperand(1).getDefiningOp() &&
-  //                (isa<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()) &&
-  //                 cast<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp())
-  //                     .getCallee()
-  //                     .starts_with("cudaMalloc"))) {
-  //       if(memref_to_collapsed_memref.find(mlir::cast<TypedValue<BaseMemRefType>>(cpy.getDst())) == memref_to_collapsed_memref.end())
-  //       {
-  //         TypedValue<MemRefType> collapsedMemref = mlir::tensorAlgebra::collapseMemref(cpy.getDst(), builder);
-  //         auto cast = builder.create<mlir::memref::CastOp>(
-  //             cpy->getLoc(),
-  //             MemRefType::get({ShapedType::kDynamic},
-  //                             collapsedMemref.getType().getElementType()),
-  //             collapsedMemref);
-  //         memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getDst())] = cast.getResult();
-  //       }
-  //       mlir::Value cast = memref_to_collapsed_memref[mlir::cast<TypedValue<BaseMemRefType>>(cpy.getDst())];
-
-  //       if (IntegerType intType = mlir::dyn_cast<IntegerType>(
-  //               mlir::cast<MemRefType>(cpy.getOperand(0).getType())
-  //                   .getElementType())) {
-  //         int width = intType.getWidth();
-  //         builder.create<mlir::func::CallOp>(
-  //             cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
-  //             ValueRange({cpy.getOperand(1), cast, dToH}));
-  //       } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
-  //                      mlir::cast<MemRefType>(cpy.getOperand(0).getType())
-  //                          .getElementType())) {
-  //         int width = floatType.getWidth();
-  //         builder.create<mlir::func::CallOp>(
-  //             cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
-  //             ValueRange({cpy.getOperand(1), cast, dToH}));
-  //       } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
-  //                      mlir::cast<MemRefType>(cpy.getOperand(0).getType())
-  //                          .getElementType())) {
-  //         builder.create<mlir::func::CallOp>(
-  //             cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
-  //             ValueRange({cpy.getOperand(1), cast, dToH}));
-  //       }
-  //     }
-
-  //     cpy->erase();
-  //   }
-
-  //   for (auto launchOp : launchOps) {
-  //     builder.setInsertionPoint(launchOp);
-  //     auto zeroIndex =
-  //         builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), 0);
-
-  //     int64_t numOps = launchOp.getNumKernelOperands();
-  //     std::vector<Value> ptr_ops;
-  //     // memref::AllocaOp temp = builder.create<mlir::memref::AllocaOp>(
-  //     //     launchOp->getLoc(),
-  //     //     MemRefType::get({1}, launchOp.getGridSizeX().getType()));
-  //     // builder.create<memref::StoreOp>(launchOp->getLoc(),
-  //     //                                 launchOp.getGridSizeY(), temp,
-  //     //                                 ValueRange({zeroIndex}));
-  //     // ptr_ops.push_back(
-  //     //     builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
-  //     //         launchOp->getLoc(), temp));
-  //     // temp = builder.create<mlir::memref::AllocaOp>(
-  //     //     launchOp->getLoc(),
-  //     //     MemRefType::get({1}, launchOp.getGridSizeY().getType()));
-  //     // builder.create<memref::StoreOp>(launchOp->getLoc(),
-  //     //                                 launchOp.getGridSizeX(), temp,
-  //     //                                 ValueRange({zeroIndex}));
-  //     // ptr_ops.push_back(
-  //     //     builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
-  //     //         launchOp->getLoc(), temp));
-
-  //     for (auto op : launchOp.getKernelOperands()) {
-  //       if (mlir::isa<MemRefType>(op.getType())) {
-  //         ptr_ops.push_back(
-  //             builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
-  //                 launchOp->getLoc(), op));
-  //       } else {
-  //         auto temp = builder.create<mlir::memref::AllocaOp>(
-  //             launchOp->getLoc(), MemRefType::get({1}, op.getType()));
-  //         builder.create<memref::StoreOp>(launchOp->getLoc(), op, temp,
-  //                                         ValueRange({zeroIndex}));
-  //         ptr_ops.push_back(
-  //             builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(
-  //                 launchOp->getLoc(), temp));
-  //       }
-  //     }
-
-  //     auto args = builder.create<memref::AllocaOp>(
-  //         launchOp->getLoc(),
-  //         MemRefType::get({numOps}, builder.getIndexType()));
-  //     auto args_dynamic = builder.create<memref::CastOp>(
-  //         launchOp->getLoc(),
-  //         MemRefType::get({ShapedType::kDynamic},
-  //                         args.getType().getElementType()),
-  //         args);
-  //     for (size_t i = 0; i < ptr_ops.size(); i++) {
-  //       Value op = ptr_ops[i];
-  //       builder.create<memref::StoreOp>(
-  //           launchOp->getLoc(), op, args,
-  //           builder.create<arith::ConstantIndexOp>(launchOp->getLoc(), i)
-  //               .getResult());
-  //     }
-  //     std::string &funcName =
-  //         gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
-  //                               "::" + launchOp.getKernelName().strref())
-  //                                  .str()];
-  //     if (funcs.find(funcName) == funcs.end()) {
-  //       // We need the global string to include the \0 character so that it is
-  //       // correctly read by the cuda lib Hence the StringRef(funcName.c_str(),
-  //       // funcName.size()+1)
-  //       funcs[funcName] = LLVM::createGlobalString(
-  //           modOp->getLoc(), builder, funcName + "_str",
-  //           StringRef(funcName.c_str(), funcName.size() + 1),
-  //           LLVM::linkage::Linkage::Private);
-  //     }
-
-  //     auto name =
-  //         gpu_to_triton_kernel[(launchOp.getKernelModuleName().strref() +
-  //                               "::" + launchOp.getKernelName().strref())
-  //                                  .str()];
-  //     builder.create<mlir::func::CallOp>(
-  //         launchOp->getLoc(), "cudaLaunchKernel", TypeRange(),
-  //         ValueRange({launchOp.getGridSizeX(), launchOp.getGridSizeY(),
-  //                     launchOp.getGridSizeZ(), launchOp.getBlockSizeX(),
-  //                     launchOp.getBlockSizeY(), launchOp.getBlockSizeZ(),
-  //                     args_dynamic, funcs[funcName],
-  //                     builder.create<arith::ConstantIndexOp>(launchOp->getLoc(),
-  //                                                            funcName.size()),
-  //                     launchOp.getDynamicSharedMemorySize()}));
-  //     launchOp->erase();
-  //   }
-
-  //   std::vector<mlir::gpu::DeallocOp> gpuDeallocs;
-  //   modOp->walk([&gpuDeallocs](mlir::gpu::DeallocOp gpuDeallocOp) {
-  //     gpuDeallocs.push_back(gpuDeallocOp);
-  //   });
-
-  //   for (auto dealloc : gpuDeallocs) {
-  //     builder.setInsertionPoint(dealloc);
-  //     builder.create<mlir::func::CallOp>(dealloc->getLoc(), "cudaFree",
-  //                                        TypeRange(),
-  //                                        ValueRange(dealloc->getOperand(0)));
-  //     dealloc.erase();
-  //   }
-  //   modOp->walk([](mlir::triton::FuncOp TTFuncOp) { TTFuncOp.erase(); });
-  //   modOp->walk([](mlir::gpu::GPUModuleOp gpuMod) { gpuMod.erase(); });
   }
 };
 
 std::unique_ptr<OperationPass<mlir::ModuleOp>>
 mlir::comet::createLowerGpuHostToCudaPass() {
-  // std::cout << "Running createLowerGpuHostToCudaPass\n";
-
   return std::make_unique<::LowerGpuHostToCuda>();
 }

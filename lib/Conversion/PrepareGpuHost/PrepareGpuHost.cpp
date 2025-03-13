@@ -73,7 +73,7 @@ public:
 
     modOp->walk([&gpu_to_triton_kernel, &triton_name_to_triton_func_op](mlir::triton::FuncOp TTFuncOp) {
         gpu::GPUModuleOp gpuModuleOp = TTFuncOp->getParentOfType<gpu::GPUModuleOp>();
-        gpu_to_triton_kernel[gpuModuleOp.getName().str() +"::"+ TTFuncOp.getName().substr(3).str()] = TTFuncOp.getName().str();
+        gpu_to_triton_kernel[gpuModuleOp.getName().str() +"::"+ TTFuncOp.getName().substr(3 + gpuModuleOp.getName().size()).str()] = TTFuncOp.getName().str();
         triton_name_to_triton_func_op[TTFuncOp.getName().str()] = TTFuncOp;
     });
 
