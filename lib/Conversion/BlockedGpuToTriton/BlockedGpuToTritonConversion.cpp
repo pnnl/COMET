@@ -4,14 +4,18 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Types.h"
+#include "mlir/IR/Visitors.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "mlir/IR/BuiltinDialect.h"
+#include "llvm/ADT/STLExtras.h"
 
+#include <cstddef>
 #include <optional>
 
 
@@ -79,7 +83,7 @@ mlir::comet::TritonTypeConverter::TritonTypeConverter(MLIRContext *context)
     });
 
     addArgumentMaterialization([](OpBuilder &builder, MemRefType memrefType, ValueRange values, Location loc)-> std::optional<Value> {
-        assert(values.size() == memrefType.getRank() * 2 + 2);
+        assert(values.size() == static_cast<size_t>(memrefType.getRank()) * 2 + 2);
         return builder.create<UnrealizedConversionCastOp>(loc, memrefType, values)->getResult(0);
     });
 
@@ -91,8 +95,12 @@ mlir::comet::TritonTypeConverter::TritonTypeConverter(MLIRContext *context)
 mlir::comet::TritonConversionTarget::TritonConversionTarget(MLIRContext &context, TritonTypeConverter &typeConverter)
     : ConversionTarget(context) 
 {
-    addLegalDialect<arith::ArithDialect, scf::SCFDialect, triton::TritonDialect, mlir::BuiltinDialect, func::FuncDialect>();
+    addDynamicallyLegalOp<scf::ForOp>( [&](Operation* op) {
+        // return true;
+        return llvm::all_of(op->getOperandTypes(), [&](Type type) { return typeConverter.isLegal(type); });
+    });
+    addLegalDialect<arith::ArithDialect, scf::SCFDialect, triton::TritonDialect, mlir::BuiltinDialect, func::FuncDialect, tensor::TensorDialect>();
     addLegalOp<tensor::CastOp, bufferization::ToTensorOp, gpu::GPUModuleOp>();
-    addIllegalDialect<gpu::GPUDialect>();
+    addIllegalDialect<gpu::GPUDialect, linalg::LinalgDialect>();
     addIllegalOp<tensor::InsertSliceOp, tensor::ExtractSliceOp, tensor::SplatOp>();
 }

@@ -20,16 +20,21 @@
 //
 
 
+#include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <utility>
 #include <vector>
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/Attributes.h"
+#include "mlir/IR/Block.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Location.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Pass/Pass.h"
@@ -49,6 +54,8 @@
 #include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "llvm/ADT/MapVector.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
@@ -353,6 +360,120 @@ std::pair<scf::ParallelOp, llvm::SmallVector<scf::ForOp, 2>> tileParallelLoop(Co
     return std::make_pair(outerLoop, innerLoops);
 }
 
+std::pair<scf::ForOp, scf::ForOp> tileForLoop(OpBuilder& builder, scf::ForOp& op, int64_t tileSize) {
+    builder.setInsertionPoint(op);
+    auto zero = builder.create<arith::ConstantIndexOp>(op.getLoc(), 0);
+    Value tileSizeConstant = builder.create<arith::ConstantIndexOp>(op.getLoc(), tileSize);
+    // tileSizeConstants.reserve(op.getUpperBound().size());
+    // for (size_t i = 0, end = op.getUpperBound().size(); i != end; ++i) {
+    //     if (i < tileSizes.size())
+    //     tileSizeConstants.push_back(
+    
+    //     else
+    //     // Just pick 1 for the remaining dimensions.
+    //     tileSizeConstants.push_back(
+    //         builder.create<arith::ConstantIndexOp>(op.getLoc(), 1));
+    // }
+
+    // Create the outer loop with adjusted steps.
+    Value newStep = builder.create<arith::MulIOp>(op.getLoc(), op.getStep(), tileSizeConstant);
+    
+    auto outerLoop = builder.create<scf::ForOp>(op.getLoc(), op.getLowerBound(), op.getUpperBound(), newStep, op.getInitArgs());
+    outerLoop->setAttr("reduceDim", builder.getUnitAttr());
+    builder.setInsertionPointToStart(outerLoop.getBody());
+
+
+
+
+    // Create the inner loop with adjusted bounds.
+    Value newBound;
+    // newBounds.reserve(op.getUpperBound().size());
+    bool needInboundCheck = false;
+    // for (auto [lowerBound, upperBound, newStep, iv, step, tileSizeConstant] :
+        // llvm::zip(outerLoop.getLowerBound(), outerLoop.getUpperBound(),
+        //             outerLoop.getStep(), outerLoop.getInductionVars(),
+        //             op.getStep(), tileSizeConstant)) 
+        // {
+            auto tileSizeNew =
+                cast<arith::ConstantIndexOp>(tileSizeConstant.getDefiningOp()).value();
+            // Compute min(size, dim - offset) to avoid out-of-bounds accesses.
+            auto minMap = AffineMap::get(
+                /*dimCount=*/2, /*symbolCount=*/0,
+                {getAffineConstantExpr(/*position=*/tileSizeNew, builder.getContext()),
+                getAffineDimExpr(/*position=*/0, builder.getContext()) -
+                    getAffineDimExpr(/*position=*/1, builder.getContext())},
+                builder.getContext());
+            // Collect the statically known loop bounds
+            auto lowerBoundConstant =
+                dyn_cast_or_null<arith::ConstantIndexOp>(outerLoop.getLowerBound().getDefiningOp());
+            auto upperBoundConstant =
+                dyn_cast_or_null<arith::ConstantIndexOp>(outerLoop.getUpperBound().getDefiningOp());
+            auto stepConstant =
+                dyn_cast_or_null<arith::ConstantIndexOp>(op.getStep().getDefiningOp());
+            
+            // If the loop bounds and the loop step are constant and if the number of
+            // loop iterations is an integer multiple of the tile size, we use a static
+            // bound for the inner loop.
+            if (lowerBoundConstant && upperBoundConstant && stepConstant) {
+            auto numIterations = llvm::divideCeil(upperBoundConstant.value() -
+                                                        lowerBoundConstant.value(),
+                                                    stepConstant.value());
+            if (numIterations % tileSize == 0) {
+                newBound = outerLoop.getStep();
+                // continue;
+            }
+        }
+
+        // Otherwise, we dynamically compute the bound for
+        // each iteration of the outer loop.
+        newBound =  builder.create<affine::AffineMinOp>(op.getLoc(), builder.getIndexType(), minMap, ValueRange{outerLoop.getUpperBound(), outerLoop.getInductionVar()});
+    // }
+
+    SmallVector<Value,2> newArgs;
+    SmallVector<scf::ForOp, 2> innerLoops;
+    SmallVector<Value, 2> inductionVars;
+    // for(size_t i = 0; i <  tileSizes.size(); i++)
+    // {
+        auto innerLoop = builder.create<scf::ForOp>(op.getLoc(), zero, newBound, op.getStep(), outerLoop.getRegionIterArgs());
+        innerLoop->setAttr("blockSize", builder.getUI32IntegerAttr(tileSize));
+        innerLoops.push_back(innerLoop);
+        builder.setInsertionPointToStart(innerLoop.getBody());
+        auto new_arg = builder.create<arith::AddIOp>(op.getLoc(), innerLoop.getBody()->getArgument(0), outerLoop.getBody()->getArgument(0));
+        newArgs.push_back(new_arg);
+        newArgs.insert(newArgs.end(), innerLoop.getRegionIterArgs().begin(), innerLoop.getRegionIterArgs().end());
+        inductionVars.push_back(innerLoop.getInductionVar());
+    // }
+
+    // op.getBody()->getTerminator()->erase();
+    
+    // innerLoops.back().getBody()->getTerminator()->erase();
+    builder.setInsertionPointToEnd(innerLoops.back().getBody());
+    auto temp_yieldOp = builder.create<scf::YieldOp>(op->getLoc());
+    
+
+    
+    
+    // builder.mergeBlocks(op.getBody(), innerLoops.back().getBody(), newArgs);
+    builder.setInsertionPointToEnd(outerLoop.getBody());
+    builder.create<scf::YieldOp>(op->getLoc(), innerLoop.getResults());
+
+    for(auto& inner_op: llvm::make_early_inc_range(op.getBody()->getOperations()))
+    {
+        // inner_op.dump();
+        inner_op.moveBefore(innerLoops.back().getBody()->getTerminator());
+    }
+    temp_yieldOp->erase();
+    for(auto [old_arg, new_arg] : llvm::zip(op.getBody()->getArguments(), newArgs) )
+    {
+        old_arg.replaceAllUsesWith(new_arg);
+    }
+    op->replaceAllUsesWith(outerLoop);
+    op->erase();
+
+
+    return std::make_pair(outerLoop, innerLoop);
+}
+
 class ParallelOpToGpu: public mlir::OpConversionPattern<mlir::scf::ParallelOp> {
 private:
     int blockX, blockY, blockR;
@@ -363,21 +484,25 @@ public:
     matchAndRewrite(mlir::scf::ParallelOp parOp, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
         
-        std::vector<int64_t> tileSizes = {blockY, blockX};
-        auto tiledLoop = tileParallelLoop(rewriter, parOp, tileSizes);
-        SmallVector<Attribute, 2> string_attrs = {rewriter.getAttr<mlir::StringAttr>("dimY_grid"), rewriter.getAttr<mlir::StringAttr>("dimX_grid")};
+        llvm::SmallVector<int64_t, 3> allTileSizes = {blockY, blockX};
+        llvm::SmallVector<int64_t, 3> tileSizes; 
+        std::copy(allTileSizes.begin(), allTileSizes.begin() + parOp.getInductionVars().size(), std::back_inserter(tileSizes));
+        SmallVector<Attribute, 2> allStringAttrs = {rewriter.getAttr<mlir::StringAttr>("dimY_grid"), rewriter.getAttr<mlir::StringAttr>("dimX_grid")};
+        SmallVector<Attribute, 2> stringAttrs;
+        std::copy(allStringAttrs.begin(), allStringAttrs.begin() + parOp.getInductionVars().size(), std::back_inserter(stringAttrs));
+        
         auto dim0 = rewriter.getAffineDimExpr(0);
         auto dim1 = rewriter.getAffineDimExpr(0);
         auto yMap = mlir::AffineMap::get(1, 0, dim0);
         auto xMap = mlir::AffineMap::get(1, 0, dim1);
-        SmallVector<Attribute, 2> gpu_attrs = {mlir::gpu::ParallelLoopDimMappingAttr::get(rewriter.getContext(), ::mlir::gpu::Processor::BlockY, yMap, yMap), mlir::gpu::ParallelLoopDimMappingAttr::get(rewriter.getContext(), ::mlir::gpu::Processor::BlockX, xMap, xMap)};
-        for(size_t i= 0; i < tiledLoop.first.getInductionVars().size(); i++)
-        {
-            tiledLoop.first->setAttr("parallelDim", rewriter.getArrayAttr(string_attrs));
-            tiledLoop.first->setAttr("mapping", rewriter.getArrayAttr(gpu_attrs));
-        }
-        // y_loop_grid->setAttr("parallelDim", rewriter.getAttr<mlir::StringAttr>("dimY_grid"));
-        // newAttr = mlir::gpu::ParallelLoopDimMappingAttr::get(rewriter.getContext(), ::mlir::gpu::Processor::BlockY, map, map);
+        SmallVector<Attribute, 2> allGpuAttrs = {mlir::gpu::ParallelLoopDimMappingAttr::get(rewriter.getContext(), ::mlir::gpu::Processor::BlockY, yMap, yMap), mlir::gpu::ParallelLoopDimMappingAttr::get(rewriter.getContext(), ::mlir::gpu::Processor::BlockX, xMap, xMap)};
+        SmallVector<Attribute, 2> gpuAttrs;
+        std::copy(allGpuAttrs.begin(), allGpuAttrs.begin() + parOp.getInductionVars().size(), std::back_inserter(gpuAttrs));
+        auto tiledLoop = tileParallelLoop(rewriter, parOp, tileSizes);
+
+        tiledLoop.first->setAttr("parallelDim", rewriter.getArrayAttr(stringAttrs));
+        tiledLoop.first->setAttr("mapping", rewriter.getArrayAttr(gpuAttrs));
+
         return success();
         // for()
         // if(parOp->getAttrOfType<mlir::StringAttr>("parallelDim"))
@@ -686,7 +811,7 @@ struct DetectReduction
     matchAndRewrite(mlir::scf::ForOp forOp, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
         bool no_inner_loops = forOp.getBody()->getOps<mlir::scf::ForOp>().empty();
-        if(forOp->hasAttr("parallelDim") || forOp->hasAttr("reduceDim") )
+        if(forOp->hasAttr("blockSize") ||forOp->hasAttr("parallelDim") || forOp->hasAttr("reduceDim") )
         {
             return mlir::failure();
         }
@@ -817,6 +942,179 @@ public:
         {
             return signalPassFailure();
         }
+
+        llvm::SmallVector<scf::ForOp, 2> toReduceForOps;
+        funcOp->walk([&toReduceForOps](mlir::scf::ForOp forOp) {
+            if(is_reduction(forOp))
+            {
+                toReduceForOps.push_back(forOp);
+            }
+        });
+
+        OpBuilder builder(funcOp);
+
+        for(scf::ForOp forOp: llvm::make_early_inc_range(toReduceForOps))
+        {
+            llvm::SmallVector<mlir::Value, 4> inductionVars;
+            llvm::SmallVector<mlir::Operation*, 4> loopInvMemOps;
+            inductionVars.push_back(forOp.getInductionVar());
+
+            forOp->walk([&loopInvMemOps](Operation* op){
+                if(mlir::isa<mlir::memref::StoreOp,mlir::memref::LoadOp>(op))
+                {
+                    loopInvMemOps.push_back(op);
+                }
+            });
+
+
+            for(auto inductionVar: inductionVars)
+            {
+                for(auto user: llvm::make_early_inc_range(inductionVar.getUsers()))
+                {
+                    if(mlir::isa<mlir::memref::StoreOp,mlir::memref::LoadOp>(user))
+                    {
+                        auto it = std::find(loopInvMemOps.begin(), loopInvMemOps.end(), user);
+                        loopInvMemOps.erase(it);
+                    }
+                    for(auto res: user->getResults())
+                    {
+                        inductionVars.push_back(res);
+                    }
+                }
+            }
+
+            llvm::SmallMapVector<mlir::Value, llvm::SmallVector<mlir::Operation*, 2>, 4> loadStorePairs;
+            for(auto memOp: loopInvMemOps)
+            {
+                if(memref::StoreOp storeOp = dyn_cast<memref::StoreOp>(memOp))
+                {
+                    auto it = loadStorePairs.find(storeOp.getMemRef());
+                    assert(it!= loadStorePairs.end());
+                    it->second.push_back(storeOp);
+                }
+                else if(memref::LoadOp loadOp = dyn_cast<memref::LoadOp>(memOp))
+                {
+                    auto it = loadStorePairs.find(loadOp.getMemRef());
+                    assert(it == loadStorePairs.end());
+                    loadStorePairs[loadOp.getMemRef()].push_back(loadOp);
+                    // it->second.push_back(loadOp);
+                }
+                else 
+                {
+                    assert(false && "UNREACHABLE. Should vectore should only contain store or load operations");
+                }
+            }
+
+            // for(auto [_, pairs]: loadStorePairs)
+            // {
+            auto pairs = loadStorePairs.front().second;
+                pairs[0]->moveBefore(forOp);
+                pairs[1]->moveAfter(forOp);
+                builder.setInsertionPoint(forOp);
+                auto newForOp = builder.create<scf::ForOp>(forOp->getLoc(), forOp.getLowerBound(), forOp.getUpperBound(), forOp.getStep(), ValueRange(pairs[0]->getResult(0)));
+                // newForOp->dump();
+                builder.setInsertionPointToEnd(newForOp.getBody());
+                builder.create<scf::YieldOp>(forOp->getLoc(), pairs[1]->getOperand(0));
+                pairs[0]->getResult(0).replaceAllUsesExcept(newForOp.getRegionIterArg(0), newForOp);
+                pairs[1]->setOperand(0, newForOp.getResult(0));
+                forOp.getBody()->getTerminator()->erase();
+                for(auto& op: llvm::make_early_inc_range(forOp.getBody()->getOperations()))
+                {
+                    op.moveBefore(newForOp.getBody()->getTerminator());
+                }
+                forOp.getInductionVar().replaceAllUsesWith(newForOp.getInductionVar());
+                auto [outerLoop, innerLoop] = tileForLoop(builder, newForOp, blockR);
+            // funcOp->dump();
+            // }
+            // forOp->dump();
+            forOp->erase();
+            // funcOp->dump();
+
+            // llvm::SmallVector<mlir::Value, 4> loopInvMemOps;
+            // auto innerLoopp = innerLoop;
+            // for(auto& op: llvm::make_early_inc_range(innerLoop.getBody()->getOperations()))
+            // {
+            //     if(llvm::all_of(op.getOperands(), [&innerLoopp](mlir::Value operand){
+            //       return operand.getParentBlock() != innerLoopp->getBlock();
+            //     }))
+            //     op.moveBefore(innerLoop);
+            // }
+            
+            // llvm::SmallMapVector<Value, bool, 4> reductionTargetMemrefs;
+
+            // SmallVector<void*, 4> storeMemrefs;
+            // SmallVector<void*, 4> loadMemrefs;
+            // SmallVector<memref::StoreOp, 4> storeOps;
+            // innerLoop->walk([&storeOps, &storeMemrefs](memref::StoreOp storeOp) {
+            //     storeOps.push_back(storeOp);
+            //     storeMemrefs.push_back(storeOp.getMemRef().getAsOpaquePointer());
+            // });
+            
+            // SmallVector<memref::LoadOp, 4> loadOps;
+            // innerLoop->walk([&loadOps, &loadMemrefs](memref::LoadOp loadOp) {
+            //     loadOps.push_back(loadOp);
+            //     loadMemrefs.push_back(loadOp.getMemRef().getAsOpaquePointer());
+            // });
+            
+            
+            // SmallVector<void*, 4> commonMemrefs;
+            // std::set_intersection(storeMemrefs.begin(), storeMemrefs.end(), loadMemrefs.begin(), loadMemrefs.end(), std::back_inserter(commonMemrefs));
+            // SmallVector<std::pair<memref::StoreOp, memref::LoadOp>, 4> matchinOps;
+            // // SmallVector<memref::LoadOp, 4>neededLoadOps;
+            // SmallVector<Value, 4> valuesToYield, valuesToInitArgs;
+            // auto innerLoopp = innerLoop;
+            // for(auto storeOp: storeOps)
+            // {
+
+            //     if(std::find(commonMemrefs.begin(), commonMemrefs.end(), storeOp.getMemRef().getAsOpaquePointer()))
+            //     {
+
+            //         for(auto loadOp: loadOps)
+            //         {
+            //             if(std::find(commonMemrefs.begin(), commonMemrefs.end(), loadOp.getMemRef().getAsOpaquePointer()))
+            //             {
+            //                 if(llvm::all_of(llvm::zip(storeOp.getIndices(), loadOp.getIndices()), [&innerLoopp](std::pair<mlir::Value, mlir::Value> ops){return (ops.first == ops.second) and ops.first.getParentBlock() != innerLoopp.getBody() and ops.second.getParentBlock() != innerLoopp.getBody() ;}))
+            //                 {
+            //                     valuesToInitArgs.push_back(loadOp.getResult());
+            //                     valuesToYield.push_back(storeOp.getValueToStore());
+            //                     storeOp->moveBefore(outerLoop);
+            //                     loadOp->moveAfter(outerLoop);
+            //                 }
+            //             }
+            //         }
+            //     }
+            // }
+
+            // auto outerInitArgs = outerLoop.getInitArgsMutable();
+            // outerInitArgs.append(valuesToInitArgs);
+            // std::vector<Location> locs;
+            // for(auto init_arg: outerLoop.getInitArgs())
+            // {
+            //     locs.push_back(init_arg.getLoc());
+            // }
+            // outerLoop.getBody()->addArguments(outerLoop.getInitArgs().getTypes(), locs);
+            
+            // auto innerInitArgs = innerLoop.getInitArgsMutable();
+            // innerInitArgs.append(outerLoop.getRegionIterArgs());
+            
+            // innerLoop.getBody()->addArguments(innerLoop.getInitArgs().getTypes(), locs);
+
+
+            // for(auto load: zip(valuesToInitArgs, innerLoop.getRegionIterArgs(), innerInitArgs))
+            // {
+            //     std::get<0>(load).replaceAllUsesExcept(std::get<1>(load), std::get<2>(load).get().getDefiningOp());
+            // }
+
+            // innerLoop.getBody()->getTerminator()->setOperands(valuesToYield);
+            // outerLoop.getBody()->getTerminator()->setOperands(innerLoop->getResults());
+
+            // for(size_t i = 0; i < valuesToYield.size(); i++)
+            // {
+            //     valuesToYield[i].replaceAllUsesExcept(outerLoop->getResults()[i], innerLoop.getBody()->getTerminator());
+            // }
+
+        }
+
 
         // funcOp->walk([](mlir::scf::ParallelOp par_for) {
         //     mlir::OpBuilder builder(par_for);

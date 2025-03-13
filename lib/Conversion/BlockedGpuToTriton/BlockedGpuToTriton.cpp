@@ -5,6 +5,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/Index/IR/IndexOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -95,6 +96,58 @@ class ConvertGpuFuncToTritonFunc : public OpConversionPattern<mlir::gpu::GPUFunc
         rewriter.create<func::ReturnOp>(gpuFunc.getLoc());
         newFunc->setAttr(gpu::GPUDialect::getKernelFuncAttrName(),
                            rewriter.getUnitAttr());
+        
+        return success();
+    }
+
+};
+
+class ConvertForOp : public OpConversionPattern<mlir::scf::ForOp>{
+    public:
+    using mlir::OpConversionPattern<mlir::scf::ForOp>::OpConversionPattern;
+    ConvertForOp(mlir::MLIRContext* ctx) : mlir::OpConversionPattern<mlir::scf::ForOp>(ctx) {}
+    mlir::LogicalResult
+    matchAndRewrite(mlir::scf::ForOp forOp, OpAdaptor adaptor,
+                    mlir::ConversionPatternRewriter &rewriter) const override {
+        
+        llvm::SmallVector<Value, 4> materializedValues;
+        
+        llvm::SmallVector<Value, 4> newForValues;
+        llvm::SmallVector<size_t, 4> sizes;
+        for(auto arg: forOp->getOperands())
+        {
+
+            if(arg.getType().isIndex())
+            {
+                auto cast_index = rewriter.create<arith::IndexCastOp>(forOp->getLoc(), IntegerType::get(getContext(), 32),  arg);
+                newForValues.push_back(cast_index);
+            }
+            else
+            {
+                newForValues.push_back(arg);
+            }
+        }
+
+        auto newForOp = rewriter.create<scf::ForOp>(forOp->getLoc(), newForValues[0], newForValues[1], newForValues[2], ValueRange(newForValues).drop_front(3));
+        rewriter.setInsertionPointToStart(newForOp.getBody());
+        llvm::SmallVector<Value, 4> newForArgs;
+
+        for(auto arg: newForOp.getBody()->getArguments())
+        {
+            if(arg.getType().isInteger())
+            {
+                auto cast_index = rewriter.create<arith::IndexCastOp>(forOp->getLoc(), rewriter.getIndexType(),  arg);
+                newForArgs.push_back(cast_index);
+            }
+            else
+            {
+                newForArgs.push_back(arg);
+            }
+        }
+
+        rewriter.mergeBlocks(forOp.getBody(), newForOp.getBody(), newForArgs);
+        rewriter.replaceAllOpUsesWith(forOp, newForOp);
+        rewriter.eraseOp(forOp);
         
         return success();
     }
@@ -274,8 +327,8 @@ class ConvertInsertSlice : public OpConversionPattern<mlir::tensor::InsertSliceO
         if(blockedOffsets.size() == 1)
         {
             auto shaped = mlir::cast<ShapedType>(blockedOffsets[0].getType());
-            auto blockedPtr = rewriter.create<triton::SplatOp>(insertSliceOp->getLoc(), RankedTensorType::get(shaped.getShape(), rewriter.getIntegerType(32)), ttDest);
-            auto ptr = rewriter.create<triton::AddPtrOp>(insertSliceOp->getLoc(),  RankedTensorType::get({mlir::cast<ShapedType>(blockedOffsets[0].getType()).getShape()}, rewriter.getIntegerType(32)), blockedPtr, blockedOffsets[0]);
+            auto blockedPtr = rewriter.create<triton::SplatOp>(insertSliceOp->getLoc(), RankedTensorType::get(shaped.getShape(), ttDest.getType()), ttDest);
+            auto ptr = rewriter.create<triton::AddPtrOp>(insertSliceOp->getLoc(),  RankedTensorType::get(shaped.getShape(), ttDest.getType()), blockedPtr, blockedOffsets[0]);
             if(ShapedType sourceShaped = mlir::dyn_cast<ShapedType>(ttSource.getType());  sourceShaped && !sourceShaped.hasStaticShape())
             {
                 auto castOp = rewriter.create<tensor::CastOp>(insertSliceOp->getLoc(), RankedTensorType::get(shaped.getShape(), insertSliceOp.getDestType().getElementType()), ttSource);
@@ -602,6 +655,49 @@ class ConvertArithIndex : public OpConversionPattern<T> {
     }
 };
 
+class ConvertLinalgReduceOp : public OpConversionPattern<mlir::linalg::ReduceOp> {
+    public:
+    using mlir::OpConversionPattern<linalg::ReduceOp>::OpConversionPattern;
+    ConvertLinalgReduceOp(mlir::MLIRContext* ctx) : mlir::OpConversionPattern<linalg::ReduceOp>(ctx) {}
+    mlir::LogicalResult
+    matchAndRewrite(linalg::ReduceOp reduceOp,  OpAdaptor adaptor,
+                    mlir::ConversionPatternRewriter &rewriter) const override {
+
+        assert(adaptor.getDimensions().size() == 1);
+        triton::ReduceOp ttReduceOp = rewriter.create<triton::ReduceOp>(reduceOp->getLoc(), adaptor.getInputs(), static_cast<int>(adaptor.getDimensions().front()));
+        auto arg_types = reduceOp.getBody()->getArgumentTypes();
+        std::vector locs = {reduceOp->getOperand(0).getLoc(), reduceOp->getOperand(1).getLoc()};
+        // rewriter.setInsertionPointToStart(ttReduceOp.getBody());
+        Block* reduceBody = rewriter.createBlock(&ttReduceOp.getBodyRegion(),{}, arg_types, locs);
+
+        auto yieldOp = reduceOp.getBody()->getTerminator();
+        rewriter.mergeBlocks(reduceOp.getBody(), reduceBody, reduceBody->getArguments());
+        rewriter.setInsertionPointToEnd(ttReduceOp.getBody());
+        rewriter.replaceOpWithNewOp<triton::ReduceReturnOp>(yieldOp, yieldOp->getOperands());
+        rewriter.replaceAllUsesWith(reduceOp.getResult(0), ttReduceOp.getResult());
+        rewriter.eraseOp(reduceOp);
+        
+        return success();
+    }
+};
+
+class ConvertLinalgBroadcastOp : public OpConversionPattern<mlir::linalg::BroadcastOp> {
+    public:
+    using mlir::OpConversionPattern<linalg::BroadcastOp>::OpConversionPattern;
+    ConvertLinalgBroadcastOp(mlir::MLIRContext* ctx) : mlir::OpConversionPattern<mlir::linalg::BroadcastOp>(ctx) {}
+    mlir::LogicalResult
+    matchAndRewrite(linalg::BroadcastOp bcastOp,  OpAdaptor adaptor,
+                    mlir::ConversionPatternRewriter &rewriter) const override {
+
+        assert(adaptor.getDimensions().size() == 1);
+        auto expandDimsOp = rewriter.create<triton::ExpandDimsOp>(bcastOp->getLoc(), adaptor.getInput(), static_cast<int>(adaptor.getDimensions().front()));
+        rewriter.replaceOpWithNewOp<triton::BroadcastOp>(bcastOp, adaptor.getInit().getType(), expandDimsOp);
+        return success();
+    }
+};
+
+
+
 template<typename T>
 class ConvertArithDynamicShape : public OpConversionPattern<T> {
     public:
@@ -689,78 +785,80 @@ class ConvertBlockedGpuToTriton: public CometBlockedGpuToTritonBase<ConvertBlock
 
     void runOnOperation() override 
     {
-        gpu::GPUModuleOp gpuModule = *getOperation().getOps<gpu::GPUModuleOp>().begin();
-        
-        RewritePatternSet patterns(&getContext());
-
-        mlir::comet::TritonTypeConverter converter(&getContext());
-        mlir::comet::TritonConversionTarget target(getContext(), converter);
-        patterns.insert<ConvertGpuFuncToTritonFunc>( converter, &getContext());
-        patterns.insert<ConvertExtractSlice, ConvertInsertSlice, ConvertBlockDim, ConvertBlockId, ConvertToTensor,ConvertTensorSplatOp, ConvertExtractStridedMetadata>( &getContext());
-
-        if (failed(applyPartialConversion(gpuModule, target, std::move(patterns))))
+        for(gpu::GPUModuleOp gpuModule : getOperation().getOps<gpu::GPUModuleOp>())
         {
-            return signalPassFailure();
-        }
-        
-        auto ttFuncs = getOperation().getOps<triton::FuncOp>();
-        target.addIllegalOp<bufferization::ToTensorOp>();
-        RewritePatternSet patternsClean(&getContext());
-        patternsClean.insert<ConvertToTensor>(&getContext());
-        
-        for(auto func: ttFuncs)
-        {
-            if (failed(applyPatternsAndFoldGreedily(func, std::move(patternsClean))))
+            RewritePatternSet patterns(&getContext());
+
+            mlir::comet::TritonTypeConverter converter(&getContext());
+            mlir::comet::TritonConversionTarget target(getContext(), converter);
+            patterns.insert<ConvertGpuFuncToTritonFunc, ConvertForOp>( converter, &getContext());
+            patterns.insert<ConvertExtractSlice, ConvertInsertSlice, ConvertBlockDim, ConvertBlockId, ConvertToTensor,ConvertTensorSplatOp, ConvertExtractStridedMetadata, ConvertLinalgReduceOp, ConvertLinalgBroadcastOp>( &getContext());
+
+            if (failed(applyPartialConversion(gpuModule, target, std::move(patterns))))
+            {
+                return signalPassFailure();
+            }
+            
+            auto ttFuncs = getOperation().getOps<triton::FuncOp>();
+            target.addIllegalOp<bufferization::ToTensorOp>();
+            RewritePatternSet patternsClean(&getContext());
+            patternsClean.insert<ConvertToTensor>(&getContext());
+            
+            for(auto func: ttFuncs)
+            {
+                if (failed(applyPatternsAndFoldGreedily(func, std::move(patternsClean))))
+                {
+                    return signalPassFailure();
+                }
+
+            }
+            PassManager pm(&getContext());
+            pm.addPass(mlir::createCanonicalizerPass());
+            if (failed(pm.run(gpuModule))) {
+                signalPassFailure();
+                return;
+            }
+            
+            RewritePatternSet patternsClean2(&getContext());
+            target.addIllegalOp<UnrealizedConversionCastOp>();
+            patternsClean2.insert<ConvertUnrealizedCast>(&getContext());
+
+            if (failed(applyPartialConversion(gpuModule, target, std::move(patternsClean2))))
+            {
+                return signalPassFailure();
+            }
+            
+            RewritePatternSet patternsClean3(&getContext());
+            target.addDynamicallyLegalOp<index::ConstantOp, arith::AddIOp, arith::MulIOp, arith::SubIOp>([&](Operation *op) {
+                return llvm::all_of(op->getOperandTypes(),
+                                    [&](Type type) { return converter.isLegal(type); }) &&
+                    llvm::all_of(op->getResultTypes(),
+                                    [&](Type type) { return converter.isLegal(type); });
+            });
+
+            patternsClean3.insert<ConvertIndexConstant, ConvertArithIndex<arith::AddIOp>, ConvertArithIndex<arith::MulIOp>, ConvertArithIndex<arith::SubIOp> >(converter, &getContext());
+
+            if (failed(applyPartialConversion(gpuModule, target, std::move(patternsClean3))))
             {
                 return signalPassFailure();
             }
 
-        }
-        PassManager pm(&getContext());
-        pm.addPass(mlir::createCanonicalizerPass());
-        if (failed(pm.run(gpuModule))) {
-            signalPassFailure();
-            return;
-        }
-        
-        RewritePatternSet patternsClean2(&getContext());
-        target.addIllegalOp<UnrealizedConversionCastOp>();
-        patternsClean2.insert<ConvertUnrealizedCast>(&getContext());
+            RewritePatternSet patternsClean4(&getContext());
+            target.addDynamicallyLegalOp<arith::AddIOp, arith::MulIOp, arith::SubIOp, arith::AddFOp, arith::MulFOp, arith::SubFOp>([&](Operation *op) {
+                return llvm::all_of(op->getOperandTypes(),
+                                    [&](Type type) { if(RankedTensorType shapedType = mlir::dyn_cast<RankedTensorType>(type)){return shapedType.hasStaticShape(); } return true; }) &&
+                    llvm::all_of(op->getResultTypes(),
+                                    [&](Type type) { if(RankedTensorType shapedType = mlir::dyn_cast<RankedTensorType>(type)){return shapedType.hasStaticShape(); } return true; });
+            });
 
-        if (failed(applyPartialConversion(gpuModule, target, std::move(patternsClean2))))
-        {
-            return signalPassFailure();
-        }
-        
-        RewritePatternSet patternsClean3(&getContext());
-        target.addDynamicallyLegalOp<index::ConstantOp, arith::AddIOp, arith::MulIOp, arith::SubIOp>([&](Operation *op) {
-            return llvm::all_of(op->getOperandTypes(),
-                                [&](Type type) { return converter.isLegal(type); }) &&
-                   llvm::all_of(op->getResultTypes(),
-                                [&](Type type) { return converter.isLegal(type); });
-        });
+            patternsClean4.insert<ConvertArithDynamicShape<arith::AddIOp>, ConvertArithDynamicShape<arith::MulIOp>, ConvertArithDynamicShape<arith::SubIOp>, ConvertArithDynamicShape<arith::AddFOp>, ConvertArithDynamicShape<arith::MulFOp>, ConvertArithDynamicShape<arith::SubFOp> >(&getContext());
 
-        patternsClean3.insert<ConvertIndexConstant, ConvertArithIndex<arith::AddIOp>, ConvertArithIndex<arith::MulIOp>, ConvertArithIndex<arith::SubIOp> >(converter, &getContext());
-
-        if (failed(applyPartialConversion(gpuModule, target, std::move(patternsClean3))))
-        {
-            return signalPassFailure();
+            if (failed(applyPartialConversion(gpuModule, target, std::move(patternsClean4))))
+            {
+                return signalPassFailure();
+            }
         }
 
-        RewritePatternSet patternsClean4(&getContext());
-        target.addDynamicallyLegalOp<arith::AddIOp, arith::MulIOp, arith::SubIOp, arith::AddFOp, arith::MulFOp, arith::SubFOp>([&](Operation *op) {
-            return llvm::all_of(op->getOperandTypes(),
-                                [&](Type type) { if(RankedTensorType shapedType = mlir::dyn_cast<RankedTensorType>(type)){return shapedType.hasStaticShape(); } return true; }) &&
-                   llvm::all_of(op->getResultTypes(),
-                                [&](Type type) { if(RankedTensorType shapedType = mlir::dyn_cast<RankedTensorType>(type)){return shapedType.hasStaticShape(); } return true; });
-        });
-
-        patternsClean4.insert<ConvertArithDynamicShape<arith::AddIOp>, ConvertArithDynamicShape<arith::MulIOp>, ConvertArithDynamicShape<arith::SubIOp>, ConvertArithDynamicShape<arith::AddFOp>, ConvertArithDynamicShape<arith::MulFOp>, ConvertArithDynamicShape<arith::SubFOp> >(&getContext());
-
-        if (failed(applyPartialConversion(gpuModule, target, std::move(patternsClean4))))
-        {
-            return signalPassFailure();
-        }
     }
 };
 

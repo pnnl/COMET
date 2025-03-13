@@ -609,10 +609,15 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     pm.nest<mlir::gpu::GPUModuleOp>().addNestedPass<mlir::gpu::GPUFuncOp>(mlir::comet::createConvertGpuToBlockedGpuPass());
     pm.addPass(mlir::comet::createConvertBlockedGpuToTritonPass());
+    pm.addPass(mlir::createLoopInvariantCodeMotionPass());
+    pm.addPass(mlir::createCSEPass());;
+    pm.addPass(mlir::createSymbolDCEPass());;
+    pm.addPass(mlir::createCanonicalizerPass());
     // pm.addPass(mlir::comet::createConvertGpuKernelToTritonPass());
 
     if (emitTriton_)
     {
+
       if (mlir::failed(pm.run(*module)))
         return 4;
       return 0;
