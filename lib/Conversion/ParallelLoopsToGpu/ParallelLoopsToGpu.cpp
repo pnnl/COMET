@@ -219,6 +219,7 @@ bool contains_arg(mlir::Block& block, mlir::BlockArgument arg)
             }
             else {
                 llvm::errs() << "Load operation without affine expression\n";
+                block.dump();
                 index.dump();
                 store_op->dump();
                 exit(1);
@@ -943,11 +944,16 @@ public:
             return signalPassFailure();
         }
 
+
         llvm::SmallVector<scf::ForOp, 2> toReduceForOps;
         funcOp->walk([&toReduceForOps](mlir::scf::ForOp forOp) {
-            if(is_reduction(forOp))
+            if(forOp->getParentOfType<scf::ParallelOp>())
             {
-                toReduceForOps.push_back(forOp);
+
+                if(is_reduction(forOp))
+                {
+                    toReduceForOps.push_back(forOp);
+                }
             }
         });
 

@@ -437,8 +437,8 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                                 assert(!useToIndices[v0].empty());
                                 bool isDone = useToIndices.insert(std::make_pair(bcastOp->getResult(0), useToIndices[v0])).second;
                                 assert(isDone);
-                                bcastOp->dump();
-                                funcOp->dump();
+                                // bcastOp->dump();
+                                // funcOp->dump();
                                 // llvm::errs() << "FOUND\n";
                                 // bcastOp->dump();
                                 // v0.dump();
