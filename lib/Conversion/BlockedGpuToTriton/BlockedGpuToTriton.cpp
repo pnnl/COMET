@@ -696,6 +696,36 @@ class ConvertLinalgBroadcastOp : public OpConversionPattern<mlir::linalg::Broadc
     }
 };
 
+class ConvertLinalgMatmulOp : public OpConversionPattern<mlir::linalg::MatmulOp> {
+    public:
+    using mlir::OpConversionPattern<linalg::MatmulOp>::OpConversionPattern;
+    ConvertLinalgMatmulOp(mlir::MLIRContext* ctx) : mlir::OpConversionPattern<mlir::linalg::MatmulOp>(ctx) {}
+    mlir::LogicalResult
+    matchAndRewrite(linalg::MatmulOp matmulOp,  OpAdaptor adaptor,
+                    mlir::ConversionPatternRewriter &rewriter) const override {
+
+        assert(matmulOp->hasOneUse());
+        arith::AddFOp addOp = mlir::dyn_cast<arith::AddFOp>(*matmulOp->getUsers().begin()); 
+        assert(addOp);
+        Value c;
+        if(matmulOp.getResult(0) == addOp.getLhs())
+        {
+            c = addOp.getRhs();
+        }
+        else
+        {
+            c = addOp.getLhs();
+        }
+
+
+        triton::DotOp dot = rewriter.create<triton::DotOp>(matmulOp->getLoc(), matmulOp.getInputs()[0], matmulOp.getInputs()[1], c);
+        rewriter.eraseOp(matmulOp);
+        rewriter.replaceOp(*matmulOp->getUsers().begin(), dot);
+        // rewriter.eraseOp(matmulOp->getUsers())
+        return success();
+    }
+};
+
 
 
 template<typename T>
@@ -792,7 +822,18 @@ class ConvertBlockedGpuToTriton: public CometBlockedGpuToTritonBase<ConvertBlock
             mlir::comet::TritonTypeConverter converter(&getContext());
             mlir::comet::TritonConversionTarget target(getContext(), converter);
             patterns.insert<ConvertGpuFuncToTritonFunc, ConvertForOp>( converter, &getContext());
-            patterns.insert<ConvertExtractSlice, ConvertInsertSlice, ConvertBlockDim, ConvertBlockId, ConvertToTensor,ConvertTensorSplatOp, ConvertExtractStridedMetadata, ConvertLinalgReduceOp, ConvertLinalgBroadcastOp>( &getContext());
+            patterns.insert<
+                            ConvertExtractSlice, 
+                            ConvertInsertSlice, 
+                            ConvertBlockDim, 
+                            ConvertBlockId, 
+                            ConvertToTensor,
+                            ConvertTensorSplatOp, 
+                            ConvertExtractStridedMetadata, 
+                            ConvertLinalgReduceOp, 
+                            ConvertLinalgBroadcastOp,
+                            ConvertLinalgMatmulOp
+            >( &getContext());
 
             if (failed(applyPartialConversion(gpuModule, target, std::move(patterns))))
             {
