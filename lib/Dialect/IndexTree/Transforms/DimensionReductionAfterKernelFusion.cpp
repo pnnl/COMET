@@ -399,34 +399,6 @@ Value createNewComputeOp(Value computeOp,
   return new_compute_op;
 }
 
-
-/// One of current Compute Op's RHS operand is the previous Compute Op.
-/// Return the idx (i.e., 0 or 1) of that RHS operand, and the RHS operand itself.
-uint32_t getIntermediateIdxInRhsOperands(uint32_t computeOp_i,
-                                         const llvm::SmallVector<Value> &computeOps,
-                                         IndexTreeOperandOp &intermediate_operand /*out*/)
-{
-  Value prev_computeOp = computeOps[computeOp_i - 1];
-  Value curr_computeOp = computeOps[computeOp_i];
-  llvm::SmallVector<Value> old_rhs_operand_ops =
-      llvm::cast<IndexTreeComputeOp>(curr_computeOp.getDefiningOp()).getRhs();
-  uint32_t intermediate_idx = 0;
-  IndexTreeOperandOp old_rhs_operand_op = nullptr;
-  while (intermediate_idx < old_rhs_operand_ops.size()) {
-    IndexTreeOperandOp operandOp =
-        llvm::cast<IndexTreeOperandOp>(old_rhs_operand_ops[intermediate_idx].getDefiningOp());
-    if (operandOp.getTensor() == prev_computeOp) {
-      old_rhs_operand_op = operandOp;
-      break;  /// Found the intermediate tensor
-    }
-    ++intermediate_idx;
-  }
-  assert(intermediate_idx < old_rhs_operand_ops.size() && "Error: not found the intermediate tensor.");
-  intermediate_operand = old_rhs_operand_op;
-  return intermediate_idx;
-}
-
-
 /// Create the new rhs oprand for the new intermeidate tensor, then return it along with the other old rhs operand.
 llvm::SmallVector<Value> createNewRHSOperandOps(Value prev_old_compute_op,
                                                 Value curr_old_compute_op,

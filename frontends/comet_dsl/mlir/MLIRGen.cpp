@@ -53,6 +53,7 @@
 #include <numeric>
 #include <cstdlib> /// for random num generation
 #include <random>  /// for seed of random num generation
+#include <unordered_set>
 
 #include "mlir/IR/Types.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -76,8 +77,7 @@ int32_t defaultSpTensorIndiceBitWidth = 64; // TODO: We should be able to pass t
 using StringSet = std::set<std::string>;
 
 // *********** For debug purpose *********//
-// #define COMET_DEBUG_MODE
-// #define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -2446,12 +2446,51 @@ namespace
         all_lbls_value.push_back(symbolTable.lookup(n));
       }
 
+      /// determine the map. The order is rhs1's dimensions, rhs2's, then lhs'.
+      /// TODO: the order can be determined by autotuning.
       std::map<std::string, mlir::AffineExpr> expr_map;
       unsigned dim = 0;
-      for (const auto &lbl : all_lbls)
       {
-        expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
+        std::unordered_set<std::string> labels_set;
+        llvm::SmallVector<std::string> labels_ordered;
+        for (const auto &label : rhs1_lbls) {
+          if (labels_set.find(label) == labels_set.end()) {
+            /// A new label
+            labels_set.insert(label);
+            labels_ordered.push_back(label);
+          }
+        }
+        for (const auto &label : rhs2_lbls) {
+          if (labels_set.find(label) == labels_set.end()) {
+            /// A new label
+            labels_set.insert(label);
+            labels_ordered.push_back(label);
+          }
+        }
+        for (const auto &label : lhs_lbls) {
+          if (labels_set.find(label) == labels_set.end()) {
+            /// A new label
+            labels_set.insert(label);
+            labels_ordered.push_back(label);
+          }
+        }
+
+        for (const auto &label : labels_ordered) {
+          expr_map[label] = getAffineDimExpr(dim++, builder.getContext());
+        }
       }
+
+//      std::map<std::string, mlir::AffineExpr> expr_map;
+//      unsigned dim = 0;
+//      for (const auto &lbl : all_lbls)
+//      {
+//        expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
+//        {/// test
+//          comet_debug() << lbl << "\n";
+//          comet_vdump(expr_map[lbl]);
+//        }
+//      }
+
       std::vector<mlir::AffineExpr> rhs1_exprs;
       std::vector<mlir::AffineExpr> rhs2_exprs;
       std::vector<mlir::AffineExpr> lhs_exprs;
