@@ -36,9 +36,11 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <map>
+#include <tuple>
 #include <utility>
 using namespace::mlir;
 
@@ -59,57 +61,41 @@ bool checkOperandsSameShape(Operation* op)
     {
         return true;
     }
-    else if(op->getNumOperands() == 2)  
-    {
-        ShapedType shape0 = mlir::dyn_cast<ShapedType>(op->getOperand(0).getType());
-        ShapedType shape1 = mlir::dyn_cast<ShapedType>(op->getOperand(1).getType());
-        if(shape0 == nullptr && shape1 == nullptr)
+
+    ShapedType shape0 = mlir::dyn_cast<ShapedType>(op->getOperandTypes().front());
+    return llvm::all_of(op->getOperandTypes(), [&shape0](Type type){
+        ShapedType shape1 = mlir::dyn_cast<ShapedType>(type);
+        if(!shape0 && !shape1)
         {
             return true;
         }
-        else if(shape0 == nullptr || shape1 == nullptr)
+        else if(shape0 && !shape1)
         {
             return false;
         }
-        else 
+        else if(!shape0 && shape1)
         {
-            if(shape0.getRank() == shape1.getRank())
-            {
-                for(int64_t i = 0; i < shape0.getRank(); i++)
-                {
-                    if(shape0.getDimSize(i) != shape1.getDimSize(i))
-                    {
-                        return false;
-                    }
-                }
-            }
-            else 
-            {
-                return false;
-            }
-
-            return true;
+            return false;
         }
-    }
-    else 
-    {
-        assert(false && "Operations with more than two operands are not handled currently");
-    }
+        else
+        {
+            return llvm::all_of(zip(shape0.getShape(), shape1.getShape()), [](std::tuple<int64_t, int64_t> dims) {
+                auto [first, second] = dims;
+                return first == second;
+            });
+        }
+    });
 }
+
 bool checkOperandsSameType(Operation* op) 
 {
+    
     if(op->getNumOperands() == 1) 
     {
         return true;
     }
-    else if(op->getNumOperands() == 2)  
-    {
-        return op->getOperandTypes()[0] == op->getOperandTypes()[1];
-    }
-    else 
-    {
-        assert(false && "Operations with more than two operands are not handled currently");
-    }
+    Type type0 = op->getOperandTypes().front();
+    return llvm::all_of(op->getOperandTypes(), [&type0](Type type){return type == type0;});
 }
 
 class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlockedGpu> {
@@ -157,7 +143,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
         llvm::MapVector<mlir::tensor::ExtractOp, llvm::SmallVector<BlockInfo, 2>> extracts;
         llvm::MapVector<mlir::tensor::InsertOp, llvm::SmallVector<BlockInfo, 2>> inserts;
         llvm::SmallVector<scf::ForOp, 2> forOps;
-        auto comp = [](Value a, Value b) {return a.getAsOpaquePointer() < b.getAsOpaquePointer();};
         // std::set<mlir::Value, decltype(comp)> needCheck(comp);
         std::vector<mlir::Value> needCheck;
 
@@ -360,13 +345,17 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                         // user->dump();
                     }
 
+                    bool sameOpResType = user->hasTrait<mlir::OpTrait::SameOperandsAndResultType>();
+                    bool sameOpResShape = user->hasTrait<mlir::OpTrait::SameOperandsAndResultShape>();
+                    bool sameOpType = user->hasTrait<mlir::OpTrait::SameTypeOperands>();
+                    bool elewise = user->hasTrait<mlir::OpTrait::Elementwise>();
                     // If inputs and outputs should have the same shape
                     // This includes most of `arith` operations. Instead of handling each operation
                     // explicitly, we handle them based on whether they have the specific trait
-                    if(user->hasTrait<mlir::OpTrait::SameOperandsAndResultType>())
+                    if(elewise)
                     {
                         // llvm::errs() << "Has SameOperandsAmdResultTypeType trait\n";
-                        bool operandsSameShape = checkOperandsSameType(user);
+                        bool operandsSameShape = checkOperandsSameShape(user);
                         // If input operands do not have the same type/shape
                         if(!operandsSameShape)
                         {
@@ -377,14 +366,16 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                             if(shaped0 && !shaped1 && ! isNotPartOfReduction)
                             {
                                 builder.setInsertionPoint(user);
-                                auto splatOp = builder.create<tensor::SplatOp>(user->getLoc(), shaped0, user->getOperands()[1]);
+                                auto outputType = RankedTensorType::get(shaped0.getShape(), user->getOperandTypes()[1]);
+                                auto splatOp = builder.create<tensor::SplatOp>(user->getLoc(), outputType, user->getOperands()[1]);
                                 user->getOpOperands()[1].set(splatOp);
                             }
                             // Same as above with LHS being scalar and RHS being shaped
                             else if(!shaped0 && shaped1 && !isNotPartOfReduction)
                             {
                                 builder.setInsertionPoint(user);
-                                auto splatOp = builder.create<tensor::SplatOp>(user->getLoc(), shaped1, user->getOperands()[0]);
+                                auto outputType = RankedTensorType::get(shaped1.getShape(), user->getOperandTypes()[0]);
+                                auto splatOp = builder.create<tensor::SplatOp>(user->getLoc(), outputType, user->getOperands()[0]);
                                 user->getOpOperands()[0].set(splatOp);
                             }
                             // Both are shaped, but the shapes do not match.
@@ -436,7 +427,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                                     // if(*user->getUsers().begin())
                                     // assert(shaped0.getRank() != shaped1.getRank() && "Shapes have same rank but are different");
                                 }
-                                else // Broadcast
+                                else // We surely need to broadcast
                                 {
                                     // Assuming first operand is the one to potentially broadcast (input)
 
@@ -514,21 +505,42 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                         // This can be easily fixed by re-creating the same operation with
                         // the new "blocked" inputs, which will automatically update their output
                         // type
-                        if(user->getOperandTypes()[0] != user->getResultTypes()[0] && ! isNotPartOfReduction)
+                        if(!isNotPartOfReduction)
                         {
-                            builder.setInsertionPoint(user);
-                            auto blockedOp = builder.create(user->getLoc(), user->getName().getIdentifier(), user->getOperands(), TypeRange(user->getOperandTypes()[0]));
-                            user->replaceAllUsesWith(blockedOp);
-                            newOpsToCheck.insert(newOpsToCheck.end(), blockedOp->getResults().begin(), blockedOp->getResults().end());
-                            if(useToIndices.find(user->getOperands()[1])!=useToIndices.end())
+                            Operation* blockedOp = nullptr;
+                            if(user->getOperandTypes()[0] != user->getResultTypes()[0] && sameOpResType)
                             {
-                                bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[1]])).second;
-                                assert(isDone);
+                                builder.setInsertionPoint(user);
+                                blockedOp = builder.create(user->getLoc(), user->getName().getIdentifier(), user->getOperands(), TypeRange(user->getOperandTypes()[0]), user->getAttrs());
                             }
-                            else if(useToIndices.find(user->getOperands()[0])!=useToIndices.end())
+                            else if(elewise || sameOpResShape)
                             {
-                                bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[0]])).second;
-                                assert(isDone);
+                                if(RankedTensorType input0T = dyn_cast<RankedTensorType>(user->getOperandTypes()[0]) )
+                                {
+                                    if(!isa<RankedTensorType>(user->getResultTypes()[0]))
+                                    {
+                                        builder.setInsertionPoint(user);
+                                        
+                                        blockedOp = builder.create(user->getLoc(), user->getName().getIdentifier(), user->getOperands(), TypeRange(RankedTensorType::get(input0T.getShape(), user->getResultTypes()[0])), user->getAttrs());
+                                    }
+                                    
+                                }
+                            }
+                            if(blockedOp)
+                            {
+                                user->replaceAllUsesWith(blockedOp);
+                                newOpsToCheck.insert(newOpsToCheck.end(), blockedOp->getResults().begin(), blockedOp->getResults().end());
+                                if(useToIndices.find(user->getOperands()[1])!=useToIndices.end())
+                                {
+                                    bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[1]])).second;
+                                    assert(isDone);
+                                }
+                                else if(useToIndices.find(user->getOperands()[0])!=useToIndices.end())
+                                {
+                                    bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[0]])).second;
+                                    assert(isDone);
+                                }
+                                user->erase();
                             }
 
                             // llvm::errs() << "FOUND\n";
@@ -542,8 +554,12 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                             //     llvm::errs() << index.getAsOpaquePointer() << "\n";
                             // }
                             // llvm::errs() << "======= END ===========\n";
-                            user->erase();
                         }
+                        // else
+                        // {
+                            // llvm::errs() << "Skipped :\n";
+                            // user->dump();
+                        // }
                     }
                     else if(scf::ForOp forOp = mlir::dyn_cast<scf::ForOp>(user))
                     {
@@ -640,6 +656,14 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             insert.first->erase();
             /// TODO: It might make sense to replaceAll uses at some point later
             // insert.first.replaceAllUsesWith(insertSlice.getResult());
+        });
+
+        funcOp->walk([&] (mlir::tensor::SplatOp splatOp) {
+            if(splatOp.getInput().getType() == splatOp.getResult().getType())
+            {
+                splatOp.replaceAllUsesWith(splatOp.getInput());
+                splatOp->erase();
+            }
         });
 
         // Since we might have replaced forOps if they were using initArgs
