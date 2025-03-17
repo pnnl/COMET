@@ -82,7 +82,7 @@ class ConvertGpuFuncToTritonFunc : public OpConversionPattern<mlir::gpu::GPUFunc
             }
             else
             {
-                materializedValues.push_back(ttFuncBlock->getArguments()[i]); 
+                materializedValues.push_back(ttFuncBlock->getArguments()[prev]); 
             }
             rewriter.replaceAllUsesWith(gpuFunc.getBody().getArguments()[i], materializedValues.back());
             prev += sizes[i];
@@ -381,166 +381,33 @@ class ConvertInsertSlice : public OpConversionPattern<mlir::tensor::InsertSliceO
         RankedTensorType sliceT = mlir::cast<RankedTensorType>(tensorCastOp.getSource().getType());
         auto [combinedOffsetBlocked, combinedBoundBlocked] = generate_triton_blocked_bounds_and_offsets(rewriter, insertSliceOp, sliceT);
         auto resultShape = dyn_cast<ShapedType>(combinedBoundBlocked.getType()).getShape();
-        // llvm::SmallVector<Value, 2> blockedOffsets;
-        // llvm::SmallVector<Value, 2> blockedBounds;
-        // for(size_t i = 0; i < insertSliceOp.getOffsets().size(); i++)
-        // {
-        //     auto offset = insertSliceOp.getOffsets()[i];
-        //     if(auto castOp = mlir::dyn_cast<UnrealizedConversionCastOp>(offset.getDefiningOp()))
-        //     {
-        //         Value cast;
-        //         if(auto shaped = mlir::dyn_cast<ShapedType>(castOp.getInputs().front().getType()))
-        //         {
-        //             cast = rewriter.create<arith::IndexCastOp>(insertSliceOp->getLoc(), RankedTensorType::get(shaped.getShape(), rewriter.getIntegerType(32)), castOp.getInputs().front());
-        //         }
-        //         else 
-        //         {
-        //             cast = rewriter.create<arith::IndexCastOp>(insertSliceOp->getLoc(), rewriter.getIntegerType(32), castOp.getInputs().front());
-        //         }
-        //         blockedOffsets.push_back(cast);
-        //     }
-
-        //     auto blockSize = sliceT.getDimSize(i);
-        //     Value bound = insertSliceOp.getSizes()[i];
-        //     if(auto min = mlir::dyn_cast_if_present<arith::MinSIOp>(bound.getDefiningOp()))
-        //     {
-        //         bound = min.getRhs();
-        //     }
-        //     Value cast = rewriter.create<arith::IndexCastOp>(bound.getLoc(), rewriter.getIntegerType(32), bound);
-            
-        //     auto blockedBound =  rewriter.create<triton::SplatOp>(bound.getLoc(), RankedTensorType::get({blockSize}, rewriter.getIntegerType(32)),  cast);
-        //     auto blockedBlockSize =  rewriter.create<triton::MakeRangeOp>(bound.getLoc(), RankedTensorType::get({blockSize}, rewriter.getIntegerType(32)), 0, blockSize);
-        //     auto cmp = rewriter.create<arith::CmpIOp>(bound.getLoc(), arith::CmpIPredicate::slt, blockedBlockSize, blockedBound);
-        //     blockedBounds.push_back(cmp);
-        // }
-
-
-        // SmallVector<Value, 4> tritonOffsets, tritonBounds;
-        // SmallVector<int64_t, 3> resultShape;
-
-        // for(size_t i = 0; i < blockedOffsets.size(); i++)
-        // {
-        //     auto blockedOffset = blockedOffsets[i];
-        //     Value strideVal = rewriter.create<arith::IndexCastOp>(insertSliceOp->getLoc(), rewriter.getIntegerType(32), adaptor.getStrides()[i]);
-        //     Value stridesBlocked = rewriter.create<triton::SplatOp>(insertSliceOp->getLoc(), blockedOffset.getType(), strideVal);
-        //     Value offsetBlocked = rewriter.create<arith::MulIOp>(insertSliceOp->getLoc(), blockedOffset, stridesBlocked);
-        //     tritonOffsets.push_back(offsetBlocked);
-        //     tritonBounds.push_back(blockedBounds[i]);
-        //     auto shaped = mlir::cast<ShapedType>(blockedOffset.getType());
-
-        //     resultShape.push_back(shaped.getDimSize(0));
-        // }
-
-        // for(size_t i = 0; i < tritonOffsets.size(); i++)
-        // {
-        //     for(size_t j = 0; j <tritonOffsets.size(); j++  )
-        //     {
-        //         if(i != j)
-        //         {
-        //             tritonOffsets[i] = rewriter.create<triton::ExpandDimsOp>(insertSliceOp->getLoc(), tritonOffsets[i], j);
-        //             tritonBounds[i] = rewriter.create<triton::ExpandDimsOp>(insertSliceOp->getLoc(), tritonBounds[i], j);
-                    
-        //         }
-        //     }
-            
-        //     tritonOffsets[i] = rewriter.create<triton::BroadcastOp>(insertSliceOp->getLoc(), RankedTensorType::get(resultShape, rewriter.getIntegerType(32)), tritonOffsets[i]);
-        //     tritonBounds[i] = rewriter.create<triton::BroadcastOp>(insertSliceOp->getLoc(), RankedTensorType::get(resultShape, rewriter.getIntegerType(1)), tritonBounds[i]);
-        // }
-        // Value combinedOffsetBlocked, combinedBoundBlocked;
-        // combinedOffsetBlocked = tritonOffsets.front();
-        // combinedBoundBlocked = tritonBounds.front();
-        // for(size_t i = 1; i <  tritonOffsets.size(); i++)
-        // {
-        //     combinedOffsetBlocked = rewriter.create<arith::AddIOp>(insertSliceOp->getLoc(), combinedOffsetBlocked, tritonOffsets[i]);
-        //     combinedBoundBlocked = rewriter.create<arith::AndIOp>(insertSliceOp->getLoc(), combinedBoundBlocked, tritonBounds[i]);
-        // }
 
         auto blockedPtr = rewriter.create<triton::SplatOp>(insertSliceOp->getLoc(), RankedTensorType::get(resultShape, ttDest.getType()), ttDest);
         auto ptr = rewriter.create<triton::AddPtrOp>(insertSliceOp->getLoc(),  RankedTensorType::get(resultShape, ttDest.getType()), blockedPtr, combinedOffsetBlocked);
 
-        //     auto blockedPtr = rewriter.create<triton::SplatOp>(insertSliceOp->getLoc(), RankedTensorType::get(resultShape.getShape(), ttDest.getType()), ttDest);
-        //     auto ptr = rewriter.create<triton::AddPtrOp>(insertSliceOp->getLoc(),  RankedTensorType::get(resultShape.getShape(), ttDest.getType()), blockedPtr, combinedBlockedOffsets);
-
-        // if(blockedOffsets.size() == 1)
-        // {
-        //     auto shaped = mlir::cast<ShapedType>(blockedOffsets[0].getType());
-        //     auto blockedPtr = rewriter.create<triton::SplatOp>(insertSliceOp->getLoc(), RankedTensorType::get(shaped.getShape(), ttDest.getType()), ttDest);
-        //     auto ptr = rewriter.create<triton::AddPtrOp>(insertSliceOp->getLoc(),  RankedTensorType::get(shaped.getShape(), ttDest.getType()), blockedPtr, blockedOffsets[0]);
-        //     if(ShapedType sourceShaped = mlir::dyn_cast<ShapedType>(ttSource.getType());  sourceShaped && !sourceShaped.hasStaticShape())
-        //     {
-        //         auto castOp = rewriter.create<tensor::CastOp>(insertSliceOp->getLoc(), RankedTensorType::get(shaped.getShape(), insertSliceOp.getDestType().getElementType()), ttSource);
-        //         rewriter.create<triton::StoreOp>( insertSliceOp->getLoc(), ptr, castOp, blockedBounds[0], mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
-        //     }
-        //     else 
-        //     {
-        //         rewriter.create<triton::StoreOp>( insertSliceOp->getLoc(), ptr, ttSource, blockedBounds[0], mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
-        //     }
-        //     rewriter.eraseOp(insertSliceOp);
-        //     if(toTensor->getUsers().empty())
-        //     {
-        //         rewriter.eraseOp(toTensor);
-        //     }
-        //     if(castOp->getUsers().empty())
-        //     {
-        //         rewriter.eraseOp(castOp);
-        //     }
-        //     return success();
-        // }
-        // else if(blockedOffsets.size() == 2)
-        // {
-        //     auto shaped0 = mlir::cast<ShapedType>(blockedOffsets[0].getType());
-        //     auto shaped1 = mlir::cast<ShapedType>(blockedOffsets[1].getType());
-        //     auto resultShape = RankedTensorType::get({shaped0.getDimSize(0), shaped1.getDimSize(0)}, rewriter.getIntegerType(32));
-        //     auto boundShape = RankedTensorType::get({shaped0.getDimSize(0), shaped1.getDimSize(0)}, rewriter.getIntegerType(1));
-        //     Value ybound = rewriter.create<triton::ExpandDimsOp>(insertSliceOp->getLoc(), blockedBounds[0], 1);
-        //     ybound = rewriter.create<triton::BroadcastOp>(insertSliceOp->getLoc(), boundShape, ybound);
-        //     Value xbound = rewriter.create<triton::ExpandDimsOp>(insertSliceOp->getLoc(), blockedBounds[1], 0);
-        //     xbound = rewriter.create<triton::BroadcastOp>(insertSliceOp->getLoc(), boundShape, xbound);
-        //     Value combinedBlockedBound = rewriter.create<arith::AndIOp>(insertSliceOp->getLoc(), ybound, xbound);
-
-        //     Value yOffsets = rewriter.create<triton::ExpandDimsOp>(insertSliceOp->getLoc(), blockedOffsets[0], 1);
-        //     Value cast = rewriter.create<arith::IndexCastOp>(insertSliceOp->getLoc(), rewriter.getIntegerType(32), insertSliceOp.getStrides()[0]);
-
-        //     Value yStrides = rewriter.create<triton::SplatOp>(insertSliceOp->getLoc(), yOffsets.getType(), cast);
-        //     yOffsets = rewriter.create<arith::MulIOp>(insertSliceOp->getLoc(), yOffsets, yStrides);
-        //     yOffsets = rewriter.create<triton::BroadcastOp>(insertSliceOp->getLoc(), resultShape, yOffsets);
-
-        //     Value xOffsets = rewriter.create<triton::ExpandDimsOp>(insertSliceOp->getLoc(), blockedOffsets[1], 0);
-        //     xOffsets = rewriter.create<triton::BroadcastOp>(insertSliceOp->getLoc(), resultShape, xOffsets);
-        //     Value combinedBlockedOffsets = rewriter.create<arith::AddIOp>(insertSliceOp->getLoc(), yOffsets, xOffsets);
-        //     auto blockedPtr = rewriter.create<triton::SplatOp>(insertSliceOp->getLoc(), RankedTensorType::get(resultShape.getShape(), ttDest.getType()), ttDest);
-        //     auto ptr = rewriter.create<triton::AddPtrOp>(insertSliceOp->getLoc(),  RankedTensorType::get(resultShape.getShape(), ttDest.getType()), blockedPtr, combinedBlockedOffsets);
-            if(ShapedType sourceShaped = mlir::dyn_cast<ShapedType>(ttSource.getType());  sourceShaped && !sourceShaped.hasStaticShape())
-            {
-                auto castOp = rewriter.create<tensor::CastOp>(insertSliceOp->getLoc(), RankedTensorType::get(resultShape, insertSliceOp.getDestType().getElementType()), ttSource);
-                rewriter.create<triton::StoreOp>( insertSliceOp->getLoc(), ptr, castOp, combinedBoundBlocked, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
-                auto placeholder = rewriter.create<UnrealizedConversionCastOp>(insertSliceOp->getLoc(), insertSliceOp.getResultType(), ValueRange(ptr));
-                rewriter.replaceOp(insertSliceOp, placeholder->getResult(0));
-            }
-            else 
-            {
-                rewriter.create<triton::StoreOp>( insertSliceOp->getLoc(), ptr, ttSource, combinedBoundBlocked, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
-                auto placeholder = rewriter.create<UnrealizedConversionCastOp>(insertSliceOp->getLoc(), insertSliceOp.getResultType(), ValueRange(ptr));
-                rewriter.replaceOp(insertSliceOp, placeholder->getResult(0));
-            }
-            // rewriter.eraseOp(insertSliceOp);
-            // rewriter.create<triton::StoreOp>(insertSliceOp->getLoc(), ptr, ttSource, combinedBlockedBound, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
-            
-            if(toTensor->getUsers().empty())
-            {
-                rewriter.eraseOp(toTensor);
-            }
-            if(castOp->getUsers().empty())
-            {
-                rewriter.eraseOp(castOp);
-            }
-            return success();
-        // }
-        // else {
-        //     assert(false && "blocks of dimension > 2 are not currently supported");
-        // }
-
-        // return failure();
+        if(ShapedType sourceShaped = mlir::dyn_cast<ShapedType>(ttSource.getType());  sourceShaped && !sourceShaped.hasStaticShape())
+        {
+            auto castOp = rewriter.create<tensor::CastOp>(insertSliceOp->getLoc(), RankedTensorType::get(resultShape, insertSliceOp.getDestType().getElementType()), ttSource);
+            rewriter.create<triton::StoreOp>( insertSliceOp->getLoc(), ptr, castOp, combinedBoundBlocked, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
+            auto placeholder = rewriter.create<UnrealizedConversionCastOp>(insertSliceOp->getLoc(), insertSliceOp.getResultType(), ValueRange(ptr));
+            rewriter.replaceOp(insertSliceOp, placeholder->getResult(0));
+        }
+        else 
+        {
+            rewriter.create<triton::StoreOp>( insertSliceOp->getLoc(), ptr, ttSource, combinedBoundBlocked, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
+            auto placeholder = rewriter.create<UnrealizedConversionCastOp>(insertSliceOp->getLoc(), insertSliceOp.getResultType(), ValueRange(ptr));
+            rewriter.replaceOp(insertSliceOp, placeholder->getResult(0));
+        }
+        
+        if(toTensor->getUsers().empty())
+        {
+            rewriter.eraseOp(toTensor);
+        }
+        if(castOp->getUsers().empty())
+        {
+            rewriter.eraseOp(castOp);
+        }
+        return success();
     }
 };
 
@@ -583,171 +450,33 @@ class ConvertExtractSlice : public OpConversionPattern<mlir::tensor::ExtractSlic
         auto [combinedOffsetBlocked, combinedBoundBlocked] = generate_triton_blocked_bounds_and_offsets(rewriter, extractSliceOp, sliceT);
         auto resultShape = dyn_cast<ShapedType>(combinedBoundBlocked.getType()).getShape();
 
-        // llvm::SmallVector<Value, 2> blockedOffsets;
-        // llvm::SmallVector<Value, 2> blockedBounds;
-
-        // for(size_t i = 0; i < adaptor.getOffsets().size(); i++)
-        // {
-        //     auto offset = extractSliceOp.getOffsets()[i];
-        //     if(auto castOp = mlir::dyn_cast<UnrealizedConversionCastOp>(offset.getDefiningOp()))
-        //     {
-        //         Value cast;
-        //         if(auto shaped = mlir::dyn_cast<ShapedType>(castOp.getInputs().front().getType()))
-        //         {
-        //             cast = rewriter.create<arith::IndexCastOp>(extractSliceOp->getLoc(), RankedTensorType::get(shaped.getShape(), rewriter.getIntegerType(32)), castOp.getInputs().front());
-        //         }
-        //         else 
-        //         {
-        //             cast = rewriter.create<arith::IndexCastOp>(extractSliceOp->getLoc(), rewriter.getIntegerType(32), castOp.getInputs().front());
-        //         }
-        //         blockedOffsets.push_back(cast);
-        //     }
-
-        //     auto blockSize = sliceT.getDimSize(i);
-        //     Value bound = adaptor.getSizes()[i];
-        //     if(auto min = mlir::dyn_cast_if_present<arith::MinSIOp>(bound.getDefiningOp()))
-        //     {
-        //         bound = min.getRhs();
-        //     }
-        //     Value cast = rewriter.create<arith::IndexCastOp>(bound.getLoc(), rewriter.getIntegerType(32), bound);
-
-        //     auto blockedBound =  rewriter.create<triton::SplatOp>(bound.getLoc(), RankedTensorType::get({blockSize}, rewriter.getIntegerType(32)),  cast);
-        //     auto blockedBlockSize =  rewriter.create<triton::MakeRangeOp>(bound.getLoc(), RankedTensorType::get({blockSize}, rewriter.getIntegerType(32)), 0, blockSize);
-        //     auto cmp = rewriter.create<arith::CmpIOp>(bound.getLoc(), arith::CmpIPredicate::slt, blockedBlockSize, blockedBound);
-        //     blockedBounds.push_back(cmp);
-        // }
-
-        // SmallVector<Value, 4> tritonOffsets, tritonBounds;
-        // SmallVector<int64_t, 3> resultShape;
-
-        // for(size_t i = 0; i < blockedOffsets.size(); i++)
-        // {
-        //     auto blockedOffset = blockedOffsets[i];
-        //     Value strideVal = rewriter.create<arith::IndexCastOp>(extractSliceOp->getLoc(), rewriter.getIntegerType(32), adaptor.getStrides()[i]);
-        //     Value stridesBlocked = rewriter.create<triton::SplatOp>(extractSliceOp->getLoc(), blockedOffset.getType(), strideVal);
-        //     Value offsetBlocked = rewriter.create<arith::MulIOp>(extractSliceOp->getLoc(), blockedOffset, stridesBlocked);
-        //     tritonOffsets.push_back(offsetBlocked);
-        //     tritonBounds.push_back(blockedBounds[i]);
-        //     auto shaped = mlir::cast<ShapedType>(blockedOffset.getType());
-
-        //     resultShape.push_back(shaped.getDimSize(0));
-        // }
-
-        // for(size_t i = 0; i < tritonOffsets.size(); i++)
-        // {
-        //     for(size_t j = 0; j <tritonOffsets.size(); j++  )
-        //     {
-        //         if(i != j)
-        //         {
-        //             tritonOffsets[i] = rewriter.create<triton::ExpandDimsOp>(extractSliceOp->getLoc(), tritonOffsets[i], j);
-        //             tritonBounds[i] = rewriter.create<triton::ExpandDimsOp>(extractSliceOp->getLoc(), tritonBounds[i], j);
-                    
-        //         }
-        //     }
-            
-        //     tritonOffsets[i] = rewriter.create<triton::BroadcastOp>(extractSliceOp->getLoc(), RankedTensorType::get(resultShape, rewriter.getIntegerType(32)), tritonOffsets[i]);
-        //     tritonBounds[i] = rewriter.create<triton::BroadcastOp>(extractSliceOp->getLoc(), RankedTensorType::get(resultShape, rewriter.getIntegerType(1)), tritonBounds[i]);
-        // }
-        // Value combinedOffsetBlocked, combinedBoundBlocked;
-        // combinedOffsetBlocked = tritonOffsets.front();
-        // combinedBoundBlocked = tritonBounds.front();
-        // for(size_t i = 1; i <  tritonOffsets.size(); i++)
-        // {
-        //     combinedOffsetBlocked = rewriter.create<arith::AddIOp>(extractSliceOp->getLoc(), combinedOffsetBlocked, tritonOffsets[i]);
-        //     combinedBoundBlocked = rewriter.create<arith::AndIOp>(extractSliceOp->getLoc(), combinedBoundBlocked, tritonBounds[i]);
-        // }
-
         auto blockedPtr = rewriter.create<triton::SplatOp>(extractSliceOp->getLoc(), RankedTensorType::get(resultShape, ttSource.getType()), ttSource);
         auto ptr = rewriter.create<triton::AddPtrOp>(extractSliceOp->getLoc(),  RankedTensorType::get(resultShape, ttSource.getType()), blockedPtr, combinedOffsetBlocked);
-
-
+       
+        auto loadOp = rewriter.create<triton::LoadOp>(extractSliceOp->getLoc(), ptr, combinedBoundBlocked, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL, false);
+        if(auto shaped = mlir::dyn_cast<ShapedType>(loadOp.getType()))
+        {
+            SmallVector<int64_t, 2> rank;
+            for(int64_t i = 0; i < shaped.getRank(); i ++)
+            {
+                rank.push_back(ShapedType::kDynamic);
+            }
+            auto cast = rewriter.create<tensor::CastOp>(loadOp->getLoc(), RankedTensorType::get(rank, shaped.getElementType()), loadOp);
+            rewriter.replaceOp(extractSliceOp, cast);
+        }
+        else 
+        {
+            rewriter.replaceOp(extractSliceOp, loadOp);
+        }
         
-        // if(blockedOffsets.size() == 1)
-        // {
-        //     auto shaped = mlir::cast<ShapedType>(blockedOffsets[0].getType());
-        //     auto blockedPtr = rewriter.create<triton::SplatOp>(extractSliceOp->getLoc(), RankedTensorType::get(shaped.getShape(), ttSource.getType()), ttSource);
-        //     auto ptr = rewriter.create<triton::AddPtrOp>(extractSliceOp->getLoc(),  RankedTensorType::get({mlir::cast<ShapedType>(blockedOffsets[0].getType()).getShape()}, ttSource.getType()), blockedPtr, blockedOffsets[0]);
-        //     auto loadOp = rewriter.create<triton::LoadOp>(extractSliceOp->getLoc(), ptr, blockedBounds[0], mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL, false);
-        //     if(auto shaped = mlir::dyn_cast<ShapedType>(loadOp.getType()))
-        //     {
-        //         SmallVector<int64_t, 2> rank;
-        //         for(int64_t i = 0; i < shaped.getRank(); i ++)
-        //         {
-        //             rank.push_back(ShapedType::kDynamic);
-        //         }
-        //         auto cast = rewriter.create<tensor::CastOp>(loadOp->getLoc(), RankedTensorType::get(rank, shaped.getElementType()), loadOp);
-        //         rewriter.replaceOp(extractSliceOp, cast);
-        //     }
-        //     else 
-        //     {
-        //         rewriter.replaceOp(extractSliceOp, loadOp);
-        //     }
-
-        //     if(toTensor->getUsers().empty())
-        //     {
-        //         rewriter.eraseOp(toTensor);
-        //     }
-        //     if(castOp->getUsers().empty())
-        //     {
-        //         rewriter.eraseOp(castOp);
-        //     }
-        
-        //     return success();
-        // }
-        // else if(blockedOffsets.size() == 2)
-        // {
-            // auto shaped0 = mlir::cast<ShapedType>(blockedOffsets[0].getType());
-            // auto shaped1 = mlir::cast<ShapedType>(blockedOffsets[1].getType());
-            // auto boundShape = RankedTensorType::get({shaped0.getDimSize(0), shaped1.getDimSize(0)}, rewriter.getIntegerType(1));
-
-            // auto resultShape = RankedTensorType::get({shaped0.getDimSize(0), shaped1.getDimSize(0)}, rewriter.getIntegerType(32));
-            // Value ybound = rewriter.create<triton::ExpandDimsOp>(extractSliceOp->getLoc(), blockedBounds[0], 1);
-            // ybound = rewriter.create<triton::BroadcastOp>(extractSliceOp->getLoc(), boundShape, ybound);
-            // Value xbound = rewriter.create<triton::ExpandDimsOp>(extractSliceOp->getLoc(), blockedBounds[1], 0);
-            // xbound = rewriter.create<triton::BroadcastOp>(extractSliceOp->getLoc(), boundShape, xbound);
-            // Value combinedBlockedBound = rewriter.create<arith::AndIOp>(extractSliceOp->getLoc(), ybound, xbound);
-
-            // Value yOffsets = rewriter.create<triton::ExpandDimsOp>(extractSliceOp->getLoc(), blockedOffsets[0], 1);
-            // Value cast = rewriter.create<arith::IndexCastOp>(extractSliceOp->getLoc(), rewriter.getIntegerType(32), adaptor.getStrides()[0]);
-            // Value yStrides = rewriter.create<triton::SplatOp>(extractSliceOp->getLoc(), yOffsets.getType(), cast);
-            // yOffsets = rewriter.create<arith::MulIOp>(extractSliceOp->getLoc(), yOffsets, yStrides);
-            // yOffsets = rewriter.create<triton::BroadcastOp>(extractSliceOp->getLoc(), resultShape, yOffsets);
-
-            // Value xOffsets = rewriter.create<triton::ExpandDimsOp>(extractSliceOp->getLoc(), blockedOffsets[1], 0);
-            // xOffsets = rewriter.create<triton::BroadcastOp>(extractSliceOp->getLoc(), resultShape, xOffsets);
-            // Value combinedBlockedOffsets = rewriter.create<arith::AddIOp>(extractSliceOp->getLoc(), yOffsets, xOffsets);
-            // auto blockedPtr = rewriter.create<triton::SplatOp>(extractSliceOp->getLoc(), RankedTensorType::get(resultShape.getShape(), ttSource.getType()), ttSource);
-            // auto ptr = rewriter.create<triton::AddPtrOp>(extractSliceOp->getLoc(),  RankedTensorType::get(resultShape.getShape(), ttSource.getType()), blockedPtr, combinedBlockedOffsets);
-            
-            auto loadOp = rewriter.create<triton::LoadOp>(extractSliceOp->getLoc(), ptr, combinedBoundBlocked, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL, false);
-            if(auto shaped = mlir::dyn_cast<ShapedType>(loadOp.getType()))
-            {
-                SmallVector<int64_t, 2> rank;
-                for(int64_t i = 0; i < shaped.getRank(); i ++)
-                {
-                    rank.push_back(ShapedType::kDynamic);
-                }
-                auto cast = rewriter.create<tensor::CastOp>(loadOp->getLoc(), RankedTensorType::get(rank, shaped.getElementType()), loadOp);
-                rewriter.replaceOp(extractSliceOp, cast);
-            }
-            else 
-            {
-                rewriter.replaceOp(extractSliceOp, loadOp);
-            }
-            
-            if(toTensor->getUsers().empty())
-            {
-                rewriter.eraseOp(toTensor);
-            }
-            if(castOp->getUsers().empty())
-            {
-                rewriter.eraseOp(castOp);
-            }
-        //     return success();
-        // }
-        // else {
-        //     assert(false && "blocks of dimension > 2 are not currently supported");
-        // }
+        if(toTensor->getUsers().empty())
+        {
+            rewriter.eraseOp(toTensor);
+        }
+        if(castOp->getUsers().empty())
+        {
+            rewriter.eraseOp(castOp);
+        }
 
         return success();
     }

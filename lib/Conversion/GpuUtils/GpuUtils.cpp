@@ -1,12 +1,15 @@
 #include "comet/Dialect/Utils/Utils.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/ValueRange.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include <functional>
 #include <map>
@@ -61,7 +64,20 @@ mlir::LogicalResult specializeGpuHost(mlir::OpBuilder& builder, mlir::ModuleOp m
                             gpuAlloc.getMemref().getType().getNumElements())
                         .getResult();
       } else {
-        allocSize = mlir::tensorAlgebra::get_memref_num_elements(builder.getContext(), builder, gpuAlloc.getLoc(), gpuAlloc.getMemref());
+        Value numElements = builder.create<arith::ConstantIndexOp>(gpuAlloc->getLoc(), 1);
+        for(auto dimSize :gpuAlloc.getDynamicSizes())
+        {
+          numElements = builder.create<arith::MulIOp>(gpuAlloc->getLoc(), numElements, dimSize);
+        }
+        for(int64_t dim =0; dim < gpuAlloc.getMemref().getType().getRank(); dim++)
+        {
+          if(!gpuAlloc.getMemref().getType().isDynamicDim(dim))
+          {
+            Value dimSize = builder.create<arith::ConstantIndexOp>(gpuAlloc->getLoc(), gpuAlloc.getMemref().getType().getDimSize(dim));
+            numElements = builder.create<arith::MulIOp>(gpuAlloc->getLoc(), numElements, dimSize);
+          }
+        }
+        allocSize = numElements;
       }
 
       // builder.create<memref::DimOp>(gpuAlloc.getLoc(), gpuAlloc.getMemref(),
