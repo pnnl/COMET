@@ -398,6 +398,15 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // Create new pass manager to optimize the index tree dialect
     optPM.addPass(mlir::comet::createIndexTreeDomainInferencePass());
 
+    /// Concretize the domains of all the index variables
+    // Previously this had to come after we created the sparse tensor declerations
+    optPM.addPass(mlir::comet::createIndexTreeDomainConcretizationPass());
+
+    if (OptWorkspace) {
+      /// Optimized workspace transformations, reduce iteration space for nonzero elements
+      optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
+    }
+
     if (OptKernelFusion || OptDimensionReduction)
     {
       /// Reduce intermediate tensors' dimension after kernel fusion
@@ -464,13 +473,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
     optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
 
-    /// Concretize the domains of all the index variables
-    optPM.addPass(mlir::comet::createIndexTreeDomainConcretizationPass());
-
-    if (OptWorkspace) {
-      /// Optimized workspace transformations, reduce iteration space for nonzero elements
-      optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
-    }
+    
 
     optPM.addPass(mlir::comet::createIndexTreeSymbolicComputePass());
 

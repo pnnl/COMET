@@ -129,7 +129,8 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
       }
     }
 
-    llvm::SmallVector<Value, 4> domains;
+    llvm::SmallVector<Value> domains;
+    llvm::SmallVector<Value> backup;
     Value zero = builder.create<index::ConstantOp>(loc, builder.getIndexType(), builder.getIndexAttr(0));
     auto tree_op = op->getParentOfType<IndexTreeOp>();
     tree_op.getBody()->walk([&](IndexTreeComputeOp compute_op) {
@@ -209,6 +210,7 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
         }
         domains.push_back(temp_domain);
       }
+      backup.push_back(temp_domain);
       return WalkResult::advance();
     });
 
@@ -216,8 +218,14 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
     if(domains.size() > 1) {
       final_domain = builder.create<indexTree::IndexTreeDomainUnionOp>(loc,
             domain_type, domains, nullptr);
-    } else {
+    } else if(domains.size() == 1) {
       final_domain = domains[0];
+    } else {
+      // If the index variable is not used in any domain restricted by the output
+      // Assume we need the inferred domain
+      // TODO: Analyze which other index variables refer to the same output domain
+      // and use that to infer the domain.
+      final_domain = backup[backup.size() - 1];
     }
     comet_vdump(final_domain);
 
