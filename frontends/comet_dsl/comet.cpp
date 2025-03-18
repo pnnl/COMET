@@ -402,10 +402,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     // Previously this had to come after we created the sparse tensor declerations
     optPM.addPass(mlir::comet::createIndexTreeDomainConcretizationPass());
 
-    if (OptWorkspace) {
-      /// Optimized workspace transformations, reduce iteration space for nonzero elements
-      optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
-    }
+//    if (OptWorkspace) {
+//      /// Optimized workspace transformations, reduce iteration space for nonzero elements
+//      optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
+//    }
 
     if (OptKernelFusion || OptDimensionReduction)
     {
@@ -473,7 +473,14 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// If it is a transpose of sparse tensor, it lowers the code to make a runtime call to specific sorting algorithm
     optPM.addPass(mlir::comet::createLowerTensorAlgebraToSCFPass());
 
-    
+    /// Concretize the domains of all the index variables
+    // Previously this had to come after we created the sparse tensor declerations
+    optPM.addPass(mlir::comet::createIndexTreeDomainConcretizationPass());
+
+    if (OptWorkspace) {
+      /// Optimized workspace transformations, reduce iteration space for nonzero elements
+      optPM.addPass(mlir::comet::createIndexTreeWorkspaceTransformationsPass());
+    }
 
     optPM.addPass(mlir::comet::createIndexTreeSymbolicComputePass());
 

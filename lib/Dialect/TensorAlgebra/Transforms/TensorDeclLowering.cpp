@@ -840,10 +840,23 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           /// do nothing!
           comet_debug() << " the tensor has use in alias op\n";
         }
+        else if (isa<indexTree::IndexTreeDenseDomainOp>(u1)
+            || isa<indexTree::IndexTreeSparseDomainOp>(u1))
+        {
+          /// do nothing!
+          comet_debug() << " the tensor has use in Domain op\n";
+        }
+        else if (isa<tensorAlgebra::SpTensorGetDimSize>(u1)
+            || isa<tensorAlgebra::SpTensorGetDimCrd>(u1)
+            || isa<tensorAlgebra::SpTensorGetDimPos>(u1))
+        {
+          /// do nothing!
+          comet_debug() << " the tensor has use in Sparse Tensor Get Dim op\n";
+        }
         else
         {
           u1->dump();
-          llvm::errs() << __FILE__ << ":" << __LINE__ << "The tensor is in not supported operation\n";
+          llvm::errs() << __FILE__ << ":" << __LINE__ << " The tensor is in not supported operation\n";
         }
       }
 
