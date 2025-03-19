@@ -560,6 +560,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
               comet_debug() << " AllocOp: ";
               comet_vdump(alloc_sizes);
             }
+            alloc_sizes.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
             Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes, rewriter.getUnitAttr(), rewriter.getUnitAttr());
             tensorload_sizes_vec.push_back(tensorload_sizes);
           }
@@ -620,6 +621,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
       MemRefType memrefType2 = MemRefType::get(cur_memref_arrayref, valsType);
       Value alloc_sizes1 = insertAllocAndInitialize(loc, memrefType2, ValueRange(cur_indices), rewriter);
+      alloc_sizes1.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
       comet_debug() << " AllocOp: ";
       comet_vdump(alloc_sizes1);
 
@@ -1025,6 +1027,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           idxes.push_back(array_sizes[i]);
           comet_vdump(array_sizes[i]);
           Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_indices_type, ValueRange{idxes}, rewriter);
+          alloc_size.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
           comet_debug() << " ";
           comet_vdump(alloc_size);
 
@@ -1038,6 +1041,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           std::vector<Value> idxes;
           idxes.push_back(array_sizes[i]);
           Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_float, ValueRange{idxes}, rewriter);
+          alloc_size.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
           comet_debug() << " ";
           comet_vdump(alloc_size);
           alloc_sizes_vec.push_back(alloc_size);

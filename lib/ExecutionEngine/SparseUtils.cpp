@@ -1836,6 +1836,26 @@ void read_input_2D(int32_t fileID,
   auto *desc_A2tile_crd = static_cast<StridedMemRefType<IndicesType, 1> *>(A2tile_crd_ptr);
   auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
 
+//  {
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1pos->data): " << sizeof(desc_A1pos->data) << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1pos->data " << (uint64_t) desc_A1pos->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1crd->data): " << sizeof(desc_A1crd->data) << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1crd->data " << (uint64_t) desc_A1crd->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2pos->data): " << sizeof(desc_A2pos->data) << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2pos->data " << (uint64_t) desc_A2pos->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2crd->data): " << sizeof(desc_A2crd->data) << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2crd->data " << (uint64_t) desc_A2crd->data << "\n";
+//
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1tile_pos->data): " << sizeof(desc_A1tile_pos->data) << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1tile_pos->data " << (uint64_t) desc_A1tile_pos->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1tile_crd->data): " << sizeof(desc_A1tile_crd->data) << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1tile_crd->data " << (uint64_t) desc_A1tile_crd->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2tile_pos->data): " << sizeof(desc_A2tile_pos->data) << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2tile_pos->data " << (uint64_t) desc_A2tile_pos->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2tile_crd->data): " << sizeof(desc_A2tile_crd->data) << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2tile_crd->data " << (uint64_t) desc_A2tile_crd->data << "\n";
+//  }
+
   /// For example, A2pos is not used for COO, but initialized with -1 to speficify that it is not used
   desc_A1pos->data[0] = -1;
   desc_A1crd->data[0] = -1;
