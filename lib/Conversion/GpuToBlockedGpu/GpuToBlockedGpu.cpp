@@ -57,6 +57,49 @@ struct BlockInfo {
     mlir::Value max;
 };
 
+bool checkOperandsSameOrientation(Operation* op, llvm::MapVector<mlir::Value, llvm::SmallVector<Value, 2>>& useToIndices) 
+{
+    if(op->getNumOperands() == 1) 
+    {
+        return true;
+    }
+
+    llvm::SmallVector<Value, 2> indices;
+    for(auto operand: op->getOperands())
+    {
+        if(useToIndices.find(operand) != useToIndices.end())
+        {
+            indices = useToIndices[operand];
+        } 
+    }
+
+    return llvm::all_of(op->getOperands(), [&useToIndices, &indices](Value val){
+        if(useToIndices.find(val) == useToIndices.end())
+        {
+            return true;
+        }
+        else
+        {
+            if(indices.size() != useToIndices[val].size())
+            {
+                return false;
+            }
+            else
+            {
+                for(auto [i0, i1]: zip(indices, useToIndices[val]))
+                {
+                    if(i0 != i1)
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
+    });
+}
+
 bool checkOperandsSameShape(Operation* op) 
 {
     if(op->getNumOperands() == 1) 
@@ -76,6 +119,10 @@ bool checkOperandsSameShape(Operation* op)
             return false;
         }
         else if(!shape0 && shape1)
+        {
+            return false;
+        }
+        else if(shape0.getRank() != shape1.getRank())
         {
             return false;
         }
@@ -388,6 +435,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             // explicitly, we handle them based on whether they have the specific trait
             if(elewise)
             {
+                // llvm::errs() << "Elementwise\n";
                 // user->dump();
                 for(auto operand: user->getOperands())
                 {
@@ -411,15 +459,19 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
 
                 // llvm::errs() << "Has SameOperandsAmdResultTypeType trait\n";
                 bool operandsSameShape = checkOperandsSameShape(user);
+                bool operandsSameOrientation = checkOperandsSameOrientation(user, useToIndices);
                 // If input operands do not have the same type/shape
-                if(!operandsSameShape)
+                if(!operandsSameShape || !operandsSameOrientation)
                 {
+                    // llvm::errs() << "Not same shape\n";
+                    // user->dump();
                     auto shaped0 = mlir::dyn_cast<ShapedType>(user->getOperandTypes()[0]);
                     auto shaped1 = mlir::dyn_cast<ShapedType>(user->getOperandTypes()[1]);
                     auto indices0 = useToIndices.find(user->getOperand(0));
                     auto indices1 = useToIndices.find(user->getOperand(1));
                     // If LHS is shaped and RHS is scalar, simply "splat"/expand the value to 
                     // a tensor of same shape as the LHS
+
                     if(shaped0 && !shaped1)
                     {
                         assert(indices1 == useToIndices.end());
@@ -448,58 +500,136 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
 
                         user->getOpOperands()[0].set(splatOp);
                     }
-                    // Both are shaped, but the shapes do not match.
+                    // Both are shaped, but the shapes do not match or they have different indexing orientation
                     // We need to infer how to reshape them based on their indexing
                     else
                     {
+                        // llvm::errs() << "Not same shape but both ranked\n";
+                        // user->dump();
                         assert(shaped0.getElementType() == shaped1.getElementType() && "Inputs need to have same element types");
 
                         SmallVector<Value, 2>& indices0 = useToIndices[user->getOperand(0)];
                         SmallVector<Value, 2>& indices1 = useToIndices[user->getOperand(1)];
                         
-                        
-                        /// TODO: Handle the case where dimensions are missing from both tensors, e.g., adding a row and a column vector
+                        assert(!indices0.empty());
+                        assert(!indices1.empty());
                         if(shaped0.getRank() == shaped1.getRank())
                         {
-                            /// TODO: Shapes same rank but different possibly mean matrix multiplication
-                            if(llvm::all_of(user->getUsers(), [](Operation* op){
-                                return !op->hasAttr("notPartOfReduction");
-                            }))
+                            // llvm::errs() << "Not same shape but same rank\n";
+                            // user->dump();
+                            auto forOp = user->getParentOfType<scf::ForOp>();
+
+                            if(forOp && forOp->hasAttr("blockSize") && forOp.getNumRegionIterArgs() > 0) // if it's a reduction loop
                             {
-                                auto redForOp = user->getParentOfType<scf::ForOp>();
-                                assert(redForOp);
-                                // assert(redForOp.getRegionIterArgs().size() == 1);
-                                auto userUser = user->getUses().begin();
-                                while(!isa<scf::YieldOp>(userUser->getOwner()))
+                                auto redForOp = forOp;
+
+                                /// TODO: Shapes same rank but different possibly mean matrix multiplication
+                                if(llvm::all_of(user->getUsers(), [](Operation* op){
+                                    return !op->hasAttr("notPartOfReduction");
+                                }))
                                 {
-                                    userUser = userUser->getOwner()->getUses().begin(); 
-                                }
-
-
-                                if(mlir::isa<arith::MulFOp, arith::MulIOp>(user) && user->hasOneUse() && mlir::isa<arith::AddFOp, arith::AddIOp>(*user->getUsers().begin()) && shaped0.getRank() > 1)
-                                {
-                                    builder.setInsertionPoint(user);
-
-                                    auto userUserT = mlir::dyn_cast<ShapedType>(redForOp->getOperand(3 + userUser->getOperandNumber()).getType());
-                                    auto empty = builder.create<tensor::EmptyOp>(user->getLoc(), userUserT.getShape(), userUserT.getElementType());
-                                    auto matmul = builder.create<linalg::MatmulOp>(user->getLoc(), user->getOperands(), ValueRange({empty}));
-                                    user->replaceAllUsesWith(matmul);
-                                    // llvm::errs() << "Erasing: " << user <<"\n";
-                                    user->erase();
-                                    newOpsToCheck.push_back(matmul.getResult(0));
-                                    auto found = useToIndices.find(redForOp->getOperand(3 + userUser->getOperandNumber()));
-                                    assert(found != useToIndices.end());
-
-                                    bool isDone = useToIndices.insert(std::make_pair(matmul->getResult(0), useToIndices[found->first])).second;
-                                    assert(isDone);
-                                    continue;
+                                    assert(redForOp);
+                                    // assert(redForOp.getRegionIterArgs().size() == 1);
+                                    auto userUser = user->getUses().begin();
+                                    while(!isa<scf::YieldOp>(userUser->getOwner()))
+                                    {
+                                        userUser = userUser->getOwner()->getUses().begin(); 
+                                    }
+                                    
+                                    
+                                    if(mlir::isa<arith::MulFOp, arith::MulIOp>(user) && user->hasOneUse() && mlir::isa<arith::AddFOp, arith::AddIOp>(*user->getUsers().begin()) && shaped0.getRank() > 1)
+                                    {
+                                        builder.setInsertionPoint(user);
+                                        
+                                        auto userUserT = mlir::dyn_cast<ShapedType>(redForOp->getOperand(3 + userUser->getOperandNumber()).getType());
+                                        auto empty = builder.create<tensor::EmptyOp>(user->getLoc(), userUserT.getShape(), userUserT.getElementType());
+                                        auto matmul = builder.create<linalg::MatmulOp>(user->getLoc(), user->getOperands(), ValueRange({empty}));
+                                        user->replaceAllUsesWith(matmul);
+                                        // llvm::errs() << "Erasing: " << user <<"\n";
+                                        user->erase();
+                                        newOpsToCheck.push_back(matmul.getResult(0));
+                                        auto found = useToIndices.find(redForOp->getOperand(3 + userUser->getOperandNumber()));
+                                        assert(found != useToIndices.end());
+                                        
+                                        bool isDone = useToIndices.insert(std::make_pair(matmul->getResult(0), useToIndices[found->first])).second;
+                                        assert(isDone);
+                                        continue;
+                                    }
                                 }
                             }
-                            // if(*user->getUsers().begin())
-                            // assert(shaped0.getRank() != shaped1.getRank() && "Shapes have same rank but are different");
+                            // Handle the case where dimensions are missing from both tensors, e.g., adding a row and a column vector
+                            else
+                            {
+                                // llvm::errs() << "Not part of reduction\n";
+                                // user->dump();
+                                auto result = user->getUses().begin();
+                                while(!isa<scf::YieldOp>(result->getOwner()) && !isa<tensor::InsertOp>(result->getOwner()))
+                                {
+                                    result = result->getOwner()->getUses().begin();
+                                }
+
+                                SmallVector<Value, 2> indicesRes;
+                                Type resElementType;
+                                if(isa<scf::YieldOp>(result->getOwner()))
+                                {
+                                    auto parentOp = result->getOwner()->getParentOp();
+                                    assert(useToIndices.find(parentOp->getResult(result->getOperandNumber())) != useToIndices.end());
+                                    indicesRes = useToIndices[parentOp->getResult(result->getOperandNumber())];
+                                    RankedTensorType resShaped = cast<RankedTensorType>(parentOp->getResult(result->getOperandNumber()).getType() );
+                                    resElementType = resShaped.getElementType();
+                                }
+                                else
+                                {
+                                    tensor::InsertOp insertOp = cast<tensor::InsertOp>(result->getOwner());
+                                    for(auto index: insertOp.getIndices())
+                                    {
+                                        assert(useToIndices.find(index) != useToIndices.end());
+                                        assert(useToIndices[index].size() == 1);
+                                        indicesRes.push_back(useToIndices[index][0]);
+                                    }
+                                    resElementType = result->getOwner()->getResultTypes()[0];
+                                }
+                                SmallVector<int64_t, 2> resShape;
+                                for(auto index: indicesRes)
+                                {
+                                    RankedTensorType indexShaped = cast<RankedTensorType>(index.getType());
+                                    resShape.push_back(indexShaped.getShape()[0]);
+                                }
+
+                                RankedTensorType resType = RankedTensorType::get(resShape, cast<RankedTensorType>(result->getOwner()->getResultTypes()[0]).getElementType());
+                                builder.setInsertionPoint(user);
+
+                                Value init = builder.create<tensor::EmptyOp>(user->getLoc(), resType.getShape(), resType.getElementType());
+
+                                for(auto& operand: user->getOpOperands())
+                                {
+                                    SmallVector<int64_t, 2> dimensions;
+                                    assert(useToIndices.find(operand.get()) != useToIndices.end());
+                                    auto operandIndices = useToIndices[operand.get()];
+                                    for(size_t i = 0; i < indicesRes.size(); i++)
+                                    {
+                                        if(std::find(operandIndices.begin(), operandIndices.end(), indicesRes[i]) == operandIndices.end())
+                                        {
+                                            dimensions.push_back(i);
+                                        }
+                                    }
+
+                                    Value newOperand = operand.get();
+
+                                    if(!dimensions.empty())
+                                    {
+                                        newOperand = builder.create<mlir::linalg::BroadcastOp>(user->getLoc(), newOperand, init, dimensions)->getResult(0);
+                                        bool isDone = useToIndices.insert(std::make_pair(newOperand, indicesRes)).second;
+                                        assert(isDone);
+                                    }
+                                    operand.set(newOperand);
+                                }
+                            }
                         }
                         else // We surely need to broadcast
                         {
+                            // llvm::errs() << "Broadcast?\n";
+                            // user->dump();
                             // Assuming first operand is the one to potentially broadcast (input)
 
                             OpOperand& input = user->getOpOperand(0);
@@ -726,7 +856,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             // insert.first.replaceAllUsesWith(insertSlice.getResult());
         });
 
-        
+
         // Since we might have replaced forOps if they were using initArgs
         // we need to collect forOps with "blockSize" again
         forOps.clear();
