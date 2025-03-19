@@ -199,7 +199,8 @@ def SparseOutputTensorDeclOp : TA_Op<"sparse_output_tensor_decl", [Pure]> {
   }];
 
   /// The constant operation takes an attribute as the only input.
-  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format);
+  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format,
+                   DefaultValuedAttr<StrAttr, "\"default\"">:$allocator);
 
   /// The constant operation returns a single value of TensorType.
   let results = (outs TA_AnyTensor);
@@ -229,7 +230,8 @@ def TempSparseOutputTensorDeclOp : TA_Op<"temp_sparse_output_tensor_decl", [Pure
   }];
 
   /// The constant operation takes an attribute as the only input.
-  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format);
+  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format,
+                   DefaultValuedAttr<StrAttr, "\"default\"">:$allocator);
 
   /// The constant operation returns a single value of TensorType.
   let results = (outs TA_AnyTensor);
