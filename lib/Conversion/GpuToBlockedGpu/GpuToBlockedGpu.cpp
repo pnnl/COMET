@@ -20,6 +20,7 @@
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
+#include "mlir/IR/Visitors.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
@@ -38,6 +39,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <iterator>
 #include <map>
 #include <tuple>
@@ -120,11 +122,11 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                         
                         builder.setInsertionPoint(storeOp);
                         mlir::tensor::InsertOp insertOp = builder.create<mlir::tensor::InsertOp>(storeOp->getLoc(), storeOp.getValueToStore(), tensor, storeOp.getIndices());
-                        // If someone accesses the same memref (load) within the same block, replace its use with the output of this operation
-                        storeOp.getMemRef().replaceUsesWithIf(insertOp.getResult(), [&](OpOperand& op) {
+                        /// TODO: If someone accesses the same memref (load) within the same block but no other store in-between, replace its use with the output of this operation
+                        // storeOp.getMemRef().replaceUsesWithIf(insertOp.getResult(), [&](OpOperand& op) {
                             
-                            return op.getOwner()->getBlock() == storeOp->getBlock() && insertOp->isBeforeInBlock(op.getOwner());
-                        });
+                        //     return op.getOwner()->getBlock() == storeOp->getBlock() && insertOp->isBeforeInBlock(op.getOwner());
+                        // });
                         storeOp->erase();
                         // StoreOp has no uses
                         // storeOp->replaceAllUsesWith(insertOp);
@@ -145,6 +147,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
         llvm::SmallVector<scf::ForOp, 2> forOps;
         // std::set<mlir::Value, decltype(comp)> needCheck(comp);
         std::vector<mlir::Value> needCheck;
+        llvm::MapVector<mlir::Value, llvm::SmallVector<Value, 2>> useToIndices;
 
         funcOp->walk([&](mlir::scf::ForOp forOp) {
             // forOps with "blockSize"   attribute induction variables need to be expanded to blocked indices
@@ -158,7 +161,10 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                 // Since there is no built-in op that creates a range, we use unrealized casts to represent the expansion of an IV to a vector
                 auto blockedIndex = builder.create<UnrealizedConversionCastOp>(forOp.getInductionVar().getLoc(), TypeRange({RankedTensorType::get({static_cast<int64_t>(blockSize)}, builder.getIndexType())}), forOp.getInductionVar());
                 forOp.getInductionVar().replaceAllUsesExcept(blockedIndex.getResult(0), blockedIndex);
-                
+                SmallVector<Value, 2> indices;
+                indices.push_back(blockedIndex->getResult(0));
+                bool isDone = useToIndices.insert(std::make_pair(blockedIndex.getResult(0), indices)).second;
+                assert(isDone);
                 // We have replaced indices with blocked indices, we need to make sure their users 
                 // will be converted to blocks as well
                 for(auto res: blockedIndex->getResults())
@@ -189,6 +195,10 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                                     builder.setInsertionPoint(insertOp);
                                     auto cast = builder.create<UnrealizedConversionCastOp>(inductionVar.getLoc(), builder.getIndexType(), inductionVar);
                                     inserts[insertOp].push_back(BlockInfo(i, blockSize, cast->getResult(0), forOp.getUpperBound()));
+                                    SmallVector<Value, 2> indices;
+                                    indices.push_back(blockedIndex.getResult(0));
+                                    bool isDone = useToIndices.insert(std::make_pair(cast.getResult(0), indices)).second;
+                                    assert(isDone);
                                 }
                             }
                         }
@@ -206,6 +216,10 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                                     builder.setInsertionPoint(extractOp);
                                     auto cast = builder.create<UnrealizedConversionCastOp>(inductionVar.getLoc(), builder.getIndexType(), inductionVar);
                                     extracts[extractOp].push_back(BlockInfo(i, blockSize, cast->getResult(0), forOp.getUpperBound()));
+                                    SmallVector<Value, 2> indices;
+                                    indices.push_back(blockedIndex.getResult(0));
+                                    bool isDone = useToIndices.insert(std::make_pair(cast.getResult(0), indices)).second;
+                                    assert(isDone);
                                 }
                             }
                         }
@@ -224,7 +238,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
 
         /// TODO: Indices need to be the initial "block Indices" i.e. what will later be blockId, reduction Id or any other loop induction variable
         /// Since we only care about the "direction" of iteration, not the actual index
-        llvm::MapVector<mlir::Value, llvm::SmallVector<Value, 2>> useToIndices;
 
         // Convert extractOp to extractSliceOp as it is a closer representation of triton's blocked memory loads
         // We also keep the information regarding the boolean masks that need to be generated in order to avoid
@@ -274,17 +287,21 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                 SmallVector<Value, 2> indices;
                 for(auto offset: offsets)
                 {
-                    if(auto index = dyn_cast_if_present<UnrealizedConversionCastOp>(offset.getDefiningOp()))
-                    {
-                        indices.push_back(index->getOperand(0));
-                    }
-                    else
-                    {
-                        indices.push_back(offset);
-                    }
+                    assert(useToIndices.find(offset) != useToIndices.end());
+                    indices.insert(indices.end(),useToIndices[offset].begin(), useToIndices[offset].end());
+                    // if(auto index = dyn_cast_if_present<UnrealizedConversionCastOp>(offset.getDefiningOp()))
+                    // {
+                    //     indices.push_back(index->getOperand(0));
+                    // }
+                    // else
+                    // {
+                    //     indices.push_back(offset);
+                    // }
                 }
                 assert(!indices.empty());
                 bool isDone = useToIndices.insert(std::make_pair(castSliceShape,indices)).second;
+                assert(isDone);
+                isDone = useToIndices.insert(std::make_pair(extractSlice,indices)).second;
                 assert(isDone);
                 // llvm::errs() << "FOUND\n";
                 // castSliceShape->dump();
@@ -307,321 +324,370 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             // }
         });
 
-        size_t size_before;
-        SmallVector<Value, 4> newOpsToCheck;
-        do 
-        {
-            size_before = needCheck.size();
+        std::deque<Operation *> worklist;
+        funcOp.walk<mlir::WalkOrder::PreOrder>([&](Operation *op) {
+            worklist.push_back(op);
+        });
 
-            for(auto op: llvm::make_early_inc_range(needCheck))
+
+
+
+
+        SmallVector<Value, 4> newOpsToCheck;
+        while(!worklist.empty())
+        {
+            auto user = worklist.front();
+            // user->dump();
+            worklist.pop_front();
+            if(!user)
             {
-                for(mlir::Operation* user: llvm::make_early_inc_range(op.getUsers()))
+                continue;
+            }
+            // user->dump();
+            bool isNotPartOfReduction = llvm::any_of(user->getOperands(), [&](Value val) {
+                if(BlockArgument block_arg = mlir::dyn_cast<BlockArgument>(val))
                 {
-                    // user->dump();
-                    bool isNotPartOfReduction = llvm::any_of(user->getOperands(), [](Value val) {
-                        if(BlockArgument block_arg = mlir::dyn_cast<BlockArgument>(val))
+                    // block_arg.dump();
+                    if(auto owner_for =  mlir::dyn_cast<scf::ForOp>(block_arg.getOwner()->getParentOp()))
+                    {
+                        if(auto redTarget = std::find(owner_for.getRegionIterArgs().begin(), owner_for.getRegionIterArgs().end(), block_arg); redTarget != owner_for.getRegionIterArgs().end())
                         {
-                            // block_arg.dump();
-                            if(auto owner_for =  mlir::dyn_cast<scf::ForOp>(block_arg.getOwner()->getParentOp()))
-                            {
-                                if(std::find(owner_for.getRegionIterArgs().begin(), owner_for.getRegionIterArgs().end(), block_arg) != owner_for.getRegionIterArgs().end())
-                                {
-                                    return true;
-                                }
-                            }
-                        }
-                        else if(val.getDefiningOp()->hasAttr("notPartOfReduction"))
-                        {
+                            assert(useToIndices.find(val) != useToIndices.end());
+                            auto indices = useToIndices[val];
+                            useToIndices[user->getResult(0)] = indices;
                             return true;
                         }
-                        return false;
-                    });
-                    if(isNotPartOfReduction && !isa<scf::ForOp>(user))
-                    {
-                        user->setAttr("notPartOfReduction", builder.getUnitAttr());
                     }
-                    if(isNotPartOfReduction)
+                }
+                else if(val.getDefiningOp()->hasAttr("notPartOfReduction"))
+                {
+                    assert(useToIndices.find(val) != useToIndices.end());
+                    if(user->getNumResults() > 0)
                     {
-                        // user->dump();
+                        useToIndices[user->getResult(0)] = useToIndices[val];
                     }
+                    return true;
+                }
+                return false;
+            });
+            if(isNotPartOfReduction && !isa<scf::ForOp>(user) && !isa<scf::YieldOp>(user))
+            {
+                user->setAttr("notPartOfReduction", builder.getUnitAttr());
+            }
+            if(isNotPartOfReduction)
+            {
+                // user->dump();
+            }
 
-                    bool sameOpResType = user->hasTrait<mlir::OpTrait::SameOperandsAndResultType>();
-                    bool sameOpResShape = user->hasTrait<mlir::OpTrait::SameOperandsAndResultShape>();
-                    bool sameOpType = user->hasTrait<mlir::OpTrait::SameTypeOperands>();
-                    bool elewise = user->hasTrait<mlir::OpTrait::Elementwise>();
-                    // If inputs and outputs should have the same shape
-                    // This includes most of `arith` operations. Instead of handling each operation
-                    // explicitly, we handle them based on whether they have the specific trait
-                    if(elewise)
+            bool sameOpResType = user->hasTrait<mlir::OpTrait::SameOperandsAndResultType>();
+            bool sameOpResShape = user->hasTrait<mlir::OpTrait::SameOperandsAndResultShape>();
+            bool sameOpType = user->hasTrait<mlir::OpTrait::SameTypeOperands>();
+            bool elewise = user->hasTrait<mlir::OpTrait::Elementwise>() && !isNotPartOfReduction;
+            // If inputs and outputs should have the same shape
+            // This includes most of `arith` operations. Instead of handling each operation
+            // explicitly, we handle them based on whether they have the specific trait
+            if(elewise)
+            {
+                // user->dump();
+                for(auto operand: user->getOperands())
+                {
+                    if(llvm::isa_and_present<affine::AffineApplyOp>(operand.getDefiningOp()))
                     {
-                        // llvm::errs() << "Has SameOperandsAmdResultTypeType trait\n";
-                        bool operandsSameShape = checkOperandsSameShape(user);
-                        // If input operands do not have the same type/shape
-                        if(!operandsSameShape)
+
+                    }
+                    else if(llvm::isa<BlockArgument>(operand) && operand.getParentBlock()->getParentOp()->hasAttr("reduceDim"))
+                    {
+
+                    }
+                    else if(llvm::isa<BlockArgument>(operand) && isa<gpu::GPUFuncOp>(operand.getParentBlock()->getParentOp()))
+                    {
+
+                    }
+                    else
+                    {
+                        assert(useToIndices.find(operand) != useToIndices.end());
+                    }
+                }
+
+                // llvm::errs() << "Has SameOperandsAmdResultTypeType trait\n";
+                bool operandsSameShape = checkOperandsSameShape(user);
+                // If input operands do not have the same type/shape
+                if(!operandsSameShape)
+                {
+                    auto shaped0 = mlir::dyn_cast<ShapedType>(user->getOperandTypes()[0]);
+                    auto shaped1 = mlir::dyn_cast<ShapedType>(user->getOperandTypes()[1]);
+                    auto indices0 = useToIndices.find(user->getOperand(0));
+                    auto indices1 = useToIndices.find(user->getOperand(1));
+                    // If LHS is shaped and RHS is scalar, simply "splat"/expand the value to 
+                    // a tensor of same shape as the LHS
+                    if(shaped0 && !shaped1)
+                    {
+                        assert(indices1 == useToIndices.end());
+                        builder.setInsertionPoint(user);
+                        auto outputType = RankedTensorType::get(shaped0.getShape(), user->getOperandTypes()[1]);
+                        auto splatOp = builder.create<tensor::SplatOp>(user->getLoc(), outputType, user->getOperands()[1]);
+                        assert(useToIndices.find(user->getOperand(0)) != useToIndices.end());
+                        SmallVector<Value, 2> indices = useToIndices[user->getOperand(0)];
+                        useToIndices[splatOp] = indices;
+                        // bool isDone = useToIndices.insert(std::make_pair(splatOp, indices)).second;
+                        // assert(isDone);
+                        user->getOpOperands()[1].set(splatOp);
+                    }
+                    // Same as above with LHS being scalar and RHS being shaped
+                    else if(!shaped0 && shaped1)
+                    {
+                        assert(indices0 == useToIndices.end());
+                        builder.setInsertionPoint(user);
+                        auto outputType = RankedTensorType::get(shaped1.getShape(), user->getOperandTypes()[0]);
+                        auto splatOp = builder.create<tensor::SplatOp>(user->getLoc(), outputType, user->getOperands()[0]);
+                        assert(useToIndices.find(user->getOperand(1)) != useToIndices.end());
+                        SmallVector<Value, 2> indices = useToIndices[user->getOperand(1)];
+                        useToIndices[splatOp] = indices;
+                        // bool isDone = useToIndices.insert(std::make_pair(splatOp, indices)).second;
+                        // assert(isDone);
+
+                        user->getOpOperands()[0].set(splatOp);
+                    }
+                    // Both are shaped, but the shapes do not match.
+                    // We need to infer how to reshape them based on their indexing
+                    else
+                    {
+                        assert(shaped0.getElementType() == shaped1.getElementType() && "Inputs need to have same element types");
+
+                        SmallVector<Value, 2>& indices0 = useToIndices[user->getOperand(0)];
+                        SmallVector<Value, 2>& indices1 = useToIndices[user->getOperand(1)];
+                        
+                        
+                        /// TODO: Handle the case where dimensions are missing from both tensors, e.g., adding a row and a column vector
+                        if(shaped0.getRank() == shaped1.getRank())
                         {
-                            auto shaped0 = mlir::dyn_cast<ShapedType>(user->getOperandTypes()[0]);
-                            auto shaped1 = mlir::dyn_cast<ShapedType>(user->getOperandTypes()[1]);
-                            // If LHS is shaped and RHS is scalar, simply "splat"/expand the value to 
-                            // a tensor of same shape as the LHS
-                            if(shaped0 && !shaped1 && ! isNotPartOfReduction)
+                            /// TODO: Shapes same rank but different possibly mean matrix multiplication
+                            if(llvm::all_of(user->getUsers(), [](Operation* op){
+                                return !op->hasAttr("notPartOfReduction");
+                            }))
                             {
-                                builder.setInsertionPoint(user);
-                                auto outputType = RankedTensorType::get(shaped0.getShape(), user->getOperandTypes()[1]);
-                                auto splatOp = builder.create<tensor::SplatOp>(user->getLoc(), outputType, user->getOperands()[1]);
-                                user->getOpOperands()[1].set(splatOp);
-                            }
-                            // Same as above with LHS being scalar and RHS being shaped
-                            else if(!shaped0 && shaped1 && !isNotPartOfReduction)
-                            {
-                                builder.setInsertionPoint(user);
-                                auto outputType = RankedTensorType::get(shaped1.getShape(), user->getOperandTypes()[0]);
-                                auto splatOp = builder.create<tensor::SplatOp>(user->getLoc(), outputType, user->getOperands()[0]);
-                                user->getOpOperands()[0].set(splatOp);
-                            }
-                            // Both are shaped, but the shapes do not match.
-                            // We need to infer how to reshape them based on their indexing
-                            else if (!isNotPartOfReduction)
-                            {
-                                assert(shaped0.getElementType() == shaped1.getElementType() && "Inputs need to have same element types");
-
-                                SmallVector<Value, 2>& indices0 = useToIndices[user->getOperand(0)];
-                                SmallVector<Value, 2>& indices1 = useToIndices[user->getOperand(1)];
-                                
-                                
-                                /// TODO: Handle the case where dimensions are missing from both tensors, e.g., adding a row and a column vector
-                                if(shaped0.getRank() == shaped1.getRank())
+                                auto redForOp = user->getParentOfType<scf::ForOp>();
+                                assert(redForOp);
+                                // assert(redForOp.getRegionIterArgs().size() == 1);
+                                auto userUser = user->getUses().begin();
+                                while(!isa<scf::YieldOp>(userUser->getOwner()))
                                 {
-                                    /// TODO: Shapes same rank but different possibly mean matrix multiplication
-                                    if(llvm::all_of(user->getUsers(), [](Operation* op){
-                                        return !op->hasAttr("notPartOfReduction");
-                                    }))
-                                    {
-                                        auto redForOp = user->getParentOfType<scf::ForOp>();
-                                        assert(redForOp);
-                                        // assert(redForOp.getRegionIterArgs().size() == 1);
-                                        auto userUser = user->getUses().begin();
-                                        while(!isa<scf::YieldOp>(userUser->getOwner()))
-                                        {
-                                            userUser = userUser->getOwner()->getUses().begin(); 
-                                        }
-
-
-                                        if(mlir::isa<arith::MulFOp, arith::MulIOp>(user) && user->hasOneUse() && mlir::isa<arith::AddFOp, arith::AddIOp>(*user->getUsers().begin()) && shaped0.getRank() > 1)
-                                        {
-                                            builder.setInsertionPoint(user);
-
-                                            auto userUserT = mlir::dyn_cast<ShapedType>(redForOp->getOperand(3 + userUser->getOperandNumber()).getType());
-                                            auto empty = builder.create<tensor::EmptyOp>(user->getLoc(), userUserT.getShape(), userUserT.getElementType());
-                                            auto matmul = builder.create<linalg::MatmulOp>(user->getLoc(), user->getOperands(), ValueRange({empty}));
-                                            user->replaceAllUsesWith(matmul);
-                                            user->erase();
-                                            newOpsToCheck.push_back(matmul.getResult(0));
-                                            auto found = useToIndices.find(redForOp->getOperand(3 + userUser->getOperandNumber()));
-                                            assert(found != useToIndices.end());
-
-                                            bool isDone = useToIndices.insert(std::make_pair(matmul->getResult(0), useToIndices[found->first])).second;
-                                            assert(isDone);
-                                            continue;
-                                        }
-                                    }
-                                    // if(*user->getUsers().begin())
-                                    // assert(shaped0.getRank() != shaped1.getRank() && "Shapes have same rank but are different");
+                                    userUser = userUser->getOwner()->getUses().begin(); 
                                 }
-                                else // We surely need to broadcast
+
+
+                                if(mlir::isa<arith::MulFOp, arith::MulIOp>(user) && user->hasOneUse() && mlir::isa<arith::AddFOp, arith::AddIOp>(*user->getUsers().begin()) && shaped0.getRank() > 1)
                                 {
-                                    // Assuming first operand is the one to potentially broadcast (input)
-
-                                    OpOperand& input = user->getOpOperand(0);
-                                    OpOperand& output = user->getOpOperand(1);
-                                    ShapedType initShape = shaped1;
-
-                                    // If not, swap the input, output
-                                    if(shaped0.getRank() > shaped1.getRank())
-                                    {
-                                        std::swap(input, output);
-                                        initShape = shaped0;
-                                    }
-
-                                    // Broadcast lower rank tensor to match the higher-rank one.
                                     builder.setInsertionPoint(user);
-                                    Value init = builder.create<tensor::EmptyOp>(user->getLoc(), initShape.getShape(), initShape.getElementType());
 
+                                    auto userUserT = mlir::dyn_cast<ShapedType>(redForOp->getOperand(3 + userUser->getOperandNumber()).getType());
+                                    auto empty = builder.create<tensor::EmptyOp>(user->getLoc(), userUserT.getShape(), userUserT.getElementType());
+                                    auto matmul = builder.create<linalg::MatmulOp>(user->getLoc(), user->getOperands(), ValueRange({empty}));
+                                    user->replaceAllUsesWith(matmul);
+                                    // llvm::errs() << "Erasing: " << user <<"\n";
+                                    user->erase();
+                                    newOpsToCheck.push_back(matmul.getResult(0));
+                                    auto found = useToIndices.find(redForOp->getOperand(3 + userUser->getOperandNumber()));
+                                    assert(found != useToIndices.end());
 
-                                    // Collect the induction variable indices used to form these values from load operations
-                                    // Note that there should be no case where the input or output do not have indices
-                                    // as those would be handled by the previous conditions of the if-else blocks
-                                    assert(useToIndices.find(output.get())!= useToIndices.end());
-                                    assert(useToIndices.find(input.get())!= useToIndices.end());
-
-                                    SmallVector<int64_t, 2> dimensions;
-
-                                    // Find the dimension(s) "missing" from the lower rank tensor
-                                    /// TODO: Handle the case where dimensions are missing from both tensors, e.g., adding a row and a column vector
-                                    for(size_t i = 0; i < indices0.size(); i++)
-                                    {
-                                        if(std::find(indices1.begin(), indices1.end(), indices0[i]) == indices1.end())
-                                        {
-                                            dimensions.push_back(i);
-                                        }
-                                    }
-
-                                    Operation* bcastOp = builder.create<mlir::linalg::BroadcastOp>(user->getLoc(), input.get(), init, dimensions);
-                                    assert(bcastOp->getResults().size() == 1);
-                                    input.set(bcastOp->getResults().front());
-                                    
-                                    // newOpsToCheck.push_back(bcastOp->getResult(0));
-                                    assert(useToIndices.find(output.get())!=useToIndices.end());
-                                    assert(!useToIndices[output.get()].empty());
-                                    bool isDone = useToIndices.insert(std::make_pair(bcastOp->getResult(0), useToIndices[output.get()])).second;
+                                    bool isDone = useToIndices.insert(std::make_pair(matmul->getResult(0), useToIndices[found->first])).second;
                                     assert(isDone);
-                                    // bcastOp->dump();
-                                    // funcOp->dump();
-                                    // llvm::errs() << "FOUND\n";
-                                    // bcastOp->dump();
-                                    // v0.dump();
-                                    // for(auto index: useToIndices[v0])
-                                    // {
-                                    //     llvm::errs() << index.getAsOpaquePointer() << "\n";
-
-                                    // }
-                                    // llvm::errs() << "Output ptr: " << v0.getAsOpaquePointer() << "\n";
-                                    // funcOp->dump();
-                                    // llvm::errs() << bcastOp->getResult(0).getAsOpaquePointer() << "\n";
-
-                                    // llvm::errs() << "======= START ===========\n";
-                                    // for(auto index: useToIndices[bcastOp->getResult(0)])
-                                    // {
-                                    //     llvm::errs() << index.getAsOpaquePointer() << "\n";
-                                    // }
-                                    // llvm::errs() << "======= END ===========\n";
-
+                                    continue;
                                 }
                             }
-
+                            // if(*user->getUsers().begin())
+                            // assert(shaped0.getRank() != shaped1.getRank() && "Shapes have same rank but are different");
                         }
-
-                        // For operations we have already "blocked" their input operands
-                        // their outputs would still have remained scalar.
-                        // This can be easily fixed by re-creating the same operation with
-                        // the new "blocked" inputs, which will automatically update their output
-                        // type
-                        if(!isNotPartOfReduction)
+                        else // We surely need to broadcast
                         {
-                            Operation* blockedOp = nullptr;
-                            if(user->getOperandTypes()[0] != user->getResultTypes()[0] && sameOpResType)
+                            // Assuming first operand is the one to potentially broadcast (input)
+
+                            OpOperand& input = user->getOpOperand(0);
+                            OpOperand& output = user->getOpOperand(1);
+                            ShapedType initShape = shaped1;
+
+                            // If not, swap the input, output
+                            if(shaped0.getRank() > shaped1.getRank())
                             {
-                                builder.setInsertionPoint(user);
-                                blockedOp = builder.create(user->getLoc(), user->getName().getIdentifier(), user->getOperands(), TypeRange(user->getOperandTypes()[0]), user->getAttrs());
-                            }
-                            else if(elewise || sameOpResShape)
-                            {
-                                if(RankedTensorType input0T = dyn_cast<RankedTensorType>(user->getOperandTypes()[0]) )
-                                {
-                                    if(!isa<RankedTensorType>(user->getResultTypes()[0]))
-                                    {
-                                        builder.setInsertionPoint(user);
-                                        
-                                        blockedOp = builder.create(user->getLoc(), user->getName().getIdentifier(), user->getOperands(), TypeRange(RankedTensorType::get(input0T.getShape(), user->getResultTypes()[0])), user->getAttrs());
-                                    }
-                                    
-                                }
-                            }
-                            if(blockedOp)
-                            {
-                                user->replaceAllUsesWith(blockedOp);
-                                newOpsToCheck.insert(newOpsToCheck.end(), blockedOp->getResults().begin(), blockedOp->getResults().end());
-                                if(useToIndices.find(user->getOperands()[1])!=useToIndices.end())
-                                {
-                                    bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[1]])).second;
-                                    assert(isDone);
-                                }
-                                else if(useToIndices.find(user->getOperands()[0])!=useToIndices.end())
-                                {
-                                    bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[0]])).second;
-                                    assert(isDone);
-                                }
-                                user->erase();
+                                std::swap(input, output);
+                                initShape = shaped0;
                             }
 
+                            // Broadcast lower rank tensor to match the higher-rank one.
+                            builder.setInsertionPoint(user);
+                            Value init = builder.create<tensor::EmptyOp>(user->getLoc(), initShape.getShape(), initShape.getElementType());
+
+
+                            // Collect the induction variable indices used to form these values from load operations
+                            // Note that there should be no case where the input or output do not have indices
+                            // as those would be handled by the previous conditions of the if-else blocks
+                            assert(useToIndices.find(output.get())!= useToIndices.end());
+                            assert(useToIndices.find(input.get())!= useToIndices.end());
+
+                            SmallVector<int64_t, 2> dimensions;
+
+                            // Find the dimension(s) "missing" from the lower rank tensor
+                            /// TODO: Handle the case where dimensions are missing from both tensors, e.g., adding a row and a column vector
+                            for(size_t i = 0; i < indices0.size(); i++)
+                            {
+                                if(std::find(indices1.begin(), indices1.end(), indices0[i]) == indices1.end())
+                                {
+                                    dimensions.push_back(i);
+                                }
+                            }
+
+                            Operation* bcastOp = builder.create<mlir::linalg::BroadcastOp>(user->getLoc(), input.get(), init, dimensions);
+                            assert(bcastOp->getResults().size() == 1);
+                            input.set(bcastOp->getResults().front());
+                            
+                            // newOpsToCheck.push_back(bcastOp->getResult(0));
+                            assert(useToIndices.find(output.get())!=useToIndices.end());
+                            assert(!useToIndices[output.get()].empty());
+                            bool isDone = useToIndices.insert(std::make_pair(bcastOp->getResult(0), useToIndices[output.get()])).second;
+                            assert(isDone);
+                            // bcastOp->dump();
+                            // funcOp->dump();
                             // llvm::errs() << "FOUND\n";
-                            // blockedOp->dump();
-                            // llvm::errs() << blockedOp->getResult(0).getAsOpaquePointer() << "\n";
-                            // llvm::errs() << "Operand 1\n";
-                            // llvm::errs() << user->getOperands()[1].getAsOpaquePointer() << "\n";
+                            // bcastOp->dump();
+                            // v0.dump();
+                            // for(auto index: useToIndices[v0])
+                            // {
+                            //     llvm::errs() << index.getAsOpaquePointer() << "\n";
+
+                            // }
+                            // llvm::errs() << "Output ptr: " << v0.getAsOpaquePointer() << "\n";
+                            // funcOp->dump();
+                            // llvm::errs() << bcastOp->getResult(0).getAsOpaquePointer() << "\n";
+
                             // llvm::errs() << "======= START ===========\n";
-                            // for(auto index: useToIndices[blockedOp->getResult(0)])
+                            // for(auto index: useToIndices[bcastOp->getResult(0)])
                             // {
                             //     llvm::errs() << index.getAsOpaquePointer() << "\n";
                             // }
                             // llvm::errs() << "======= END ===========\n";
+
                         }
-                        // else
-                        // {
-                            // llvm::errs() << "Skipped :\n";
-                            // user->dump();
-                        // }
                     }
-                    else if(scf::ForOp forOp = mlir::dyn_cast<scf::ForOp>(user))
+
+                }
+
+                // For operations we have already "blocked" their input operands
+                // their outputs would still have remained scalar.
+                // This can be easily fixed by re-creating the same operation with
+                // the new "blocked" inputs, which will automatically update their output
+                // type
+                Operation* blockedOp = nullptr;
+                if(user->getOperandTypes()[0] != user->getResultTypes()[0] && sameOpResType)
+                {
+                    builder.setInsertionPoint(user);
+                    blockedOp = builder.create(user->getLoc(), user->getName().getIdentifier(), user->getOperands(), TypeRange(user->getOperandTypes()[0]), user->getAttrs());
+                }
+                else if(elewise || sameOpResShape)
+                {
+                    if(RankedTensorType input0T = dyn_cast<RankedTensorType>(user->getOperandTypes()[0]) )
                     {
-                        // If one of the changed operations has a use in a ForOp operation's initArgs
-                        // we need to change the forOp accordingly and update its inner uses as well as its results
-                        bool needsFixes = false;
-                        for(size_t i = 0; i < forOp.getInitArgs().size(); i++)
+                        if(!isa<RankedTensorType>(user->getResultTypes()[0]))
                         {
-                            if(forOp.getInitArgs()[i].getType() != forOp.getRegionIterArgs()[i].getType())
-                            {
-                                needsFixes = true;
-                            }
+                            builder.setInsertionPoint(user);
+                            
+                            blockedOp = builder.create(user->getLoc(), user->getName().getIdentifier(), user->getOperands(), TypeRange(RankedTensorType::get(input0T.getShape(), user->getResultTypes()[0])), user->getAttrs());
                         }
-                        if(!needsFixes)
-                        {
-                            continue;
-                        }
-                        // op.dump();
-                        builder.setInsertionPoint(user);
-                        auto newForOp = builder.create<scf::ForOp>(user->getLoc(), forOp.getLowerBound(), forOp.getUpperBound(), forOp.getStep(), forOp.getInitArgs());
-                        if(forOp->hasAttr("blockSize"))
-                        {
-                            newForOp->setAttr("blockSize", forOp->getAttr("blockSize"));
-                        }
-                        else if(forOp->hasAttr("reduceDim"))
-                        {
-                            newForOp->setAttr("reduceDim", forOp->getAttr("reduceDim"));
-
-                        }
-                        builder.setInsertionPointToEnd(newForOp.getBody());
-                        builder.create<scf::YieldOp>(forOp->getLoc(), forOp.getBody()->getTerminator()->getOperands());
-                        forOp.getBody()->getTerminator()->erase();
-                        for(auto& inner_op: llvm::make_early_inc_range(forOp.getBody()->getOperations()))
-                        {
-                            inner_op.moveBefore(newForOp.getBody()->getTerminator());
-                        }
-                        // newForOp.getBody()->getTerminator()->erase();
-                        for(auto inner_arg: zip(forOp.getBody()->getArguments(), newForOp.getBody()->getArguments()))
-                        {
-                            std::get<0>(inner_arg).replaceAllUsesWith(std::get<1>(inner_arg));
-                            newOpsToCheck.push_back(std::get<1>(inner_arg));
-                        }
-                        for(auto [old_arg, new_arg]: zip(forOp.getInits(), newForOp.getRegionIterArgs()))
-                        {
-                            assert(useToIndices.find(old_arg) != useToIndices.end());
-                            bool isDone = useToIndices.insert(std::make_pair(new_arg, useToIndices[old_arg])).second;
-                            assert(isDone);
-
-                        }
-                        forOp->replaceAllUsesWith(newForOp);
-                        newOpsToCheck.insert(newOpsToCheck.end() , newForOp->getResults().begin(), newForOp->getResults().end());
-                        forOp->erase();
+                        
                     }
                 }
-            }
+                if(blockedOp)
+                {
+                    user->replaceAllUsesWith(blockedOp);
+                    newOpsToCheck.insert(newOpsToCheck.end(), blockedOp->getResults().begin(), blockedOp->getResults().end());
+                    if(useToIndices.find(user->getOperands()[1])!=useToIndices.end())
+                    {
+                        bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[1]])).second;
+                        assert(isDone);
+                    }
+                    else if(useToIndices.find(user->getOperands()[0])!=useToIndices.end())
+                    {
+                        bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[0]])).second;
+                        assert(isDone);
+                    }
+                    // llvm::errs() << "Erasing: " << user <<"\n";
+                    user->erase();
 
-            for(auto op: newOpsToCheck)
-            {
-                needCheck.push_back(op);
+                }
+
+                // llvm::errs() << "FOUND\n";
+                // blockedOp->dump();
+                // llvm::errs() << blockedOp->getResult(0).getAsOpaquePointer() << "\n";
+                // llvm::errs() << "Operand 1\n";
+                // llvm::errs() << user->getOperands()[1].getAsOpaquePointer() << "\n";
+                // llvm::errs() << "======= START ===========\n";
+                // for(auto index: useToIndices[blockedOp->getResult(0)])
+                // {
+                //     llvm::errs() << index.getAsOpaquePointer() << "\n";
+                // }
+                // llvm::errs() << "======= END ===========\n";
+                // else
+                // {
+                    // llvm::errs() << "Skipped :\n";
+                    // user->dump();
+                // }
             }
-            newOpsToCheck.clear();
-        }while(needCheck.size() != size_before);
+            else if(scf::ForOp forOp = mlir::dyn_cast<scf::ForOp>(user))
+            {
+                // If one of the changed operations has a use in a ForOp operation's initArgs
+                // we need to change the forOp accordingly and update its inner uses as well as its results
+                bool needsFixes = false;
+                for(size_t i = 0; i < forOp.getInitArgs().size(); i++)
+                {
+                    if(forOp.getInitArgs()[i].getType() != forOp.getRegionIterArgs()[i].getType())
+                    {
+                        needsFixes = true;
+                    }
+                }
+                if(!needsFixes)
+                {
+                    continue;
+                }
+                // op.dump();
+                builder.setInsertionPoint(user);
+                auto newForOp = builder.create<scf::ForOp>(user->getLoc(), forOp.getLowerBound(), forOp.getUpperBound(), forOp.getStep(), forOp.getInitArgs());
+                if(forOp->hasAttr("blockSize"))
+                {
+                    newForOp->setAttr("blockSize", forOp->getAttr("blockSize"));
+                }
+                else if(forOp->hasAttr("reduceDim"))
+                {
+                    newForOp->setAttr("reduceDim", forOp->getAttr("reduceDim"));
+
+                }
+                builder.setInsertionPointToEnd(newForOp.getBody());
+                auto newYield = builder.create<scf::YieldOp>(forOp->getLoc(), forOp.getBody()->getTerminator()->getOperands());
+                // forOp.getBody()->getTerminator()->erase();
+                for(auto& inner_op: llvm::make_early_inc_range(forOp.getBody()->getOperations()))
+                {
+                    inner_op.moveBefore(newForOp.getBody()->getTerminator());
+                }
+                // llvm::errs() << "Erasing: " << newYield << newYield.getAsOpaquePointer() <<"\n";
+                newYield->erase();
+
+                // newForOp.getBody()->getTerminator()->erase();
+                for(auto inner_arg: zip(forOp.getBody()->getArguments(), newForOp.getBody()->getArguments()))
+                {
+                    std::get<0>(inner_arg).replaceAllUsesWith(std::get<1>(inner_arg));
+                    newOpsToCheck.push_back(std::get<1>(inner_arg));
+                }
+                for(auto [old_arg, new_arg]: zip(forOp.getInits(), newForOp.getRegionIterArgs()))
+                {
+                    assert(useToIndices.find(old_arg) != useToIndices.end());
+                    bool isDone = useToIndices.insert(std::make_pair(new_arg, useToIndices[old_arg])).second;
+                    assert(isDone);
+                }
+                forOp->replaceAllUsesWith(newForOp);
+                newOpsToCheck.insert(newOpsToCheck.end() , newForOp->getResults().begin(), newForOp->getResults().end());
+                // llvm::errs() << "Erasing: " << forOp << forOp.getAsOpaquePointer() <<"\n";
+                forOp->erase();
+
+            }
+        }
 
         funcOp->walk([&](tensor::InsertOp insertOp){
             auto insert = *inserts.find(insertOp);
@@ -653,19 +719,14 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             auto castSliceShape = builder.create<mlir::tensor::CastOp>(insert.first->getLoc(), type, insert.first.getScalar());
 
             auto insertSlice = builder.create<mlir::tensor::InsertSliceOp>(insert.first->getLoc(), castSliceShape, insert.first.getDest(), mlir::ValueRange(offsets), mlir::ValueRange(blockSizes), mlir::ValueRange(strides), static_offsets, mlir::ArrayRef(blockSizesLiteral), mlir::ArrayRef(stridesLiteral));
+            // llvm::errs() << "Erasing: " << insert.first << insert.first.getAsOpaquePointer();
             insert.first->erase();
+
             /// TODO: It might make sense to replaceAll uses at some point later
             // insert.first.replaceAllUsesWith(insertSlice.getResult());
         });
 
-        funcOp->walk([&] (mlir::tensor::SplatOp splatOp) {
-            if(splatOp.getInput().getType() == splatOp.getResult().getType())
-            {
-                splatOp.replaceAllUsesWith(splatOp.getInput());
-                splatOp->erase();
-            }
-        });
-
+        
         // Since we might have replaced forOps if they were using initArgs
         // we need to collect forOps with "blockSize" again
         forOps.clear();
@@ -685,8 +746,11 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                 auto c0 = builder.create<mlir::index::ConstantOp>(forOp->getLoc(), 0);
                 forOp.getInductionVar().replaceAllUsesWith(c0);
                 auto yieldOp = *forOp.getOps<scf::YieldOp>().begin();
+                // llvm::errs() << "Erasing: " << yieldOp << yieldOp.getAsOpaquePointer() << "\n";
                 yieldOp->erase();
+                
                 forOp->getBlock()->getOperations().splice(forOp->getIterator(), forOp.getBody()->getOperations());
+                // llvm::errs() << "Erasing: " << forOp << forOp.getAsOpaquePointer() << "\n";
                 forOp->erase();
             }
             else // Reduction loops need special handling 
@@ -698,32 +762,73 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                         notPartOfReduction.push_back(op);
                     }
                 });
-
-                for(auto op: notPartOfReduction)
+                llvm::SmallSet<Operation*, 4> skip;
+                // SmallVector<Operation, 8> opsNotInReduction;
+                for(auto op: llvm::make_early_inc_range(notPartOfReduction))
                 {
-                    
+                    // op->dump();
+                    Value isBlockArgument0 = dyn_cast<BlockArgument>(op->getOperands()[0]);
+                    Value isBlockArgument1 = dyn_cast<BlockArgument>(op->getOperands()[1]);
+                    bool is0notPartOfReduction = isBlockArgument0 ? isBlockArgument0.getParentBlock()->getParentOp()->hasAttr("blockSize") : op->getOperands()[0].getDefiningOp()->hasAttr("notPartOfReduction");
+                    bool is1notPartOfReduction = isBlockArgument1 ? isBlockArgument1.getParentBlock()->getParentOp()->hasAttr("blockSize") : op->getOperands()[1].getDefiningOp()->hasAttr("notPartOfReduction");
+                    Value v0 = op->getOperand(0);
+                    Value v1 = op->getOperand(1);
+                    SmallVector<Value, 2>& indices0 = useToIndices[v0];
+                    SmallVector<Value, 2>& indices1 = useToIndices[v1];
+
                     // If one of the, possibly, two operands is not operating as part of the reduction, i.e., has the attribute notPartOfReduction
-                    // this operand is either the accumulating target buffer (init) or an operation that is operating on it
+                    // this operand is either the accumulating target buffer (init) or an operation on it
                     Value init, toReduced;
-                    if(!op->getOperands()[0].getDefiningOp() || op->getOperands()[0].getDefiningOp()->hasAttr("notPartOfReduction") )
+                    int64_t reduce_operand, other_operand;
+                    linalg::ReduceOp reduceOp;
+                    if((is0notPartOfReduction && is1notPartOfReduction) || ((indices0.size() == 0 || indices1.size() == 0) && (indices0.size() != 0 || indices1.size() != 0)))
+                    {
+                        if((reduceOp = dyn_cast_if_present<linalg::ReduceOp>(op->getOperand(0).getDefiningOp())))
+                        {
+                            reduce_operand = 0;
+                            other_operand = 1;
+                        }
+                        else if((reduceOp = dyn_cast_if_present<linalg::ReduceOp>(op->getOperand(1).getDefiningOp())))
+                        {
+                            reduce_operand = 1;
+                            other_operand = 0;
+                        }
+                        else 
+                        {
+                            /// TODO: Handle cases where both are "notPartOfReduction"
+                            assert(false && "Unexpected cast where none of the operands are part of a reduce operation");
+                        }
+
+                        if(!dyn_cast<ShapedType>(op->getOperand(other_operand).getType()))
+                        {
+                            builder.setInsertionPoint(reduceOp.getBody()->getTerminator());
+                            Operation* newRes = builder.create(op->getLoc(), op->getName().getIdentifier(), {op->getOperand(other_operand), reduceOp.getBody()->getTerminator()->getOperands().back()},  op->getResultTypes());
+                            reduceOp.getBody()->getTerminator()->getOpOperands().back().set(newRes->getResult(0));
+                            op->replaceAllUsesWith(reduceOp);
+                            // llvm::errs() << "Erasing: " << op <<"\n";
+
+                            op->erase();
+
+                            continue;
+                        }
+                        else
+                        {
+                            assert(false && "Reductions in the for of C = a op C op B ... are not supported. If your reduction can be expressed as C = C op (a op B) please rewrite it as such.");
+                        }
+                    }
+                    else if(is0notPartOfReduction)
                     {
                         init = op->getOperands()[0];
                         toReduced = op->getOperands()[1];
                     }
-                    else if(!op->getOperands()[1].getDefiningOp() || op->getOperands()[1].getDefiningOp()->hasAttr("notPartOfReduction"))
+                    else if(is1notPartOfReduction) 
                     {
                         init = op->getOperands()[1];
                         toReduced = op->getOperands()[0];
                     }
-                    else
-                    {
-                        /// TODO: Handle cases where both are "notPartOfReduction"
-                        assert(false && "TODO: Handle cases where both are notPartOfReduction");
-                    }
 
                     builder.setInsertionPoint(op);
-                    Value v0 = op->getOperand(0);
-                    Value v1 = op->getOperand(1);
+
 
 
                     // v0.dump();
@@ -736,8 +841,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     // Collect the induction variable indices used to form these values from load operations
                     /// TODO: Handle the case where a scalar is used, i.e., A[i] + 1, 1 will not have indices
                     /// but it is valid to be expanded to any direction 
-                    SmallVector<Value, 2>& indices0 = useToIndices[v0];
-                    SmallVector<Value, 2>& indices1 = useToIndices[v1];
                     if(indices0.size() < indices1.size())
                     {
                         std::swap(indices0, indices1);
@@ -763,8 +866,14 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                             auto res = builder.create(loc, op->getName().getIdentifier(), values, op->getResultTypes());
                             builder.create<mlir::linalg::YieldOp>(loc, res->getResults());
                         });
-    
+                        reduceOp->setAttr("notPartOfReduction", builder.getUnitAttr());
+                        assert(useToIndices.find(init) != useToIndices.end());
+                        useToIndices[reduceOp.getResult(0)] = useToIndices[init]; 
+                        
                         op->replaceAllUsesWith(reduceOp);
+                        // llvm::errs() << "Erasing: " << op <<"\n";
+                        // op->dump();
+
                         op->erase();
                     }
                     else
@@ -777,6 +886,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                         builder.setInsertionPoint(op);
                         auto addFOp = builder.create<arith::AddFOp>(op->getLoc(), op->getOperands());
                         op->replaceAllUsesWith(addFOp);
+                        // llvm::errs() << "Erasing: " << op <<"\n";
                         op->erase();
                     }
 
@@ -790,8 +900,12 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     iter_arg.replaceAllUsesWith(forOp.getInitArgs()[index]);
                 }
                 forOp->replaceAllUsesWith(forOp.getBody()->getTerminator()->getOperands());
+                // llvm::errs() << "Erasing: " << forOp.getBody()->getTerminator() << "\n";
+
                 forOp.getBody()->getTerminator()->erase();
                 forOp->getBlock()->getOperations().splice(forOp->getIterator(), forOp.getBody()->getOperations());
+                // llvm::errs() << "Erasing: " << forOp << forOp.getAsOpaquePointer() << "\n";
+
                 forOp->erase();
 
             }
