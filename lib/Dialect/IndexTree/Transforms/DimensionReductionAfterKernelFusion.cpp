@@ -485,40 +485,109 @@ llvm::SmallVector<Value> createNewRHSOperandOps(Value prev_old_compute_op,
   return rhs_operand_ops;
 }
 
+
+llvm::SmallVector<Value> createExtraIndicesOpsForReset(Value prev_old_compute_op,
+                               Value parent_index_op,
+                               mlir::IRRewriter &rewriter,
+                               mlir::Location &loc)
+{
+  /// Get the domain from previous ComputeOP
+  /// Domain: previous ComputeOp -> LHSOperandOp -> IndexToTensorDim -> IndexOp -> DenseDomainOp
+  auto prev_compute_op = llvm::cast<IndexTreeComputeOp>(prev_old_compute_op.getDefiningOp());
+  auto lhs_operand_op = llvm::cast<IndexTreeLHSOperandOp>(prev_compute_op.getLhs().getDefiningOp());
+  llvm::SmallVector<IndexTreeIndexToTensorOp> index_to_tensor_dim_ops;
+  for (Value pos : lhs_operand_op.getPos()) {
+    index_to_tensor_dim_ops.push_back(llvm::cast<IndexTreeIndexToTensorOp>(pos.getDefiningOp()));
+  }
+  llvm::SmallVector<IndexTreeIndicesOp> indices_ops;
+  for (auto index_to_tensor_dim : index_to_tensor_dim_ops) {
+    indices_ops.push_back(llvm::cast<IndexTreeIndicesOp>(index_to_tensor_dim.getIndex().getDefiningOp()));
+  }
+  llvm::SmallVector<Value> domain_ops;
+  for (auto index : indices_ops) {
+    domain_ops.push_back(index.getDomain());
+  }
+
+  llvm::SmallVector<Value> new_indices_ops;
+  Value parent = parent_index_op;
+  for (Value domain : domain_ops) {
+    Value new_index = rewriter.create<indexTree::IndexTreeIndicesOp>(loc,
+                                                                     indexTree::IndexNodeType::get(rewriter.getContext()),
+                                                                     parent,
+                                                                     domain);
+    new_indices_ops.push_back(new_index);
+    parent = new_index;
+    comet_vdump(new_index);
+  }
+
+  return new_indices_ops;
+}
+
 Value createComputeOpForReset(const llvm::SmallVector<Value> &common_indices,
+                              Value prev_old_comput_op,
                               Value intermediate_tensor,
                               IndexTreeOperandOp new_rhs_operand_op,
                               mlir::Type element_type,
                               mlir::IRRewriter &rewriter,
                               mlir::Location &loc)
 {
-  /// Create the new lhs operand to reset
-  llvm::SmallVector<Value> pos;
-  llvm::SmallVector<Value> crds;
-  Value prev_dim = nullptr;
-  auto access_type = rewriter.getIndexType();
-  for (Value posOp : new_rhs_operand_op.getPos()) {
-    IndexTreeIndexToTensorOp tensorDimOp = llvm::cast<IndexTreeIndexToTensorOp>(posOp.getDefiningOp());
-    Value index_node = tensorDimOp.getIndex();
-    uint32_t dim = tensorDimOp.getDim();
-    auto access_op = rewriter.create<indexTree::IndexTreeIndexToTensorOp>(
-        loc,
-        TypeRange({access_type, access_type}),
-        /*lhs_tensor=*/intermediate_tensor,
-        index_node,
-        rewriter.getUI32IntegerAttr(dim),
-        prev_dim);
-    pos.push_back(access_op.getPos());
-    crds.push_back(access_op.getCrd());
-    prev_dim = pos.back();
+  uint32_t num_dims_new_tensor = 0;
+  for (Value _ : new_rhs_operand_op.getPos()) {
+    ++num_dims_new_tensor;
   }
   indexTree::OperandType operand_type = indexTree::OperandType::get(rewriter.getContext());
-  Value lhs_operand_op = rewriter.create<indexTree::IndexTreeLHSOperandOp>(
-      loc,
-      operand_type,
-      intermediate_tensor,
-      pos,
-      crds);
+  Value parent;
+  Value lhs_operand_op;
+  if (num_dims_new_tensor)
+  {
+    /// If the intermediate tensor is still a tensor, generate extra indices (loops) to reset it.
+    llvm::SmallVector<Value> new_indices_ops = createExtraIndicesOpsForReset(prev_old_comput_op,
+                                                                        /*parent_index_op=*/common_indices.back(),
+                                                                        rewriter,
+                                                                        loc);
+    assert(new_indices_ops.size() == num_dims_new_tensor && "Expect to reset the whole new tensor");
+    parent = new_indices_ops.back();
+
+    /// Create the new lhs operand to reset
+    llvm::SmallVector<Value> pos;
+    llvm::SmallVector<Value> crds;
+    Value prev_dim = nullptr;
+    auto access_type = rewriter.getIndexType();
+    uint32_t index_i = 0;
+    for (Value posOp : new_rhs_operand_op.getPos()) {
+      IndexTreeIndexToTensorOp tensorDimOp = llvm::cast<IndexTreeIndexToTensorOp>(posOp.getDefiningOp());
+//      Value index_node = tensorDimOp.getIndex();
+      uint32_t dim = tensorDimOp.getDim();
+      Value index_node = new_indices_ops[index_i++];
+      auto access_op = rewriter.create<indexTree::IndexTreeIndexToTensorOp>(
+          loc,
+          TypeRange({access_type, access_type}),
+          /*lhs_tensor=*/intermediate_tensor,
+          index_node,
+          rewriter.getUI32IntegerAttr(dim),
+          prev_dim);
+      pos.push_back(access_op.getPos());
+      crds.push_back(access_op.getCrd());
+      prev_dim = pos.back();
+    }
+
+    lhs_operand_op = rewriter.create<indexTree::IndexTreeLHSOperandOp>(
+        loc,
+        operand_type,
+        intermediate_tensor,
+        pos,
+        crds);
+  }
+  else
+  {
+    /// If the intermediate tensor is a scalar, link to the last common index
+    parent = common_indices.back();
+    auto access_type = rewriter.getIndexType();
+    lhs_operand_op = rewriter.create<indexTree::IndexTreeLHSOperandOp>(
+        loc,
+        operand_type,
+        intermediate_tensor);
+  }
 
   /// Create the rhs operand (i.e., constant 0)
   mlir::TypedAttr zero = rewriter.getZeroAttr(element_type);
@@ -533,15 +602,6 @@ Value createComputeOpForReset(const llvm::SmallVector<Value> &common_indices,
       /*crds*/ValueRange{});
 
   /// Create the Compute Op for resetting
-  Value parent;
-  if (pos.size()) {
-    /// If the intermediate tensor is still a tensor, link to the last remaining dimension (index)
-    auto last_pos = llvm::cast<IndexTreeIndexToTensorOp>(pos.back().getDefiningOp());
-    parent = last_pos.getIndex();
-  } else {
-    /// If the intermediate tensor is a scalar, link to the last common index
-    parent = common_indices.back();
-  }
   mlir::StringRef semiring("noop_times");
   bool compute_missing = false;
   Value compute_op = rewriter.create<indexTree::IndexTreeComputeOp>(
@@ -673,7 +733,8 @@ void IndexTreeDimensionReduction::runOnOperation()
       rewriter.setInsertionPointAfter(new_compute_op.getDefiningOp());
       mlir::Type element_type = llvm::cast<mlir::TensorType>(computeOps[computeOp_i - 1].getType()).getElementType();
       Value compute_op_for_reset = createComputeOpForReset(
-          /*common_indices*/computeOp_to_common_indices[computeOp_i],
+          /*common_indices=*/computeOp_to_common_indices[computeOp_i],
+          /*prev_old_comput_op=*/computeOps[computeOp_i - 1],
           prev_new_compute_op,
           new_rhs_operand_op,
           element_type,
@@ -716,7 +777,8 @@ void IndexTreeDimensionReduction::runOnOperation()
       rewriter.setInsertionPointAfter(new_compute_op.getDefiningOp());
       mlir::Type element_type = llvm::cast<mlir::TensorType>(computeOps[computeOp_i - 1].getType()).getElementType();
       Value compute_op_for_reset = createComputeOpForReset(
-          /*common_indices*/computeOp_to_common_indices[computeOp_i],
+          /*common_indices=*/computeOp_to_common_indices[computeOp_i],
+          /*prev_old_comput_op=*/computeOps[computeOp_i - 1],
                             prev_new_compute_op,
                             new_rhs_operand_op,
                             element_type,
