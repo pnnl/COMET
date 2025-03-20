@@ -900,7 +900,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                         }
                         else 
                         {
-                            /// TODO: Handle cases where both are "notPartOfReduction"
                             assert(false && "Unexpected cast where none of the operands are part of a reduce operation");
                         }
 
@@ -983,16 +982,66 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     }
                     else
                     {
-
                         /// TODO: Handle other cases where shapes are same rank
-                        assert(mlir::isa<arith::AddFOp>(op) && llvm::any_of(op->getOperands(), [](Value val){
+                        if(mlir::isa<arith::AddFOp>(op) && llvm::any_of(op->getOperands(), [](Value val){
                             return llvm::isa_and_present<linalg::MatmulOp>(val.getDefiningOp());
-                        }) && "Only matmul is supported here currently");
-                        builder.setInsertionPoint(op);
-                        auto addFOp = builder.create<arith::AddFOp>(op->getLoc(), op->getOperands());
-                        op->replaceAllUsesWith(addFOp);
-                        // llvm::errs() << "Erasing: " << op <<"\n";
-                        op->erase();
+                        })) 
+                        {
+
+                            builder.setInsertionPoint(op);
+                            auto addFOp = builder.create<arith::AddFOp>(op->getLoc(), op->getOperands());
+                            op->replaceAllUsesWith(addFOp);
+                            // llvm::errs() << "Erasing: " << op <<"\n";
+                            op->erase();
+                        }
+                        else
+                        {
+
+                            SmallVector<int64_t, 2> dimensions;
+                            if(is1notPartOfReduction)
+                            {
+                                broadcastWithRespectTo(builder, op->getOpOperand(0) ,  indices1 , useToIndices);
+                                indices0 = useToIndices[op->getOperand(0)];
+                                for(size_t i = 0; i < indices0.size(); i++)
+                                {
+                                    // auto it = std::find(indices1.begin(), indices1.end(), indices0[i]);
+                                    if(std::find(indices1.begin(), indices1.end(), indices0[i]) == indices1.end())
+                                    {
+                                        dimensions.push_back(i);
+                                    }
+                                }
+                                toReduced = op->getOperand(0);
+                            }
+                            else if(is0notPartOfReduction)
+                            {
+                                broadcastWithRespectTo(builder, op->getOpOperand(1) ,  indices0 , useToIndices);
+                                indices1 = useToIndices[op->getOperand(1)];
+                                for(size_t i = 0; i < indices1.size(); i++)
+                                {
+                                    // auto it = std::find(indices1.begin(), indices1.end(), indices1[i]);
+                                    if(std::find(indices0.begin(), indices0.end(), indices1[i]) == indices0.end())
+                                    {
+                                        dimensions.push_back(i);
+                                    }
+                                }
+                                toReduced = op->getOperand(1);
+                            }
+
+
+                            auto reduceOp = builder.create<mlir::linalg::ReduceOp>(op->getLoc(), toReduced, init, dimensions, [&](OpBuilder builder, Location loc, ValueRange values){
+                                auto res = builder.create(loc, op->getName().getIdentifier(), values, op->getResultTypes());
+                                builder.create<mlir::linalg::YieldOp>(loc, res->getResults());
+                            });
+                            reduceOp->setAttr("notPartOfReduction", builder.getUnitAttr());
+                            assert(useToIndices.find(init) != useToIndices.end());
+                            useToIndices[reduceOp.getResult(0)] = useToIndices[init]; 
+                            
+                            op->replaceAllUsesWith(reduceOp);
+                            // llvm::errs() << "Erasing: " << op <<"\n";
+                            // op->dump();
+    
+                            op->erase();
+                        }
                     }
 
                 }
