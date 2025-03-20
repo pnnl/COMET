@@ -147,6 +147,47 @@ bool checkOperandsSameType(Operation* op)
     return llvm::all_of(op->getOperandTypes(), [&type0](Type type){return type == type0;});
 }
 
+
+void broadcastWithRespectTo(OpBuilder& builder, OpOperand& op, SmallVector<Value, 2> indicesRes, llvm::MapVector<Value, SmallVector<Value, 2>>& useToIndices)
+{
+    assert(useToIndices.find(op.get()) != useToIndices.end());
+    auto operandIndices = useToIndices[op.get()];
+    SmallVector<int64_t, 2> resShape;
+    for(auto index: operandIndices)
+    {
+        RankedTensorType indexShaped = cast<RankedTensorType>(index.getType());
+        resShape.push_back(indexShaped.getShape()[0]);
+    }
+    
+    
+    SmallVector<int64_t, 2> dimensions;
+    for(size_t i = 0; i < indicesRes.size(); i++)
+    {
+        if(std::find(operandIndices.begin(), operandIndices.end(), indicesRes[i]) == operandIndices.end())
+        {
+            dimensions.push_back(i);
+            RankedTensorType indexShaped = cast<RankedTensorType>(indicesRes[i].getType());
+            resShape.insert(resShape.begin()+i, indexShaped.getShape()[0]);
+            operandIndices.insert(operandIndices.begin()+i, indicesRes[i]);
+        }
+    }
+    Type resElementType = dyn_cast<RankedTensorType>(op.getOwner()->getResultTypes().front()) ? dyn_cast<RankedTensorType>(op.getOwner()->getResultTypes().front()).getElementType() : op.getOwner()->getResultTypes().front();
+
+    RankedTensorType resType = RankedTensorType::get(resShape, resElementType);
+    
+    
+    Value newOperand = op.get();
+    
+    if(!dimensions.empty())
+    {
+        Value init = builder.create<tensor::EmptyOp>(op.getOwner()->getLoc(), resType.getShape(), resType.getElementType());
+        newOperand = builder.create<mlir::linalg::BroadcastOp>(op.getOwner()->getLoc(), newOperand, init, dimensions)->getResult(0);
+        bool isDone = useToIndices.insert(std::make_pair(newOperand, operandIndices)).second;
+        assert(isDone);
+    }
+    op.set(newOperand);
+}
+
 class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlockedGpu> {
     public:
     ConvertGpuToBlockedGpu() = default;
@@ -192,7 +233,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
         llvm::MapVector<mlir::tensor::ExtractOp, llvm::SmallVector<BlockInfo, 2>> extracts;
         llvm::MapVector<mlir::tensor::InsertOp, llvm::SmallVector<BlockInfo, 2>> inserts;
         llvm::SmallVector<scf::ForOp, 2> forOps;
-        // std::set<mlir::Value, decltype(comp)> needCheck(comp);
         std::vector<mlir::Value> needCheck;
         llvm::MapVector<mlir::Value, llvm::SmallVector<Value, 2>> useToIndices;
 
@@ -281,10 +321,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                 }
             }
         });
-        // funcOp->dump();
-
-        /// TODO: Indices need to be the initial "block Indices" i.e. what will later be blockId, reduction Id or any other loop induction variable
-        /// Since we only care about the "direction" of iteration, not the actual index
 
         // Convert extractOp to extractSliceOp as it is a closer representation of triton's blocked memory loads
         // We also keep the information regarding the boolean masks that need to be generated in order to avoid
@@ -421,10 +457,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             {
                 user->setAttr("notPartOfReduction", builder.getUnitAttr());
             }
-            if(isNotPartOfReduction)
-            {
-                // user->dump();
-            }
 
             bool sameOpResType = user->hasTrait<mlir::OpTrait::SameOperandsAndResultType>();
             bool sameOpResShape = user->hasTrait<mlir::OpTrait::SameOperandsAndResultShape>();
@@ -557,145 +589,83 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                                     }
                                 }
                             }
-                            // Handle the case where dimensions are missing from both tensors, e.g., adding a row and a column vector
+                        }
+
+                        //  This could be improved by first trying to make the shapes equal with respect to each other rather than
+                        //  the eventual result first
+
+                        SmallVector<void*, 4> indices0_sorted, indices1_sorted;
+                        for(auto index: indices0)
+                        {
+                            builder.setInsertionPoint(user);
+
+                            indices0_sorted.push_back(index.getAsOpaquePointer());
+                        }
+                        for(auto index: indices1)
+                        {
+                            builder.setInsertionPoint(user);
+                            indices1_sorted.push_back(index.getAsOpaquePointer());
+                        }
+                        std::sort(indices0_sorted.begin(),indices0_sorted.end());
+                        std::sort(indices1_sorted.begin(),indices1_sorted.end());
+
+                        SmallVector<void*, 4> diff_0_not_in_1;
+                        std::set_difference(indices0_sorted.begin(), indices0_sorted.end(), indices1_sorted.begin(), indices1_sorted.end(), std::back_inserter(diff_0_not_in_1));  
+                        SmallVector<void*, 4> diff_1_not_in_0; 
+                        std::set_difference(indices1_sorted.begin(), indices1_sorted.end(), indices0_sorted.begin(), indices0_sorted.end(), std::back_inserter(diff_1_not_in_0));  
+
+                        if(shaped0.getRank() > shaped1.getRank() && diff_1_not_in_0.empty()) // everything in indices1 is also in indices0
+                        {
+                            broadcastWithRespectTo(builder, user->getOpOperand(1), useToIndices[user->getOpOperand(0).get()], useToIndices);
+                        }
+                        else if(shaped0.getRank() < shaped1.getRank() && diff_0_not_in_1.empty()) // everything in indices0 is also in indices1
+                        {
+                            broadcastWithRespectTo(builder, user->getOpOperand(0), useToIndices[user->getOpOperand(1).get()], useToIndices);
+                        }
+                        else
+                        {
+                            auto result = user->getUses().begin();
+                            while(!isa<scf::YieldOp>(result->getOwner()) && !isa<tensor::InsertOp>(result->getOwner()))
+                            {
+                                result = result->getOwner()->getUses().begin();
+                            }
+    
+                            SmallVector<Value, 2> indicesRes;
+                            if(isa<scf::YieldOp>(result->getOwner()))
+                            {
+                                auto parentOp = result->getOwner()->getParentOp();
+                                assert(useToIndices.find(parentOp->getResult(result->getOperandNumber())) != useToIndices.end());
+                                indicesRes = useToIndices[parentOp->getResult(result->getOperandNumber())];
+                            }
                             else
                             {
-                                // llvm::errs() << "Not part of reduction\n";
-                                // user->dump();
-                                auto result = user->getUses().begin();
-                                while(!isa<scf::YieldOp>(result->getOwner()) && !isa<tensor::InsertOp>(result->getOwner()))
+                                tensor::InsertOp insertOp = cast<tensor::InsertOp>(result->getOwner());
+                                for(auto index: insertOp.getIndices())
                                 {
-                                    result = result->getOwner()->getUses().begin();
-                                }
-
-                                SmallVector<Value, 2> indicesRes;
-                                Type resElementType;
-                                if(isa<scf::YieldOp>(result->getOwner()))
-                                {
-                                    auto parentOp = result->getOwner()->getParentOp();
-                                    assert(useToIndices.find(parentOp->getResult(result->getOperandNumber())) != useToIndices.end());
-                                    indicesRes = useToIndices[parentOp->getResult(result->getOperandNumber())];
-                                    RankedTensorType resShaped = cast<RankedTensorType>(parentOp->getResult(result->getOperandNumber()).getType() );
-                                    resElementType = resShaped.getElementType();
-                                }
-                                else
-                                {
-                                    tensor::InsertOp insertOp = cast<tensor::InsertOp>(result->getOwner());
-                                    for(auto index: insertOp.getIndices())
-                                    {
-                                        assert(useToIndices.find(index) != useToIndices.end());
-                                        assert(useToIndices[index].size() == 1);
-                                        indicesRes.push_back(useToIndices[index][0]);
-                                    }
-                                    resElementType = result->getOwner()->getResultTypes()[0];
-                                }
-                                SmallVector<int64_t, 2> resShape;
-                                for(auto index: indicesRes)
-                                {
-                                    RankedTensorType indexShaped = cast<RankedTensorType>(index.getType());
-                                    resShape.push_back(indexShaped.getShape()[0]);
-                                }
-
-                                RankedTensorType resType = RankedTensorType::get(resShape, cast<RankedTensorType>(result->getOwner()->getResultTypes()[0]).getElementType());
-                                builder.setInsertionPoint(user);
-
-                                Value init = builder.create<tensor::EmptyOp>(user->getLoc(), resType.getShape(), resType.getElementType());
-
-                                for(auto& operand: user->getOpOperands())
-                                {
-                                    SmallVector<int64_t, 2> dimensions;
-                                    assert(useToIndices.find(operand.get()) != useToIndices.end());
-                                    auto operandIndices = useToIndices[operand.get()];
-                                    for(size_t i = 0; i < indicesRes.size(); i++)
-                                    {
-                                        if(std::find(operandIndices.begin(), operandIndices.end(), indicesRes[i]) == operandIndices.end())
-                                        {
-                                            dimensions.push_back(i);
-                                        }
-                                    }
-
-                                    Value newOperand = operand.get();
-
-                                    if(!dimensions.empty())
-                                    {
-                                        newOperand = builder.create<mlir::linalg::BroadcastOp>(user->getLoc(), newOperand, init, dimensions)->getResult(0);
-                                        bool isDone = useToIndices.insert(std::make_pair(newOperand, indicesRes)).second;
-                                        assert(isDone);
-                                    }
-                                    operand.set(newOperand);
+                                    assert(useToIndices.find(index) != useToIndices.end());
+                                    assert(useToIndices[index].size() == 1);
+                                    indicesRes.push_back(useToIndices[index][0]);
                                 }
                             }
-                        }
-                        else // We surely need to broadcast
-                        {
-                            // llvm::errs() << "Broadcast?\n";
-                            // user->dump();
-                            // Assuming first operand is the one to potentially broadcast (input)
-
-                            OpOperand& input = user->getOpOperand(0);
-                            OpOperand& output = user->getOpOperand(1);
-                            ShapedType initShape = shaped1;
-
-                            // If not, swap the input, output
-                            if(shaped0.getRank() > shaped1.getRank())
-                            {
-                                std::swap(input, output);
-                                initShape = shaped0;
-                            }
-
-                            // Broadcast lower rank tensor to match the higher-rank one.
+    
                             builder.setInsertionPoint(user);
-                            Value init = builder.create<tensor::EmptyOp>(user->getLoc(), initShape.getShape(), initShape.getElementType());
-
-
-                            // Collect the induction variable indices used to form these values from load operations
-                            // Note that there should be no case where the input or output do not have indices
-                            // as those would be handled by the previous conditions of the if-else blocks
-                            assert(useToIndices.find(output.get())!= useToIndices.end());
-                            assert(useToIndices.find(input.get())!= useToIndices.end());
-
-                            SmallVector<int64_t, 2> dimensions;
-
-                            // Find the dimension(s) "missing" from the lower rank tensor
-                            /// TODO: Handle the case where dimensions are missing from both tensors, e.g., adding a row and a column vector
-                            for(size_t i = 0; i < indices0.size(); i++)
-                            {
-                                if(std::find(indices1.begin(), indices1.end(), indices0[i]) == indices1.end())
-                                {
-                                    dimensions.push_back(i);
-                                }
-                            }
-
-                            Operation* bcastOp = builder.create<mlir::linalg::BroadcastOp>(user->getLoc(), input.get(), init, dimensions);
-                            assert(bcastOp->getResults().size() == 1);
-                            input.set(bcastOp->getResults().front());
                             
-                            // newOpsToCheck.push_back(bcastOp->getResult(0));
-                            assert(useToIndices.find(output.get())!=useToIndices.end());
-                            assert(!useToIndices[output.get()].empty());
-                            bool isDone = useToIndices.insert(std::make_pair(bcastOp->getResult(0), useToIndices[output.get()])).second;
-                            assert(isDone);
-                            // bcastOp->dump();
-                            // funcOp->dump();
-                            // llvm::errs() << "FOUND\n";
-                            // bcastOp->dump();
-                            // v0.dump();
-                            // for(auto index: useToIndices[v0])
-                            // {
-                            //     llvm::errs() << index.getAsOpaquePointer() << "\n";
-
-                            // }
-                            // llvm::errs() << "Output ptr: " << v0.getAsOpaquePointer() << "\n";
-                            // funcOp->dump();
-                            // llvm::errs() << bcastOp->getResult(0).getAsOpaquePointer() << "\n";
-
-                            // llvm::errs() << "======= START ===========\n";
-                            // for(auto index: useToIndices[bcastOp->getResult(0)])
-                            // {
-                            //     llvm::errs() << index.getAsOpaquePointer() << "\n";
-                            // }
-                            // llvm::errs() << "======= END ===========\n";
-
+                            for(auto& operand: user->getOpOperands())
+                            {
+                                broadcastWithRespectTo(builder, operand, indicesRes, useToIndices);
+                            }
+    
+                            bool needFurtherBroadcasting = checkOperandsSameOrientation(user, useToIndices);
+                            // Handle the case where dimensions are still missing from one or both tensors
+                            if(needFurtherBroadcasting)
+                            {
+                                auto& operand0 = user->getOpOperand(0);
+                                auto& operand1 = user->getOpOperand(1);
+                                SmallVector<Value, 2> indicesRes = useToIndices[operand1.get()];
+                                broadcastWithRespectTo(builder, operand0, indicesRes, useToIndices);
+                                indicesRes = useToIndices[operand0.get()];
+                                broadcastWithRespectTo(builder, operand1, indicesRes, useToIndices);
+                            }
                         }
                     }
 
@@ -812,6 +782,11 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     assert(isDone);
                 }
                 forOp->replaceAllUsesWith(newForOp);
+                for(auto [res, init_val]: llvm::zip(newForOp.getResults(), newForOp.getInits()))
+                {
+                    assert(useToIndices.find(init_val) != useToIndices.end());
+                    useToIndices[res] = useToIndices[init_val];
+                }
                 newOpsToCheck.insert(newOpsToCheck.end() , newForOp->getResults().begin(), newForOp->getResults().end());
                 // llvm::errs() << "Erasing: " << forOp << forOp.getAsOpaquePointer() <<"\n";
                 forOp->erase();
