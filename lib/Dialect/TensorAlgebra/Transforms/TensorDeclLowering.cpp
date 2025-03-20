@@ -71,7 +71,19 @@ using namespace mlir::indexTree;
 //===----------------------------------------------------------------------===//
 namespace
 {
-  void insertReadFileLibCall(int rank_size, Type floatEleType, Type indicesType, MLIRContext *ctx, ModuleOp &module, func::FuncOp function)
+  bool is_format_with_no_tiles(std::string formats_str)
+  {
+    if ("COO" == formats_str || "CSR" == formats_str || "CSC" == formats_str || "DCSR" == formats_str)
+    {
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
+  void insertReadFileLibCall(int rank_size, Type floatEleType, Type indicesType, MLIRContext *ctx, ModuleOp &module, func::FuncOp function, std::string formats_str="general")
   {
     comet_debug() << "Inserting insertReadFileLibCall\n";
     IndexType indexType = IndexType::get(function.getContext());
@@ -88,10 +100,23 @@ namespace
       inputFuncArgTypes.push_back(indexType);
       inputSizeFuncArgTypes.push_back(indexType);
     }
-    for(int i = 0; i < rank_size * 4; i++)
+    if (is_format_with_no_tiles(formats_str))
     {
-      inputFuncArgTypes.push_back(unrankedMemref_indices_type);
+      /// each rank has pos, crd. No tiles
+      for(int i = 0; i < rank_size * 2; i++)
+      {
+        inputFuncArgTypes.push_back(unrankedMemref_indices_type);
+      }
     }
+    else
+    {
+      /// each rank has pos, crd, tile_pos, tile_crd.
+      for(int i = 0; i < rank_size * 4; i++)
+      {
+        inputFuncArgTypes.push_back(unrankedMemref_indices_type);
+      }
+    }
+
     inputSizeFuncArgTypes.push_back(unrankedMemref_index);
     inputFuncArgTypes.push_back(unrankedMemref_element_type);
     inputSizeFuncArgTypes.push_back(i32Type);
@@ -129,6 +154,11 @@ namespace
     else 
     {
       assert(false && "Unexpected type");
+    }
+
+    if (2 == rank_size && is_format_with_no_tiles(formats_str))
+    {
+      func_name += "_no_tiles";
     }
 
     if (!hasFuncDeclaration(module, func_name))
@@ -962,7 +992,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         { /// 2D
           comet_debug() << " 2D\n";
           /// Add function definition to the module
-          insertReadFileLibCall(rank_size, floatEleType, indicesType, ctx, module, function);
+          insertReadFileLibCall(rank_size, floatEleType, indicesType, ctx, module, function, formats_str);
 
           std::string read_input_sizes_str;
           if (floatEleType.isF32())
@@ -1033,20 +1063,77 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         /// A1_pos ... A_value
         auto dynamicmemTy_1d_indices_type = MemRefType::get({ShapedType::kDynamic}, type.getIndicesType()); /// memref<?xindex>
         Type unrankedMemTy_indices_type = UnrankedMemRefType::get(type.getIndicesType(), 0);
-      
-        for (unsigned int i = 0; i < sp_decl.getDimArrayCount(); i++)
-        {
-          std::vector<Value> idxes;
-          idxes.push_back(array_sizes[i]);
-          comet_vdump(array_sizes[i]);
-          Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_indices_type, ValueRange{idxes}, rewriter);
-          alloc_size.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
-          comet_debug() << " ";
-          comet_vdump(alloc_size);
 
-          alloc_sizes_vec.push_back(alloc_size);
-          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_indices_type, alloc_size);
-          alloc_sizes_cast_vec.push_back(alloc_size_cast);
+//        for (unsigned int i = 0; i < sp_decl.getDimArrayCount(); i++)
+//        {
+//          std::vector<Value> idxes;
+//          idxes.push_back(array_sizes[i]);
+//          comet_vdump(array_sizes[i]);
+//          Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_indices_type, ValueRange{idxes}, rewriter);
+//          alloc_size.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
+//          comet_debug() << " ";
+//          comet_vdump(alloc_size);
+//
+//          alloc_sizes_vec.push_back(alloc_size);
+//          Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_indices_type, alloc_size);
+//          alloc_sizes_cast_vec.push_back(alloc_size_cast);
+//        }
+        if (is_format_with_no_tiles(formats_str))
+        {
+          /// Formats without tiles: those tile arrays do not need a Fill Op.
+          uint32_t i = 0;
+          for (uint32_t rank = 0; rank < rank_size; ++rank) {
+            for (uint32_t ess = 0; ess < 2; ++ess) {
+              /// 2 means pos and crd for each rank.
+              std::vector<Value> idxes;
+              idxes.push_back(array_sizes[i++]);
+              comet_vdump(array_sizes[i]);
+              Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_indices_type, ValueRange{idxes},
+                                                          rewriter);
+              alloc_size.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
+              comet_debug() << " ";
+              comet_vdump(alloc_size);
+
+              alloc_sizes_vec.push_back(alloc_size);
+              Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_indices_type, alloc_size);
+              alloc_sizes_cast_vec.push_back(alloc_size_cast);
+            }
+            for (uint32_t tile_array = 0; tile_array < 2; ++tile_array) {
+              /// 2 means tile_pos and tile_crd for each rank.
+              /// So that we do not generate Fill Op.
+              std::vector<Value> idxes;
+              idxes.push_back(array_sizes[i++]);
+              comet_vdump(array_sizes[i]);
+              Value alloc_size = rewriter.create<memref::AllocOp>(loc,
+                                                                  dynamicmemTy_1d_indices_type,
+                                                                  ValueRange{idxes});
+              alloc_size.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
+              comet_debug() << " ";
+              comet_vdump(alloc_size);
+
+              alloc_sizes_vec.push_back(alloc_size);
+              Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_indices_type, alloc_size);
+              alloc_sizes_cast_vec.push_back(alloc_size_cast);
+            }
+          }
+        }
+        else
+        {
+          /// Formats with tiles: every format array needs a Fill Op.
+          for (unsigned int i = 0; i < sp_decl.getDimArrayCount(); i++)
+          {
+            std::vector<Value> idxes;
+            idxes.push_back(array_sizes[i]);
+            comet_vdump(array_sizes[i]);
+            Value alloc_size = insertAllocAndInitialize(loc, dynamicmemTy_1d_indices_type, ValueRange{idxes}, rewriter);
+            alloc_size.getDefiningOp()->setAttr("allocator", op.getAllocatorAttr());
+            comet_debug() << " ";
+            comet_vdump(alloc_size);
+
+            alloc_sizes_vec.push_back(alloc_size);
+            Value alloc_size_cast = rewriter.create<memref::CastOp>(loc, unrankedMemTy_indices_type, alloc_size);
+            alloc_sizes_cast_vec.push_back(alloc_size_cast);
+          }
         }
 
         for (unsigned int i = sp_decl.getDimArrayCount(); i < sp_decl.getValueArrayPos(); i++)
@@ -1082,20 +1169,55 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
           read_input_str += "_i"+std::to_string(indicesType.getWidth());
 
-          auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
-                                                                  ValueRange{sparseFileID,
-                                                                             dim_format[0], dim_format[1], /// A1_format, A1_tile_format
-                                                                             dim_format[2], dim_format[3], /// A2_format, A2_tile_format
-                                                                             alloc_sizes_cast_vec[0],      /// A1_pos
-                                                                             alloc_sizes_cast_vec[1],      /// A1_crd
-                                                                             alloc_sizes_cast_vec[2],      /// A1_tile_pos
-                                                                             alloc_sizes_cast_vec[3],      /// A1_tile_crd
-                                                                             alloc_sizes_cast_vec[4],      /// A2_pos
-                                                                             alloc_sizes_cast_vec[5],      /// A2_crd
-                                                                             alloc_sizes_cast_vec[6],      /// A2_tile_pos
-                                                                             alloc_sizes_cast_vec[7],      /// A2_tile_crd
-                                                                             alloc_sizes_cast_vec[8], readModeConst});
-          read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
+//          auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
+//                                                                  ValueRange{sparseFileID,
+//                                                                             dim_format[0], dim_format[1], /// A1_format, A1_tile_format
+//                                                                             dim_format[2], dim_format[3], /// A2_format, A2_tile_format
+//                                                                             alloc_sizes_cast_vec[0],      /// A1_pos
+//                                                                             alloc_sizes_cast_vec[1],      /// A1_crd
+//                                                                             alloc_sizes_cast_vec[2],      /// A1_tile_pos
+//                                                                             alloc_sizes_cast_vec[3],      /// A1_tile_crd
+//                                                                             alloc_sizes_cast_vec[4],      /// A2_pos
+//                                                                             alloc_sizes_cast_vec[5],      /// A2_crd
+//                                                                             alloc_sizes_cast_vec[6],      /// A2_tile_pos
+//                                                                             alloc_sizes_cast_vec[7],      /// A2_tile_crd
+//                                                                             alloc_sizes_cast_vec[8], readModeConst});
+//          read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
+
+          if (is_format_with_no_tiles(formats_str))
+          {
+            /// Call with no tile arrays
+            read_input_str += "_no_tiles";
+            auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
+                                                                    ValueRange{sparseFileID,
+                                                                               dim_format[0], dim_format[1], /// A1_format, A1_tile_format
+                                                                               dim_format[2], dim_format[3], /// A2_format, A2_tile_format
+                                                                               alloc_sizes_cast_vec[0],      /// A1_pos
+                                                                               alloc_sizes_cast_vec[1],      /// A1_crd
+                                                                               alloc_sizes_cast_vec[4],      /// A2_pos
+                                                                               alloc_sizes_cast_vec[5],      /// A2_crd
+                                                                               alloc_sizes_cast_vec[8],
+                                                                               readModeConst});
+            read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
+          }
+          else
+          {
+            /// Call with tile arrays
+            auto read_input_f64Call = rewriter.create<func::CallOp>(loc, read_input_str, SmallVector<Type, 2>{},
+                                                                    ValueRange{sparseFileID,
+                                                                               dim_format[0], dim_format[1], /// A1_format, A1_tile_format
+                                                                               dim_format[2], dim_format[3], /// A2_format, A2_tile_format
+                                                                               alloc_sizes_cast_vec[0],      /// A1_pos
+                                                                               alloc_sizes_cast_vec[1],      /// A1_crd
+                                                                               alloc_sizes_cast_vec[2],      /// A1_tile_pos
+                                                                               alloc_sizes_cast_vec[3],      /// A1_tile_crd
+                                                                               alloc_sizes_cast_vec[4],      /// A2_pos
+                                                                               alloc_sizes_cast_vec[5],      /// A2_crd
+                                                                               alloc_sizes_cast_vec[6],      /// A2_tile_pos
+                                                                               alloc_sizes_cast_vec[7],      /// A2_tile_crd
+                                                                               alloc_sizes_cast_vec[8], readModeConst});
+            read_input_f64Call.getOperation()->setAttr("filename", rewriter.getStringAttr(input_filename));
+          }
         }
         else if (rank_size == 3)
         { /// 3D
@@ -1145,25 +1267,25 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         if (rank_size == 2)
         {
           Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange{array_sizes[9], array_sizes[10]});
-          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, 
-                                                                                                dims, /// Dim sizes
-                                                                                                ValueRange{
-                                                                                                  alloc_tensor_vec[0], // A1_pos
-                                                                                                  alloc_tensor_vec[4], /// A2_pos
-                                                                                                },
-                                                                                                ValueRange{
-                                                                                                  alloc_tensor_vec[1], /// A1_crd
-                                                                                                  alloc_tensor_vec[5], /// A2_crd
-                                                                                                },
-                                                                                                ValueRange{
-                                                                                                  alloc_tensor_vec[2], /// A1_tile_pos
-                                                                                                  alloc_tensor_vec[6], /// A2_tile_pos
-                                                                                                },
-                                                                                                ValueRange{
-                                                                                                  alloc_tensor_vec[3], /// A1_tile_crd
-                                                                                                  alloc_tensor_vec[7], /// A2_tile_crd
-                                                                                                },
-                                                                                                alloc_tensor_vec[8], /// Avals
+          sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty,
+                                                                             dims, /// Dim sizes
+                                                                             ValueRange{
+                                                                               alloc_tensor_vec[0], // A1_pos
+                                                                               alloc_tensor_vec[4], /// A2_pos
+                                                                             },
+                                                                             ValueRange{
+                                                                               alloc_tensor_vec[1], /// A1_crd
+                                                                               alloc_tensor_vec[5], /// A2_crd
+                                                                             },
+                                                                             ValueRange{
+                                                                               alloc_tensor_vec[2], /// A1_tile_pos
+                                                                               alloc_tensor_vec[6], /// A2_tile_pos
+                                                                             },
+                                                                             ValueRange{
+                                                                               alloc_tensor_vec[3], /// A1_tile_crd
+                                                                               alloc_tensor_vec[7], /// A2_tile_crd
+                                                                             },
+                                                                             alloc_tensor_vec[8], /// Avals
                                                                              2, dim_format_attrs);
         }
         else if (rank_size == 3)
