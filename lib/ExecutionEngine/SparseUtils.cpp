@@ -1836,24 +1836,48 @@ void read_input_2D(int32_t fileID,
   auto *desc_A2tile_crd = static_cast<StridedMemRefType<IndicesType, 1> *>(A2tile_crd_ptr);
   auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
 
-//  {
+//  {/// some debug
 //    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1pos->data): " << sizeof(desc_A1pos->data) << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1pos->data " << (uint64_t) desc_A1pos->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1pos->data: " << (uint64_t) desc_A1pos->data << "\n";
 //    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1crd->data): " << sizeof(desc_A1crd->data) << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1crd->data " << (uint64_t) desc_A1crd->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1crd->data: " << (uint64_t) desc_A1crd->data << "\n";
 //    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2pos->data): " << sizeof(desc_A2pos->data) << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2pos->data " << (uint64_t) desc_A2pos->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2pos->data: " << (uint64_t) desc_A2pos->data << "\n";
 //    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2crd->data): " << sizeof(desc_A2crd->data) << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2crd->data " << (uint64_t) desc_A2crd->data << "\n";
+//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2crd->data: " << (uint64_t) desc_A2crd->data << "\n";
 //
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1tile_pos->data): " << sizeof(desc_A1tile_pos->data) << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1tile_pos->data " << (uint64_t) desc_A1tile_pos->data << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1tile_crd->data): " << sizeof(desc_A1tile_crd->data) << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1tile_crd->data " << (uint64_t) desc_A1tile_crd->data << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2tile_pos->data): " << sizeof(desc_A2tile_pos->data) << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2tile_pos->data " << (uint64_t) desc_A2tile_pos->data << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2tile_crd->data): " << sizeof(desc_A2tile_crd->data) << "\n";
-//    llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2tile_crd->data " << (uint64_t) desc_A2tile_crd->data << "\n";
+//    if (A1tile_pos_ptr) {
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(A1tile_pos_ptr): " << sizeof(A1tile_pos_ptr) << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) A1tile_pos_ptr: " << (uint64_t) A1tile_pos_ptr << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1tile_pos->data): " << sizeof(desc_A1tile_pos->data) << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1tile_pos->data: " << (uint64_t) desc_A1tile_pos->data << "\n";
+//    } else {
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) A1tile_pos_ptr: " << (uint64_t) A1tile_pos_ptr << "\n";
+//    }
+//    if (A1tile_crd_ptr) {
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(A1tile_crd_ptr): " << sizeof(A1tile_crd_ptr) << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) A1tile_crd_ptr: " << (uint64_t) A1tile_crd_ptr << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A1tile_crd->data): " << sizeof(desc_A1tile_crd->data) << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A1tile_crd->data: " << (uint64_t) desc_A1tile_crd->data << "\n";
+//    } else {
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) A1tile_crd_ptr: " << (uint64_t) A1tile_crd_ptr << "\n";
+//    }
+//    if (A2tile_pos_ptr) {
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(A2tile_pos_ptr): " << sizeof(A2tile_pos_ptr) << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) A2tile_pos_ptr: " << (uint64_t) A2tile_pos_ptr << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2tile_pos->data): " << sizeof(desc_A2tile_pos->data) << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2tile_pos->data: " << (uint64_t) desc_A2tile_pos->data << "\n";
+//    } else {
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) A2tile_pos_ptr: " << (uint64_t) A2tile_pos_ptr << "\n";
+//    }
+//    if (A2tile_crd_ptr) {
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(A2tile_crd_ptr): " << sizeof(A2tile_crd_ptr) << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) A2tile_crd_ptr: " << (uint64_t) A2tile_crd_ptr << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " sizeof(desc_A2tile_crd->data): " << sizeof(desc_A2tile_crd->data) << "\n";
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) desc_A2tile_crd->data: " << (uint64_t) desc_A2tile_crd->data << "\n";
+//    } else {
+//      llvm::errs() << __FILE__ << ":" << __LINE__ << " (uint64_t) A2tile_crd_ptr: " << (uint64_t) A2tile_crd_ptr << "\n";
+//    }
 //  }
 
   /// For example, A2pos is not used for COO, but initialized with -1 to speficify that it is not used
@@ -1861,10 +1885,18 @@ void read_input_2D(int32_t fileID,
   desc_A1crd->data[0] = -1;
   desc_A2pos->data[0] = -1;
   desc_A2crd->data[0] = -1;
-  desc_A1tile_pos->data[0] = -1;
-  desc_A1tile_crd->data[0] = -1;
-  desc_A2tile_pos->data[0] = -1;
-  desc_A2tile_crd->data[0] = -1;
+  if (desc_A1tile_pos && desc_A1tile_pos->data) {
+    desc_A1tile_pos->data[0] = -1;
+  }
+  if (desc_A1tile_crd && desc_A1tile_crd->data) {
+    desc_A1tile_crd->data[0] = -1;
+  }
+  if (desc_A2tile_pos && desc_A2tile_pos->data) {
+    desc_A2tile_pos->data[0] = -1;
+  }
+  if (desc_A2tile_crd && desc_A2tile_crd->data) {
+    desc_A2tile_crd->data[0] = -1;
+  }
 
   int selected_matrix_read = getMatrixReadOption(readMode);
   FileReaderWrapper<T> FileReader(fileID); /// init of COO
@@ -2467,6 +2499,88 @@ extern "C" void read_input_2D_f64_i64(int32_t fileID,
                         A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
                         Aval_rank, Aval_ptr, readMode);
 }
+
+/// No-tiles version of `read_input_2D_XXX_XXX`, so that get rid of 0-length memref.alloc
+extern "C" void read_input_2D_f32_i32_no_tiles(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int A1pos_rank, void *A1pos_ptr,
+                                  int A1crd_rank, void *A1crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr,
+                                  int A2crd_rank, void *A2crd_ptr,
+                                  int Aval_rank, void *Aval_ptr,
+                                  int32_t readMode)
+{
+  read_input_2D<float, int32_t>(fileID,
+                       A1format, A1_tile_format,
+                       A2format, A2_tile_format,
+                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                       /*A1tile_pos_rank*/0, /*A1tile_pos_ptr*/nullptr, /*A1tile_crd_rank*/0, /*A1tile_crd_ptr*/nullptr,
+                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                       /*A2tile_pos_rank*/0, /*A2tile_pos_ptr*/nullptr, /*A2tile_crd_rank*/0, /*A2tile_crd_ptr*/nullptr,
+                       Aval_rank, Aval_ptr, readMode);
+}
+
+extern "C" void read_input_2D_f32_i64_no_tiles(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int A1pos_rank, void *A1pos_ptr,
+                                  int A1crd_rank, void *A1crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr,
+                                  int A2crd_rank, void *A2crd_ptr,
+                                  int Aval_rank, void *Aval_ptr,
+                                  int32_t readMode)
+{
+  read_input_2D<float, int64_t>(fileID,
+                       A1format, A1_tile_format,
+                       A2format, A2_tile_format,
+                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                       /*A1tile_pos_rank*/0, /*A1tile_pos_ptr*/nullptr, /*A1tile_crd_rank*/0, /*A1tile_crd_ptr*/nullptr,
+                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                       /*A2tile_pos_rank*/0, /*A2tile_pos_ptr*/nullptr, /*A2tile_crd_rank*/0, /*A2tile_crd_ptr*/nullptr,
+                       Aval_rank, Aval_ptr, readMode);
+}
+
+extern "C" void read_input_2D_f64_i32_no_tiles(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int A1pos_rank, void *A1pos_ptr,
+                                  int A1crd_rank, void *A1crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr,
+                                  int A2crd_rank, void *A2crd_ptr,
+                                  int Aval_rank, void *Aval_ptr,
+                                  int32_t readMode)
+{
+  read_input_2D<double, int32_t>(fileID,
+                        A1format, A1_tile_format,
+                        A2format, A2_tile_format,
+                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                        /*A1tile_pos_rank*/0, /*A1tile_pos_ptr*/nullptr, /*A1tile_crd_rank*/0, /*A1tile_crd_ptr*/nullptr,
+                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                        /*A2tile_pos_rank*/0, /*A2tile_pos_ptr*/nullptr, /*A2tile_crd_rank*/0, /*A2tile_crd_ptr*/nullptr,
+                        Aval_rank, Aval_ptr, readMode);
+}
+
+extern "C" void read_input_2D_f64_i64_no_tiles(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int A1pos_rank, void *A1pos_ptr,
+                                  int A1crd_rank, void *A1crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr,
+                                  int A2crd_rank, void *A2crd_ptr,
+                                  int Aval_rank, void *Aval_ptr,
+                                  int32_t readMode)
+{
+  read_input_2D<double, int64_t>(fileID,
+                        A1format, A1_tile_format,
+                        A2format, A2_tile_format,
+                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                        /*A1tile_pos_rank*/0, /*A1tile_pos_ptr*/nullptr, /*A1tile_crd_rank*/0, /*A1tile_crd_ptr*/nullptr,
+                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                        /*A2tile_pos_rank*/0, /*A2tile_pos_ptr*/nullptr, /*A2tile_crd_rank*/0, /*A2tile_crd_ptr*/nullptr,
+                        Aval_rank, Aval_ptr, readMode);
+}
+/// end No-tiles versions of No-tiles version of `read_input_2D_XXX_XXX`.
 
 extern "C" void read_input_3D_f32_i32(int32_t fileID,
                                   int32_t A1format, int32_t A1_tile_format,
