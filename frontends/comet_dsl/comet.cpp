@@ -95,6 +95,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
+#include "comet/Conversion/ForAllToParallel/ForAllToParallelPass.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
 #ifdef ENABLE_GPU_TARGET
@@ -647,10 +648,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Blanket-convert any remaining affine ops if any remain.
     pm.addPass(mlir::createLowerAffinePass());
     /// Convert SCF to CF (always needed).
-    pm.addPass(mlir::createConvertSCFToCFPass());
-    /// Sprinkle some cleanups.
+    pm.addPass(mlir::comet::createConvertForAllToParallelPass());
+    pm.addPass(mlir::createConvertSCFToOpenMPPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());
+    pm.addPass(mlir::createConvertSCFToCFPass());
+    /// Sprinkle some cleanups.
     /// Convert vector to LLVM (always needed).
     pm.addPass(mlir::createConvertVectorToLLVMPass()); // TODO: add more options on a per-need basis.
     //// Convert Math to LLVM (always needed).
@@ -660,11 +663,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// The expansion may create affine expressions. Get rid of them.
     pm.addPass(mlir::createLowerAffinePass());
     /// Convert MemRef to LLVM (always needed).
-    pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
     /// Convert Func to LLVM (always needed).
+    pm.addPass(mlir::createConvertControlFlowToLLVMPass());
+    pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
     pm.addPass(mlir::createConvertFuncToLLVMPass());
     /// Convert Index to LLVM (always needed).
     pm.addPass(mlir::createConvertIndexToLLVMPass());
+    pm.addPass(mlir::createConvertOpenMPToLLVMPass());
     /// Convert remaining unrealized_casts (always needed).
     pm.addPass(mlir::createReconcileUnrealizedCastsPass());
 

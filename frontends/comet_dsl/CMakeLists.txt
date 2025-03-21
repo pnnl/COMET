@@ -30,6 +30,7 @@ set(LIBS
   COMETUtils
   COMETTensorAlgebraDialect
   COMETIndexTreeDialect
+  COMETForAllToParallel
   # COMETIndexTreeToSCF
 )
 
