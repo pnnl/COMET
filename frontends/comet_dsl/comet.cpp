@@ -581,7 +581,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   pm.addPass(mlir::createCanonicalizerPass());
 
 #if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
-  if ((CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA) && (emitTriton_ || emitLLVM || isLoweringToLLVM))
+  if ((CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA) && (emitTriton_ || emitLLVM || isLoweringToLLVM || IsLoweringtoTriton))
   {
     pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
