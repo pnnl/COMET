@@ -475,16 +475,16 @@ namespace
       static LoopInfo* build(Operation* domain_op, IRRewriter& rewriter, ValueRange inputs)
       {
         auto loc = domain_op->getLoc();
-        Value inductionVar;
         Value lb = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(0));
         Value ub = domain_op->getOperand(0);
         Value step = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
         scf::ForOp for_loop = rewriter.create<scf::ForOp>(loc, lb, ub, step, inputs);
-        rewriter.setInsertionPointToStart(for_loop.getBody());
-        scf::YieldOp terminator = rewriter.create<scf::YieldOp>(loc, for_loop.getRegionIterArgs());
-        rewriter.setInsertionPointAfter(for_loop);
+        
         IRMapping map;
-        return new DenseLoopInfo(for_loop.getRegionIterArgs(), for_loop->getResults(), terminator, map, for_loop.getInductionVar(), terminator);
+        rewriter.setInsertionPointToStart(for_loop.getBody());
+        auto yield_op = rewriter.create<scf::YieldOp>(loc, for_loop.getRegionIterArgs());
+        rewriter.setInsertionPointAfter(for_loop);
+        return new DenseLoopInfo(for_loop.getRegionIterArgs(), for_loop->getResults(), yield_op, map, for_loop.getInductionVar(), yield_op);
       }
 
       Value getCrd(IRRewriter& rewriter) override {return inductionVar;}
