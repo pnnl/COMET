@@ -534,6 +534,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   
   pm.addPass(mlir::createCanonicalizerPass());
   pm.addPass(mlir::createCSEPass());
+  pm.addPass(mlir::memref::createFoldMemRefAliasOpsPass());
 
 #ifdef ENABLE_GPU_TARGET
   if (CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringtoTriton))

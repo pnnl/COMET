@@ -378,7 +378,7 @@ namespace
       // Also will not work with indices that don't align to tensor dims!
 
       IndexTreeOp tree = llvm::cast<IndexTreeOp>(op);
-      for(Value input : tree.getInputs()) {
+      for(Value input : tree.getBody()->getArguments()) {
         for(auto user : input.getUsers()) {
           if(auto lhs = llvm::dyn_cast<IndexTreeLHSOperandOp>(user)) {
             int64_t dim = 0;
@@ -1421,7 +1421,7 @@ namespace
             auto output_sets = output_analysis.getOutputSets(index_node_op);
             uint32_t i = 0;
             for(Value v: inputs){
-              output_sets.insert(std::make_pair(v, output_sets[tree.getOperand(i)]));
+              output_sets.insert(std::make_pair(v, output_sets[tree.getBody()->getArgument(i)]));
               i++;
             }
             return DenseParallelLoopInfo::build(op, rewriter, parent_info->getInputs(), output_sets);
