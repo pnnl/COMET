@@ -756,8 +756,9 @@ namespace
       }
 
       Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {
+        // This is needed 
         if(llvm::isa<TensorType>(tensor.getType())) {
-          // For dense tensors, positions and crd should be the same.
+          // For dense tensors, positions and crd should be the same. 
           return getCrd(rewriter);
         }
         return inductionVar;
@@ -1300,7 +1301,7 @@ namespace
         LLVM_DEBUG({logger.startLine() << __FILE__ << ":" << __LINE__ << " " << reduce_result << "\n";});
         output_tensor = reduce_result;
       } else if(llvm::isa<mlir::TensorType>(old_tensor.getType())) {
-        output_tensor = rewriter.create<tensor::InsertOp>(loc, old_tensor.getType(), reduce_result, old_tensor, lhs.getCrds());
+        output_tensor = rewriter.create<tensor::InsertOp>(loc, old_tensor.getType(), reduce_result, old_tensor, lhs.getPos());
       } else {
         output_tensor = rewriter.create<tensorAlgebra::TensorInsertOp>(loc, old_tensor.getType(), old_tensor, lhs.getPos(), lhs.getCrds(), reduce_result);
       }
