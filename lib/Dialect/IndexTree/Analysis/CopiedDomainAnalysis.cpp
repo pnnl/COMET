@@ -73,3 +73,8 @@ bool CopiedDomainAnalysis::isCopiedDomain(Value tensor, unsigned dim)
 {
     return copiedDomains.contains(std::make_pair(tensor, dim));
 }
+
+bool CopiedDomainAnalysis::isReductionVar(IndexTreeComputeOp op, Value index_var)
+{
+   return reductionVars.contains(std::make_pair(op, index_var));
+}

@@ -266,7 +266,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
       dim += 1;
     }
 
-    auto itree_op = rewriter.create<IndexTreeOp>(loc, llvm::SmallVector<Type>(symbolic_domains.size(), domain_type), input_domains);
+    auto itree_op = rewriter.create<IndexTreeOp>(loc, llvm::SmallVector<Type>(symbolic_domains.size(), domain_type), input_domains, ValueRange());
     Region* body = &itree_op.getRegion();
     loc = body->getLoc();
     Block* block = rewriter.createBlock(body, {}, llvm::SmallVector<Type>(symbolic_domains.size(), domain_type), llvm::SmallVector<Location>(symbolic_domains.size(), loc));

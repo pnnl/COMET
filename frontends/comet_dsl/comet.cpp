@@ -484,14 +484,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     optPM.addPass(mlir::comet::createIndexTreeSymbolicComputePass());
 
-    /// Dump index tree dialect.
-    if (emitIT)
-    {
-      if (mlir::failed(pm.run(*module)))
-        return 4;
-      return 0;
-    }
-
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
     optPM.addPass(mlir::comet::createWorkspaceOptimizationsPass());

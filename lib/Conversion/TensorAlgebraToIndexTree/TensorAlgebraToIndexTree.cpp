@@ -35,6 +35,7 @@
 
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Operation.h"
+#include "mlir/IR/ValueRange.h"
 
 using namespace mlir;
 using namespace mlir::indexTree;
@@ -241,7 +242,8 @@ mlir::LogicalResult generalIndexOperationRewrite(
   comet_vdump(lhs_tensor);
 
   Value mask_tensor = nullptr;
-  if(llvm::isa<TensorMultOp>(op)){
+  if (llvm::isa<TensorMultOp>(op))
+  {
     mask_tensor = llvm::cast<TensorMultOp>(op).getMask();
     if(mask_tensor && (mask_tensor == rhs1_tensor || mask_tensor == rhs2_tensor))
     {
@@ -254,7 +256,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
   auto MaskingTypeAttr = mult_op.getMaskTypeAttr();
 
   auto tensor_type = op->getResultTypes()[0];
-  auto itree_op = rewriter.create<IndexTreeOp>(loc, tensor_type, lhs_tensor);
+  auto itree_op = rewriter.create<IndexTreeOp>(loc, tensor_type, ValueRange(lhs_tensor), ValueRange());
   Region* body = &itree_op.getRegion();
   loc = body->getLoc();
   Block* block = rewriter.createBlock(body, {}, TypeRange(lhs_tensor.getType()), {lhs_tensor.getLoc()});
