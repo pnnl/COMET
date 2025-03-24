@@ -201,8 +201,8 @@ bool contains_arg(mlir::Block& block, mlir::BlockArgument arg)
             }
             else {
                 llvm::errs() << "Load operation without affine expression\n";
-                index.dump();
-                store_op->dump();
+                // index.dump();
+                // store_op->dump();
                 exit(1);
             }
         }
@@ -471,7 +471,7 @@ public:
             rewriter.replaceAllUsesWith(parOp.getBody()->getArgument(0), newIndexX->getResult(0));
             
             rewriter.eraseOp(parOp.getBody()->getTerminator());
-            parOp->getParentOfType<mlir::ModuleOp>()->dump();
+            // parOp->getParentOfType<mlir::ModuleOp>()->dump();
             if(target == mlir::tensorAlgebra::TargetDevice::GPU)
             {
                 rewriter.inlineBlockBefore(parOp.getBody(), x_loop_block.getBody()->getTerminator(), newIndexX->getResult(0));
@@ -484,7 +484,7 @@ public:
                     // auto newBlock = rewriter.splitBlock(par_if.getBody(), parOp->getIterator()); 
                     mlir::Value condition = par_if.getCondition();
                     auto new_Y_if = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), condition);
-                    parOp->getParentOfType<mlir::ModuleOp>()->dump();
+                    // parOp->getParentOfType<mlir::ModuleOp>()->dump();
                     
                     rewriter.eraseOp(par_if.getBody()->getTerminator());
                     
@@ -494,7 +494,7 @@ public:
                 }
                 auto ifOp = rewriter.create<mlir::scf::IfOp>(parOp->getLoc(), withinX);
                 rewriter.inlineBlockBefore(parOp.getBody(), ifOp.getBody()->getTerminator(), {newIndexX->getResult(0)});
-                parOp->getParentOfType<mlir::ModuleOp>()->dump();
+                // parOp->getParentOfType<mlir::ModuleOp>()->dump();
 
             }
             rewriter.eraseOp(parOp);
