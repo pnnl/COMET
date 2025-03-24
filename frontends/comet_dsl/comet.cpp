@@ -283,7 +283,7 @@ static cl::opt<bool> IsLoweringtoSCF("convert-to-loops",
 /// =============================================================================
 /// Lowering loops to Triton
 /// =============================================================================
-static cl::opt<bool> IsLoweringtoTriton("convert-to-triton",
+static cl::opt<bool> IsLoweringToTriton("convert-to-triton",
                                      cl::desc("Output Triton dialect after lowering all operations"));
 #endif
 
@@ -579,9 +579,11 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   pm.addPass(mlir::createCSEPass());
   pm.addPass(mlir::memref::createFoldMemRefAliasOpsPass());
   pm.addPass(mlir::createCanonicalizerPass());
-
+#ifndef ENABLE_GPU_TARGET
+  bool IsLoweringToTriton = false;
+#endif
 #if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
-  if ((CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA) && (emitTriton_ || emitLLVM || isLoweringToLLVM || IsLoweringtoTriton))
+  if ((CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA) && (emitTriton_ || emitLLVM || isLoweringToLLVM || IsLoweringToTriton))
   {
     pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
@@ -591,7 +593,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   }
 
   #ifdef ENABLE_GPU_TARGET
-  if(CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringtoTriton || isLoweringToLLVM))
+  if(CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringToTriton || isLoweringToLLVM))
   {
 
     pm.addPass(mlir::comet::createConvertGpuKernelToTritonPass());

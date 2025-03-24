@@ -39,8 +39,7 @@ after some optimizations.
 $ git clone https://github.com/pnnl/COMET.git
 $ export COMET_SRC=`pwd`/COMET
 $ cd $COMET_SRC
-$ git submodule init
-$ git submodule update --depth=1 # --depth=1 requires git>=1.8.4
+$ git submodule update --init --depth=1 .
 ```
 
 3) **Build and test LLVM/MLIR:**
