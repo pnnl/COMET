@@ -53,13 +53,14 @@ void bli_dgemm_x86_ukr(
       (strcmp("zen2", arch) == 0) ||
       (strcmp("zen3", arch) == 0) ||
       (strcmp("skx", arch) == 0) ||
-      (strcmp("knl", arch) == 0))
+      (strcmp("knl", arch) == 0) ||
+      (strcmp("generic", arch) == 0))
   {
     bli_dgemm_haswell_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
   }
   else
   {
-    llvm::errs() << __FILE__ << " " << __LINE__ << "ERROR: Undefined microkernel"
+    llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: Undefined microkernel"
                  << "\n";
   }
 }
@@ -87,7 +88,7 @@ void bli_dgemm_arm_ukr(
   }
   else
   {
-    llvm::errs() << __FILE__ << " " << __LINE__ << "Undefined microkernel"
+    llvm::errs() << __FILE__ << ":" << __LINE__ << " Undefined microkernel"
                  << "\n";
   }
 }
