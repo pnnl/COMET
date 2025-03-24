@@ -2597,7 +2597,12 @@ extern "C" void read_input_sizes_3D_f64(int32_t fileID,
 //===----------------------------------------------------------------------===//
 ///  Sort a vector within a range [first, last).
 //===----------------------------------------------------------------------===//
-extern "C" void _milr_ciface_comet_sort(UnrankedMemRefType<int64_t> *M, int64_t index_first, int64_t index_last)
+extern "C" void _milr_ciface_comet_sort32(UnrankedMemRefType<int32_t> *M, int64_t index_first, int64_t index_last)
+{
+  cometSortIndex(*M, index_first, index_last);
+}
+
+extern "C" void _milr_ciface_comet_sort64(UnrankedMemRefType<int64_t> *M, int64_t index_first, int64_t index_last)
 {
   cometSortIndex(*M, index_first, index_last);
 }
@@ -2605,11 +2610,17 @@ extern "C" void _milr_ciface_comet_sort(UnrankedMemRefType<int64_t> *M, int64_t 
 extern "C" void comet_sort_index(int64_t rank, void *ptr, int64_t index_first, int64_t index_last)
 {
   UnrankedMemRefType<int64_t> descriptor = {rank, ptr};
-  _milr_ciface_comet_sort(&descriptor, index_first, index_last);
+  _milr_ciface_comet_sort64(&descriptor, index_first, index_last);
 }
 
-extern "C" void comet_sort(int64_t rank, void *ptr, int64_t index_first, int64_t index_last)
+extern "C" void comet_sort32(int64_t rank, void *ptr, int64_t index_first, int64_t index_last)
+{
+  UnrankedMemRefType<int32_t> descriptor = {rank, ptr};
+  _milr_ciface_comet_sort32(&descriptor, index_first, index_last);
+}
+
+extern "C" void comet_sort64(int64_t rank, void *ptr, int64_t index_first, int64_t index_last)
 {
   UnrankedMemRefType<int64_t> descriptor = {rank, ptr};
-  _milr_ciface_comet_sort(&descriptor, index_first, index_last);
+  _milr_ciface_comet_sort64(&descriptor, index_first, index_last);
 }

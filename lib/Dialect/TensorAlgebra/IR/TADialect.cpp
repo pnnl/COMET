@@ -26,6 +26,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include <iostream>
+#include <string>
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -306,6 +307,11 @@ struct SortOpInterface
     Type indexType = rewriter.getIndexType();
     auto sort_func = FunctionType::get(ctx, {UnrankedMemRefType::get(elemType, 0), indexType, indexType}, {});
     std::string func_name = "comet_sort";
+    if(auto integer = dyn_cast<IntegerType>(elemType))
+    {
+      func_name +=  std::to_string(integer.getIntOrFloatBitWidth());
+    }
+
     if (!hasFuncDeclaration(module, func_name))
     {
       func::FuncOp func_declare = func::FuncOp::create(loc,
@@ -318,7 +324,6 @@ struct SortOpInterface
     
     
     auto unrankedMemrefType = mlir::UnrankedMemRefType::get(shaped_type.getElementType(), 0);
-    auto indexMemrefType = mlir::UnrankedMemRefType::get(rewriter.getIndexType(), 0);
     auto unrankedMemref = rewriter.create<memref::CastOp>(loc, unrankedMemrefType, *destMemref);
     rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{}, ValueRange{unrankedMemref, sortOp.getStart(), sortOp.getEnd()});
     bufferization::replaceOpWithBufferizedValues(rewriter, op, *destMemref);
