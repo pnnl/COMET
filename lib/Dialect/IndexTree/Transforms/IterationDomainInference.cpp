@@ -95,7 +95,7 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
         comet_vdump(tensor_val);
         comet_debug() << "dim: " << dim << "\n";
         Value domain;
-        if(llvm::isa<IndexTreeComputeOp>(tensor_val.getDefiningOp()) && op->isBeforeInBlock(tensor_val.getDefiningOp()))
+        if(llvm::isa_and_present<IndexTreeComputeOp>(tensor_val.getDefiningOp()) && op->isBeforeInBlock(tensor_val.getDefiningOp()))
         {
           if(copiedDomains.isCopiedDomain(tensor_val, dim)){
             // The domain is the same on the LHS as it is on the RHS

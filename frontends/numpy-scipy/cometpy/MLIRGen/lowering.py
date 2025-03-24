@@ -394,7 +394,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     to_llvm_command = path_to_cometopt + scf_lower_flags #+ llvm_in
     translate_mlir_command = cfg.llvm_path+"/bin/mlir-translate --mlir-to-llvmir -- " 
     libname =   "./lib"+llvmir_file+func_name+".so"
-    gcc_command = cfg.llvm_path+"/bin/clang -march=native -mtune=native -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L {0}/lib/ -Wl,-rpath,{0}/lib/ -lcomet_runner_utils -".format(cfg.comet_path)
+    gcc_command = cfg.llvm_path+"/bin/clang -march=native -mtune=native -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L {0}/lib/ -Wl,-rpath,{0}/lib/ -lcomet_runner_utils -L {1}/lib/ -Wl,-rpath,{1}/lib/ -fopenmp -".format(cfg.comet_path, cfg.llvm_path)
 
     # We merge all several calls in a single call to the shell in order to only pay the overhead of process creation once.
     # 1. Call comet to lower scf code to llvm
@@ -404,7 +404,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | ' + gcc_command , input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     if(p.returncode != 0):
         cleanup()
-        raise AssertionError("gcc failed with error code: {}. Error: {}".format(p.returncode, p.stdout))
+        raise AssertionError("gcc failed with error code: {}. Error: {} {}".format(p.returncode, p.stdout, p.stderr))
     files_to_cleanup.append(os.path.join( os.getcwd(), temp_dir +libname))
 
     # Load code generated from COMET
