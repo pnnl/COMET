@@ -4,9 +4,9 @@ name: Test on Ubuntu Linux
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "dev-new"]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master", "dev-new"]
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
