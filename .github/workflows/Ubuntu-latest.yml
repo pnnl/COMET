@@ -47,7 +47,7 @@ jobs:
 
     - name: Build llvm
       if: steps.cache-submodule.outputs.cache-hit != 'true'
-      run: mkdir ${{github.workspace}}/llvm/build && cd llvm/build/ && cmake -G Ninja ../llvm -DLLVM_ENABLE_PROJECTS="mlir;openmp;clang" -DLLVM_TARGETS_TO_BUILD="X86" -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release && ninja
+      run: mkdir ${{github.workspace}}/llvm/build && cd llvm/build/ && cmake -G Ninja ../llvm -DLLVM_ENABLE_PROJECTS="mlir;openmp;clang" -DLLVM_TARGETS_TO_BUILD="X86" -DOPENMP_ENABLE_LIBOMPTARGET=OFF -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release && ninja
 
     - name: Build blis
       if: steps.cache-submodule.outputs.cache-hit != 'true'
