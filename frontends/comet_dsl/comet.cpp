@@ -267,6 +267,15 @@ static cl::opt<bool> isLoweringToLLVM("convert-to-llvm",
                                       cl::desc("Output LLVM IR"));
 
 /// =============================================================================
+/// Debug Options
+/// =============================================================================
+static cl::opt<bool> GenTensorAlgebraLabelsInAlphabeticalOrder(
+    "debug-ta-labels-alphabet-order",
+    cl::desc("If turned on, when generating Tensor Algebra dialect, the order of the affine maps' dimensions will be "
+             "the alphabetical order of index labels. "
+             "For example, for C[i,k] = A[i,h] * B[h,k], the d0, d1, d2 will be h, i, k."));
+
+/// =============================================================================
 /// Utility functions
 /// =============================================================================
 static cl::opt<bool> IsPrintFlops("print-flops", cl::init(false),
@@ -332,6 +341,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   bool emitTriton_ = false;
 #endif
 
+  /// Load debug options
+  if (GenTensorAlgebraLabelsInAlphabeticalOrder)
+  {
+    tensorAlgebra::debugOptions.insert("debug-ta-labels-alphabet-order");
+  }
+  /// end Load debug options
   if (int error = loadMLIR(context, module))
     return error;
 

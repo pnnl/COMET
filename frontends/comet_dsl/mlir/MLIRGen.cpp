@@ -2426,7 +2426,15 @@ namespace
       /// TODO: the order can be determined by autotuning.
       std::map<std::string, mlir::AffineExpr> expr_map;
       unsigned dim = 0;
-      {
+      if (debugOptions.find("debug-ta-labels-alphabet-order") != debugOptions.end())
+      {/// Use alphabet order
+        for (const auto &lbl : all_lbls)
+        {
+          expr_map[lbl] = getAffineDimExpr(dim++, builder.getContext());
+        }
+      }
+      else
+      {/// Use order of rhs1 and rhs2.
         std::unordered_set<std::string> labels_set;
         llvm::SmallVector<std::string> labels_ordered;
         for (const auto &label : rhs1_lbls) {
@@ -2709,10 +2717,11 @@ namespace
     }
   };
 
-} /// namespace
+} /// anonymous namespace
 
 namespace tensorAlgebra
 {
+  std::unordered_set<std::string> debugOptions;
 
   /// The public API for codegen.
   mlir::OwningOpRef<mlir::ModuleOp> mlirGen(mlir::MLIRContext &context,

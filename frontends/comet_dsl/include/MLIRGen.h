@@ -30,6 +30,8 @@
 #define COMET_DSL_MLIRGEN_H_
 
 #include <memory>
+#include <unordered_set>
+#include <string>
 
 namespace mlir
 {
@@ -47,6 +49,8 @@ namespace tensorAlgebra
     /// or nullptr on failure.
     mlir::OwningOpRef<mlir::ModuleOp> mlirGen(mlir::MLIRContext &context,
                                               ModuleAST &moduleAST);
+
+    extern std::unordered_set<std::string> debugOptions;
 } /// namespace tensorAlgebra
 
 #endif /// COMET_DSL_MLIRGEN_H_
