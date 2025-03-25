@@ -817,15 +817,10 @@ void fuseITrees(IndexTreeOp new_itree,
   indexTree::YieldOp yield_op = llvm::cast<indexTree::YieldOp>(new_itree.getRegion().getBlocks().front().getTerminator());
   OpBuilder::InsertionGuard guard(rewriter);
   rewriter.setInsertionPoint(yield_op);
-  /// TODO: We set indices as not parallel only when output is sparse.
-  /// This needs a better way to handle
-  bool allow_parallel = !llvm::any_of(new_itree.getResultTypes(), [](Type t){return isa<tensorAlgebra::SparseTensorType>(t);});
-  if(!allow_parallel)
+  /// TODO: Parallel execution does not seem to work properly when fusion is in place...
+  for(auto indexOp : host_index_ops)
   {
-    for(auto indexOp : host_index_ops)
-    {
-      indexOp.setIsParallel(false);
-    }
+    indexOp.setIsParallel(false);
   }
   /// Fuse each other itree to the new itree.
   for (uint32_t tree_i = 1; tree_i < num_itrees; ++tree_i) {
