@@ -318,6 +318,11 @@ public:
     auto cudaFree = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(), "cudaFree", cudaFreeT);
     cudaFree.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(cudaFree);
+    
+    auto cudaFinitT = builder.getFunctionType({}, {});
+    auto cudaFinit = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(), "cudaFinit", cudaFinitT);
+    cudaFinit.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(cudaFinit);
 
 
     std::vector<mlir::gpu::LaunchFuncOp> launchOps;
@@ -558,6 +563,10 @@ public:
       builder.create<mlir::func::CallOp>(dealloc->getLoc(), "cudaFree", TypeRange(), ValueRange(dealloc->getOperand(0)));
       dealloc.erase();
     }
+    func::FuncOp funcOp = *initFuncs.begin();
+    builder.setInsertionPoint(funcOp.getBody().front().getTerminator());
+
+    builder.create<mlir::func::CallOp>(funcOp.getBody().front().getTerminator()->getLoc(), "cudaFinit", TypeRange(), ValueRange());
     modOp->walk([](mlir::triton::FuncOp TTFuncOp) {
       TTFuncOp.erase();
     });

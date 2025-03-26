@@ -165,3 +165,12 @@ extern "C" __attribute__((visibility("default"))) void cudaLaunchKernel(int64_t 
     void** cast_args = (void**)aligned_ptr;
     CU_CHECK(cuLaunchKernel(cuFunction, blocksPerGridX, blocksPerGridY, blocksPerGridZ, numWraps* threadsPerWarp, 1, 1, sharedMem, 0, cast_args, 0));
 }
+
+extern "C" __attribute__((visibility("default"))) void cudaFinit() 
+{
+    cuModuleUnload(cuModule);
+    cuModule = NULL;
+    cuCtxDestroy(cuContext);
+    cuContext = NULL;
+    moduleImg = NULL;
+}
