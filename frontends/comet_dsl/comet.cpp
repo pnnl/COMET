@@ -200,10 +200,10 @@ static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Co
 #if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
 static cl::opt<int> GPUBlockSizeX("kernel-block-x-size", cl::init(32), cl::desc("Kernel Block size in X direction"));
 static cl::opt<int> GPUBlockSizeY("kernel-block-y-size", cl::init(8), cl::desc("Kernel Block size in Y direction"));
-#if defined(ENABLE_FPGA_TARGET)
-static cl::opt<int> GPUBlockSizeR("kernel-block-r-size", cl::init(1), cl::desc("Kernel Block size in R direction"));
-#else
+#if defined(ENABLE_GPU_TARGET)
 static cl::opt<int> GPUBlockSizeR("kernel-block-r-size", cl::init(32), cl::desc("Kernel Block size in R direction"));
+#else
+static cl::opt<int> GPUBlockSizeR("kernel-block-r-size", cl::init(1), cl::desc("Kernel Block size in R direction"));
 #endif
 #endif
 #ifdef ENABLE_FPGA_TARGET
@@ -506,7 +506,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// =============================================================================
   /// Lowering all the operations to loops
   /// =============================================================================
-  if (IsLoweringtoSCF || emitLoops || emitLLVM)
+  if (IsLoweringtoSCF || emitLoops || emitLLVM || emitTriton_)
   { 
     /// =============================================================================
     /// Lowering of other operations such as transpose, sum, etc. to SCF dialect
