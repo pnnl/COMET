@@ -1955,9 +1955,11 @@ public:
     });
     
     patterns3.insert<RewriteReduction>(context);
-    for(auto ttfuncOp: op.getOps<triton::FuncOp>())
-    {
-      if (failed(applyPartialConversion(ttfuncOp, target3, std::move(patterns3))))
+    std::vector<Operation*> allttfuncOps;
+     op->walk([&allttfuncOps](triton::FuncOp gMod) {allttfuncOps.push_back(gMod); });
+     // for(auto ttfuncOp: op.getOps<triton::FuncOp>())
+     {
+       if (failed(applyPartialConversion(allttfuncOps, target3, std::move(patterns3))))
       {
         // COMET_ERRS << "Failed to Lower STCOutputLowering2\n";
         signalPassFailure();
