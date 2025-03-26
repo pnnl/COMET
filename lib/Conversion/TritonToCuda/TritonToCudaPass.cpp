@@ -35,7 +35,7 @@
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-
+#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
 
 #include "triton/Conversion/NVGPUToLLVM/NVGPUToLLVMPass.h"
@@ -119,9 +119,9 @@ public:
     pm.addPass(triton::gpu::createCoalescePass());
     pm.addPass(createTritonNvidiaGPUPlanCTAPass());
     pm.addPass(mlir::triton::createRewriteTensorPointerPass(computeCapability.getValue()));
+    pm.addPass(createTritonNvidiaGPUPlanCTAPass());
     pm.addPass(triton::gpu::createRemoveLayoutConversionsPass());
     pm.addPass(triton::gpu::createOptimizeThreadLocalityPass());
-    pm.addPass(triton::gpu::createAccelerateMatmulPass(computeCapability.getValue()));
     pm.addPass(triton::gpu::createAccelerateMatmulPass(computeCapability.getValue()));
     pm.addPass(triton::gpu::createRemoveLayoutConversionsPass());
     pm.addPass(triton::gpu::createOptimizeDotOperandsPass());
@@ -141,7 +141,7 @@ public:
     pm.addPass(createConvertIndexToLLVMPass());
     pm.addPass(mlir::triton::createConvertTritonGPUToLLVMPass());
     pm.addPass(mlir::triton::createConvertNVGPUToLLVMPass());
-    // pm.addPass(createConvertToLLVMPass());
+    pm.addPass(createArithToLLVMConversionPass());
     pm.addPass(createCanonicalizerPass());
     pm.addPass(createCSEPass());
     pm.addPass(createSymbolDCEPass());
