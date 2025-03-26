@@ -454,7 +454,7 @@ namespace
       virtual Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {return nullptr;}
       virtual void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -505,7 +505,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-       rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+       rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -642,7 +642,7 @@ namespace
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
         Operation* terminator = terminator_ops[idx];
-        rewriter.modifyOpInPlace(terminator, [&](){terminator->setOperand(0, newOutput);});
+        rewriter.updateRootInPlace(terminator, [&](){terminator->setOperand(0, newOutput);});
       }
   };
 
@@ -723,7 +723,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -842,7 +842,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -1057,7 +1057,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -1183,7 +1183,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 

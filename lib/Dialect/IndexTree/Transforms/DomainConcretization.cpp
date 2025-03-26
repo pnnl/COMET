@@ -516,7 +516,7 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
       Operation* origin = arg.getDefiningOp();
       if(origin && (new_domain_op->getBlock() == origin->getBlock()) && new_domain_op->isBeforeInBlock(origin))
       {
-        rewriter.modifyOpInPlace(new_domain_op, [&]() { new_domain_op->moveAfter(origin); });
+        rewriter.updateRootInPlace(new_domain_op, [&]() { new_domain_op->moveAfter(origin); });
         rewriter.setInsertionPointAfter(new_domain_op);
       }
     }

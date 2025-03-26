@@ -263,7 +263,7 @@ struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
     auto newOp = rewriter.create<IndexTreeOp>(loc, tree_types, tree_op.getInputs(), tree_temps);
     rewriter.inlineRegionBefore(tree_op.getRegion(), newOp.getRegion(), newOp.getRegion().end());
     indexTree::YieldOp yield = cast<indexTree::YieldOp>(newOp.getRegion().getBlocks().front().getTerminator());
-    rewriter.modifyOpInPlace(yield, [&]() {
+    rewriter.updateRootInPlace(yield, [&]() {
       yield->insertOperands(yield->getNumOperands(), ValueRange{workspace});
     });
     for(unsigned i = 0; i < tree_op.getNumResults(); i++){
