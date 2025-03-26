@@ -745,7 +745,7 @@ void TALoweringTTGTPass::runOnOperation()
   auto printFlopFunc = FunctionType::get(ctx, {FloatType::getF64(ctx)}, {});
 
   /// func @getTime() -> f64
-  if (!hasFuncDeclaration(module, "getTime"))
+  if (this->printFlops && !hasFuncDeclaration(module, "getTime"))
   {
     mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "getTime", getTimeFunc,
                                                           ArrayRef<NamedAttribute>{});
@@ -754,7 +754,7 @@ void TALoweringTTGTPass::runOnOperation()
   }
 
   /// func @print_flops(%flops) : (f64) -> ()
-  if (!hasFuncDeclaration(module, "print_flops"))
+  if (this->printFlops && !hasFuncDeclaration(module, "print_flops"))
   {
     mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "print_flops",
                                                           printFlopFunc, ArrayRef<NamedAttribute>{});
