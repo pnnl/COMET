@@ -23,6 +23,7 @@
 #include "mlir/Dialect/Index/IR/IndexOps.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/SmallSet.h"
@@ -184,19 +185,14 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
         auto operand_op = compute_op.getMask().getDefiningOp();
         if(operands_to_domains.find(operand_op) != operands_to_domains.end())
         {
+          Value mask_domain = operands_to_domains[operand_op];
           temp_domain = builder.create<indexTree::IndexTreeMaskedDomainOp>(
             loc, 
             domain_type, 
-            operands_to_domains[operand_op],
+            mask_domain,
             temp_domain, 
             nullptr
           );
-          // temp_domain = builder.create<indexTree::IndexTreeDomainIntersectionOp>(
-          //   loc, 
-          //   domain_type, 
-          //   ValueRange({operands_to_domains[operand_op], temp_domain}), 
-          //   nullptr
-          // );
         }
       }
 
@@ -238,9 +234,20 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
   }
 };
 
+struct CreateZeroMaskOp : public OpRewritePattern<IndexTreeFillMaskOp> {
+  CreateZeroMaskOp(MLIRContext *context)
+    : OpRewritePattern<IndexTreeFillMaskOp>(context, /*benefit=*/1) {}
+
+  mlir::LogicalResult
+  matchAndRewrite(IndexTreeFillMaskOp op, mlir::PatternRewriter &builder) const override {
+    return failure();
+  }
+};
+
 void mlir::indexTree::populateDomainInferencePatterns(
     MLIRContext *context, RewritePatternSet &patterns, CopiedDomainAnalysis &copiedDomains) {
   patterns.add<InferIndexDomain>(context, copiedDomains);
+  patterns.add<CreateZeroMaskOp>(context);
 }
 
 void IndexTreeDomainInference::runOnOperation() {
