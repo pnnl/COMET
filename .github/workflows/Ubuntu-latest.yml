@@ -159,7 +159,11 @@ jobs:
     - name: Install python dependencies
       run: |
           sudo apt-get install -y python3-pip
-
+          
+    - name: Build COMET
+      # Build your program with the given configuration
+      run: rm -rf ${{github.workspace}}/build && mkdir ${{github.workspace}}/build && cd ${{github.workspace}}/build && cmake -G Ninja .. -DMLIR_DIR=${{github.workspace}}/llvm/build/lib/cmake/mlir -DLLVM_DIR=${{github.workspace}}/llvm/build/lib/cmake/llvm -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release && ninja 
+    
     - name: Setup cometPy
       run: cd ${{github.workspace}}/frontends/numpy-scipy/ && pip3 install -e .
 
