@@ -23,6 +23,7 @@
 #define TRITON_TO_CUDA_CONVERSION_PASSES
 
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
+#include "nvidia/include/Dialect/NVGPU/IR/Dialect.h"
 
 namespace mlir {
 namespace comet {

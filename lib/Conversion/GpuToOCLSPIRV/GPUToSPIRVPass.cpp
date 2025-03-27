@@ -92,20 +92,25 @@ void GPUToSPIRVPass::runOnOperation() {
 
     // Map MemRef memory space to SPIR-V storage class first if requested.
     if (mapMemorySpace) {
-      std::unique_ptr<ConversionTarget> target =
-          spirv::getMemorySpaceToStorageClassTarget(*context);
       spirv::MemorySpaceToStorageClassMap memorySpaceMap =
           targetEnvSupportsKernelCapability(
               dyn_cast<gpu::GPUModuleOp>(gpuModule))
               ? spirv::mapMemorySpaceToOpenCLStorageClass
               : spirv::mapMemorySpaceToVulkanStorageClass;
       spirv::MemorySpaceToStorageClassConverter converter(memorySpaceMap);
+      spirv::convertMemRefTypesAndAttrs(gpuModule, converter);
 
-      RewritePatternSet patterns(context);
-      spirv::populateMemorySpaceToStorageClassPatterns(converter, patterns);
-
-      if (failed(applyFullConversion(gpuModule, *target, std::move(patterns))))
-        return signalPassFailure();
+      // Check if there are any illegal ops remaining.
+      std::unique_ptr<ConversionTarget> target =
+          spirv::getMemorySpaceToStorageClassTarget(*context);
+      gpuModule->walk([&target, this](Operation *childOp) {
+        if (target->isIllegal(childOp)) {
+          childOp->emitOpError("failed to legalize memory space");
+          signalPassFailure();
+          return WalkResult::interrupt();
+        }
+        return WalkResult::advance();
+      });
     }
 
     std::unique_ptr<ConversionTarget> target =
@@ -114,18 +119,12 @@ void GPUToSPIRVPass::runOnOperation() {
     SPIRVConversionOptions options;
     options.use64bitIndex = this->use64bitIndex;
     SPIRVTypeConverter typeConverter(targetAttr, options);
-    populateMMAToSPIRVCoopMatrixTypeConversion(typeConverter,
-                                               this->useCoopMatrixNV);
+    populateMMAToSPIRVCoopMatrixTypeConversion(typeConverter);
 
     RewritePatternSet patterns(context);
     populateGPUToSPIRVPatterns(typeConverter, patterns);
-    if (this->useCoopMatrixNV) {
-      populateGpuWMMAToSPIRVCoopMatrixNVConversionPatterns(typeConverter,
-                                                           patterns);
-    } else {
-      populateGpuWMMAToSPIRVCoopMatrixKHRConversionPatterns(typeConverter,
-                                                            patterns);
-    }
+    populateGpuWMMAToSPIRVCoopMatrixKHRConversionPatterns(typeConverter,
+                                                          patterns);
 
     // TODO: Change SPIR-V conversion to be progressive and remove the following
     // patterns.
@@ -134,6 +133,7 @@ void GPUToSPIRVPass::runOnOperation() {
     mlir::arith::populateArithToSPIRVPatterns(typeConverter, patterns);
     populateMemRefToSPIRVPatterns(typeConverter, patterns);
     populateFuncToSPIRVPatterns(typeConverter, patterns);
+    populateVectorToSPIRVPatterns(typeConverter, patterns);
 
     if (failed(applyFullConversion(gpuModule, *target, std::move(patterns))))
       return signalPassFailure();

@@ -1,9 +1,10 @@
-# Sparse matrix dense matrix elementwise subtraction
+# Sparse matrix sparse matrix elementwise addition
 # Sparse matrix is in CSR format. Currently workspace transformation on the IndexTree dialect works for only CSR format
-# RUN: comet-opt --opt-comp-workspace --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> eltwise_sub_CSRxCSR_oCSR_sameSpPattern.llvm
+# UNSUPPORTED: *
+# RUN: comet-opt --opt-comp-workspace --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> eltwise_add_CSRxCSR_oCSR.llvm
 # RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
 # RUN: export SPARSE_FILE_NAME1=%comet_integration_test_data_dir/test_rank2_transpose.mtx
-# RUN: mlir-cpu-runner eltwise_sub_CSRxCSR_oCSR_sameSpPattern.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner eltwise_add_CSRxCSR_oCSR.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
 
 
 def main() {
@@ -21,7 +22,7 @@ def main() {
     B[i, j] = comet_read(1);
     
     #Tensor Contraction
-    C[i, j] = A[i, j] - B[i, j];
+    C[i, j] = A[i, j] + B[i, j];
     print(C);
 }
 
@@ -35,4 +36,4 @@ def main() {
 # CHECK-NEXT: data = 
 # CHECK-NEXT: 0,3,1,4,2,0,3,1,4,
 # CHECK-NEXT: data = 
-# CHECK-NEXT: 0,-2.7,0,-2.7,0,2.7,0,2.7,0,
+# CHECK-NEXT: 2,5.5,4,7.7,6,5.5,8,7.7,10,

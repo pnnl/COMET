@@ -25,6 +25,7 @@
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
 
 #include "comet/Dialect/Utils/Utils.h"
+#include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -43,12 +44,15 @@
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
 
-#include "triton/Conversion/NVGPUToLLVM/NVGPUToLLVMPass.h"
-#include "triton/Conversion/TritonGPUToLLVM/TritonGPUToLLVMPass.h"
+// #include "triton/Conversion/NVGPUToLLVM/TritonGPUToLLVMPass.h"
+// #include "triton/Conversion/TritonGPUToLLVM/TritonGPUToLLVMPass.h"
+#include "third_party/nvidia/include/NVGPUToLLVM/NVGPUToLLVMPass.h"
+#include "third_party/nvidia/include/TritonNVIDIAGPUToLLVM/Passes.h"
+#include "triton/Conversion/TritonGPUToLLVM/Passes.h"
 #include "triton/Dialect/Triton/Transforms/Passes.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "triton/Dialect/TritonNvidiaGPU/IR/Dialect.h"
-#include "triton/Dialect/NVGPU/IR/Dialect.h"
+// #include "triton/Dialect/NVGPU/IR/Dialect.h"
 #include "triton/Conversion/TritonToTritonGPU/TritonToTritonGPUPass.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Dialect/TritonGPU/Transforms/Passes.h"
@@ -64,6 +68,7 @@
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include <set>
+#include <string>
 
 #define GEN_PASS_CLASSES
 #include "comet/Conversion/TritonToCuda/Passes.h"
@@ -125,32 +130,30 @@ public:
       pm.addPass(createSymbolDCEPass());
       pm.addPass(createCanonicalizerPass());
       pm.addPass(createLoopInvariantCodeMotionPass());
-      pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass(numWarps.getValue(), threadsPerWarp.getValue(), numCTAs.getValue(), computeCapability.getValue()));
-      pm.addPass(triton::gpu::createCoalescePass());
+      pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass("cuda:"+std::to_string(computeCapability.getValue()), numWarps.getValue(), threadsPerWarp.getValue(), numCTAs.getValue()));
+      pm.addPass(triton::gpu::createTritonGPUCoalesce());
       pm.addPass(createTritonNvidiaGPUPlanCTAPass());
-      pm.addPass(mlir::triton::createRewriteTensorPointerPass(computeCapability.getValue()));
+      pm.addPass(mlir::triton::createRewriteTensorPointerPass());
       pm.addPass(createTritonNvidiaGPUPlanCTAPass());
-      pm.addPass(triton::gpu::createRemoveLayoutConversionsPass());
-      pm.addPass(triton::gpu::createOptimizeThreadLocalityPass());
-      pm.addPass(triton::gpu::createAccelerateMatmulPass(computeCapability.getValue()));
-      pm.addPass(triton::gpu::createRemoveLayoutConversionsPass());
-      pm.addPass(triton::gpu::createOptimizeDotOperandsPass());
+      pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
+      pm.addPass(triton::gpu::createTritonGPUOptimizeThreadLocality());
+      pm.addPass(triton::gpu::createTritonGPUAccelerateMatmul());
+      pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
+      pm.addPass(triton::gpu::createTritonGPUOptimizeDotOperands());
       pm.addPass(createCSEPass());
-      pm.addPass(triton::gpu::createPipelinePass(numStages.getValue(),numWarps.getValue(),numCTAs.getValue(), computeCapability.getValue()));
-      pm.addPass(createTritonNvidiaGPUMaterializeLoadStorePass(numWarps.getValue(), computeCapability.getValue()));
-      pm.addPass(triton::gpu::createPrefetchPass());
-      pm.addPass(triton::gpu::createOptimizeDotOperandsPass());
-      pm.addPass(triton::gpu::createDecomposeConversionsPass());
-      pm.addPass(createTritonNvidiaGPUWSFixupMissingAttrs());
-      pm.addPass(triton::gpu::createReorderInstructionsPass());
-      pm.addPass(createCSEPass());
-      pm.addPass(createSymbolDCEPass());
-      pm.addPass(createTritonNvidiaGPUWSFixupMissingAttrs());
-      pm.addPass(createCanonicalizerPass());
-      pm.addPass(mlir::createConvertSCFToCFPass());
+      triton::gpu::TritonGPUPipelineOptions pipelineOpts;
+      pipelineOpts.numStages = numStages.getValue();
+      pm.addPass(triton::gpu::createTritonGPUPipeline(pipelineOpts));
+      // pm.addPass(createTritonNvidiaGPUMaterializeLoadStorePass(numWarps.getValue(), computeCapability.getValue()));
+      pm.addPass(triton::NVIDIA::createDecomposeUnsupportedConversionsPass());
+      pm.addPass(triton::gpu::createTritonGPUPrefetch());
+      pm.addPass(triton::gpu::createTritonGPUOptimizeDotOperands());
+      pm.addPass(triton::gpu::createTritonGPUCombineTensorSelectAndIf());
+      pm.addPass(createConvertSCFToCFPass());
       pm.addPass(createConvertIndexToLLVMPass());
-      pm.addPass(mlir::triton::createConvertTritonGPUToLLVMPass());
-      pm.addPass(mlir::triton::createConvertNVGPUToLLVMPass());
+      pm.addPass(triton::gpu::createAllocateSharedMemoryPass());
+      pm.addPass(triton::createConvertTritonGPUToLLVMPass(computeCapability.getValue()));
+      pm.addPass(triton::createConvertNVGPUToLLVMPass());
       pm.addPass(createArithToLLVMConversionPass());
       pm.addPass(createCanonicalizerPass());
       pm.addPass(createCSEPass());

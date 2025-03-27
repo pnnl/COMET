@@ -408,7 +408,7 @@ struct ConvertSymbolicDomainsPass
 
     mlir::ConversionTarget target(getContext());
     target.addLegalDialect<index::IndexDialect, arith::ArithDialect, scf::SCFDialect, memref::MemRefDialect, bufferization::BufferizationDialect, func::FuncDialect, tensor::TensorDialect>();
-    target.addLegalDialect<tensorAlgebra::TADialect>();
+    target.addLegalDialect<tensorAlgebra::TADialect, indexTree::IndexTreeDialect>();
     target.addLegalOp<UnrealizedConversionCastOp>();
     target.addIllegalOp<indexTree::DeclDomainOp, indexTree::SymbolicDomainEndRowOp, indexTree::SymbolicDomainInsertOp>();
     target.addIllegalOp<indexTree::IndexTreeSparseTensorOp>();

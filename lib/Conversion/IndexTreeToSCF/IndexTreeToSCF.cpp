@@ -267,12 +267,12 @@ namespace
     else if (semiringSecond == "minxy")
     {
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OLT, Input0, Input1);
-      elementWiseResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
+      elementWiseResult = builder.create<arith::SelectOp>(loc, cmp, Input0, Input1);
     }
     else if (semiringSecond == "max")
     {
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OGT, Input0, Input1);
-      elementWiseResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
+      elementWiseResult = builder.create<arith::SelectOp>(loc, cmp, Input0, Input1);
     }
     else if (semiringSecond == "ne")
     {
@@ -319,12 +319,12 @@ namespace
     else if (semiringFirst == "minxy")
     {
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OLT, Input0, Input1);
-      reduceResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
+      reduceResult = builder.create<arith::SelectOp>(loc, cmp, Input0, Input1);
     }
     else if (semiringFirst == "max")
     {
       Value cmp = builder.create<CmpFOp>(loc, CmpFPredicate::OGT, Input0, Input1);
-      reduceResult = builder.create<SelectOp>(loc, cmp, Input0, Input1);
+      reduceResult = builder.create<arith::SelectOp>(loc, cmp, Input0, Input1);
     }
     else if (semiringFirst == "land")
     {
@@ -454,7 +454,7 @@ namespace
       virtual Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override {return nullptr;}
       virtual void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -505,7 +505,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-       rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+       rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -642,7 +642,7 @@ namespace
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
         Operation* terminator = terminator_ops[idx];
-        rewriter.updateRootInPlace(terminator, [&](){terminator->setOperand(0, newOutput);});
+        rewriter.modifyOpInPlace(terminator, [&](){terminator->setOperand(0, newOutput);});
       }
   };
 
@@ -723,7 +723,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -842,7 +842,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -1057,7 +1057,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
@@ -1138,7 +1138,7 @@ namespace
 
       void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) override {
         currentInputs[idx] = newOutput;
-        rewriter.updateRootInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
+        rewriter.modifyOpInPlace(terminator, [&](){terminator.setOperand(idx, newOutput);});
       }
   };
 
