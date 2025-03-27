@@ -36,7 +36,6 @@ jobs:
           ${{github.workspace}}/llvm
           ${{github.workspace}}/blis/
           ${{github.workspace}}/install/
-          ${{github.workspace}}/build/
         key: ${{ runner.os }}-submodules
 
     - name: Checkout repository
@@ -76,7 +75,6 @@ jobs:
           ${{github.workspace}}/llvm
           ${{github.workspace}}/blis/
           ${{github.workspace}}/install/
-          ${{github.workspace}}/build/
         key: ${{ runner.os }}-submodules
 
     - name: Build COMET
@@ -133,7 +131,7 @@ jobs:
   #       cargo test
   
   test-cometpy:
-    needs: test-comet-backend
+    needs: build-comet-dependencies
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -147,7 +145,6 @@ jobs:
           ${{github.workspace}}/llvm
           ${{github.workspace}}/blis/
           ${{github.workspace}}/install/
-          ${{github.workspace}}/build/
         key: ${{ runner.os }}-submodules
         
     - name: Initialize Python 3.11
