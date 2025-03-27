@@ -96,7 +96,7 @@ namespace
 
 struct TransformSparseOutput : public OpRewritePattern<IndexTreeComputeOp> {
   TransformSparseOutput(MLIRContext *context)
-    : OpRewritePattern<IndexTreeComputeOp>(context, /*benefit=*/0.5) {}
+    : OpRewritePattern<IndexTreeComputeOp>(context, /*benefit=*/0) {}
 
   mlir::LogicalResult
   matchAndRewrite(IndexTreeComputeOp compute_op, mlir::PatternRewriter &rewriter) const override {
@@ -372,7 +372,10 @@ void IndexTreeWorkspaceTransformationsPass::runOnOperation()
   CopiedDomainAnalysis& copiedDomains = getAnalysis<CopiedDomainAnalysis>();
   indexTree::populateDomainInferencePatterns(&getContext(), workspace_transformation_patterns, copiedDomains); //For new index variables
   indexTree::populateDomainConcretizationPatterns(&getContext(), workspace_transformation_patterns);
-  mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(workspace_transformation_patterns));
+  if(failed(mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(workspace_transformation_patterns))))
+  {
+    signalPassFailure();
+  }
   comet_debug() << __FILE__ << " " << __LINE__ << " ending CompressedWorkspaceTransforms pass \n";
 }
 

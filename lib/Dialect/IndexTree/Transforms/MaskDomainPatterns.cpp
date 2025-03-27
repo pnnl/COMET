@@ -171,7 +171,9 @@ struct MoveInvariantMaskOp : public mlir::OpRewritePattern<IndexTreeFillMaskOp> 
       rewriter.modifyOpInPlace(domain, [&](){domain->moveBefore(op);});
       IndexTreeSparseDomainOp sparse_domain;
       if((sparse_domain = llvm::dyn_cast<IndexTreeSparseDomainOp>(domain))){
-        liftAccessOp(sparse_domain, llvm::cast<IndexTreeIndexToTensorOp>(sparse_domain.getParent().getDefiningOp()), rewriter);
+        if (mlir::failed(liftAccessOp(sparse_domain, llvm::cast<IndexTreeIndexToTensorOp>(sparse_domain.getParent().getDefiningOp()), rewriter))) {
+          return failure();
+        }
       }
     }
 

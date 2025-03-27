@@ -40,6 +40,7 @@
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/ValueRange.h"
+#include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/SmallVector.h"
 #include <string>
@@ -106,10 +107,9 @@ namespace
       Value alloc;
       if (user_setOp)
       {
-        if (isa<ToTensorOp>(setnewop.getOperand(1).getDefiningOp()))
+        if (auto toTensor = dyn_cast<ToTensorOp>(setnewop.getOperand(1).getDefiningOp()))
         {
-          Operation *tensorload = cast<ToTensorOp>(setnewop.getOperand(1).getDefiningOp());
-          auto alloc_op = cast<memref::AllocOp>(tensorload->getOperand(0).getDefiningOp());
+          auto alloc_op = cast<memref::AllocOp>(toTensor->getOperand(0).getDefiningOp());
           comet_vdump(alloc_op);
           alloc = alloc_op;
         }
@@ -126,7 +126,7 @@ namespace
       /// Create these constants up-front to avoid large amounts of redundant
       /// operations.
       auto valueShape = memRefType.getShape();
-      auto constTensor = op.getValue().getType().cast<mlir::TensorType>();
+      auto constTensor = mlir::cast<TensorType>(op.getValue().getType());
       if(constTensor.getRank() == 1 && constTensor.getDimSize(0) == 1)
       {
         auto float_attr = *constantValue.getValues<FloatAttr>().begin();
@@ -225,7 +225,7 @@ namespace
       tensorAlgebra::TensorSetOp setOp;
       Value lhs;
 
-      if (inputType.isa<TensorType>())
+      if (isa<TensorType>(inputType))
       { /// for dense
         comet_debug() << "Dense transpose\n";
 
@@ -262,8 +262,8 @@ namespace
         }
 
         ArrayAttr opFormatsArrayAttr = op.getFormats();
-        std::string formats_strIn(opFormatsArrayAttr[0].cast<mlir::StringAttr>().getValue());
-        std::string formats_strOut(opFormatsArrayAttr[1].cast<mlir::StringAttr>().getValue());
+        std::string formats_strIn(cast<mlir::StringAttr>(opFormatsArrayAttr[0]).getValue());
+        std::string formats_strOut(cast<mlir::StringAttr>(opFormatsArrayAttr[1]).getValue());
         IntegerType i32Type = IntegerType::get(ctx, 32);
         IndexType indexType = IndexType::get(ctx);
 
@@ -292,7 +292,7 @@ namespace
 
         for (unsigned int n = 0; n < tensors_num; n++)
         {
-          auto tensor_rank = tensors[n].getType().cast<ShapedType>().getRank();
+          auto tensor_rank = cast<ShapedType>(tensors[n].getType()).getRank();
           comet_debug() << "ATTR_Val: " << tensor_rank << "\n";
 
           comet_debug() << " tensor_rank: " << tensor_rank << "\n";
@@ -300,11 +300,11 @@ namespace
                         << "\n";
           comet_pdump(tensors[n].getDefiningOp());
           auto tensor = tensors[n];
-          auto tensor_type = tensors[n].getType().cast<SparseTensorType>();
+          auto tensor_type = cast<SparseTensorType>(tensors[n].getType());
           for(int i = 0; i < tensor_rank; i++)
           {
             Value pos = rewriter.create<SpTensorGetDimPos>(loc, tensor, rewriter.getI32IntegerAttr(i));
-            ShapedType shape = pos.getType().cast<ShapedType>();
+            ShapedType shape = cast<ShapedType>(pos.getType());
             Value pos_memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get(shape.getShape(), shape.getElementType()), pos);
             Value pos_v = rewriter.create<memref::CastOp>(loc, unrankedMemrefType_indices_type, pos_memref);
             alloc_sizes_cast_vecs[n].push_back(pos_v);
@@ -455,7 +455,7 @@ namespace
 
       comet_vdump(res);
 
-      if (inputType.isa<TensorType>())
+      if (auto tensorT = dyn_cast<TensorType>(inputType))
       { /// tensor is dense
         comet_debug() << "Input Tensor is dense\n";
         std::vector<Value> indices;
@@ -465,7 +465,7 @@ namespace
         auto step = rewriter.create<ConstantIndexOp>(loc, 1);
 
 
-        for (unsigned rank = 0; rank < inputType.cast<mlir::TensorType>().getRank(); rank++)
+        for (unsigned rank = 0; rank < tensorT.getRank(); rank++)
         {
           Value upperBound = rewriter.create<tensor::DimOp>(loc, op->getOperand(0), rank);
           
@@ -481,18 +481,17 @@ namespace
         auto reduced = rewriter.create<AddFOp>(loc, load_rhs, res_load);
         rewriter.create<memref::StoreOp>(loc, reduced, res, alloc_zero_loc);
       }
-      else
+      else if (auto spTensorT = dyn_cast<SparseTensorType>(inputType))
       { /// sparse tensor type
-        SparseTensorType sp_tensor_type = inputType.cast<SparseTensorType>();
         comet_debug() << "Input Tensor is sparse\n";
 
         comet_pdump(op);
 
-        int tensorRanks = sp_tensor_type.getRank();
+        int tensorRanks = spTensorT.getRank();
         comet_debug() << " tensorRank: " << tensorRanks << " \n";
         comet_debug() << "Tensor to reduce:\n";
         comet_pdump(op->getOperand(0).getDefiningOp());
-        Value sp_tensor_values = rewriter.create<tensorAlgebra::SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic,}, sp_tensor_type.getElementType()), op->getOperand(0));
+        Value sp_tensor_values = rewriter.create<tensorAlgebra::SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic,}, spTensorT.getElementType()), op->getOperand(0));
         Value upperBound = rewriter.create<tensor::DimOp>(loc, sp_tensor_values, 0);
 
         comet_debug() << "Upper Bound:\n";
@@ -516,6 +515,10 @@ namespace
         /// need to restore the insertion point to the previous point
         rewriter.restoreInsertionPoint(insertPt);
         comet_vdump(loop);
+      }
+      else
+      {
+        return failure();
       }
       rewriter.setInsertionPoint(op);
       /// Important to replace all uses of this operation with the new one, otherwise, the current op won't be lowered.

@@ -23,6 +23,7 @@
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -261,14 +262,15 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
           auto lblOp = labels[i].getDefiningOp();
           if (lblSizes.count(lblOp) == 0)
           {
+            auto rhs2T = cast<TensorType>(multop.getRhs2().getType());
 
             /// If dynamic dimension, we need to retrieve the value of the constantIndexOp that was used to create it
             /// If static, just get it from the tensor type
-              if (multop.getRhs2().getType().cast<TensorType>().isDynamicDim(i))
+              if (rhs2T.isDynamicDim(i))
               {
                 if (DenseTensorDeclOp dense_decl_op = llvm::dyn_cast_if_present<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs2().getDefiningOp()))
                 {
-                  ConstantIndexOp val = cast<ConstantIndexOp>(dense_decl_op->getOperand(multop.getRhs2().getType().cast<TensorType>().getDynamicDimIndex(i)).getDefiningOp());
+                  ConstantIndexOp val = cast<ConstantIndexOp>(dense_decl_op->getOperand(rhs2T.getDynamicDimIndex(i)).getDefiningOp());
                   lblSizes[lblOp] = val.value();
                 }
                 else 
@@ -279,7 +281,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
               }
               else
               {
-                lblSizes[lblOp] = multop.getRhs2().getType().cast<TensorType>().getDimSize(i);
+                lblSizes[lblOp] = rhs2T.getDimSize(i);
               }
             labelValues[lblOp] = labels[i];
           }
@@ -301,13 +303,15 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
           auto lblOp = labels[i].getDefiningOp();
           if (lblSizes.count(lblOp) == 0)
           {
+            auto rhs1T = cast<TensorType>(multop.getRhs1().getType());
+
             /// If dynamic dimension, we need to retrieve the value of the constantIndexOp that was used to create it
             /// If static, just get it from the tensor type
-              if (multop.getRhs1().getType().cast<TensorType>().isDynamicDim(i))
+              if (rhs1T.isDynamicDim(i))
               {
                 if (isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs1().getDefiningOp()))
                 {
-                  ConstantIndexOp val = cast<ConstantIndexOp>(multop.getRhs1().getDefiningOp()->getOperand(multop.getRhs1().getType().cast<TensorType>().getDynamicDimIndex(i)).getDefiningOp());
+                  ConstantIndexOp val = cast<ConstantIndexOp>(multop.getRhs1().getDefiningOp()->getOperand(rhs1T.getDynamicDimIndex(i)).getDefiningOp());
                   lblSizes[lblOp] = val.value();
                 }
                 else 
@@ -317,7 +321,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
               }
               else
               {
-                lblSizes[lblOp] = multop.getRhs1().getType().cast<TensorType>().getDimSize(i);
+                lblSizes[lblOp] = rhs1T.getDimSize(i);
               }
 
             labelValues[lblOp] = labels[i];
@@ -393,7 +397,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
     for (size_t i = 1; i < order.size(); i++)
     {
       newRhs2 = inLTValues[inLTOps[order[i]]];
-      auto elType = newRhs1.getType().dyn_cast<RankedTensorType>().getElementType();
+      auto elType = dyn_cast<RankedTensorType>(newRhs1.getType()).getElementType();
       auto newType = RankedTensorType::get(lhsTensorShapes[i - 1], elType);
       std::vector<Value> newSumLabels;
 

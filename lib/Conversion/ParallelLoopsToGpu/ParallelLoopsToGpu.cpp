@@ -24,6 +24,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -41,6 +42,7 @@
 #include "comet/Conversion/ParallelLoopsToGpu/Passes.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "llvm/Support/Casting.h"
 
 #define GEN_PASS_CLASSES
 #include "comet/Conversion/ParallelLoopsToGpu/Passes.h.inc"
@@ -89,7 +91,7 @@ mlir::Value reassociateIndices(T op, mlir::OpBuilder& builder)
             }
         }
 
-        if(op.getIndices()[i].template isa<mlir::BlockArgument>()) 
+        if(mlir::isa<mlir::BlockArgument>(op.getIndices()[i])) 
         {
             dimVals.push_back(op.getIndices()[i]);
             expr =  expr * mlir::getAffineDimExpr(currDimPos++, op->getContext());
@@ -100,7 +102,7 @@ mlir::Value reassociateIndices(T op, mlir::OpBuilder& builder)
             expr =  expr * mlir::getAffineSymbolExpr(currSymPos++, op->getContext());
         }
 
-        if(newIndex.isa<mlir::BlockArgument>()) 
+        if(mlir::isa<mlir::BlockArgument>(newIndex)) 
         {
             dimVals.push_back(newIndex);
             expr =  mlir::getAffineDimExpr(currDimPos++, op->getContext()) + expr;
@@ -125,7 +127,7 @@ mlir::Value reassociateIndices(T op, mlir::OpBuilder& builder)
 void collapseMemrefAndUsers(mlir::Value val, mlir::OpBuilder& builder)
 {
     
-    auto memref = val.getType().cast<mlir::MemRefType>();
+    auto memref = mlir::cast<mlir::MemRefType>(val.getType());
     if (memref.getRank() == 1)
     {
         return;
@@ -171,7 +173,7 @@ bool contains_arg(mlir::Block& block, mlir::BlockArgument arg)
     {
         for(auto index: store_op.getIndices())
         {
-            if (auto affine_expr = llvm::dyn_cast_or_null<mlir::affine::AffineApplyOp>(index.getDefiningOp()))
+            if (auto affine_expr = mlir::dyn_cast_if_present<mlir::affine::AffineApplyOp>(index.getDefiningOp()))
             {
                 for(auto op: affine_expr.getOperands())
                 {
@@ -182,7 +184,7 @@ bool contains_arg(mlir::Block& block, mlir::BlockArgument arg)
                     }
                 }
             }
-            else if(auto block_arg = index.dyn_cast_or_null<mlir::BlockArgument>())
+            else if(auto block_arg = mlir::dyn_cast<mlir::BlockArgument>(index))
             {
                 if(block_arg == arg)
                 {
@@ -249,7 +251,7 @@ mlir::Operation* CeilDivUIOp(mlir::ConversionPatternRewriter &rewriter, mlir::Lo
 
 class ParallelOpToGpu: public mlir::OpConversionPattern<mlir::scf::ParallelOp> {
 private:
-    int blockX, blockY, blockR;
+[[maybe_unused]]  int blockX, blockY, blockR;
     mlir::tensorAlgebra::TargetDevice target;
 public:
     using mlir::OpConversionPattern<mlir::scf::ParallelOp>::OpConversionPattern;
@@ -513,7 +515,7 @@ struct DetectReduction
     : public mlir::OpConversionPattern<mlir::scf::ForOp> {
     DetectReduction(mlir::MLIRContext* ctx, int blockX, int blockY, int blockR) : mlir::OpConversionPattern<mlir::scf::ForOp>(ctx), blockX(blockX), blockY(blockY), blockR(blockR) {}
     private:
-        int blockX, blockY, blockR;
+    [[maybe_unused]] int blockX, blockY, blockR;
     mlir::LogicalResult
     matchAndRewrite(mlir::scf::ForOp forOp, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
@@ -596,7 +598,7 @@ public:
         {
             for(auto arg: funcOp.getArguments())
             {
-                if(arg.getType().isa<mlir::MemRefType>())
+                if(mlir::isa<mlir::MemRefType>(arg.getType()))
                 {
                     builder.setInsertionPointToStart(&funcOp.getBody().getBlocks().front());
                     collapseMemrefAndUsers(arg, builder);

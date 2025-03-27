@@ -116,9 +116,9 @@ auto lhsT = lhs.getType();
   auto rhsT = rhs.getType();
   if(lhsT != rhsT)
   {
-    if(auto lhsTensor = lhsT.dyn_cast<RankedTensorType>())
+    if(auto lhsTensor = mlir::dyn_cast<RankedTensorType>(lhsT))
     {
-      if(auto rhsTensor = rhsT.dyn_cast<RankedTensorType>() ) // 
+      if(auto rhsTensor = mlir::dyn_cast<RankedTensorType>(rhsT) ) // 
       {
 
         if(lhsTensor.getRank() != rhsTensor.getRank())
@@ -195,7 +195,7 @@ auto lhsT = lhs.getType();
     }
     else
     {
-      if(auto rhsTensor = rhsT.dyn_cast<RankedTensorType>())
+      if(auto rhsTensor = dyn_cast<RankedTensorType>(rhsT))
       {
         lhs = rewriter.createOrFold<triton::SplatOp>(op->getLoc(), RankedTensorType::get(rhsTensor.getShape(), lhs.getType()), lhs);
       }
@@ -425,7 +425,7 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
             if(map.find(exp.getAsOpaquePointer()) == map.end())
             {
               // COMET_ERRS << "HERE\n";
-              if(getSymOrDimOperand(aaffineop, exp).getType().isa<IndexType>())
+              if(isa<IndexType>(getSymOrDimOperand(aaffineop, exp).getType()))
               {
                 // COMET_ERRS << "HERE\n";
                 // COMET_ERRS << getSymOrDimOperand(aaffineop, exp);
@@ -603,14 +603,14 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
   }
 
   mlir::Value ptr;
-  if(RankedTensorType t = op->getOperand(mem_offset).getType().dyn_cast<RankedTensorType>())  
+  if(RankedTensorType t = dyn_cast<RankedTensorType>(op->getOperand(mem_offset).getType()))  
   {
-    if(t.getElementType().isa<IndexType>()) 
+    if(mlir::isa<IndexType>(t.getElementType())) 
     {
       ptr = rewriter.create<arith::IndexCastOp>(op->getLoc(), RankedTensorType::get(t.getShape(), rewriter.getI32Type()), op->getOperand(mem_offset));
     }
   }
-  else if(op->getOperand(mem_offset).getType().isa<IndexType>())
+  else if(mlir::isa<IndexType>(op->getOperand(mem_offset).getType()))
   {
     ptr = rewriter.create<arith::IndexCastOp>(op->getLoc(), rewriter.getI32Type(), op->getOperand(mem_offset));
   } 
@@ -620,9 +620,9 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
   }
   // auto ptr_array = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(block_sizes, ptr.getType()), ptr);
   mlir::Value ptr_array;
-  if(op->getOperand(mem_offset +1).getType().isa<RankedTensorType>())
+  if(mlir::isa<RankedTensorType>(op->getOperand(mem_offset +1).getType()))
   {
-    ptr_array = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(op->getOperand(mem_offset +1).getType().cast<RankedTensorType>().getShape(), ptr.getType()), ptr).getResult();
+    ptr_array = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(cast<RankedTensorType>(op->getOperand(mem_offset +1).getType()).getShape(), ptr.getType()), ptr).getResult();
   }
   else 
   {
@@ -649,10 +649,10 @@ LogicalResult convertMemoryOp(Operation* op, ConversionPatternRewriter &rewriter
   else 
   {
     mlir::Value toStore;
-    if (op->getOperand(0).getType().dyn_cast<RankedTensorType>() ) {
+    if (dyn_cast<RankedTensorType>(op->getOperand(0).getType()) ) {
       toStore = op->getOperand(0);
     }
-    else if(auto ptr_array_type = final_ptr_array.getResult().getType().dyn_cast<RankedTensorType>(); ptr_array_type && !op->getOperand(0).getType().dyn_cast<RankedTensorType>()  ) {
+    else if(auto ptr_array_type = dyn_cast<RankedTensorType>(final_ptr_array.getResult().getType()); ptr_array_type && !dyn_cast<RankedTensorType>(op->getOperand(0).getType())  ) {
       toStore = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(ptr_array_type.getShape(), op->getOperand(0).getType()), op->getOperand(0));
     }
     mlir::triton::StoreOp storeVal;
@@ -737,24 +737,26 @@ LogicalResult ExpandScalarTensorSelectOp(arith::SelectOp& op, ConversionPatternR
   mlir::Type res_type = res.getType();  
 
   Operation* expandedOp = NULL;
+  auto rankedCondT = mlir::dyn_cast<RankedTensorType>(cond_type);
+
   if(lhs_type != rhs_type)
   {
-    if(auto lhs_tensor_type = lhs_type.dyn_cast_or_null<RankedTensorType>())
+    if(auto lhs_tensor_type = mlir::dyn_cast<RankedTensorType>(lhs_type))
     {
-      if(!cond_type.isa<RankedTensorType>())
+      if(!isa<RankedTensorType>(cond_type))
       {
         auto expandedCond = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(lhs_tensor_type.getShape(), cond.getType()), cond);
         cond = expandedCond.getResult();
       }
-      if(!rhs_type.isa<RankedTensorType>()  && lhs_tensor_type.getElementType() == rhs_type)
+      if(!isa<RankedTensorType>(rhs_type)  && lhs_tensor_type.getElementType() == rhs_type)
       {
         auto scalarExpanded = rewriter.create<triton::SplatOp>(op->getLoc(), lhs.getType(), rhs);
         expandedOp = rewriter.create<arith::SelectOp>(op->getLoc(), cond, lhs, scalarExpanded);
       }
     }
-    else if(auto rhs_tensor_type = rhs_type.dyn_cast_or_null<RankedTensorType>())
+    else if(auto rhs_tensor_type = mlir::dyn_cast<RankedTensorType>(rhs_type))
     {
-      if(!cond_type.isa<RankedTensorType>())
+      if(!isa<RankedTensorType>(cond_type))
       {
         auto expandedCond = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(rhs_tensor_type.getShape(), cond.getType()), cond);
         cond = expandedCond.getResult();
@@ -768,17 +770,17 @@ LogicalResult ExpandScalarTensorSelectOp(arith::SelectOp& op, ConversionPatternR
   }
   else if (lhs_type != res_type)
   {
-    auto rhs_tensor_type = rhs_type.dyn_cast_or_null<RankedTensorType>();
-    if(rhs_tensor_type && !cond_type.isa<RankedTensorType>())
+    auto rhs_tensor_type = mlir::dyn_cast<RankedTensorType>(rhs_type);
+    if(rhs_tensor_type && !rankedCondT)
     {
       auto expandedCond = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(rhs_tensor_type.getShape(), cond.getType()), cond);
       cond = expandedCond.getResult();
     }
     expandedOp = rewriter.create<arith::SelectOp>(op->getLoc(), cond, lhs, rhs);
   }
-  else if (!cond_type.isa<RankedTensorType>() && rhs_type.isa<RankedTensorType>())
+  else if (!rankedCondT && mlir::isa<RankedTensorType>(rhs_type))
   {
-    auto rhs_tensor_type = rhs_type.cast<RankedTensorType>();
+    auto rhs_tensor_type = mlir::dyn_cast<RankedTensorType>(rhs_type);
     auto expandedCond = rewriter.create<triton::SplatOp>(op->getLoc(), RankedTensorType::get(rhs_tensor_type.getShape(), cond.getType()), cond);
     cond = expandedCond.getResult();
     expandedOp = rewriter.create<arith::SelectOp>(op->getLoc(), cond, lhs, rhs);
@@ -821,7 +823,7 @@ LogicalResult ExpandScalarTensorArithCmpOp(T op, ConversionPatternRewriter &rewr
   {
     if(auto lhs_tensor_type = mlir::dyn_cast_if_present<RankedTensorType>(lhs_type))
     {
-      if(!rhs_type.isa<RankedTensorType>()  && lhs_tensor_type.getElementType() == rhs_type)
+      if(!mlir::isa<RankedTensorType>(rhs_type)  && lhs_tensor_type.getElementType() == rhs_type)
       {
         auto scalarExpanded = rewriter.create<triton::SplatOp>(op->getLoc(), lhs.getType(), rhs);
         expandedOp = rewriter.create<T>(op->getLoc(), op->template getAttrOfType<TAttr>("predicate"), lhs, scalarExpanded);
@@ -871,7 +873,7 @@ void iterateOperations(Operation *op, PatternRewriter& rewriter) {
     for (Block &block : region) {
       for(auto arg: block.getArguments())
       { 
-        if(arg.getType().isa<IndexType>())
+        if(mlir::isa<IndexType>(arg.getType()))
         {
           arg.setType(IntegerType::get(arg.getContext(), 32));
         }
@@ -909,7 +911,7 @@ void convertBlockArgTypes(mlir::triton::FuncOp func, PatternRewriter& rewriter) 
   for (Block &block : func) {
     for(auto arg: block.getArguments())
       { 
-        if(arg.getType().isa<IndexType>())
+        if(mlir::isa<IndexType>(arg.getType()))
         {
           arg.setType(IntegerType::get(arg.getContext(), 32));
         }
@@ -1002,7 +1004,7 @@ public:
             continue;
           }
           isAncestor(offset.getDefiningOp()->getOperand(0).getDefiningOp(), forOp.getLoopRegions()[0]->getArgument(0), local_ops_chain, ops_chain);
-          mlir::Value base, step;
+          mlir::Value base;
           mlir::Value res;
           std::vector<mlir::Value> stepsMul, stepsAdd;
           if(!local_ops_chain.empty())
@@ -1040,11 +1042,11 @@ public:
           {
             if(s.getType() != offset.getType())
             {
-              if(auto sTensor = s.getType().dyn_cast<mlir::RankedTensorType>())
+              if(auto sTensor = mlir::dyn_cast<mlir::RankedTensorType>(s.getType()))
               {
-                if(sTensor.getRank() != offset.getType().cast<mlir::RankedTensorType>().getRank())
+                if(sTensor.getRank() != cast<mlir::RankedTensorType>(offset.getType()).getRank())
                 {
-                  if(sTensor.getDimSize(0) == offset.getType().cast<mlir::RankedTensorType>().getDimSize(0))
+                  if(sTensor.getDimSize(0) == cast<mlir::RankedTensorType>(offset.getType()).getDimSize(0))
                   {
                     s = rewriter.create<mlir::triton::ExpandDimsOp>(op->getLoc(), s, 1);
                   }
@@ -1064,7 +1066,7 @@ public:
                   res = rewriter.create<mlir::arith::MulIOp>(op->getLoc(), res, temp);
                 }
               }
-              else if (s.getType().isa<mlir::IntegerType>() )
+              else if (mlir::isa<mlir::IntegerType>(s.getType()) )
               {
                 auto temp = rewriter.create<mlir::triton::SplatOp>(op->getLoc(), offset.getType(), s);
                 
@@ -1170,7 +1172,7 @@ public:
       if (!forOp.getOps<mlir::triton::DotOp>().empty())
       {
         dotOp = *forOp.getOps<mlir::triton::DotOp>().begin();
-        auto elementType = mlir::isa<mlir::RankedTensorType>(dotOp->getResultTypes()[0]) ? dotOp->getResultTypes()[0].cast<mlir::RankedTensorType>().getElementType() : dotOp->getResultTypes()[0];
+        auto elementType = mlir::isa<mlir::RankedTensorType>(dotOp->getResultTypes()[0]) ? cast<mlir::RankedTensorType>(dotOp->getResultTypes()[0]).getElementType() : dotOp->getResultTypes()[0];
         auto init = rewriter.create<mlir::arith::ConstantOp>(forOp->getLoc(), elementType, rewriter.getZeroAttr(elementType));
         auto initSplat = rewriter.create<mlir::triton::SplatOp>(forOp->getLoc(), dotOp->getResultTypes()[0], init);
         dotOp.getCMutable().assign(initSplat);
@@ -1179,7 +1181,7 @@ public:
       if (!forOp.getOps<mlir::triton::ReduceOp>().empty())
       {
         reduceOp = *forOp.getOps<mlir::triton::ReduceOp>().begin();
-        auto elementType = mlir::isa<mlir::RankedTensorType>(reduceOp->getUsers().begin()->getResultTypes()[0]) ? reduceOp->getUsers().begin()->getResultTypes()[0].cast<mlir::RankedTensorType>().getElementType() : reduceOp->getUsers().begin()->getResultTypes()[0];
+        auto elementType = mlir::isa<mlir::RankedTensorType>(reduceOp->getUsers().begin()->getResultTypes()[0]) ? cast<mlir::RankedTensorType>(reduceOp->getUsers().begin()->getResultTypes()[0]).getElementType() : reduceOp->getUsers().begin()->getResultTypes()[0];
         auto init = rewriter.create<mlir::arith::ConstantOp>(forOp->getLoc(), elementType, rewriter.getZeroAttr(elementType));
         auto initSplat = rewriter.create<mlir::triton::SplatOp>(forOp->getLoc(), reduceOp->getUsers().begin()->getResultTypes()[0], init);
         basePtrs.push_back(initSplat);
@@ -1267,14 +1269,14 @@ public:
     {
       auto argT = arg.getType();
 
-      if(argT.isa<IndexType>())
+      if(mlir::isa<IndexType>(argT))
       {
         changed = true;
         arg.setType(rewriter.getI32Type());
       }
-      else if(RankedTensorType t= argT.dyn_cast<RankedTensorType>())
+      else if(RankedTensorType t= dyn_cast<RankedTensorType>(argT))
       {
-        if(t.getElementType().isa<IndexType>())
+        if(mlir::isa<IndexType>(t.getElementType()))
         {
           changed = true;
           arg.setType(RankedTensorType::get(t.getShape(), rewriter.getI32Type()));
@@ -1349,8 +1351,8 @@ public:
       auto addOp = cast<arith::AddFOp>(*op->getUsers().begin());
       auto loadRes = addOp.getLhs() == op ? addOp.getRhs() : addOp.getLhs();
       rewriter.setInsertionPointAfter(addOp);
-      auto lhsTensor = op->getOperand(0).getType().cast<RankedTensorType>();
-      auto rhsTensor = op->getOperand(1).getType().cast<RankedTensorType>();
+      auto lhsTensor = cast<RankedTensorType>(op->getOperand(0).getType());
+      auto rhsTensor = cast<RankedTensorType>(op->getOperand(1).getType());
       mlir::Operation* dotOp;
       if (lhsTensor.getRank() == 2 && (rhsTensor.getRank() == 1 || (rhsTensor.getRank() == 2 && (rhsTensor.getDimSize(0) == 1 || rhsTensor.getDimSize(1) == 1)) ))
       {
@@ -1384,7 +1386,6 @@ public:
         // dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes, rewriter.getBoolAttr(true), rewriter.getI32IntegerAttr(1));
         dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes);
       }
-      // if(op->getOperand(1).getType().cast<RankedTensorType>().)
 
       // addOp->replaceAllUsesWith(dotOp);
       rewriter.replaceAllUsesWith(addOp, dotOp->getResult(0));

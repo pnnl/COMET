@@ -670,7 +670,6 @@ class ConvertReturnOp
   LogicalResult
   matchAndRewrite(func::ReturnOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
-    auto opAdaptor = llvm::cast<func::ReturnOpAdaptor>(adaptor);
     auto converter = getTypeConverter();
     SmallVector<Value, 13> newOperands;
     for(auto operand: op.getOperands())
@@ -969,7 +968,7 @@ class ConvertWorkspaceTensorExtractOp
       [&] (OpBuilder& builder, Location loc) {
         // TODO: Does the zero value depend on the semi-ring?
         Type result_type  = op->getResult(0).getType();
-        FloatAttr zero_attr = op.getZeroAttr().cast<FloatAttr>();
+        FloatAttr zero_attr = mlir::cast<FloatAttr>(op.getZeroAttr());
         Value zero = builder.create<arith::ConstantOp>(loc, result_type, zero_attr);
         builder.create<scf::YieldOp>(loc, ArrayRef<Value>({zero}));
       }
@@ -1177,7 +1176,7 @@ class PrintOpLowering : public OpConversionPattern<PrintOp> {
     Value zero = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
     empty_tensor = rewriter.create<tensor::InsertOp>(loc, empty_type, neg, empty_tensor, zero);
 
-    if (inputType.isa<SparseTensorType>())
+    if (isa<SparseTensorType>(inputType))
     {
       SparseTensor sp_tensor;
       if(!unpack_sparse_tensor(adaptor.getInput(), sp_tensor)) {
@@ -1286,8 +1285,8 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
 
       auto context = type.getContext();
       Type index_type = IndexType::get(context);
-      bool is_known_size = true;
-      int known_size = 1;
+      [[maybe_unused]]  bool is_known_size = true;
+      [[maybe_unused]]  int known_size = 1;
       types.push_back(RankedTensorType::get({static_cast<long long>(dim_sizes.size())}, IndexType::get(context))); //Dimension sizes
       for(unsigned i = 0; i < dim_sizes.size(); i++) {
         types.push_back(index_type); //Insert pos

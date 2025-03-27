@@ -532,7 +532,7 @@ Value createComputeOpForReset(const llvm::SmallVector<Value> &common_indices,
                               mlir::Location &loc)
 {
   uint32_t num_dims_new_tensor = 0;
-  for (Value _ : new_rhs_operand_op.getPos()) {
+  for ([[maybe_unused]]Value _ : new_rhs_operand_op.getPos()) {
     ++num_dims_new_tensor;
   }
   indexTree::OperandType operand_type = indexTree::OperandType::get(rewriter.getContext());
@@ -582,7 +582,7 @@ Value createComputeOpForReset(const llvm::SmallVector<Value> &common_indices,
   {
     /// If the intermediate tensor is a scalar, link to the last common index
     parent = common_indices.back();
-    auto access_type = rewriter.getIndexType();
+    // auto access_type = rewriter.getIndexType();
     lhs_operand_op = rewriter.create<indexTree::IndexTreeLHSOperandOp>(
         loc,
         operand_type,

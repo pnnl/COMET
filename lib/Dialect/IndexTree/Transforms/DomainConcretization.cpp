@@ -602,7 +602,6 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
 
     // Successfully matched! Cannot fail after this point.
     auto loc = op->getLoc();
-    auto context = rewriter.getContext();
     SmallVector<Value> new_args;
     IRMapping map;
     for(unsigned dim = 0; dim < dims; dim++){

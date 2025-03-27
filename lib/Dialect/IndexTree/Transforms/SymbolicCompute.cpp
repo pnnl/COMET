@@ -188,7 +188,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
       unsigned i = 0;
       for(auto tensor : tensors)
       {
-        int32_t dim = dims[i].cast<IntegerAttr>().getValue().getSExtValue();
+        int32_t dim = cast<IntegerAttr>(dims[i]).getValue().getSExtValue();
         tensor_to_node.insert(std::make_pair(
           std::make_pair(tensor, dim),
           node.getOutput()
@@ -218,7 +218,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
     auto context = rewriter.getContext();
 
     // Declare Sparse Domains and allocate position vectors for each dimension
-    unsigned indicesBitwidth = it_tensor_decl_op->getResultTypes()[0].cast<SparseTensorType>().getIndicesType().getWidth();
+    unsigned indicesBitwidth = cast<SparseTensorType>(it_tensor_decl_op->getResultTypes()[0]).getIndicesType().getWidth();
     llvm::SmallDenseMap<Value, int64_t> symbolic_domains;
 
     llvm::SmallVector<Value> input_domains;
@@ -341,11 +341,15 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
 struct IndexTreeSymbolicComputePass : comet::impl::IndexTreeSymbolicComputePassBase<IndexTreeSymbolicComputePass> {
   using IndexTreeSymbolicComputePassBase::IndexTreeSymbolicComputePassBase;
 
-  void runOnOperation() {
+  void runOnOperation() override {
     mlir::RewritePatternSet sp_output_patterns(&getContext());
     sp_output_patterns.add<CreateSymbolicTree>(&getContext());
     indexTree::populateMaskDomainTransformationPatterns(&getContext(), sp_output_patterns);
-    mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(sp_output_patterns));
+    if(failed(mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(sp_output_patterns))))
+    {
+      signalPassFailure();
+    }
+
   }
 };
 

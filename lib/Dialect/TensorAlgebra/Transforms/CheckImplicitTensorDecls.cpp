@@ -101,12 +101,12 @@ void addTensorDecl(t op)
   /// 3. The result will be the dimension of the matching indices
   /// e.g For matmulop RHS1: (d0,d1,d2) -> (d0, d1), RHS2: (d0,d1,d2) -> (d1, d2), LHS : (d0,d1,d2) -> (d0,d2)
   ///     So we get (dim(RHS1, 0), dim(RHS2, 1)) because of d0, d2 respectively
-  auto res_map = imaps[imaps.size() - 1].cast<AffineMapAttr>().getValue();
+  auto res_map = cast<AffineMapAttr>(imaps[imaps.size() - 1]).getValue();
   for (auto v : res_map.getResults())
   {
     for (size_t i = 0; i < imaps.size() - 1; i++)
     {
-      auto map = imaps[i].cast<AffineMapAttr>().getValue();
+      auto map = cast<AffineMapAttr>(imaps[i]).getValue();
       if (auto pos = map.getResultPosition(v))
       {
         lbls_value.push_back(builder.create<TensorDimOp>(location, op->getOperand(i), *pos));
@@ -117,7 +117,7 @@ void addTensorDecl(t op)
 
   mlir::ArrayAttr opFormatsArrayAttr = op.getFormats();
   unsigned int i = opFormatsArrayAttr.size() - 1;
-  std::string ret_format_local(opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue());
+  std::string ret_format_local(cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue());
   ret_format = ret_format_local;
 
   mlir::Value itensor;
@@ -162,41 +162,36 @@ void TensorAlgebraCheckImplicitTensorDeclPass::runOnOperation()
            comet_debug() <<  " find a transpose op\n";
            /// if the output is not used as a source tensor of a set op
            /// Need to store use a sparse/dense tensor decl op to store the result
-           if (isa<tensorAlgebra::TransposeOp>(cur_op))
+           if (auto op = dyn_cast<tensorAlgebra::TransposeOp>(cur_op))
            {
-             auto op = cast<tensorAlgebra::TransposeOp>(cur_op);
              if (isNeedTensorDecl<tensorAlgebra::TransposeOp>(op))
              {
                addTensorDecl<tensorAlgebra::TransposeOp>(op);
              }
            }
-           else if (isa<tensorAlgebra::TensorMultOp>(cur_op))
+           else if (auto op = dyn_cast<tensorAlgebra::TensorMultOp>(cur_op))
            {
-             auto op = cast<tensorAlgebra::TensorMultOp>(cur_op);
              if (isNeedTensorDecl<TensorMultOp>(op))
              {
                addTensorDecl<TensorMultOp>(op);
              }
            }
-           else if (isa<tensorAlgebra::TensorElewsMultOp>(cur_op))
+           else if (auto op = dyn_cast<tensorAlgebra::TensorElewsMultOp>(cur_op))
            {
-             auto op = cast<tensorAlgebra::TensorElewsMultOp>(cur_op);
              if (isNeedTensorDecl<TensorElewsMultOp>(op))
              {
                addTensorDecl<TensorElewsMultOp>(op);
              }
            }
-           else if (isa<tensorAlgebra::TensorAddOp>(cur_op))
+           else if (auto op = dyn_cast<tensorAlgebra::TensorAddOp>(cur_op))
            {
-             auto op = cast<tensorAlgebra::TensorAddOp>(cur_op);
              if (isNeedTensorDecl<TensorAddOp>(op))
              {
                addTensorDecl<TensorAddOp>(op);
              }
            }
-           else if (isa<tensorAlgebra::TensorSubtractOp>(cur_op))
+           else if (auto op = dyn_cast<tensorAlgebra::TensorSubtractOp>(cur_op))
            {
-             auto op = cast<tensorAlgebra::TensorSubtractOp>(cur_op);
              if (isNeedTensorDecl<TensorSubtractOp>(op))
              {
                addTensorDecl<TensorSubtractOp>(op);

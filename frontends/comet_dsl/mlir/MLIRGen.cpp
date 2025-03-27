@@ -36,6 +36,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Attributes.h"
@@ -476,9 +477,9 @@ namespace
 
         mlir::StringAttr opAttr = builder.getStringAttr(op);
         mlir::RankedTensorType returnDataType;
-        if(lhs.getType().cast<mlir::RankedTensorType>().getShape() != rhs.getType().cast<mlir::RankedTensorType>().getShape())
+        if(mlir::cast<mlir::RankedTensorType>(lhs.getType()).getShape() != mlir::cast<mlir::RankedTensorType>(rhs.getType()).getShape())
         {
-          returnDataType = lhs.getType().cast<mlir::RankedTensorType>();
+          returnDataType = mlir::cast<mlir::RankedTensorType>(lhs.getType());
           auto bcastRhs = builder.create<DenseConstantOp>(location, returnDataType, mlir::cast<DenseConstantOp>(rhs.getDefiningOp()).getValueAttr());
           comet_vdump(bcastRhs);
           rhs.replaceAllUsesWith(bcastRhs);
@@ -815,7 +816,7 @@ namespace
         // std::vector<int64_t> result_dims = getDimSizes(ret_lbls_value);
         auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
 
-        auto res_map = affineMapArrayAttr[affineMapArrayAttr.size() - 1].cast<mlir::AffineMapAttr>().getValue();
+        auto res_map = mlir::cast<mlir::AffineMapAttr>(affineMapArrayAttr[affineMapArrayAttr.size() - 1]).getValue();
 
         /// get return-type based on affine-maps
         std::vector<int64_t> result_dims;
@@ -824,7 +825,7 @@ namespace
         {
           for (size_t i = 0; i < affineMapArrayAttr.size() - 1; i++)
           {
-            auto map = affineMapArrayAttr[i].cast<mlir::AffineMapAttr>().getValue();
+            auto map = mlir::cast<mlir::AffineMapAttr>(affineMapArrayAttr[i]).getValue();
             if (auto pos = map.getResultPosition(v))
             {
               mlir::Value operand = i == 0 ? lhs_labeledtensor : rhs_labeledtensor;
@@ -876,7 +877,7 @@ namespace
             /// infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorMultOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
-            mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
+            mlir::StringRef lhs_format = mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue();
             comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
             comet_debug() << " lhs_format: " << lhs_format << "\n";
             formats.push_back(lhs_format);
@@ -889,7 +890,7 @@ namespace
             /// infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
-            mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
+            mlir::StringRef lhs_format = mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue();
             comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
             comet_debug() << " lhs_format: " << lhs_format << "\n";
@@ -903,7 +904,7 @@ namespace
             /// infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorAddOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
-            mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
+            mlir::StringRef lhs_format = mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue();
             comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
             comet_debug() << " lhs_format: " << lhs_format << "\n";
@@ -917,7 +918,7 @@ namespace
             /// infer the format
             mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorSubtractOp>(e.getDefiningOp()).getFormats();
             unsigned int i = opFormatsArrayAttr.size() - 1;
-            mlir::StringRef lhs_format = opFormatsArrayAttr[i].cast<mlir::StringAttr>().getValue();
+            mlir::StringRef lhs_format = mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue();
             comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
 
             comet_debug() << " lhs_format: " << lhs_format << "\n";
@@ -1798,17 +1799,17 @@ namespace
       }
 
       /// get return-type based on affine-maps
-      auto res_map = affineMapArrayAttr[1].cast<mlir::AffineMapAttr>().getValue();
+      auto res_map = cast<mlir::AffineMapAttr>(affineMapArrayAttr[1]).getValue();
       std::vector<mlir::Value> indices;
       std::vector<int64_t> shape;
       for (auto v : res_map.getResults())
       {
-        auto map = affineMapArrayAttr[0].cast<mlir::AffineMapAttr>().getValue();
+        auto map = cast<mlir::AffineMapAttr>(affineMapArrayAttr[0]).getValue();
         if (auto pos = map.getResultPosition(v))
         {
-          if (isa<mlir::TensorType>(rhs_tensor.getType()) && !rhs_tensor.getType().cast<mlir::TensorType>().isDynamicDim(*pos))
+          if (auto tensorT = dyn_cast<mlir::TensorType>(rhs_tensor.getType()); tensorT && !tensorT.isDynamicDim(*pos))
           {
-            shape.push_back(rhs_tensor.getType().cast<mlir::TensorType>().getDimSize(*pos));
+            shape.push_back(tensorT.getDimSize(*pos));
           }
           else
           {
@@ -2647,8 +2648,7 @@ namespace
                                           StringRef tensor_name, double value)
     {
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
-      auto tensorType = tensorValue.getDefiningOp()->getOpResult(0).getType();
-      auto tensorElType = tensorType.cast<mlir::TensorType>().getElementType();
+      auto tensorElType = cast<mlir::TensorType>(tensorValue.getDefiningOp()->getOpResult(0).getType()).getElementType();
 
       mlir::FloatAttr valueAttr;
       if (tensorElType.isF64())
