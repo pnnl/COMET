@@ -12,7 +12,8 @@ env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
   COMET_SRC: ${{github.workspace}}
-
+  COMETPY_COMET_PATH: ${{github.workspace}}/build/
+  COMETPY_LLVM_PATH: ${{github.workspace}}/llvm/build/
 jobs:
   build-comet-dependencies:
     # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
