@@ -132,7 +132,6 @@ struct InferIndexDomain : public OpRewritePattern<IndexTreeIndicesOp> {
 
     llvm::SmallVector<Value> domains;
     llvm::SmallVector<Value> backup;
-    Value zero = builder.create<index::ConstantOp>(loc, builder.getIndexType(), builder.getIndexAttr(0));
     auto tree_op = op->getParentOfType<IndexTreeOp>();
     auto yield_op = llvm::cast<indexTree::YieldOp>(tree_op.getBody()->getTerminator());
     llvm::SmallDenseSet<Value, 4> outputs(yield_op.getOperands().begin(), yield_op.getOperands().begin() + tree_op.getInputs().size());

@@ -119,14 +119,14 @@ namespace
           module.push_back(print_func);
         }
 
-        if (inputType.isa<MemRefType>())
+        if (isa<MemRefType>(inputType))
         {
           auto alloc_op = cast<memref::AllocOp>(op->getOperand(0).getDefiningOp());
           comet_vdump(alloc_op);
           auto u = rewriter.create<memref::CastOp>(loc, unrankedMemrefType, alloc_op);
           rewriter.create<func::CallOp>(loc, comet_print, SmallVector<Type, 2>{}, ValueRange{u});
         }
-        else if (inputType.isa<TensorType>())
+        else if (isa<TensorType>(inputType))
         {
           auto rhs = op->getOperand(0);
           auto tensor_type = llvm::cast<TensorType>(inputType);
@@ -141,7 +141,7 @@ namespace
         }
       }
       /// If the Input type is scalar (F64)
-      else if (inputType.isa<FloatType,IndexType>())
+      else if (isa<FloatType,IndexType>(inputType))
       {
         std::string print_scalar; 
         if(inputType.isF64())
@@ -381,7 +381,6 @@ void BufferizeFunc::runOnOperation()
   ModuleOp module = getOperation();
   // func::FuncOp function = getOperation();
   mlir::OpBuilder builder(module.getContext());
-  auto callOps = module.getOps<func::CallOp>();
 
   for(func::FuncOp function: module.getOps<func::FuncOp>())
   {

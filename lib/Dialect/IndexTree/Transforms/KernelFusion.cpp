@@ -270,7 +270,7 @@ uint32_t collectIntermediateIdx(Value prev_lhs_tensor,
   return idx;
 }
 
-std::unordered_map<uint32_t, Value> createNewLhsTensors(
+[[maybe_unused]] std::unordered_map<uint32_t, Value> createNewLhsTensors(
     uint32_t num_itrees,
     llvm::SmallVector<Value> &itree_to_lhs_tensors,
     std::unordered_map<uint32_t, llvm::SmallVector<uint32_t>> &itree_to_common_indices)
@@ -358,7 +358,7 @@ void collectComputeOpInfo(IndexTreeOp itree,
 /// 1) Generate new IndexToTensorDim for the new LHS operand.
 /// 2) Replace the old LHS operand with the new one.
 /// 3) Erase the old LHS operand and its IndexToTensorDim.
-Value replaceOldLHSOperand(IndexTreeOp itree_op,
+[[maybe_unused]] Value replaceOldLHSOperand(IndexTreeOp itree_op,
                            Value lhs_tensor,
                            llvm::SmallVector<llvm::SmallVector<DimCompound>> &itree_to_lhs_dims,
                            llvm::SmallVector<llvm::SmallVector<uint32_t>> &itree_to_lhs_index_idx,
@@ -435,7 +435,7 @@ Value replaceOldLHSOperand(IndexTreeOp itree_op,
 
 /// Create the new ComputeOp for the new LHS operand.
 /// Only the return type needs change to the new LHS operand's type.
-Value replaceOldComputeOp(IndexTreeOp itree_op,
+[[maybe_unused]] Value replaceOldComputeOp(IndexTreeOp itree_op,
                          const mlir::Type &tensor_type,
                          mlir::IRRewriter &rewriter,
                          mlir::Location &loc)
@@ -485,7 +485,6 @@ IndexTreeOp createNewITree(IndexTreeOp host_itree,
                            mlir::IRRewriter &rewriter,
                            mlir::Location &loc)
 {
-  uint32_t tree_i = 0;
   OpBuilder::InsertionGuard guard(rewriter);
   rewriter.setInsertionPoint(host_itree);
   /// Create the new itree
@@ -707,7 +706,7 @@ Value createComputeOp(
   return compute_op;
 }
 
-Value createComputeOpReset(
+[[maybe_unused]] Value createComputeOpReset(
     uint32_t tree_i,
     uint32_t intermediate_idx,
     const mlir::Type &tensor_type,
@@ -843,7 +842,7 @@ void fuseITrees(IndexTreeOp new_itree,
       lhs_tensor = new_itree.getRegion().getBlocks().front().getArgument(0);
     } else {
       /// It is to generate an intermediate
-      uint32_t num_inputs = llvm::SmallVector{new_itree.getInputs()}.size();
+      uint32_t num_inputs = llvm::SmallVector<Value, 4>(new_itree.getInputs()).size();
       lhs_tensor = new_itree.getRegion().getBlocks().front().getArgument(num_inputs + tree_i);
     }
     Value lhs_operand = createLHSOperand(tree_i,

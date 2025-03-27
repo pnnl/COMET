@@ -85,7 +85,6 @@ struct ConvertDomainInsertOp
   matchAndRewrite(indexTree::SymbolicDomainInsertOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op.getLoc();
-    auto context = op.getContext();
     Type index_type = rewriter.getIndexType();
     SymbolicDomain domain;
     if(!unpack_symbolic_domain(llvm::cast<indexTree::SymbolicDomainInsertOpAdaptor>(adaptor).getDomain(), domain)){
@@ -101,9 +100,10 @@ struct ConvertDomainInsertOp
     {
       
       Value mark = rewriter.create<index::AddOp>(loc, index_type, domain.pos_size, one);
-      if(mark.getType() != domain.mark_array.getType().cast<ShapedType>().getElementType())
+      ShapedType domMarkArrayT = cast<ShapedType>(domain.mark_array.getType());
+      if(mark.getType() != domMarkArrayT.getElementType())
       {
-        mark = rewriter.create<mlir::arith::IndexCastOp>(loc,  domain.mark_array.getType().cast<ShapedType>().getElementType() ,mark);
+        mark = rewriter.create<mlir::arith::IndexCastOp>(loc,  domMarkArrayT.getElementType() ,mark);
       }
       Value mark_val = rewriter.create<memref::LoadOp>(loc, domain.mark_array, op.getCrd());
       Value is_marked = rewriter.create<arith::CmpIOp>(loc, 

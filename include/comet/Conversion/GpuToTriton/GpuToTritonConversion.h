@@ -46,7 +46,7 @@ public:
   GpuTypeConverter2(MLIRContext *context);
   int blockX, blockY, blockR;
 private:
-  MLIRContext *context;
+  [[maybe_unused]]MLIRContext *context;
 };
 
 class GpuConversionTarget2 : public ConversionTarget {

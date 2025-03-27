@@ -34,6 +34,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
+#include <cstddef>
 #include <limits>
 #include <map>
 #include <set>
@@ -150,7 +151,7 @@ namespace
       auto alphaAttr = multop.getOperation()->getAttr("__alpha__");
       auto betaAttr = multop.getOperation()->getAttr("__beta__");
 
-      Operation *startTime;
+      Operation *startTime = nullptr;
       std::string getTimeStr = "getTime";
       auto f64Type = rewriter.getF64Type();
       if (printFlops)
@@ -165,7 +166,7 @@ namespace
       /// Find summation indices
       for (const auto &map : indexMaps)
       {
-        auto affineMap = map.cast<AffineMapAttr>().getValue();
+        auto affineMap = cast<AffineMapAttr>(map).getValue();
         std::vector<unsigned> perm;
         for (size_t i = 0; i < affineMap.getNumResults(); i++)
         {
@@ -201,11 +202,11 @@ namespace
       comet_debug() << "\n";
 
       Value rhs1Memref, rhs2Memref, lhsMemref;
-      if(auto tensor_rhs1 = operands[0].getType().dyn_cast<TensorType>())
+      if(auto tensor_rhs1 = dyn_cast<TensorType>(operands[0].getType()))
       {
         rhs1Memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get(tensor_rhs1.getShape(), tensor_rhs1.getElementType()), operands[0]);
       }
-      else if(operands[0].getType().isa<MemRefType>())
+      else if(mlir::isa<MemRefType>(operands[0].getType()))
       {
         rhs1Memref = operands[0];
       }
@@ -214,11 +215,11 @@ namespace
         assert(false && "Unexpected type");
       }
 
-      if(auto tensor_rhs2 = operands[1].getType().dyn_cast<TensorType>())
+      if(auto tensor_rhs2 = dyn_cast<TensorType>(operands[1].getType()))
       {
         rhs2Memref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get(tensor_rhs2.getShape(), tensor_rhs2.getElementType()), operands[1]);
       }
-      else if(operands[1].getType().isa<MemRefType>())
+      else if(mlir::isa<MemRefType>(operands[1].getType()))
       {
         rhs2Memref = operands[1];
       }
@@ -227,11 +228,11 @@ namespace
         assert(false && "Unexpected type");
       }
 
-      if(auto tensor_lhs = lhsDef.getType().dyn_cast<TensorType>())
+      if(auto tensor_lhs = dyn_cast<TensorType>(lhsDef.getType()))
       {
         lhsMemref = rewriter.create<bufferization::ToMemrefOp>(loc, MemRefType::get(tensor_lhs.getShape(), tensor_lhs.getElementType()), lhsDef);
       }
-      else if(lhsDef.getType().isa<MemRefType>())
+      else if(mlir::isa<MemRefType>(lhsDef.getType()))
       {
         lhsMemref = lhsDef;
       }
@@ -240,9 +241,9 @@ namespace
         assert(false && "Unexpected type");
       }
 
-      auto rhs1MemrefType = rhs1Memref.getType().cast<MemRefType>();
-      auto rhs2MemrefType = rhs2Memref.getType().cast<MemRefType>();
-      auto lhsMemrefType = lhsMemref.getType().cast<MemRefType>();
+      auto rhs1MemrefType = cast<MemRefType>(rhs1Memref.getType());
+      auto rhs2MemrefType = cast<MemRefType>(rhs2Memref.getType());
+      auto lhsMemrefType = cast<MemRefType>(lhsMemref.getType());
 
       std::vector<TensorShape> allShapes{rhs1MemrefType.getShape(),
                                          rhs2MemrefType.getShape(),
@@ -368,7 +369,7 @@ namespace
             MemRefType::get(lhsDims, lhsMemrefType.getElementType()), operands, loc,
             rewriter);
         useLHSTranspose = true;
-        double beta_val = betaAttr.cast<FloatAttr>().getValueAsDouble();
+        double beta_val = cast<FloatAttr>(betaAttr).getValueAsDouble();
 
         if (beta_val == 0)
         {
@@ -654,7 +655,7 @@ namespace
       Value lhsExpand = lhsReshape;
       if (expandLHS) /// LHS tensor was collapsed and now needs to be re-expanded using the same reassociation indices
       {
-        auto expandedTensorType = MemRefType::get(lhsAlloc.getType().cast<MemRefType>().getShape(), lhsAlloc.getType().cast<MemRefType>().getElementType());
+        auto expandedTensorType = MemRefType::get(cast<MemRefType>(lhsAlloc.getType()).getShape(), cast<MemRefType>(lhsAlloc.getType()).getElementType());
 
         comet_debug() << "\nExpanded:\n";
         lhsExpand = rewriter.create<memref::ExpandShapeOp>(

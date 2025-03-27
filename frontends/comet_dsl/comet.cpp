@@ -95,10 +95,13 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
 #include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
+#endif
+#ifdef ENABLE_GPU_TARGET
+#include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
-#ifdef ENABLE_GPU_TARGET
 #include "comet/Conversion/GpuToTriton/GpuToTritonPass.h"
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
@@ -578,7 +581,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   pm.addPass(mlir::memref::createFoldMemRefAliasOpsPass());
   pm.addPass(mlir::createCanonicalizerPass());
 #ifndef ENABLE_GPU_TARGET
-  bool IsLoweringToTriton = false;
+  [[maybe_unused]] bool IsLoweringToTriton = false;
 #endif
 #if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
   if ((CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA) && (emitTriton_ || emitLLVM || isLoweringToLLVM || IsLoweringToTriton))

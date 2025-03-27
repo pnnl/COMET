@@ -154,23 +154,23 @@ def SparseTensorDeclOp : TA_Op<"spTensor_decl", [Pure]> {
 
   let extraClassDeclaration = [{
     unsigned int getParameterCount() {
-        mlir::tensorAlgebra::SparseTensorType type = getResult().getType().cast<mlir::tensorAlgebra::SparseTensorType>();
+        mlir::tensorAlgebra::SparseTensorType type = cast<mlir::tensorAlgebra::SparseTensorType>(getResult().getType());
         return (type.getRank() * 6) + 1;
     }
 
     unsigned int getDimArrayCount() {
-        mlir::tensorAlgebra::SparseTensorType type = getResult().getType().cast<mlir::tensorAlgebra::SparseTensorType>();
+        mlir::tensorAlgebra::SparseTensorType type = cast<mlir::tensorAlgebra::SparseTensorType>(getResult().getType());
         return type.getRank() * 4;
     }
 
     unsigned int getValueArrayPos() {
-        mlir::tensorAlgebra::SparseTensorType type = getResult().getType().cast<mlir::tensorAlgebra::SparseTensorType>();
+        mlir::tensorAlgebra::SparseTensorType type = cast<mlir::tensorAlgebra::SparseTensorType>(getResult().getType());
 
         return (type.getRank() * 4) + 1;
     }
 
     unsigned int getTotalArrayCount() {
-        mlir::tensorAlgebra::SparseTensorType type = getResult().getType().cast<mlir::tensorAlgebra::SparseTensorType>();
+        mlir::tensorAlgebra::SparseTensorType type = cast<mlir::tensorAlgebra::SparseTensorType>(getResult().getType());
         return (type.getRank() * 4) + 1;
     }
   }];
@@ -1083,7 +1083,7 @@ def SpTensorGetDimPos : TA_Op<"SpTensorGetDimPos", [Pure]>{
 
   let builders = 
     [OpBuilder<(ins "Value":$tensor, "IntegerAttr":$dim), [{
-      auto indices_type = tensor.getType().cast<SparseTensorType>().getIndicesType();
+      auto indices_type = mlir::cast<SparseTensorType>(tensor.getType()).getIndicesType();
       auto outType =  RankedTensorType::get({ShapedType::kDynamic}, indices_type);
       build($_builder, $_state, outType, tensor, dim); 
      }]>,
@@ -1097,7 +1097,7 @@ def SpTensorGetDimCrd : TA_Op<"SpTensorGetDimCrd", [Pure]>{
 
   let builders = 
     [OpBuilder<(ins "Value":$tensor, "IntegerAttr":$dim), [{
-      auto indices_type = tensor.getType().cast<SparseTensorType>().getIndicesType();
+      auto indices_type = mlir::cast<SparseTensorType>(tensor.getType()).getIndicesType();
       auto outType =  RankedTensorType::get({ShapedType::kDynamic}, indices_type);
       build($_builder, $_state, outType, tensor, dim); 
      }]>];
@@ -1109,7 +1109,7 @@ def SpTensorGetDimBlockPos : TA_Op<"SpTensorGetDimBlockPos", [Pure]>{
 
   let builders = 
     [OpBuilder<(ins "Value":$tensor, "IntegerAttr":$dim), [{
-      auto indices_type = tensor.getType().cast<SparseTensorType>().getIndicesType();
+      auto indices_type = mlir::cast<SparseTensorType>(tensor.getType()).getIndicesType();
       auto outType =  RankedTensorType::get({ShapedType::kDynamic}, indices_type);
       build($_builder, $_state, outType, tensor, dim); 
      }]>];
@@ -1121,7 +1121,7 @@ def SpTensorGetDimBlockCrd : TA_Op<"SpTensorGetDimBlockCrd", [Pure]>{
 
   let builders = 
     [OpBuilder<(ins "Value":$tensor, "IntegerAttr":$dim), [{
-      auto indices_type = tensor.getType().cast<SparseTensorType>().getIndicesType();
+      auto indices_type = mlir::cast<SparseTensorType>(tensor.getType()).getIndicesType();
       auto outType =  RankedTensorType::get({ShapedType::kDynamic}, indices_type);
       build($_builder, $_state, outType, tensor, dim); 
      }]>];
@@ -1134,7 +1134,7 @@ def SpTensorGetVals : TA_Op<"SpTensorGetVals", [Pure]>{
 
   let builders = 
     [OpBuilder<(ins "Value":$tensor), [{
-      auto val_type =  tensor.getType().cast<SparseTensorType>().getElementType();
+      auto val_type =  mlir::cast<SparseTensorType>(tensor.getType()).getElementType();
       auto outType =  RankedTensorType::get({ShapedType::kDynamic}, val_type);
       build($_builder, $_state, outType, tensor); 
      }]>];

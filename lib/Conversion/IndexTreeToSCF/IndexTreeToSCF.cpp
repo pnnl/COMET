@@ -173,7 +173,7 @@ namespace
   /// ----------------- ///
   /// Add declaration of the function comet_index_func;
   /// ----------------- ///
-  void declareSortFunc(ModuleOp &module,
+  [[maybe_unused]] void declareSortFunc(ModuleOp &module,
                        MLIRContext *ctx,
                        Location loc)
   {
@@ -426,8 +426,8 @@ namespace
       LoopInfo(ValueRange inputs, ValueRange outputs, Operation* body, IRMapping& ir_map):
         currentInputs(inputs), results(outputs), loopBody(body), map(ir_map) {}
 
-      virtual Value getCrd(IRRewriter& rewriter) = 0;
-      virtual Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) = 0;
+      virtual Value getCrd(IRRewriter& rewriter) override = 0;
+      virtual Value getPos(IRRewriter& rewriter, Value tensor, uint32_t dim) override = 0;
       virtual void updateOutput(IRRewriter& rewriter, uint32_t idx, Value newOutput) = 0;
       virtual ~LoopInfo(){};
 
@@ -823,7 +823,6 @@ namespace
       Value getCrd(IRRewriter& rewriter) override {
         if(crd != nullptr) return crd;
         auto loc = workspaceTensor.getLoc();
-        WorkspaceType tt = cast<WorkspaceType>(workspaceTensor.getType());
         crd = rewriter.create<SpTensorGetCrd>(loc, workspaceTensor, inductionVar, rewriter.getI32IntegerAttr(0));
         crd = rewriter.createOrFold<IndexCastOp>(loc, rewriter.getIndexType(), crd);
 
@@ -898,6 +897,12 @@ namespace
           TensorFormatEnum format = (TensorFormatEnum)sparse_domain.getFormat();
           switch(format)
           {
+            case TensorFormatEnum::D:
+            case TensorFormatEnum::UNK:
+            {
+              assert(false && "Invalid format for IndexTreeSparseDomainOp");
+              break;
+            }
             case TensorFormatEnum::CN:
             case TensorFormatEnum::S:
             {
@@ -1073,8 +1078,8 @@ namespace
       {
         auto loc = domain_op->getLoc();
         auto masked_domain = llvm::cast<IndexTreeMaskedDomainOp>(domain_op);
-        auto index_type = rewriter.getIndexType();
-        auto context = rewriter.getContext();
+        [[maybe_unused]] auto index_type = rewriter.getIndexType();
+        [[maybe_unused]] auto context = rewriter.getContext();
 
         // Create internal loop
         Operation* child = masked_domain.getBase().getDefiningOp();
@@ -1084,6 +1089,14 @@ namespace
         })
         .Case<IndexTreeSparseDomainOp>([&](IndexTreeSparseDomainOp op) {
           switch((TensorFormatEnum)op.getFormat()){
+            case TensorFormatEnum::D:
+            case TensorFormatEnum::UNK:
+            {
+              assert(false && "Invalid format for IndexTreeSparseDomainOp");
+              return (LoopInfo*)nullptr;
+
+              break;
+            }
             case TensorFormatEnum::CN:
             case TensorFormatEnum::CU:
               return SparseLoopInfo::build(op, rewriter, inputs);
@@ -1320,13 +1333,20 @@ namespace
       })
       .Case<IndexTreeSparseDomainOp>([&](IndexTreeSparseDomainOp op) {
         switch((TensorFormatEnum)op.getFormat()){
+          case TensorFormatEnum::UNK:
+          case TensorFormatEnum::D:
+            assert(false && "Invalid format for IndexTreeSparseDomainOp");
+            return (LoopInfo*)nullptr;
+            break;
           case TensorFormatEnum::CN:
           case TensorFormatEnum::CU:
             return SparseLoopInfo::build(op, rewriter, fill_loop_inputs);
           case TensorFormatEnum::S:
             assert(false && "Singleton loop inside a mask is not supported.");
+            return (LoopInfo*)nullptr;
             // return SingletonLoopInfo::build(op, rewriter, inputs, parent_info);
-        }
+            break;
+          }
       })
       .Case<IndexTreeWorkspaceDomainOp>([&](IndexTreeWorkspaceDomainOp op) {
         return WorkspaceLoopInfo::build(op, rewriter, fill_loop_inputs);
@@ -1375,11 +1395,18 @@ namespace
       })
       .Case<IndexTreeSparseDomainOp>([&](IndexTreeSparseDomainOp op) {
         switch((TensorFormatEnum)op.getFormat()){
+          case TensorFormatEnum::UNK:
+          case TensorFormatEnum::D:
+            assert(false && "Invalid format for IndexTreeSparseDomainOp");
+            return (LoopInfo*)nullptr;
+
+            break;
           case TensorFormatEnum::CN:
           case TensorFormatEnum::CU:
             return SparseLoopInfo::build(op, rewriter, zero_loop_inputs);
           case TensorFormatEnum::S:
             assert(false && "Singleton loop inside a mask is not supported.");
+            return (LoopInfo*)nullptr;
             // return SingletonLoopInfo::build(op, rewriter, inputs, parent_info);
         }
       })
@@ -1495,6 +1522,13 @@ namespace
         })
         .Case<IndexTreeSparseDomainOp>([&](IndexTreeSparseDomainOp op) {
           switch((TensorFormatEnum)op.getFormat()){
+            case TensorFormatEnum::D:
+            case TensorFormatEnum::UNK:
+            {
+              assert(false && "Invalid format for IndexTreeSparseDomainOp");
+              return (LoopInfo*)nullptr;
+              break;
+            }
             case TensorFormatEnum::CN:
             case TensorFormatEnum::CU:
               return SparseLoopInfo::build(op, rewriter, parent_info->getInputs());
@@ -1643,7 +1677,9 @@ namespace
       {
         OpBuilder builder(op);
         IRRewriter rewriter(builder);
-        convertTree(op, rewriter);
+        if(failed(convertTree(op, rewriter))){
+          return signalPassFailure();
+        }      
       }
 
       TypeConverter typeConverter;

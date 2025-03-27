@@ -200,13 +200,13 @@ namespace
       comet_debug() << "TensorDimOpLowering in format begin\n";
       comet_vdump(op);
       auto tensor = op.getTensor();
-      if (tensor.getType().isa<SparseTensorType>())
+      if (isa<SparseTensorType>(tensor.getType()))
       {
         ::mlir::TypedValue<::mlir::IndexType> idx = op.getIndex();
         auto realIndex = getConstantIntValue(idx);
         rewriter.replaceOpWithNewOp<SpTensorGetDimSize>(op, rewriter.getIndexType(), tensor, *realIndex);
       }
-      else if (tensor.getType().isa<TensorType>())
+      else if (isa<TensorType>(tensor.getType()))
       {
         ::mlir::TypedValue<::mlir::IndexType> idx = op.getIndex();
         auto dim = rewriter.create<tensor::DimOp>(op.getLoc(), tensor, idx);

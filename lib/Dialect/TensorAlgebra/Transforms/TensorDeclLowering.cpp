@@ -285,12 +285,11 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
     comet_debug() << " " << op.getNumOperands() << "\n";
     auto rank_size = mlir::cast<SparseTensorType>(op.getResult().getType()).getRank();
 
-    IndexType indexType = IndexType::get(op.getContext());
+    // IndexType indexType = IndexType::get(op.getContext());
     Type valsType = spType.getElementType();
     Type indicesType = spType.getIndicesType();
 
     /// A1_pos ... A_value
-    auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); /// memref<?xindex>
     auto dynamicmemTy_1d_vals_type = MemRefType::get({ShapedType::kDynamic}, valsType);     /// memref<?xf64>
     auto dynamicmemTy_1d_indices_type = MemRefType::get({ShapedType::kDynamic}, indicesType); 
 
@@ -383,7 +382,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           std::vector<std::string> allFormatsStr;
           for (unsigned int i = 0; i < allFormats.size(); i++)
           {
-            std::string formats_str(allFormats[i].cast<mlir::StringAttr>().getValue());
+            std::string formats_str(cast<mlir::StringAttr>(allFormats[i]).getValue());
             allFormatsStr.push_back(formats_str);
           }
           std::string src_format = allFormatsStr[0];
@@ -397,16 +396,8 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           comet_vdump(dst_input);
           comet_debug() << " ";
           comet_pdump(dst_input.getDefiningOp());
-          mlir::tensorAlgebra::SparseTensorType type;
-          auto res = dst_input.getDefiningOp()->getResult(0);
-          if (res.getType().isa<tensorAlgebra::SparseTensorType>())
-          {
-            type = res.getType().cast<tensorAlgebra::SparseTensorType>();
-          }
-          else
-          {
-            assert(false && "Expected SparseTensorType");
-          }
+          mlir::tensorAlgebra::SparseTensorType type =  cast<tensorAlgebra::SparseTensorType>(dst_input.getDefiningOp()->getResult(0).getType());
+
           // unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
           unsigned int dst_rank = type.getRank();
           for (unsigned int i = 0; i < dst_rank; i++)
@@ -428,22 +419,13 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           {
             for (unsigned int i = 0; i < dst_rank; i++)
             {
-              /// 2*dst_rank+1
-              unsigned int dstIndexLocInSrc = dstIndexLocInSrcVec[i];
-              /// src_rank = dst_rank
-              unsigned int posLocInSrc = (4 * dst_rank + 1) + 4 * dstIndexLocInSrc;
-              unsigned int crdLocInSrc = posLocInSrc + 1;
-
-              unsigned int posLocInSrc2 = posLocInSrc + 2;
-              unsigned int crdLocInSrc2 = crdLocInSrc + 2;
-
               array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimPos>(loc, src_input, rewriter.getI32IntegerAttr(0)), 0));
               array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, src_input, rewriter.getI32IntegerAttr(0)), 0));
               array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimPos>(loc, src_input, rewriter.getI32IntegerAttr(1)), 0));
               array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetDimCrd>(loc, src_input, rewriter.getI32IntegerAttr(1)), 0));
             }
             /// val array size
-            array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, src_input.getType().cast<SparseTensorType>().getElementType()), src_input), 0));
+            array_sizes_vec.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, cast<SparseTensorType>(src_input.getType()).getElementType()), src_input), 0));
 
             /// set the pos array size, 1st dim as 2, all others as 1.
             for (unsigned int i = 0; i < dst_rank * 2; i++)
@@ -477,7 +459,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
               comet_vdump(crd_size);
               array_sizes_vec.push_back(crd_size);
               /// B2pos, Bval are the same size with A2pos, Aval
-              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, src_input.getType().cast<SparseTensorType>().getElementType()), src_input), 0);
+              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, RankedTensorType::get({ShapedType::kDynamic}, cast<SparseTensorType>(src_input.getType()).getElementType()), src_input), 0);
               array_sizes_vec.push_back(vals_size);
 
               /// A2tile
@@ -509,7 +491,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
               array_sizes_vec.push_back(cst_index_0);
 
               /// Aval
-              mlir::Value vals_size = rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, src_input), 0);
+              rewriter.create<tensor::DimOp>(loc, rewriter.create<SpTensorGetVals>(loc, src_input), 0);
             }
           }
           /// For 3D, consider CSF
@@ -601,7 +583,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
     else
     { /// format == "Dense"
 
-      auto resultTensorType = op.getResult().getType().template cast<mlir::TensorType>();
+      auto resultTensorType = cast<TensorType>(op.getResult().getType());
       std::vector<Value> cur_indices;
       std::vector<int64_t> cur_memref;
       auto resultMemTy = convertTensorToMemRef(resultTensorType);
@@ -656,7 +638,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       auto resultTensorType = op.getResult().getType();
       std::vector<Value> cur_indices;
       std::vector<int64_t> cur_memref;
-      auto resultMemTy = convertTensorToMemRef(resultTensorType.cast<TensorType>());
+      auto resultMemTy = convertTensorToMemRef(cast<TensorType>(resultTensorType));
 
       int j = 0;
       for (int i = 0; i < resultMemTy.getRank(); i++)
@@ -737,16 +719,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       comet_debug() << " --- " << formats_str << "\n";
 
       comet_debug() << " " << op.getNumOperands() << "\n";
-      auto res = op.getResult();
-      mlir::tensorAlgebra::SparseTensorType type;
-      if(res.getType().isa<SparseTensorType>())
-      {
-        type = res.getType().cast<SparseTensorType>();
-      }
-      else
-      {
-        assert(false && "Expected TensorType");
-      }
+      mlir::tensorAlgebra::SparseTensorType type = cast<SparseTensorType>(op.getResult().getType());
       auto rank_size = type.getRank();
       // auto rank_size = op.getResult().getType().cast<TensorType>().getRank();
       // auto rank_size = op.getNumOperands();
@@ -863,7 +836,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       comet_debug() << " isOutputTensor: " << isOutputTensor << "\n";
 
       /// A1_pos ... A_value
-      auto dynamicmemTy_1d_index = MemRefType::get({ShapedType::kDynamic}, indexType); /// memref<?xindex>
       auto dynamicmemTy_1d_float = MemRefType::get({ShapedType::kDynamic}, floatEleType);     /// memref<?xfloat>
 
       Type unrankedMemTy_index = UnrankedMemRefType::get(indexType, 0);
@@ -888,8 +860,8 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           {
             auto fillfromfileop = cast<tensorAlgebra::TensorFillFromFileOp>(u);
             /// Can get filename, from "filename" attribute of fillfromfileop
-            StringAttr filename = fillfromfileop.getFilename().cast<StringAttr>();
-            IntegerAttr readModeAttr = fillfromfileop.getReadMode().cast<IntegerAttr>();
+            StringAttr filename = cast<StringAttr>(fillfromfileop.getFilename());
+            IntegerAttr readModeAttr = cast<IntegerAttr>(fillfromfileop.getReadMode());
             rewriter.eraseOp(fillfromfileop);
 
             comet_debug() << " filename: " << filename.getValue() << "\n";

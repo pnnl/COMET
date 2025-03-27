@@ -1443,7 +1443,7 @@ struct FileReaderWrapper
 
   bool readFileNameStr(int32_t fileID)
   {
-    char *pSparseInput;
+    char *pSparseInput = NULL;
     std::string envString;
     if (fileID >= 0 && fileID < 9999)
     {
