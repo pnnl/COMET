@@ -475,7 +475,9 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
       if(llvm::isa<indexTree::DomainType>(mask.getType()))
         mask = copyDomain(masked_domain_op.getMask(), rewriter, map, loc, index_vars);
       else {
+        assert(llvm::isa<TensorType>(mask.getType())); // Enforced by verifier create by table gen.
         auto fill_mask_op = mask.getDefiningOp<IndexTreeFillMaskOp>();
+        assert(fill_mask_op && "Currently do not support creating tensors from arbitrary bitmasks.");
         mask = copyDomain(fill_mask_op.getDomain(),  rewriter, map, loc, index_vars);
       }
       copyDomain(masked_domain_op.getBase(), rewriter, map, loc, index_vars);
