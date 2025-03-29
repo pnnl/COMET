@@ -297,6 +297,24 @@ def IndexTreeDomainIntersectionOp : IndexTreeDomain_Op<"DomainIntersectionOp",
   let results = (outs IndexTree_DomainType:$domain);
 }
 
+def IndexTreeFillMaskOp : IndexTree_Op<"FillMaskOp", [Pure, IndexTreeNodeInterface]>{
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_DomainType:$domain, TensorOf<[I1]>:$init);
+  let results = (outs TensorOf<[I1]>:$result);
+}
+
+def IndexTreeZeroMaskOp : IndexTree_Op<"ZeroMaskOp", [Pure, IndexTreeNodeInterface]>{
+  let summary = "";
+  let description = [{
+  }];
+
+  let arguments = (ins IndexTree_NodeType:$parent, IndexTree_DomainType:$domain, TensorOf<[I1]>:$init);
+  let results = (outs TensorOf<[I1]>:$result);
+}
+
 def IndexTreeMaskedDomainOp : IndexTreeDomain_Op<"MaskedDomainOp",
     [Pure, UnknownDomain, ConcreteDomainInterface, IndexTreeNodeInterface]>{
   let summary = "";
@@ -304,9 +322,10 @@ def IndexTreeMaskedDomainOp : IndexTreeDomain_Op<"MaskedDomainOp",
   }];
 
   let arguments = (ins 
-    IndexTree_DomainType:$mask,
+    AnyTypeOf<[TensorOf<[I1]>, IndexTree_DomainType]>:$mask,
     IndexTree_DomainType:$base,
     Optional<Index>:$dim_size);
+
   let results = (outs IndexTree_DomainType:$domain);
 }
 

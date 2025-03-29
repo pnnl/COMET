@@ -34,6 +34,7 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/IndexedMap.h"
+#include "llvm/ADT/TypeSwitch.h"
 
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -53,7 +54,7 @@ namespace mlir {
 
 struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp> {
   ConcretizeTensorDomain(MLIRContext *context)
-      : OpRewritePattern<IndexTreeTensorDomainOp>(context, /*benefit=*/1) {}
+      : OpRewritePattern<IndexTreeTensorDomainOp>(context, /*benefit=*/3) {}
 
   mlir::LogicalResult 
   liftAccessOp(mlir::Operation *dependent_op, 
@@ -238,7 +239,7 @@ struct ConcretizeTensorDomain :  public OpRewritePattern<IndexTreeTensorDomainOp
 
 struct SimplifyIntersectionOp : public OpRewritePattern<IndexTreeDomainIntersectionOp> {
   SimplifyIntersectionOp(MLIRContext *context)
-      : OpRewritePattern<IndexTreeDomainIntersectionOp>(context, /*benefit=*/1) {}
+      : OpRewritePattern<IndexTreeDomainIntersectionOp>(context, /*benefit=*/2) {}
 
   mlir::LogicalResult
   matchAndRewrite(IndexTreeDomainIntersectionOp op,
@@ -326,28 +327,35 @@ struct SimplifyIntersectionOp : public OpRewritePattern<IndexTreeDomainIntersect
 
 struct SimplifyMaskOp : public mlir::OpRewritePattern<IndexTreeMaskedDomainOp> {
   SimplifyMaskOp(mlir::MLIRContext *context)
-      : OpRewritePattern<IndexTreeMaskedDomainOp>(context, /*benefit=*/1) {}
+      : OpRewritePattern<IndexTreeMaskedDomainOp>(context, /*benefit=*/2) {}
 
   mlir::LogicalResult
   matchAndRewrite(IndexTreeMaskedDomainOp op,
                   mlir::PatternRewriter &rewriter) const override 
   {
-    Operation* mask = op.getMask().getDefiningOp();
+    Operation* mask_domain;
+    if(llvm::isa<DomainType>(op.getMask().getType())){
+      mask_domain = op.getMask().getDefiningOp();
+    } else {
+      auto fill_mask = op.getMask().getDefiningOp<IndexTreeFillMaskOp>();
+      mask_domain = fill_mask.getDomain().getDefiningOp();
+    }
+    
     Operation* base = op.getBase().getDefiningOp();
-    if(!llvm::isa<ConcreteDomain>(mask) || !llvm::isa<ConcreteDomain>(base)){
+    if(!llvm::isa<ConcreteDomain>(mask_domain) || !llvm::isa<ConcreteDomain>(base)){
       return failure();
     }
 
-    if(llvm::isa<IndexTreeDenseDomainOp>(mask))
+    if(llvm::isa<IndexTreeDenseDomainOp>(mask_domain))
     {
       if(llvm::isa<IndexTreeDenseDomainOp>(base))
       {
-        auto masked_domain = llvm::cast<IndexTreeDenseDomainOp>(mask);
+        auto masked_domain = llvm::cast<IndexTreeDenseDomainOp>(mask_domain);
         auto dense_domain = llvm::cast<IndexTreeDenseDomainOp>(base);
         dense_domain.getTensorsMutable().append(masked_domain.getTensors());
         auto dims = SmallVector<Attribute>(dense_domain.getDims().getAsRange<IntegerAttr>());
         dims.append(masked_domain.getDims().getAsRange<IntegerAttr>().begin(), masked_domain.getDims().getAsRange<IntegerAttr>().end());
-        dense_domain.setDimsAttr(rewriter.getArrayAttr(dims));
+        rewriter.updateRootInPlace(dense_domain, [&](){dense_domain.setDimsAttr(rewriter.getArrayAttr(dims));});
       }
       rewriter.replaceOp(op, op.getBase());
       return success();
@@ -355,7 +363,7 @@ struct SimplifyMaskOp : public mlir::OpRewritePattern<IndexTreeMaskedDomainOp> {
 
     if(llvm::isa<IndexTreeDenseDomainOp>(base))
     {
-      rewriter.replaceOp(op, op.getMask());
+      rewriter.replaceOp(op, mask_domain);
       return success();
     }
 
@@ -369,7 +377,7 @@ struct SimplifyMaskOp : public mlir::OpRewritePattern<IndexTreeMaskedDomainOp> {
 
 struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
   SimplifyUnionOp(mlir::MLIRContext *context)
-      : OpRewritePattern<IndexTreeDomainUnionOp>(context, /*benefit=*/1) {}
+      : OpRewritePattern<IndexTreeDomainUnionOp>(context, /*benefit=*/2) {}
 
   mlir::LogicalResult
   matchAndRewrite(IndexTreeDomainUnionOp op,
@@ -435,7 +443,7 @@ struct SimplifyUnionOp : public mlir::OpRewritePattern<IndexTreeDomainUnionOp> {
 
 struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
   InferOutputDomains(MLIRContext *context)
-      : OpRewritePattern<IndexTreeSparseTensorOp>(context, /*benefit=*/1) {}
+      : OpRewritePattern<IndexTreeSparseTensorOp>(context, /*benefit=*/2) {}
 
   Value copyDomain(Value domain,
                    mlir::PatternRewriter &rewriter,
@@ -459,14 +467,26 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
         copyDomain(subdomain, rewriter, map, loc, index_vars);
       }
     }
+
     if(llvm::isa<IndexTreeMaskedDomainOp>(domain_op))
     {
       auto masked_domain_op = llvm::cast<IndexTreeMaskedDomainOp>(domain_op);
-      copyDomain(masked_domain_op.getMask(), rewriter, map, loc, index_vars);
+      Value mask = masked_domain_op.getMask();
+      if(llvm::isa<indexTree::DomainType>(mask.getType()))
+        mask = copyDomain(masked_domain_op.getMask(), rewriter, map, loc, index_vars);
+      else {
+        assert(llvm::isa<TensorType>(mask.getType())); // Enforced by verifier create by table gen.
+        auto fill_mask_op = mask.getDefiningOp<IndexTreeFillMaskOp>();
+        assert(fill_mask_op && "Currently do not support creating tensors from arbitrary bitmasks.");
+        mask = copyDomain(fill_mask_op.getDomain(),  rewriter, map, loc, index_vars);
+      }
       copyDomain(masked_domain_op.getBase(), rewriter, map, loc, index_vars);
-    }
-    
-    if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
+
+      new_domain = rewriter.clone(*domain_op, map)->getResult(0);
+      auto new_masked_domain = new_domain.getDefiningOp<IndexTreeMaskedDomainOp>();
+      rewriter.updateRootInPlace(new_masked_domain, [&](){new_masked_domain.getMaskMutable().assign(mask);});
+
+    } else if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
     {
       auto sparse_domain_op = llvm::cast<IndexTreeSparseDomainOp>(domain_op);
 
@@ -606,6 +626,7 @@ struct IndexTreeDomainConcretization : comet::impl::IndexTreeDomainConcretizatio
   void runOnOperation() override {
     mlir::RewritePatternSet domain_concretization_patterns(&getContext());
     indexTree::populateDomainConcretizationPatterns(&getContext(), domain_concretization_patterns);
+    indexTree::populateMaskDomainTransformationPatterns(&getContext(), domain_concretization_patterns);
     if(failed(mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(domain_concretization_patterns)))) {
       return signalPassFailure();
     }

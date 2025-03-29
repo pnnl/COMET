@@ -34,6 +34,7 @@
 #include <cstdint>
 
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
+#include "comet/Dialect/IndexTree/Patterns.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
 
@@ -343,6 +344,7 @@ struct IndexTreeSymbolicComputePass : comet::impl::IndexTreeSymbolicComputePassB
   void runOnOperation() {
     mlir::RewritePatternSet sp_output_patterns(&getContext());
     sp_output_patterns.add<CreateSymbolicTree>(&getContext());
+    indexTree::populateMaskDomainTransformationPatterns(&getContext(), sp_output_patterns);
     mlir::applyPatternsAndFoldGreedily(getOperation(), std::move(sp_output_patterns));
   }
 };

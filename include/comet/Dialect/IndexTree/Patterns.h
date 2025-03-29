@@ -36,6 +36,7 @@ namespace mlir
         void populateDomainConcretizationPatterns(MLIRContext *context, RewritePatternSet &patterns);
         void populateIndexTreeTypeConversionPatterns(MLIRContext *context, RewritePatternSet &patterns, TypeConverter &typeConverter, ConversionTarget& target);
         void populateIndexTreeInliningPatterns(MLIRContext *context, RewritePatternSet &patterns);
+        void populateMaskDomainTransformationPatterns(MLIRContext *context, RewritePatternSet &patterns);
     }
 }
 
