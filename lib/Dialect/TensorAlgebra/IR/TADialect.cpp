@@ -542,7 +542,7 @@ void TADialect::initialize()
 #include "comet/Dialect/TensorAlgebra/IR/TAOps.cpp.inc"
       >();
 
-  declarePromisedInterface<SortOpInterface, DestinationStyleOpInterface>();
+  // declarePromisedInterface<SortOpInterface, DestinationStyleOpInterface>(); /// PT: I think this is not necessary
 }
 
 namespace mlir {

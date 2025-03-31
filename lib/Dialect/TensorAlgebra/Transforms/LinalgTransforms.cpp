@@ -222,7 +222,7 @@ namespace
         return failure();
 
       FailureOr<scf::SCFTilingResult> tilingResult =
-          scf::tileUsingSCFForOp(rewriter, op, options);
+          scf::tileUsingSCF(rewriter, op, options);
       if (failed(tilingResult))
         return rewriter.notifyMatchFailure(op, "failed to tile operation");
 

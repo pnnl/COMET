@@ -19,6 +19,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
+#include <iostream>
 #include <list>
 #include <memory>
 #include "comet/Conversion/GpuToTriton/GpuToTritonPass.h"
@@ -32,6 +33,7 @@
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
@@ -681,15 +683,15 @@ LogicalResult ExpandScalarTensorArithOp(T op, ConversionPatternRewriter &rewrite
   Operation* expandedOp = NULL;
   if(lhs_type != rhs_type)
   {
-    if(auto lhs_tensor_type = lhs_type.dyn_cast_or_null<RankedTensorType>())
+    if(auto lhs_tensor_type =  mlir::dyn_cast_if_present<RankedTensorType>(lhs_type))
     {
-      if(!rhs_type.isa<RankedTensorType>()  && lhs_tensor_type.getElementType() == rhs_type)
+      if(!mlir::dyn_cast_if_present<RankedTensorType>(rhs_type)  && lhs_tensor_type.getElementType() == rhs_type)
       {
         auto scalarExpanded = rewriter.create<triton::SplatOp>(op->getLoc(), lhs.getType(), rhs);
         expandedOp = rewriter.create<T>(op->getLoc(), lhs, scalarExpanded);
       }
     }
-    else if(auto rhs_tensor_type = rhs_type.dyn_cast_or_null<RankedTensorType>())
+    else if(auto rhs_tensor_type = mlir::dyn_cast_if_present<RankedTensorType>(rhs_type))
     {
       if(rhs_tensor_type.getElementType() == lhs_type)
       {
@@ -817,7 +819,7 @@ LogicalResult ExpandScalarTensorArithCmpOp(T op, ConversionPatternRewriter &rewr
   Operation* expandedOp = NULL;
   if(lhs_type != rhs_type)
   {
-    if(auto lhs_tensor_type = lhs_type.dyn_cast_or_null<RankedTensorType>())
+    if(auto lhs_tensor_type = mlir::dyn_cast_if_present<RankedTensorType>(lhs_type))
     {
       if(!rhs_type.isa<RankedTensorType>()  && lhs_tensor_type.getElementType() == rhs_type)
       {
@@ -825,7 +827,7 @@ LogicalResult ExpandScalarTensorArithCmpOp(T op, ConversionPatternRewriter &rewr
         expandedOp = rewriter.create<T>(op->getLoc(), op->template getAttrOfType<TAttr>("predicate"), lhs, scalarExpanded);
       }
     }
-    else if(auto rhs_tensor_type = rhs_type.dyn_cast_or_null<RankedTensorType>())
+    else if(auto rhs_tensor_type = mlir::dyn_cast_if_present<RankedTensorType>(rhs_type))
     {
       if(rhs_tensor_type.getElementType() == lhs_type)
       {
@@ -1257,6 +1259,7 @@ public:
   LogicalResult
   matchAndRewrite(mlir::triton::FuncOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    rewriter.startOpModification(op);
     
     bool changed = false;
     std::vector<Type> newArgTypes;
@@ -1289,11 +1292,11 @@ public:
     {
       newArgTypes.push_back(arg.getType());
     }
-    rewriter.startRootUpdate(op);
+    rewriter.startOpModification(op);
     auto functype= mlir::FunctionType::get(getContext(), newArgTypes, {});
     op.setType(functype);
     convertBlockArgTypes(op, rewriter);
-    rewriter.finalizeRootUpdate(op);
+    rewriter.finalizeOpModification(op);
     
     return success();
   }
@@ -1378,7 +1381,8 @@ public:
         }
       }
       else {
-        dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes, rewriter.getBoolAttr(true), rewriter.getI32IntegerAttr(1));
+        // dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes, rewriter.getBoolAttr(true), rewriter.getI32IntegerAttr(1));
+        dotOp = rewriter.create<triton::DotOp>(op->getLoc(), op->getOperand(0), op->getOperand(1), loadRes);
       }
       // if(op->getOperand(1).getType().cast<RankedTensorType>().)
 
@@ -1534,13 +1538,13 @@ public:
     rewriter.create<mlir::gpu::ReturnOp>(rewriter.getUnknownLoc());
 
 
-    rewriter.startRootUpdate(TTFunc);
+    rewriter.startOpModification(TTFunc);
     for(auto arg : llvm::zip(gpuFuncOp.getFunctionBody().back().getArguments(), TTFunc.getFunctionBody().back().getArguments()))
     {
       std::get<0>(arg).replaceAllUsesWith(std::get<1>(arg));
     }
 
-    rewriter.finalizeRootUpdate(TTFunc);
+    rewriter.finalizeOpModification(TTFunc);
     rewriter.mergeBlocks(&gpuFuncOp.getFunctionBody().back(), &TTFunc.getFunctionBody().front(), TTFunc.getFunctionBody().front().getArguments());
     rewriter.eraseOp(gpuFuncOp);
     
@@ -1706,7 +1710,7 @@ public:
         {
           // COMET_ERRS << launchOp.getKernelModuleName() <<" vs " << origin_kernel_module_name << "\n";
           // COMET_ERRS << launchOp.getKernelName() <<" vs " << origin_kernel_name << "\n";
-          if(launchOp.getKernelModuleName().strref().equals(origin_kernel_module_name) && launchOp.getKernelName().strref().equals(origin_kernel_name))
+          if(launchOp.getKernelModuleName().strref().compare(origin_kernel_module_name) == 0 && launchOp.getKernelName().strref().compare(origin_kernel_name) == 0)
           {
             // COMET_ERRS << "FOUND LAUNCHOP" << origin_kernel_fullname << "\n";
             auto block_size_r = cast<arith::ConstantIndexOp>(launchOp.getKernelOperand(input_block_size.getArgNumber()-2).getDefiningOp()).value();
@@ -1822,9 +1826,9 @@ public:
       auto kernel_mod_name = launchOp.getKernelModuleName();
     //   COMET_ERRS <<kernel_mod_name <<"::"<< kernel_name << "\n";
 
-      auto kernel_module = *std::find_if(gpuModules.begin(), gpuModules.end(), [&kernel_mod_name] (mlir::gpu::GPUModuleOp modOp) -> bool {return modOp.getName().equals(kernel_mod_name); });
+      auto kernel_module = *std::find_if(gpuModules.begin(), gpuModules.end(), [&kernel_mod_name] (mlir::gpu::GPUModuleOp modOp) -> bool {return modOp.getName().compare(kernel_mod_name) == 0; });
       auto gpufuncOps = kernel_module.getOps<mlir::gpu::GPUFuncOp>(); 
-      auto gpufuncOp = *std::find_if(gpufuncOps.begin(), gpufuncOps.end(), [&kernel_name](mlir::gpu::GPUFuncOp funcOp) -> bool{ return funcOp->getAttrOfType<mlir::StringAttr>("sym_name").strref().equals(kernel_name) ;});
+      auto gpufuncOp = *std::find_if(gpufuncOps.begin(), gpufuncOps.end(), [&kernel_name](mlir::gpu::GPUFuncOp funcOp) -> bool{ return funcOp->getAttrOfType<mlir::StringAttr>("sym_name").strref().compare(kernel_name) == 0 ;});
       auto b_size_x = dyn_cast<arith::ConstantIndexOp>(launchOp.getBlockSizeX().getDefiningOp()).value();
       auto b_size_y = dyn_cast<arith::ConstantIndexOp>(launchOp.getBlockSizeY().getDefiningOp()).value();
       if (gpufuncOp->hasAttr("simplified"))

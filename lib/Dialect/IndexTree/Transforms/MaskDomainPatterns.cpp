@@ -71,7 +71,7 @@ struct MoveInvariantMaskOp : public mlir::OpRewritePattern<IndexTreeFillMaskOp> 
             ))
           return failure();
       }
-      rewriter.updateRootInPlace(access_op, [&]() {access_op->moveBefore(dependent_op);});
+      rewriter.modifyOpInPlace(access_op, [&]() {access_op->moveBefore(dependent_op);});
       return success();
     }
 
@@ -158,7 +158,7 @@ struct MoveInvariantMaskOp : public mlir::OpRewritePattern<IndexTreeFillMaskOp> 
         logger.startLine() << "\n";
     });
     
-    rewriter.updateRootInPlace(op, [&](){
+    rewriter.modifyOpInPlace(op, [&](){
       Value cur_parent = op.getParent();
       while(cur_parent != parent) {
         op->moveBefore(cur_parent.getDefiningOp());
@@ -168,7 +168,7 @@ struct MoveInvariantMaskOp : public mlir::OpRewritePattern<IndexTreeFillMaskOp> 
     });
     if(!op.getDomain().getDefiningOp()->isBeforeInBlock(op)){
       Operation* domain = op.getDomain().getDefiningOp();
-      rewriter.updateRootInPlace(domain, [&](){domain->moveBefore(op);});
+      rewriter.modifyOpInPlace(domain, [&](){domain->moveBefore(op);});
       IndexTreeSparseDomainOp sparse_domain;
       if((sparse_domain = llvm::dyn_cast<IndexTreeSparseDomainOp>(domain))){
         liftAccessOp(sparse_domain, llvm::cast<IndexTreeIndexToTensorOp>(sparse_domain.getParent().getDefiningOp()), rewriter);
@@ -178,7 +178,7 @@ struct MoveInvariantMaskOp : public mlir::OpRewritePattern<IndexTreeFillMaskOp> 
     IndexTreeZeroMaskOp zero_op = nullptr;
     for(auto user : previous_parent.getUsers()) {
       if((zero_op = llvm::dyn_cast<IndexTreeZeroMaskOp>(user)) && zero_op.getInit() == op.getResult()) {
-        rewriter.updateRootInPlace(zero_op, [&](){zero_op.getParentMutable().assign(parent);});
+        rewriter.modifyOpInPlace(zero_op, [&](){zero_op.getParentMutable().assign(parent);});
       }
     }
     return success();
@@ -227,16 +227,16 @@ struct CreateFillMaskOp : public mlir::OpRewritePattern<IndexTreeMaskedDomainOp>
     rewriter.inlineRegionBefore(tree_op.getRegion(), new_op.getRegion(), new_op.getRegion().end());
 
     rewriter.restoreInsertionPoint(cur);
-    rewriter.updateRootInPlace(new_op, [&](){new_op.getBody()->addArgument(bit_tensor_type, loc);});
+    rewriter.modifyOpInPlace(new_op, [&](){new_op.getBody()->addArgument(bit_tensor_type, loc);});
     init_bit_tensor = new_op.getBody()->getArgument(new_op.getBody()->getNumArguments() - 1);
 
     Value domain = op.getMask();
     Value mask_tensor = rewriter.create<indexTree::IndexTreeFillMaskOp>(loc, bit_tensor_type, op.getParentNode(), domain, init_bit_tensor);
-    rewriter.updateRootInPlace(op, [&](){op.getMaskMutable().assign(mask_tensor);});
+    rewriter.modifyOpInPlace(op, [&](){op.getMaskMutable().assign(mask_tensor);});
     indexTree::YieldOp yield = llvm::cast<indexTree::YieldOp>(new_op.getBody()->getTerminator());
     rewriter.setInsertionPoint(yield);
     mask_tensor = rewriter.create<indexTree::IndexTreeZeroMaskOp>(loc, bit_tensor_type, op.getParentNode(), domain, mask_tensor);
-    rewriter.updateRootInPlace(new_op, [&](){yield.getResultsMutable().append(ValueRange(mask_tensor));});
+    rewriter.modifyOpInPlace(new_op, [&](){yield.getResultsMutable().append(ValueRange(mask_tensor));});
 
     for(unsigned i = 0; i < tree_op.getNumResults(); i++){
       rewriter.replaceAllUsesWith(tree_op.getResult(i), new_op.getResult(i));

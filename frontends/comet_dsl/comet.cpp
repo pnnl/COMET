@@ -96,7 +96,6 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
-#include "comet/Conversion/ForAllToParallel/ForAllToParallelPass.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
 #ifdef ENABLE_GPU_TARGET
@@ -654,7 +653,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Blanket-convert any remaining affine ops if any remain.
     pm.addPass(mlir::createLowerAffinePass());
     /// Convert SCF to CF (always needed).
-    pm.addPass(mlir::comet::createConvertForAllToParallelPass());
+    pm.addPass(mlir::createForallToParallelLoopPass());
     pm.addPass(mlir::createConvertSCFToOpenMPPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());

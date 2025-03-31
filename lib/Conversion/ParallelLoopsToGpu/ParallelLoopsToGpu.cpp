@@ -420,7 +420,7 @@ public:
             rewriter.eraseOp(parOp);
             return mlir::success();
         }
-        else if ((parOp->getParentOp() && parOp->getParentOp()->hasAttrOfType<mlir::UnitAttr>("GuardY")) || (mlir::isa<mlir::scf::ParallelOp>(parOp->getParentOp()) && mlir::cast<mlir::scf::ParallelOp>(parOp->getParentOp())->getAttrOfType<mlir::StringAttr>("parallelDim").getValue().equals("dimY_block")))  // X level loop
+        else if ((parOp->getParentOp() && parOp->getParentOp()->hasAttrOfType<mlir::UnitAttr>("GuardY")) || (mlir::isa<mlir::scf::ParallelOp>(parOp->getParentOp()) && mlir::cast<mlir::scf::ParallelOp>(parOp->getParentOp())->getAttrOfType<mlir::StringAttr>("parallelDim").getValue().compare("dimY_block") == 0))  // X level loop
         { 
             mlir::Value lower_bound;
             mlir::Value upper_bound;

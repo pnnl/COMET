@@ -30,16 +30,17 @@ set(LIBS
   COMETUtils
   COMETTensorAlgebraDialect
   COMETIndexTreeDialect
-  COMETForAllToParallel
   # COMETIndexTreeToSCF
 )
 
 if(ENABLE_GPU_TARGET OR ENABLE_FPGA_TARGET)
   set(LIBS
     ${LIBS}
+    MLIRGPUToLLVMIRTranslation
     COMETParallelLoopsToGpu
   )
 endif()
+
 
 if(ENABLE_GPU_TARGET)
   set(LIBS
