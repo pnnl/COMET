@@ -355,7 +355,7 @@ struct SimplifyMaskOp : public mlir::OpRewritePattern<IndexTreeMaskedDomainOp> {
         dense_domain.getTensorsMutable().append(masked_domain.getTensors());
         auto dims = SmallVector<Attribute>(dense_domain.getDims().getAsRange<IntegerAttr>());
         dims.append(masked_domain.getDims().getAsRange<IntegerAttr>().begin(), masked_domain.getDims().getAsRange<IntegerAttr>().end());
-        rewriter.updateRootInPlace(dense_domain, [&](){dense_domain.setDimsAttr(rewriter.getArrayAttr(dims));});
+        rewriter.modifyOpInPlace(dense_domain, [&](){dense_domain.setDimsAttr(rewriter.getArrayAttr(dims));});
       }
       rewriter.replaceOp(op, op.getBase());
       return success();
@@ -484,7 +484,7 @@ struct InferOutputDomains : public OpRewritePattern<IndexTreeSparseTensorOp> {
 
       new_domain = rewriter.clone(*domain_op, map)->getResult(0);
       auto new_masked_domain = new_domain.getDefiningOp<IndexTreeMaskedDomainOp>();
-      rewriter.updateRootInPlace(new_masked_domain, [&](){new_masked_domain.getMaskMutable().assign(mask);});
+      rewriter.modifyOpInPlace(new_masked_domain, [&](){new_masked_domain.getMaskMutable().assign(mask);});
 
     } else if(llvm::isa<IndexTreeSparseDomainOp>(domain_op))
     {
