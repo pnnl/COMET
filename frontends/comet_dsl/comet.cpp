@@ -33,11 +33,13 @@
 #include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
 #endif
 
+
+#include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
+#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
+#include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
-#include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
-#include "comet/Dialect/IndexTree/Passes.h"
 
 #include "comet/Conversion/Passes.h"
 
@@ -48,22 +50,24 @@
 #include "mlir/Conversion/GPUCommon/GPUCommonPass.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/SPIRV/Transforms/Passes.h"
-#include "mlir/Support/TypeID.h"
+#include "mlir/Conversion/SCFToOpenMP/SCFToOpenMP.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/Extensions/InlinerExtension.h"
+#include "mlir/Dialect/Func/Transforms/Passes.h"
+#include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
-#include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
-#include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
 #include "mlir/Dialect/SCF/Transforms/Passes.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 
+#include "mlir/Support/TypeID.h"
 
-#include "mlir/Conversion/Passes.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
 #include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
+#include "mlir/Conversion/Passes.h"
 #include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVMPass.h"
 // #include "mlir/Conversion/LinalgToLLVM/LinalgToLLVM.h"
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
@@ -73,19 +77,22 @@
 // #include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
 #include "mlir/Conversion/VectorToSCF/VectorToSCF.h"
 
-#include "mlir/IR/Verifier.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
-#include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/MLIRContext.h"
+#include "mlir/IR/Verifier.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Target/LLVMIR/Dialect/AMX/AMXToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/ROCDL/ROCDLToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/IR/DialectRegistry.h"
+#include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
@@ -106,14 +113,15 @@
 #include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Conversion/TritonToTritonGPU/Passes.h"
+#include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
 #endif
 
-#include "mlir/Target/LLVMIR/Dialect/All.h"
-#include "mlir/Target/LLVMIR/Dialect/All.h"
-#include "mlir/Dialect/LLVMIR/NVVMDialect.h"
-#include "mlir/InitAllPasses.h"
 #include "mlir/Conversion/NVVMToLLVM/NVVMToLLVM.h"
 #include "mlir/Conversion/Passes.h"
+#include "mlir/Dialect/LLVMIR/NVVMDialect.h"
+#include "mlir/InitAllPasses.h"
+#include "mlir/Target/LLVMIR/Dialect/All.h"
 // #ifdef ENABLE_GPU_TARGET
 // #include "comet/TritonConfig.h"
 // #endif
@@ -149,18 +157,12 @@ using namespace mlir::indexTree;
 #define DEBUG_TYPE "comet_dsl"
 namespace cl = llvm::cl;
 
-static cl::opt<std::string> inputFilename(cl::Positional,
-                                          cl::desc("<input tensorAlgebra file>"),
-                                          cl::init("-"),
-                                          cl::value_desc("filename"));
+static cl::opt<std::string>
+    inputFilename(cl::Positional, cl::desc("<input tensorAlgebra file>"),
+                  cl::init("-"), cl::value_desc("filename"));
 
-namespace
-{
-  enum InputType
-  {
-    TensorAlgebra,
-    MLIR
-  };
+namespace {
+enum InputType { TensorAlgebra, MLIR };
 }
 
 static cl::opt<enum InputType> inputType(
@@ -214,13 +216,14 @@ static cl::opt<std::string> xclbinPath("xclbin_path", cl::init("-"), cl::desc("P
 static cl::opt<std::string> sprirvBinOutPath("spirv_bin_path", cl::init("-"), cl::desc("Path to output SPIRV binary"));
 #endif
 #ifdef ENABLE_GPU_TARGET
-static cl::opt<GPUCompilationFormat> GPUTargetCompilationFormat("gpu-code-format", cl::init(Binary), cl::desc("GPU target code generation format"),
-                                            cl::values(
-                                              clEnumVal(Assembly, "GPU target format is assembly"),
+static cl::opt<GPUCompilationFormat> GPUTargetCompilationFormat(
+    "gpu-code-format", cl::init(Binary),
+    cl::desc("GPU target code generation format"),
+    cl::values(clEnumVal(Assembly, "GPU target format is assembly"),
                                               clEnumVal(Binary, "GPU target format is binary"),
                                               clEnumVal(Fatbin, "GPU target format is fat binary")
                                             ));
-static cl::opt<int> GPUComputeCapability("gpu-compute-capability", cl::init(CUDA_COMPUTE_CAPABILITY), cl::desc("GPU compute capability"));
+static cl::opt<std::string> GPUComputeCapability("gpu-compute-capability", cl::init(DEVICE_COMPUTE_CAPABILITY), cl::desc("GPU target architecture"));
 static cl::opt<int> GPUNumWarps("gpu-num-warps", cl::init(4), cl::desc("GPU number of warps"));
 static cl::opt<int> GPUThreadsPerWarp("gpu-threads-per-warp", cl::init(32), cl::desc("GPU threads per warp"));
 static cl::opt<int> GPUNumCTAs("gpu-num-ctas", cl::init(1), cl::desc("GPU num CTAs"));
@@ -638,12 +641,27 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 #ifdef ENABLE_GPU_TARGET
   if ((isLoweringToLLVM || emitLLVM) && CodegenTarget == TargetDevice::GPU)
   {
-    pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
+    if(GPUComputeCapability.getValue().find("sm_") != std::string::npos || GPUComputeCapability.getValue().find("compute_") != std::string::npos)
+    {
+      int32_t cudaCC = std::stoi(GPUComputeCapability.substr(GPUComputeCapability.find("_")+1));
+      pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, cudaCC, GPUTargetCompilationFormat));
+    }
+    else {
+      pm.addPass(mlir::comet::createLowerTritonDeviceToHIPPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
+    }
   }
 
   if ((isLoweringToLLVM || emitLLVM) && CodegenTarget == TargetDevice::GPU)
   {
+    if (GPUComputeCapability.getValue().find("sm_") != std::string::npos ||
+        GPUComputeCapability.getValue().find("compute_") != std::string::npos) 
+  {
     pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
+    } 
+    else 
+    {
+      pm.addPass(mlir::comet::createLowerGpuHostToHIPPass());
+    }
   }
 
 #endif
@@ -652,7 +670,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Blanket-convert any remaining high-level vector ops to loops if any remain.
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
     /// Blanket-convert any remaining linalg ops to loops if any remain.
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
+    pm.addNestedPass<mlir::func::FuncOp>(
+        mlir::createConvertLinalgToLoopsPass());
     /// Blanket-convert any remaining affine ops if any remain.
     pm.addPass(mlir::createLowerAffinePass());
     /// Convert SCF to CF (always needed).
@@ -663,7 +682,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(mlir::createConvertSCFToCFPass());
     /// Sprinkle some cleanups.
     /// Convert vector to LLVM (always needed).
-    pm.addPass(mlir::createConvertVectorToLLVMPass()); // TODO: add more options on a per-need basis.
+    pm.addPass(mlir::createConvertVectorToLLVMPass()); // TODO: add more options
+                                                       // on a per-need basis.
     //// Convert Math to LLVM (always needed).
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertMathToLLVMPass());
     /// Expand complicated MemRef operations before lowering them.
@@ -726,10 +746,14 @@ int main(int argc, char **argv)
   /// Register our Dialect with MLIR.
 #ifdef ENABLE_GPU_TARGET
   context.loadDialect<mlir::triton::TritonDialect>();
+  mlir::func::registerInlinerExtension(registry);
+  context.appendDialectRegistry(registry);
+
   registerLLVMDialectTranslation(context);
   registerLLVMDialectTranslation(context);
   registerBuiltinDialectTranslation(context);
   registerNVVMDialectTranslation(context);
+  mlir::registerROCDLDialectTranslation(context);
   mlir::registerGPUDialectTranslation(context);
   LLVMInitializeNVPTXTargetInfo();
   LLVMInitializeNVPTXTarget();

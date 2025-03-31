@@ -108,11 +108,11 @@ endif()
 if(${ENABLE_GPU_TARGET})
   set(TRITON_PATH "" CACHE PATH "Path to Triton")
   set(TRITON_BUILD_PATH "${CMAKE_BINARY_DIR}/triton" CACHE INTERNAL "Path to Triton Build")
-  set(TRITON_CODEGEN_BACKENDS "nvidia;amd")
-  if(NOT DEFINED CUDA_COMPUTE_CAPABILITY)
+  set(TRITON_CODEGEN_BACKENDS "nvidia;amd" CACHE STRING "Enable different codegen backends" FORCE)
+  if(NOT DEFINED DEVICE_COMPUTE_CAPABILITY)
     message(FATAL_ERROR "Please specify cuda compute capability requested")
   endif()
-  add_compile_definitions(CUDA_COMPUTE_CAPABILITY=${CUDA_COMPUTE_CAPABILITY})
+  add_compile_definitions(DEVICE_COMPUTE_CAPABILITY="${DEVICE_COMPUTE_CAPABILITY}")
 
   add_subdirectory(${TRITON_PATH} ${TRITON_BUILD_PATH})
   get_property(triton_libs GLOBAL PROPERTY TRITON_LIBS)
@@ -160,9 +160,6 @@ include_directories(${COMET_INCLUDE_DIR})
 #-------------------------------------------------------------------------------
 # Directory setup
 #-------------------------------------------------------------------------------
-
-
-
 add_subdirectory(include/comet)
 add_subdirectory(lib)
 add_subdirectory(frontends/comet_dsl)
