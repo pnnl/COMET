@@ -1,35 +1,15 @@
-//
-// Copyright 2022 Battelle Memorial Institute
-//
-// Redistribution and use in source and binary forms, with or without modification,
-// are permitted provided that the following conditions are met:
-//
-// 1. Redistributions of source code must retain the above copyright notice, this list of conditions
-// and the following disclaimer.
-//
-// 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions
-// and the following disclaimer in the documentation and/or other materials provided with the distribution.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-// INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-// GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-#include <cstddef>
-#include <list>
-#include <memory>
-#include "comet/Conversion/TritonToCuda/TritonToCudaPass.h"
+
+#include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
+#include "TritonAMDGPUToLLVM/Passes.h"
+#include "TritonAMDGPUTransforms/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
-#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/NVVMDialect.h"
+#include "mlir/Dialect/LLVMIR/ROCDLDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -40,57 +20,25 @@
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/Passes.h"
-#include "mlir/Dialect/GPU/IR/GPUDialect.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
-#include "mlir/Dialect/Arith/Transforms/Passes.h"
-
-// #include "triton/Conversion/NVGPUToLLVM/TritonGPUToLLVMPass.h"
-// #include "triton/Conversion/TritonGPUToLLVM/TritonGPUToLLVMPass.h"
-#include "third_party/nvidia/include/NVGPUToLLVM/NVGPUToLLVMPass.h"
-#include "third_party/nvidia/include/TritonNVIDIAGPUToLLVM/Passes.h"
 #include "triton/Conversion/TritonGPUToLLVM/Passes.h"
 #include "triton/Conversion/TritonToTritonGPU/TritonToTritonGPUPass.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Dialect/Triton/Transforms/Passes.h"
 #include "triton/Dialect/TritonGPU/Transforms/Passes.h"
-#include "triton/Dialect/TritonNvidiaGPU/Transforms/Passes.h"
-
-#include "mlir/Dialect/LLVMIR/NVVMDialect.h"
-#include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
-#include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
-#include "mlir/Target/LLVMIR/Export.h"
-
-#include "llvm/MC/TargetRegistry.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOptions.h"
-#include "llvm/IR/LegacyPassManager.h"
+#include <cstddef>
+#include <iostream>
+#include <memory>
 #include <set>
 #include <string>
 
 #define GEN_PASS_CLASSES
-#include "comet/Conversion/TritonToCuda/Passes.h"
+#include "comet/Conversion/TritonToHIP/Passes.h"
 
 using namespace mlir;
 
-class LowerTritonDeviceToCuda
-    : public mlir::comet::LowerTritonDeviceToCudaBase<LowerTritonDeviceToCuda> {
+class LowerTritonDeviceToHIP
+    : public mlir::comet::LowerTritonDeviceToHIPBase<LowerTritonDeviceToHIP> {
 public:
-  LowerTritonDeviceToCuda() = default;
-
-  LowerTritonDeviceToCuda(
-      int numWarps, int threadsPerWarp, int numCTAs, int numStages,
-      int computeCapability,
-      mlir::tensorAlgebra::GPUCompilationFormat codeFormat) {
-
-    this->numWarps = numWarps;
-    this->threadsPerWarp = threadsPerWarp;
-    this->numCTAs = numCTAs;
-    this->numStages = numStages;
-    this->computeCapability = computeCapability;
-    this->codeFormat = codeFormat;
-  }
-
   bool add_ttir_passes(ModuleOp &mod) {
     PassManager pm(mod.getContext());
 
@@ -110,72 +58,86 @@ public:
   }
 
   bool add_ttgir_passes(ModuleOp &mod) {
-    PassManager pm(mod.getContext());
-
-    pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass(
-        "cuda:" + std::to_string(computeCapability), numWarps.getValue(),
-        threadsPerWarp.getValue(), numCTAs.getValue()));
-    pm.addPass(triton::gpu::createTritonGPUCoalesce());
-    if (computeCapability / 10 >= 8) {
-      pm.addPass(triton::gpu::createTritonGPUF32DotTC());
+    {
+      PassManager pm(mod.getContext());
+      pm.addPass(mlir::triton::createConvertTritonToTritonGPUPass(
+          "hip:" + computeCapability, numWarps.getValue(),
+          threadsPerWarp.getValue(), numCTAs.getValue()));
+      if (failed(pm.run(mod))) {
+        signalPassFailure();
+        return false;
+      }
     }
-    pm.addPass(createTritonNvidiaGPUPlanCTAPass());
+    PassManager pm(mod.getContext());
+    pm.addPass(triton::gpu::createTritonGPUCoalesce());
+
     pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
     pm.addPass(triton::gpu::createTritonGPUOptimizeThreadLocality());
-    pm.addPass(triton::gpu::createTritonGPUAccelerateMatmul());
+    // TODO: This one takes options
+    pm.addPass(createTritonAMDGPUAccelerateMatmulPass(computeCapability));
     pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
+    pm.addPass(createTritonAMDGPUOptimizeEpiloguePass());
     mlir::triton::gpu::TritonGPUOptimizeDotOperandsOptions options;
-    options.hoistLayoutConversion = computeCapability >= 80;
+    options.hoistLayoutConversion = true;
     pm.addPass(triton::gpu::createTritonGPUOptimizeDotOperands(options));
-    pm.addPass(createCSEPass());
-    if (computeCapability / 10 >= 8) {
-      pm.addPass(triton::gpu::createTritonGPUOptimizeAccumulatorInit());
-      pm.addPass(triton::gpu::createTritonGPUCombineTensorSelectAndIf());
-      mlir::triton::gpu::TritonGPUPipelineOptions options;
-      options.numStages = numStages;
-      pm.addPass(triton::gpu::createTritonGPUPipeline(options));
-    }
-    pm.addPass(triton::gpu::createTritonGPUPrefetch());
+    // TODO: Tensor core options here
+    // addd.....
+
+    pm.addPass(createCanonicalizerPass());
+    // pm.addPass(triton::createTritonAMDGPUInsertInstructionSchedHintsPass());
+    // TODO: Does not work
     pm.addPass(triton::gpu::createTritonGPUOptimizeDotOperands(options));
+    pm.addPass(triton::gpu::createTritonGPURemoveLayoutConversions());
     pm.addPass(triton::gpu::createTritonGPUReduceDataDuplication());
-    pm.addPass(triton::gpu::createTritonGPUReorderInstructions());
+    if (numStages.getValue() != 0) {
+      pm.addPass(createTritonAMDGPUReorderInstructionsPass());
+    }
+    pm.addPass(createTritonAMDGPUCanonicalizePointersPass());
+    pm.addPass(createCanonicalizerPass());
     pm.addPass(createCSEPass());
     pm.addPass(createSymbolDCEPass());
-    if (computeCapability / 10 >= 9) {
-      pm.addPass(createTritonNvidiaGPUFenceInsertionPass());
-      pm.addPass(createTritonNvidiaGPUTMALoweringPass());
-    }
-    pm.addPass(createCanonicalizerPass());
-
     if (failed(pm.run(mod))) {
       signalPassFailure();
       return false;
     }
+
     return true;
   }
 
   bool add_llir_passes(ModuleOp &mod) {
     PassManager pm(mod.getContext());
 
-    pm.addPass(triton::NVIDIA::createDecomposeUnsupportedConversionsPass());
-    pm.addPass(triton::gpu::createTritonGPUCombineTensorSelectAndIf());
+    pm.addPass(triton::AMD::createDecomposeUnsupportedConversionsPass(
+        computeCapability));
     pm.addPass(createConvertSCFToCFPass());
     pm.addPass(createConvertIndexToLLVMPass());
     pm.addPass(triton::gpu::createAllocateSharedMemoryPass());
-    pm.addPass(mlir::triton::createRewriteTensorPointerPass());
     pm.addPass(
-        triton::createConvertTritonGPUToLLVMPass(computeCapability.getValue()));
-    pm.addPass(triton::createConvertNVGPUToLLVMPass());
-    pm.addPass(createArithToLLVMConversionPass());
+        triton::createConvertTritonAMDGPUToLLVMPass(computeCapability, true));
     pm.addPass(createCanonicalizerPass());
     pm.addPass(createCSEPass());
     pm.addPass(createSymbolDCEPass());
+    pm.addPass(triton::createConvertBuiltinFuncToLLVMPass());
 
     if (failed(pm.run(mod))) {
       signalPassFailure();
       return false;
     }
+
     return true;
+  }
+  LowerTritonDeviceToHIP() = default;
+
+  LowerTritonDeviceToHIP(int numWarps, int threadsPerWarp, int numCTAs,
+                         int numStages, std::string computeCapability,
+                         mlir::tensorAlgebra::GPUCompilationFormat codeFormat) {
+
+    this->numWarps = numWarps;
+    this->threadsPerWarp = threadsPerWarp;
+    this->numCTAs = numCTAs;
+    this->numStages = numStages;
+    this->computeCapability = computeCapability;
+    this->codeFormat = codeFormat;
   }
 
   void runOnOperation() override {
@@ -187,14 +149,14 @@ public:
     // Triton expects one kernel per module so we create temporary modules
     std::vector<ModuleOp> tempMods;
     OpBuilder builder(modOp);
-    std::string chip = "sm_" + std::to_string(computeCapability.getValue());
     // The pass that converts LLVM kernels to cubin expects all such kernels to
     // be within gpu.module, so we create such a module to insert the kernels
     // lowered by Triton
     auto tempMod = builder.create<mlir::gpu::GPUModuleOp>(
         modOp->getLoc(), "gpu_module",
-        mlir::NVVM::NVVMTargetAttr::get(modOp->getContext(), 3,
-                                        "nvptx64-nvidia-cuda", chip));
+        mlir::ROCDL::ROCDLTargetAttr::get(
+            modOp->getContext(), 3, "amdgcn-amd-amdhsa",
+            computeCapability)); //, "nvptx64-nvidia-Hip", chip));
 
     if (TTFuncs.empty()) {
       return signalPassFailure();
@@ -204,7 +166,7 @@ public:
       auto tempMod = ModuleOp::create(modOp.getLoc());
       OpBuilder builder(tempMod.getBodyRegion());
       builder.clone(*ttFunc.getOperation());
-
+      PassManager pm(tempMod.getContext());
       if (!add_ttir_passes(tempMod)) {
         return;
       }
@@ -232,10 +194,19 @@ public:
     builder.setInsertionPointToStart(&tempMod.getBodyRegion().front());
     for (auto mod : tempMods) {
       for (auto &op : *mod.getBody()) {
+        // op.setAttr("rocdl.kernel", builder.getUnitAttr());
+
+        if (mlir::isa<LLVM::LLVMFuncOp>(op)) {
+          std::vector<NamedAttribute> kernelAttrs;
+          kernelAttrs.push_back(
+              builder.getNamedAttr("gpu.kernel", builder.getUnitAttr()));
+          kernelAttrs.push_back(
+              builder.getNamedAttr("rocdl.kernel", builder.getUnitAttr()));
+          op.setAttrs(kernelAttrs);
+        }
         builder.clone(op);
       }
     }
-
     // GPU dialect verifier expects this
     modOp->setAttr("gpu.container_module", builder.getUnitAttr());
 
@@ -287,22 +258,23 @@ public:
 };
 
 std::unique_ptr<OperationPass<mlir::ModuleOp>>
-mlir::comet::createLowerTritonDeviceToCudaPass() {
-  return std::make_unique<::LowerTritonDeviceToCuda>();
+mlir::comet::createLowerTritonDeviceToHIPPass() {
+  return std::make_unique<::LowerTritonDeviceToHIP>();
 }
 
 std::unique_ptr<OperationPass<mlir::ModuleOp>>
-mlir::comet::createLowerTritonDeviceToCudaPass(
+mlir::comet::createLowerTritonDeviceToHIPPass(
     int numWarps, int threadsPerWarp, int numCTAs, int numStages,
-    int computeCapability, mlir::tensorAlgebra::GPUCompilationFormat format) {
-  return std::make_unique<::LowerTritonDeviceToCuda>(
+    std::string computeCapability,
+    mlir::tensorAlgebra::GPUCompilationFormat format) {
+  return std::make_unique<::LowerTritonDeviceToHIP>(
       numWarps, threadsPerWarp, numCTAs, numStages, computeCapability, format);
 }
 
-class LowerGpuHostToCuda
-    : public mlir::comet::LowerHostToCudaBase<LowerGpuHostToCuda> {
+class LowerGpuHostToHIP
+    : public mlir::comet::LowerHostToHIPBase<LowerGpuHostToHIP> {
 public:
-  LowerGpuHostToCuda() = default;
+  LowerGpuHostToHIP() = default;
 
   void runOnOperation() override {
     mlir::ModuleOp modOp = getOperation();
@@ -330,67 +302,67 @@ public:
     auto mallocI32Type = builder.getFunctionType({builder.getIndexType()},
                                                  builder.getIndexType());
     auto mallocI32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocI32", mallocI32Type);
+        builder.getUnknownLoc(), "HipMallocI32", mallocI32Type);
     mallocI32.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(mallocI32);
 
     auto mallocI64Type = builder.getFunctionType({builder.getIndexType()},
                                                  builder.getIndexType());
     auto mallocI64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocI64", mallocI64Type);
+        builder.getUnknownLoc(), "HipMallocI64", mallocI64Type);
     mallocI64.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(mallocI64);
 
     auto mallocF32Type = builder.getFunctionType({builder.getIndexType()},
                                                  builder.getIndexType());
     auto mallocF32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocF32", mallocF32Type);
+        builder.getUnknownLoc(), "HipMallocF32", mallocF32Type);
     mallocF32.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(mallocF32);
 
     auto mallocF64Type = builder.getFunctionType({builder.getIndexType()},
                                                  builder.getIndexType());
     auto mallocF64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMallocF64", mallocF64Type);
+        builder.getUnknownLoc(), "HipMallocF64", mallocF64Type);
     mallocF64.setVisibility(mlir::SymbolTable::Visibility::Private);
     modOp.push_back(mallocF64);
 
-    auto cudaMemcpyI32Type = builder.getFunctionType(
+    auto HipMemcpyI32Type = builder.getFunctionType(
         {builder.getIndexType(), memrefI32, builder.getIndexType()}, {});
-    auto cudaMemcpyI32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyI32", cudaMemcpyI32Type);
-    cudaMemcpyI32.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyI32);
+    auto HipMemcpyI32 = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyI32", HipMemcpyI32Type);
+    HipMemcpyI32.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyI32);
 
-    auto cudaMemcpyI64Type = builder.getFunctionType(
+    auto HipMemcpyI64Type = builder.getFunctionType(
         {builder.getIndexType(), memrefI64, builder.getIndexType()}, {});
-    auto cudaMemcpyI64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyI64", cudaMemcpyI64Type);
-    cudaMemcpyI64.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyI64);
+    auto HipMemcpyI64 = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyI64", HipMemcpyI64Type);
+    HipMemcpyI64.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyI64);
 
-    auto cudaMemcpyIndexType = builder.getFunctionType(
+    auto HipMemcpyIndexType = builder.getFunctionType(
         {builder.getIndexType(), memrefIndex, builder.getIndexType()}, {});
-    auto cudaMemcpyIndex = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyIndex", cudaMemcpyIndexType);
-    cudaMemcpyIndex.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyIndex);
+    auto HipMemcpyIndex = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyIndex", HipMemcpyIndexType);
+    HipMemcpyIndex.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyIndex);
 
-    auto cudaMemcpyF32Type = builder.getFunctionType(
+    auto HipMemcpyF32Type = builder.getFunctionType(
         {builder.getIndexType(), memrefF32, builder.getIndexType()}, {});
-    auto cudaMemcpyF32 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyF32", cudaMemcpyF32Type);
-    cudaMemcpyF32.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyF32);
+    auto HipMemcpyF32 = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyF32", HipMemcpyF32Type);
+    HipMemcpyF32.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyF32);
 
-    auto cudaMemcpyF64Type = builder.getFunctionType(
+    auto HipMemcpyF64Type = builder.getFunctionType(
         {builder.getIndexType(), memrefF64, builder.getIndexType()}, {});
-    auto cudaMemcpyF64 = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaMemcpyF64", cudaMemcpyF64Type);
-    cudaMemcpyF64.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaMemcpyF64);
+    auto HipMemcpyF64 = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipMemcpyF64", HipMemcpyF64Type);
+    HipMemcpyF64.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipMemcpyF64);
 
-    auto cudaLaunchKernelT = builder.getFunctionType(
+    auto HipLaunchKernelT = builder.getFunctionType(
         {builder.getIndexType(), builder.getIndexType(), builder.getIndexType(),
          builder.getIndexType(), builder.getIndexType(), builder.getIndexType(),
          MemRefType::get({ShapedType::kDynamic}, builder.getIndexType()),
@@ -398,29 +370,23 @@ public:
          builder.getIndexType(), builder.getIntegerType(32),
          builder.getIndexType(), builder.getIndexType()},
         {});
-    auto cudaLaunchKernel = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaLaunchKernel", cudaLaunchKernelT);
-    cudaLaunchKernel.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaLaunchKernel);
+    auto HipLaunchKernel = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipLaunchKernel", HipLaunchKernelT);
+    HipLaunchKernel.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipLaunchKernel);
 
-    auto cudaSetModuleImageT = builder.getFunctionType(
+    auto HipSetModuleImageT = builder.getFunctionType(
         {LLVM::LLVMPointerType::get(builder.getContext())}, {});
-    auto cudaSetModuleImage = builder.create<mlir::func::FuncOp>(
-        builder.getUnknownLoc(), "cudaSetModuleImage", cudaSetModuleImageT);
-    cudaSetModuleImage.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaSetModuleImage);
+    auto HipSetModuleImage = builder.create<mlir::func::FuncOp>(
+        builder.getUnknownLoc(), "HipSetModuleImage", HipSetModuleImageT);
+    HipSetModuleImage.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipSetModuleImage);
 
-    auto cudaFreeT = builder.getFunctionType({builder.getIndexType()}, {});
-    auto cudaFree = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(),
-                                                       "cudaFree", cudaFreeT);
-    cudaFree.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaFree);
-    
-    auto cudaFinitT = builder.getFunctionType({}, {});
-    auto cudaFinit = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(), "cudaFinit", cudaFinitT);
-    cudaFinit.setVisibility(mlir::SymbolTable::Visibility::Private);
-    modOp.push_back(cudaFinit);
-
+    auto HipFreeT = builder.getFunctionType({builder.getIndexType()}, {});
+    auto HipFree = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(),
+                                                      "HipFree", HipFreeT);
+    HipFree.setVisibility(mlir::SymbolTable::Visibility::Private);
+    modOp.push_back(HipFree);
 
     std::vector<mlir::gpu::LaunchFuncOp> launchOps;
 
@@ -448,7 +414,7 @@ public:
             launchOp->getLoc(), LLVM::LLVMPointerType::get(&getContext()),
             "gpu_code");
         builder.create<mlir::func::CallOp>(launchOp.getLoc(),
-                                           "cudaSetModuleImage", TypeRange(),
+                                           "HipSetModuleImage", TypeRange(),
                                            ValueRange({gpu_code}));
 
         initFuncs.insert(launchOp->getParentOfType<mlir::func::FuncOp>());
@@ -466,7 +432,7 @@ public:
         // builder.create<arith::IndexCastOp>(operand.get().getLoc(),
         // builder.getIntegerType(32), operand.get());
         // //   // operand.set(i32Operand);
-        // //   cudaCallArgs.push_back(i32Operand);
+        // //   HipCallArgs.push_back(i32Operand);
         // }
         // else
         if (isa<MemRefType>(operand.get().getType())) {
@@ -554,23 +520,23 @@ public:
       if (FloatType floatType = mlir::dyn_cast<FloatType>(
               gpuAlloc.getMemref().getType().getElementType())) {
         int width = floatType.getWidth();
-        auto cudaOp = builder.create<mlir::func::CallOp>(
-            gpuAlloc->getLoc(), "cudaMallocF" + std::to_string(width),
+        auto HipOp = builder.create<mlir::func::CallOp>(
+            gpuAlloc->getLoc(), "HipMallocF" + std::to_string(width),
             TypeRange(builder.getIndexType()), ValueRange(allocSize));
-        gpuAlloc->replaceAllUsesWith(cudaOp);
+        gpuAlloc->replaceAllUsesWith(HipOp);
       } else if (IntegerType intType = mlir::dyn_cast<IntegerType>(
                      gpuAlloc.getMemref().getType().getElementType())) {
         int width = intType.getWidth();
-        auto cudaOp = builder.create<mlir::func::CallOp>(
-            gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(width),
+        auto HipOp = builder.create<mlir::func::CallOp>(
+            gpuAlloc->getLoc(), "HipMallocI" + std::to_string(width),
             TypeRange(builder.getIndexType()), ValueRange(allocSize));
-        gpuAlloc->replaceAllUsesWith(cudaOp);
+        gpuAlloc->replaceAllUsesWith(HipOp);
       } else if (IndexType intType = mlir::dyn_cast<IndexType>(
                      gpuAlloc.getMemref().getType().getElementType())) {
-        auto cudaOp = builder.create<mlir::func::CallOp>(
-            gpuAlloc->getLoc(), "cudaMallocI" + std::to_string(64),
+        auto HipOp = builder.create<mlir::func::CallOp>(
+            gpuAlloc->getLoc(), "HipMallocI" + std::to_string(64),
             TypeRange(builder.getIndexType()), ValueRange(allocSize));
-        gpuAlloc->replaceAllUsesWith(cudaOp);
+        gpuAlloc->replaceAllUsesWith(HipOp);
       }
       gpuAlloc->erase();
     }
@@ -589,7 +555,7 @@ public:
           (isa<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp()) &&
            cast<mlir::func::CallOp>(cpy.getOperand(0).getDefiningOp())
                .getCallee()
-               .starts_with("cudaMalloc"))) {
+               .starts_with("HipMalloc"))) {
         auto cast = builder.create<mlir::memref::CastOp>(
             cpy->getLoc(),
             MemRefType::get({ShapedType::kDynamic},
@@ -601,27 +567,27 @@ public:
                     .getElementType())) {
           int width = intType.getWidth();
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
+              cpy->getLoc(), "HipMemcpyI" + std::to_string(width), TypeRange(),
               ValueRange({cpy.getOperand(0), cast, hToD}));
         } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
                        mlir::cast<MemRefType>(cpy.getOperand(1).getType())
                            .getElementType())) {
           int width = floatType.getWidth();
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
+              cpy->getLoc(), "HipMemcpyF" + std::to_string(width), TypeRange(),
               ValueRange({cpy.getOperand(0), cast, hToD}));
         } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
                        mlir::cast<MemRefType>(cpy.getOperand(1).getType())
                            .getElementType())) {
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
+              cpy->getLoc(), "HipMemcpyIndex", TypeRange(),
               ValueRange({cpy.getOperand(0), cast, hToD}));
         }
       } else if (cpy.getOperand(1).getDefiningOp() &&
                  (isa<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp()) &&
                   cast<mlir::func::CallOp>(cpy.getOperand(1).getDefiningOp())
                       .getCallee()
-                      .starts_with("cudaMalloc"))) {
+                      .starts_with("HipMalloc"))) {
         auto cast = builder.create<mlir::memref::CastOp>(
             cpy->getLoc(),
             MemRefType::get({ShapedType::kDynamic},
@@ -633,20 +599,20 @@ public:
                     .getElementType())) {
           int width = intType.getWidth();
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyI" + std::to_string(width), TypeRange(),
+              cpy->getLoc(), "HipMemcpyI" + std::to_string(width), TypeRange(),
               ValueRange({cpy.getOperand(1), cast, dToH}));
         } else if (FloatType floatType = mlir::dyn_cast<FloatType>(
                        mlir::cast<MemRefType>(cpy.getOperand(0).getType())
                            .getElementType())) {
           int width = floatType.getWidth();
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyF" + std::to_string(width), TypeRange(),
+              cpy->getLoc(), "HipMemcpyF" + std::to_string(width), TypeRange(),
               ValueRange({cpy.getOperand(1), cast, dToH}));
         } else if (IndexType indexType = mlir::dyn_cast<IndexType>(
                        mlir::cast<MemRefType>(cpy.getOperand(0).getType())
                            .getElementType())) {
           builder.create<mlir::func::CallOp>(
-              cpy->getLoc(), "cudaMemcpyIndex", TypeRange(),
+              cpy->getLoc(), "HipMemcpyIndex", TypeRange(),
               ValueRange({cpy.getOperand(1), cast, dToH}));
         }
       }
@@ -717,7 +683,7 @@ public:
                                    .str()];
       if (funcs.find(funcName) == funcs.end()) {
         // We need the global string to include the \0 character so that it is
-        // correctly read by the cuda lib Hence the StringRef(funcName.c_str(),
+        // correctly read by the Hip lib Hence the StringRef(funcName.c_str(),
         // funcName.size()+1)
         funcs[funcName] = LLVM::createGlobalString(
             modOp->getLoc(), builder, funcName + "_str",
@@ -738,7 +704,7 @@ public:
           ttFunc->getAttrOfType<IntegerAttr>("triton_gpu.threads-per-warp")
               .getInt());
       builder.create<mlir::func::CallOp>(
-          launchOp->getLoc(), "cudaLaunchKernel", TypeRange(),
+          launchOp->getLoc(), "HipLaunchKernel", TypeRange(),
           ValueRange({launchOp.getGridSizeX(), launchOp.getGridSizeY(),
                       launchOp.getGridSizeZ(), launchOp.getBlockSizeX(),
                       launchOp.getBlockSizeY(), launchOp.getBlockSizeZ(),
@@ -757,25 +723,19 @@ public:
 
     for (auto dealloc : gpuDeallocs) {
       builder.setInsertionPoint(dealloc);
-      builder.create<mlir::func::CallOp>(dealloc->getLoc(), "cudaFree",
+      builder.create<mlir::func::CallOp>(dealloc->getLoc(), "HipFree",
                                          TypeRange(),
                                          ValueRange(dealloc->getOperand(0)));
       dealloc.erase();
     }
-    func::FuncOp funcOp = *initFuncs.begin();
-    builder.setInsertionPoint(funcOp.getBody().front().getTerminator());
-
-    builder.create<mlir::func::CallOp>(funcOp.getBody().front().getTerminator()->getLoc(), "cudaFinit", TypeRange(), ValueRange());
-    modOp->walk([](mlir::triton::FuncOp TTFuncOp) {
-      TTFuncOp.erase();
-    });
-    modOp->walk([](mlir::gpu::GPUModuleOp gpuMod) {gpuMod.erase();});
+    modOp->walk([](mlir::triton::FuncOp TTFuncOp) { TTFuncOp.erase(); });
+    modOp->walk([](mlir::gpu::GPUModuleOp gpuMod) { gpuMod.erase(); });
   }
 };
 
 std::unique_ptr<OperationPass<mlir::ModuleOp>>
-mlir::comet::createLowerGpuHostToCudaPass() {
-  // std::cout << "Running createLowerGpuHostToCudaPass\n";
+mlir::comet::createLowerGpuHostToHIPPass() {
+  // std::cout << "Running createLowerGpuHostToHIPPass\n";
 
-  return std::make_unique<::LowerGpuHostToCuda>();
+  return std::make_unique<::LowerGpuHostToHIP>();
 }

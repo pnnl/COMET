@@ -26,6 +26,7 @@ set(LIBS
   MLIRIR
   MLIRParser
   MLIRPass
+  MLIRFuncAllExtensions
   MLIRTransforms
   COMETUtils
   COMETTensorAlgebraDialect
@@ -47,6 +48,7 @@ if(ENABLE_GPU_TARGET)
     ${LIBS}
     COMETGpuToTriton
     COMETTritonToCuda
+    COMETTritonToHIP
     ${triton_libs}
   )
 endif()
