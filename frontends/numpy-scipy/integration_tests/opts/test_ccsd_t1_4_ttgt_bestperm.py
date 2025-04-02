@@ -8,7 +8,7 @@ def run_numpy(v,t1):
 
 	return i0
 
-@comet.compile(flags="--opt-bestperm-ttgt --convert-tc-to-ttgt")
+@comet.compile(flags="--convert-tc-to-ttgt")
 def run_comet_with_jit(v,t1):
 	i0 = comet.einsum('cima,mc->ia', v,t1)
 

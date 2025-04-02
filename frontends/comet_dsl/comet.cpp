@@ -235,10 +235,7 @@ static cl::opt<int> GPUNumStages("gpu-num-stages", cl::init(1), cl::desc("GPU nu
 static cl::opt<bool> OptMultiOpFactorization("opt-multiop-factorize",
                                              cl::desc("Multi operations factorization optimization"));
 
-static cl::opt<bool> IsSelectBestPermTTGT("opt-bestperm-ttgt",
-                                          cl::desc("Select the best index permutation for TTGT, otherwise the first appropriate permutation"));
-
-static cl::opt<int> selectedPermNum("perm-num", cl::init(1),
+static cl::opt<int> selectedPermNum("perm-num", cl::init(-1),
                                     cl::ZeroOrMore, cl::desc("Select the permutation number to choose"));
 
 /// =============================================================================
@@ -499,7 +496,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (IsLoweringTCtoTTGT)
   {
     /// Sparse input and dense input/output tensor declarations needed be lowered before for TTGT pass
-    optPM.addPass(mlir::comet::createLoweringTTGTPass(IsSelectBestPermTTGT, selectedPermNum, IsPrintFlops));
+    optPM.addPass(mlir::comet::createLoweringTTGTDynPass(selectedPermNum, IsPrintFlops));
+    // optPM.addPass(mlir::comet::createLoweringTTGTPass(true, selectedPermNum, IsPrintFlops));
   }
 
   // /// =============================================================================
@@ -510,10 +508,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::comet::createLinAlgMatmulTilingPass());
   }
 
-  if (OptCallToMatMulMicroKernel)
-  {
-    optPM.addPass(mlir::comet::createLinAlgMatmulMicroKernelPass());
-  }
 
   /// =============================================================================
   /// Lowering all the operations to loops
@@ -582,6 +576,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   pm.addPass(mlir::createCSEPass());
   pm.addPass(mlir::memref::createFoldMemRefAliasOpsPass());
   pm.addPass(mlir::createCanonicalizerPass());
+  if (OptCallToMatMulMicroKernel)
+  {
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createLinAlgMatmulMicroKernelPass());
+  }
 #ifndef ENABLE_GPU_TARGET
   [[maybe_unused]] bool IsLoweringToTriton = false;
 #endif
@@ -669,8 +667,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Blanket-convert any remaining high-level vector ops to loops if any remain.
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
     /// Blanket-convert any remaining linalg ops to loops if any remain.
-    pm.addNestedPass<mlir::func::FuncOp>(
-        mlir::createConvertLinalgToLoopsPass());
+
+
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
     /// Blanket-convert any remaining affine ops if any remain.
     pm.addPass(mlir::createLowerAffinePass());
     /// Convert SCF to CF (always needed).
