@@ -1,0 +1,6 @@
+# Ignore everything
+*
+
+# Except
+!.gitignore
+!sh00.download_matrices.sh

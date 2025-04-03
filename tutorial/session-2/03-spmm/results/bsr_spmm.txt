@@ -1,0 +1,40 @@
+==896868== NVPROF is profiling process 896868, command: python3 1_bsr_spmm.py cant.mtx
+==896868== Profiling application: python3 1_bsr_spmm.py cant.mtx
+==896868== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   27.62%  54.218ms         8  6.7773ms  1.9190us  17.167ms  [CUDA memcpy DtoH]
+                   26.49%  52.009ms        11  4.7281ms  1.3430us  14.784ms  [CUDA memcpy HtoD]
+                   26.18%  51.388ms        10  5.1388ms  5.1340ms  5.1420ms  void bsrmm_small_core<double, int=2, int=3, bool=0>(int, int, int, int, double const *, int const *, int const *, int, double const *, int, int, double*, int, double, double, double const *, double const *, bool)
+                   19.64%  38.557ms        10  3.8557ms  3.8542ms  3.8576ms  cometpy_spmm__gpu_block_y_size_4__gpu_block_x_size_64__gpu_block_r_size_4_kernel0
+                    0.08%  148.72us         1  148.72us  148.72us  148.72us  [CUDA memset]
+      
+==897272== NVPROF is profiling process 897272, command: python3 1_bsr_spmm.py pdb1HYS.mtx
+==897272== Profiling application: python3 1_bsr_spmm.py pdb1HYS.mtx
+==897272== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   33.13%  52.798ms        10  5.2798ms  5.2757ms  5.2826ms  void bsrmm_small_core<double, int=2, int=3, bool=0>(int, int, int, int, double const *, int const *, int const *, int, double const *, int, int, double*, int, double, double, double const *, double const *, bool)
+                   24.11%  38.428ms        10  3.8428ms  3.8385ms  3.8495ms  cometpy_spmm__gpu_block_y_size_4__gpu_block_x_size_64__gpu_block_r_size_4_kernel0
+                   21.40%  34.103ms         8  4.2629ms  1.8880us  10.476ms  [CUDA memcpy DtoH]
+                   21.31%  33.973ms        11  3.0884ms  1.3430us  8.5937ms  [CUDA memcpy HtoD]
+                    0.06%  89.271us         1  89.271us  89.271us  89.271us  [CUDA memset]
+      
+==897575== NVPROF is profiling process 897575, command: python3 1_bsr_spmm.py rma10.mtx
+==897575== Profiling application: python3 1_bsr_spmm.py rma10.mtx
+==897575== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   32.77%  63.524ms        10  6.3524ms  6.3455ms  6.3606ms  void bsrmm_small_core<double, int=2, int=3, bool=0>(int, int, int, int, double const *, int const *, int const *, int, double const *, int, int, double*, int, double, double, double const *, double const *, bool)
+                   25.60%  49.620ms        10  4.9620ms  4.9585ms  4.9648ms  cometpy_spmm__gpu_block_y_size_4__gpu_block_x_size_64__gpu_block_r_size_4_kernel0
+                   21.15%  40.998ms         8  5.1248ms  1.7910us  13.217ms  [CUDA memcpy DtoH]
+                   20.43%  39.597ms        11  3.5997ms  1.2470us  11.066ms  [CUDA memcpy HtoD]
+                    0.06%  112.82us         1  112.82us  112.82us  112.82us  [CUDA memset]
+      
+==897842== NVPROF is profiling process 897842, command: python3 1_bsr_spmm.py shipsec1.mtx
+==897842== Profiling application: python3 1_bsr_spmm.py shipsec1.mtx
+==897842== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   28.58%  121.26ms         8  15.157ms  1.7600us  38.649ms  [CUDA memcpy DtoH]
+                   27.19%  115.34ms        11  10.485ms  1.2480us  33.809ms  [CUDA memcpy HtoD]
+                   23.64%  100.30ms        10  10.030ms  10.022ms  10.043ms  cometpy_spmm__gpu_block_y_size_8__gpu_block_x_size_64__gpu_block_r_size_8_kernel0
+                   20.51%  87.011ms        10  8.7011ms  8.6972ms  8.7070ms  void bsrmm_small_core<double, int=3, int=3, bool=0>(int, int, int, int, double const *, int const *, int const *, int, double const *, int, int, double*, int, double, double, double const *, double const *, bool)
+                    0.08%  327.07us         1  327.07us  327.07us  327.07us  [CUDA memset]
+      

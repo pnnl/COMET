@@ -1,0 +1,1 @@
+pushd ../../../ && git apply  tutorial/session-2/03-spmm/patch_spmm.patch && popd

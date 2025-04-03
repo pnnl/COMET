@@ -1,0 +1,4 @@
+{'user_api': 'blas', 'internal_api': 'openblas', 'num_threads': 8, 'prefix': 'libopenblas', 'filepath': '/opt/homebrew/Cellar/openblas/0.3.28/lib/libopenblasp-r0.3.28.dylib', 'version': '0.3.28', 'threading_layer': 'openmp', 'architecture': 'neoversen1'}
+{'user_api': 'openmp', 'internal_api': 'openmp', 'num_threads': 8, 'prefix': 'libgomp', 'filepath': '/opt/homebrew/Cellar/gcc/14.2.0/lib/gcc/current/libgomp.1.dylib', 'version': None}
+Average Execution Time for Numpy: 0.486993 seconds
+Average Execution Time for COMET: 0.330667 seconds

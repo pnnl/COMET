@@ -1,0 +1,22 @@
+# tensor contraction from ccsd_t1 method
+
+def main() {
+    #IndexLabel Declarations
+    IndexLabel [i, c] = [64];
+    IndexLabel [m, n, a] = [128];
+
+    Tensor<double> v([i, c, m, n], {Dense});
+    Tensor<double> t2([m, n, c, a], {Dense});
+    Tensor<double> i0([i, a], {Dense});
+
+    v[i, c, m, n] = 2.3;
+    t2[m, n, c, a] = 3.4;
+    i0[i, a] = 0.0;
+
+    #Tensor contraction
+    var time0 = getTime();
+    i0[i, a] = v[i, c, m, n] * t2[m, n, c, a];   #ccsd_t1 21st expression
+    var time1 = getTime();
+	printElapsedTime(time0, time1);
+    
+}

@@ -1,0 +1,23 @@
+# Dense matrix matrix multiplication
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [4096];
+	IndexLabel [j] = [4096];  
+	IndexLabel [k] = [4096];           
+
+	#Tensor Declarations
+	Tensor<double> A([i, j], {Dense});	  
+	Tensor<double> B([j, k], {Dense});
+	Tensor<double> C([i, k], {Dense});
+
+	#Tensor Fill Operation
+	A[i, j] = 2.2;
+	B[j, k] = 3.4;
+	C[i, k] = 0.0;
+
+	var time0 = getTime();
+	C[i, k] = A[i, j] * B[j, k];
+	var time1 = getTime();
+	printElapsedTime(time0, time1);
+}

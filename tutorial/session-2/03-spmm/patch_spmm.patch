@@ -1,0 +1,79 @@
+diff --git a/blis b/blis
+--- a/blis
++++ b/blis
+@@ -1 +1 @@
+-Subproject commit a0b04e3c007f1207e5678bf20c07752906742fb7
++Subproject commit a0b04e3c007f1207e5678bf20c07752906742fb7-dirty
+diff --git a/lib/Conversion/GpuToTriton/GpuToTritonPass.cpp b/lib/Conversion/GpuToTriton/GpuToTritonPass.cpp
+index 233c53e..d9bf0bf 100644
+--- a/lib/Conversion/GpuToTriton/GpuToTritonPass.cpp
++++ b/lib/Conversion/GpuToTriton/GpuToTritonPass.cpp
+@@ -1082,6 +1082,7 @@ public:
+     //   COMET_ERRS << forOp.getLowerBound();
+     //   COMET_ERRS << forOp.getStep();
+         std::vector<mlir::OpOperand*> maintain;
++
+       if(mlir::isa<mlir::arith::ConstantIntOp>(forOp.getLowerBound().getDefiningOp()) && mlir::isa<mlir::arith::ConstantIntOp>(forOp.getStep().getDefiningOp()) && mlir::cast<mlir::arith::ConstantIntOp>(forOp.getStep().getDefiningOp()).value() == 1)
+       {
+         auto ops = forOp->getRegion(0).getOps<mlir::triton::LoadOp>();
+@@ -1342,6 +1343,7 @@ public:
+           }
+         }
+       }
++
+       // COMET_ERRS << ret->getOperation()->getParentOfType<mlir::ModuleOp>();
+ 
+       return mlir::success();
+@@ -1976,22 +1978,22 @@ public:
+ 
+       for(auto k_op : llvm::enumerate(launchOp.getKernelOperands()))
+       {
+-        if(arith::ConstantIndexOp k = llvm::dyn_cast_if_present<arith::ConstantIndexOp>(k_op.value().getDefiningOp()))
+-        {
+-          if(k.value() == 0 || k.value() == 1)
+-          {
+-            bitvector.set(k_op.index());
+-            builder.setInsertionPointToStart(&gpufuncOp.getFunctionBody().getBlocks().front());
+-            gpufuncOp.getFunctionBody().getArgument(k_op.index()).replaceAllUsesWith(builder.create<arith::ConstantIndexOp>(gpufuncOp->getLoc(), k.value()));
+-          }
+-          else if(k.value() == b_size_x || k.value() == b_size_y)
+-          {
+-            bitvector.set(k_op.index());
+-            builder.setInsertionPointToStart(&gpufuncOp.getFunctionBody().getBlocks().front());
+-            auto k_val = (k.value() == b_size_x) ? b_size_x : b_size_y;
+-            gpufuncOp.getFunctionBody().getArgument(k_op.index()).replaceAllUsesWith(builder.create<arith::ConstantIndexOp>(funcOp->getLoc(), k_val));
+-          }
+-        }
++        // if(arith::ConstantIndexOp k = llvm::dyn_cast_if_present<arith::ConstantIndexOp>(k_op.value().getDefiningOp()))
++        // {
++        //   if(k.value() == 0 || k.value() == 1)
++        //   {
++        //     bitvector.set(k_op.index());
++        //     builder.setInsertionPointToStart(&gpufuncOp.getFunctionBody().getBlocks().front());
++        //     gpufuncOp.getFunctionBody().getArgument(k_op.index()).replaceAllUsesWith(builder.create<arith::ConstantIndexOp>(gpufuncOp->getLoc(), k.value()));
++        //   }
++        //   else if(k.value() == b_size_x || k.value() == b_size_y)
++        //   {
++        //     bitvector.set(k_op.index());
++        //     builder.setInsertionPointToStart(&gpufuncOp.getFunctionBody().getBlocks().front());
++        //     auto k_val = (k.value() == b_size_x) ? b_size_x : b_size_y;
++        //     gpufuncOp.getFunctionBody().getArgument(k_op.index()).replaceAllUsesWith(builder.create<arith::ConstantIndexOp>(funcOp->getLoc(), k_val));
++        //   }
++        // }
+         // else
+         // {
+         //   break;
+@@ -2007,6 +2009,7 @@ public:
+       
+       gpufuncOp.eraseArguments(bitvector);
+     }
++
+     std::map<std::string, int> kernel_names;
+     patterns.insert<BlockifyReduction>(typeConverter, context);
+     // patterns.insert<GScfIfPattern>(typeConverter, context);
+diff --git a/triton b/triton
+--- a/triton
++++ b/triton
+@@ -1 +1 @@
+-Subproject commit 6fc969d896bd65e48b2dba1394d92b542652e5a4
++Subproject commit 6fc969d896bd65e48b2dba1394d92b542652e5a4-dirty

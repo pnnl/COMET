@@ -1,0 +1,27 @@
+# Dense matrix - sparse matrix  multiplication
+# Sparse matrix is in CSR format
+
+def main() {
+	IndexLabel [a] = [?];
+	IndexLabel [b] = [?];
+	IndexLabel [c] = [256];             
+
+	#Tensor Declarations
+	Tensor<double> A([a, b], {CSR});	  
+	Tensor<double> B([b, c], {Dense});
+	Tensor<double> C([a, c], {Dense});
+
+    A[a, b] = comet_read(0);
+
+	#Tensor Fill Operation
+	B[b, c] = 1.7;
+	C[a, c] = 0.0;
+
+	var time0 = getTime();
+	C[a, c] = A[a, b] * B[b, c];
+	var time1 = getTime();
+    var ntri = SUM(C[a, c]);
+    print(ntri);
+	printElapsedTime(time0, time1);
+
+}
