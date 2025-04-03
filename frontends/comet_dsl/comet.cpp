@@ -583,20 +583,36 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
     pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createLinAlgMatmulMicroKernelPass());
   }
+  pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
+  /// Blanket-convert any remaining linalg ops to loops if any remain.
+  pm.addNestedPass<mlir::func::FuncOp>(
+    mlir::createConvertLinalgToLoopsPass());
+  /// Blanket-convert any remaining affine ops if any remain.
+  pm.addPass(mlir::createLowerAffinePass());
+  /// Convert SCF to CF (always needed).
+  pm.addPass(mlir::createForallToParallelLoopPass());
+  pm.addPass(mlir::createLoopInvariantCodeMotionPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+
 #ifndef ENABLE_GPU_TARGET
   [[maybe_unused]] bool IsLoweringToTriton = false;
 #endif
 #if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
   if ((CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA) && (emitTriton_ || emitLLVM || isLoweringToLLVM || IsLoweringToTriton))
   {
+    #ifdef ENABLE_FPGA_TARGET
     if (CodegenTarget == TargetDevice::FPGA)
     {
       pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuFPGAPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
     }
-    else
+    #endif
+    #ifdef ENABLE_GPU_TARGET
+    if (CodegenTarget == TargetDevice::GPU)
     {
       pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
     }
+    #endif
+
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
     pm.addPass(mlir::createParallelLoopToGpuPass());
     pm.addPass(mlir::createGpuKernelOutliningPass());
@@ -683,15 +699,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     optPM.addPass(mlir::createCanonicalizerPass());
     /// Blanket-convert any remaining high-level vector ops to loops if any remain.
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
-    /// Blanket-convert any remaining linalg ops to loops if any remain.
 
-
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
-    /// Blanket-convert any remaining affine ops if any remain.
-    pm.addPass(mlir::createLowerAffinePass());
-    /// Convert SCF to CF (always needed).
-    pm.addPass(mlir::createForallToParallelLoopPass());
     pm.addPass(mlir::createConvertSCFToOpenMPPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());
