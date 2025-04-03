@@ -56,7 +56,7 @@ if(ENABLE_GPU_TARGET)
     COMETParallelLoopsToGpu
     COMETGpuToBlockedGpu
     COMETBlockedGpuToTriton
-    COMETGpuToTriton
+    #COMETGpuToTriton
     COMETPrepareGpuHost
     ${triton_libs}
   )
