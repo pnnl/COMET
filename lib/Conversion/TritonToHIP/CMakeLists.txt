@@ -12,4 +12,5 @@ add_llvm_library(COMETTritonToHIP
     TritonGPUIR
     TritonGPUTransforms
     TritonAMDGPUTransforms
+    COMETGPUUtils
 )

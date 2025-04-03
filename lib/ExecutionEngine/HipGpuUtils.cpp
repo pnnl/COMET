@@ -159,7 +159,7 @@ HipLaunchKernel(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ,
 
 extern "C" __attribute__((visibility("default"))) void HipFinit() 
 {
-  hipModuleUnload(hipModule);
+  HIP_CHECK(hipModuleUnload(hipModule));
   hipModule = NULL;
   moduleImg = NULL;
 }
