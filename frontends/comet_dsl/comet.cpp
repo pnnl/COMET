@@ -34,7 +34,6 @@
 #endif
 
 
-#include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
@@ -92,7 +91,6 @@
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/IR/DialectRegistry.h"
-#include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
@@ -102,10 +100,11 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
-#if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
+#if defined(ENABLE_FPGA_TARGET) | defined(ENABLE_GPU_TARGET)
 #include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
 #endif
 #ifdef ENABLE_GPU_TARGET
+#include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
@@ -655,8 +654,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
     if (GPUComputeCapability.getValue().find("sm_") != std::string::npos ||
         GPUComputeCapability.getValue().find("compute_") != std::string::npos) 
-  {
-    pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
+    {
+      pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
     } 
     else 
     {
@@ -748,8 +747,7 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::triton::TritonDialect>();
   mlir::func::registerInlinerExtension(registry);
   context.appendDialectRegistry(registry);
-
-  registerLLVMDialectTranslation(context);
+  
   registerLLVMDialectTranslation(context);
   registerBuiltinDialectTranslation(context);
   registerNVVMDialectTranslation(context);
@@ -768,6 +766,7 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::scf::SCFDialect>();
   context.loadDialect<mlir::bufferization::BufferizationDialect>();
   context.loadDialect<mlir::index::IndexDialect>();
+  context.loadDialect<mlir::omp::OpenMPDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
 

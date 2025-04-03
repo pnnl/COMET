@@ -49,10 +49,12 @@ $ export PYTHON_EXECUTABLE=$(which python3.x) # Replace 3.x with your version. S
 $ cd $COMET_SRC
 $ mkdir llvm/build
 $ cd llvm/build
-# NVPTX is only required if targetting Nvidia GPUs
+# AArch64 for ARM architectures, X86 for X86
+# -DCMAKE_OSX_ARCHITECTURES="arm64" if using a ARM-based Mac
+# NVPTX/AMDGPU is only required if targetting Nvidia/AMD GPUs
 $ cmake -G Ninja ../llvm \
     -DLLVM_ENABLE_PROJECTS="mlir;openmp;clang" \
-    -DLLVM_TARGETS_TO_BUILD="AArch64;X86;NVPTX" \
+    -DLLVM_TARGETS_TO_BUILD="AArch64;X86;NVPTX;AMDGPU" \
     -DCMAKE_OSX_ARCHITECTURES="arm64" \
     -DPython3_EXECUTABLE=${PYTHON_EXECUTABLE} \
     -DLLVM_ENABLE_ASSERTIONS=ON \
@@ -95,12 +97,13 @@ $ mkdir build
 $ cd build
 # Omit -DENABLE_GPU_TARGET, -DCUDA_COMPUTE_CAPABILITY and -DTRITON_PATH
 # if only targetting CPUs
-# In -DCUDA_COMPUTE_CAPABILITY=70 replace 70 with the desired value
+# In -DDEVICE_COMPUTE_CAPABILITY=sm_70 replace sm_70 with the desired value:
+# sm_<numeric> for Nvidia, specific architecture for AMD e.g., gfx908
 $ cmake -G Ninja .. \
     -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
     -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
     -DENABLE_GPU_TARGET=ON \
-    -DCUDA_COMPUTE_CAPABILITY=70 \
+    -DDEVICE_COMPUTE_CAPABILITY=sm_70 \
     -DTRITON_PATH=$PWD/../triton/ \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=Release
