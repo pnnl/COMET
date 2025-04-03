@@ -676,6 +676,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
       #ifdef ENABLE_NVIDIA_GPU_BACKEND
       int32_t cudaCC = std::stoi(GPUComputeCapability.substr(GPUComputeCapability.find("_")+1));
       pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, cudaCC, GPUTargetCompilationFormat));
+      pm.addPass(mlir::comet::createPrepareGpuHostPass());
       pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
       #else
       llvm::errs() << "Trying to lower to NVIDIA(?) device without enabling the NVIDIA backend \n";
@@ -685,6 +686,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     else {
       #ifdef ENABLE_AMD_GPU_BACKEND
       pm.addPass(mlir::comet::createLowerTritonDeviceToHIPPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
+      pm.addPass(mlir::comet::createPrepareGpuHostPass());
       pm.addPass(mlir::comet::createLowerGpuHostToHIPPass());
       #else
       llvm::errs() << "Trying to lower to AMDGPU(?) device without enabling the NVIDIA backend \n";
@@ -771,14 +773,14 @@ int main(int argc, char **argv)
   context.appendDialectRegistry(registry);
   registerLLVMDialectTranslation(context);
   registerBuiltinDialectTranslation(context);
-mlir::registerGPUDialectTranslation(context);
-#endif
-
-#ifdef ENABLE_AMD_GPU_BACKED
-mlir::registerROCDLDialectTranslation(context);
-#endif
-
-#ifdef ENABLE_NVIDIA_GPU_BACKED
+  mlir::registerGPUDialectTranslation(context);
+  #endif
+  
+  #ifdef ENABLE_AMD_GPU_BACKEND
+  mlir::registerROCDLDialectTranslation(context);
+  #endif
+  
+  #ifdef ENABLE_NVIDIA_GPU_BACKEND
   registerNVVMDialectTranslation(context);
   LLVMInitializeNVPTXTargetInfo();
   LLVMInitializeNVPTXTarget();
