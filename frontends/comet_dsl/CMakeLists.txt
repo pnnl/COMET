@@ -39,6 +39,7 @@ if(ENABLE_GPU_TARGET OR ENABLE_FPGA_TARGET)
     ${LIBS}
     MLIRGPUToLLVMIRTranslation
     COMETParallelLoopsToGpu
+    COMETParallelLoopsToGpuFPGA
   )
 endif()
 

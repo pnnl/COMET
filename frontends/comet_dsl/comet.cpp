@@ -27,6 +27,7 @@
 
 
 #ifdef ENABLE_FPGA_TARGET
+#include "comet/Conversion/ParallelLoopsToGpuFPGA/ParallelLoopsToGpuFPGA.h"
 #include "comet/Conversion/GpuToOCLSPIRV/GpuToOCLSPIRVPass.h"
 #include "comet/Conversion/GpuHostToMCLRT/GpuHostToMCLRTPass.h"
 #include "mlir/Conversion/GPUToSPIRV/GPUToSPIRVPass.h"
@@ -100,10 +101,8 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
-#if defined(ENABLE_FPGA_TARGET) | defined(ENABLE_GPU_TARGET)
-#include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
-#endif
 #ifdef ENABLE_GPU_TARGET
+#include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
 #include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
@@ -586,7 +585,14 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 #if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
   if ((CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA) && (emitTriton_ || emitLLVM || isLoweringToLLVM || IsLoweringToTriton))
   {
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
+    if (CodegenTarget == TargetDevice::FPGA)
+    {
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuFPGAPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
+    }
+    else
+    {
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
+    }
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
     pm.addPass(mlir::createParallelLoopToGpuPass());
     pm.addPass(mlir::createGpuKernelOutliningPass());
