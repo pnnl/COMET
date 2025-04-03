@@ -19,24 +19,21 @@ message(STATUS "Using COMET_UTILITY_LIBRARIES: ${COMET_UTILITY_LIBRARY_DIR}")
 set(COMET_INTEGRATION_TEST_DATA_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/data/)
 message(STATUS "Using COMET_INTEGRATION_TEST_DATA_DIR: ${COMET_INTEGRATION_TEST_DATA_DIR}")
 
-if(DEFINED DEVICE_COMPUTE_CAPABILITY)
+set(COMET_ENABLE_GPU  False)
 
+if(ENABLE_AMD_GPU_BACKEND)
+  find_package(hip)
+  if(${hip_FOUND})
+    set(COMET_ENABLE_GPU  True)
+  endif()
+endif()
+
+if(ENABLE_NVIDIA_GPU_BACKEND)
   find_package(CUDAToolkit)
   if(${CUDAToolkit_FOUND})
     set(COMET_ENABLE_GPU  True)
-  else()
-    find_package(hip)
-    if(${hip_FOUND})
-      set(COMET_ENABLE_GPU  True)
-    else()
-      set(COMET_ENABLE_GPU  False)
-    endif()
   endif()
-
-else()
-  set(COMET_ENABLE_GPU  False)
 endif()
-
 
 configure_lit_site_cfg(
   ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.py.in

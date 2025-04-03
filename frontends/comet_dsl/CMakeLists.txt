@@ -57,10 +57,23 @@ if(ENABLE_GPU_TARGET)
     COMETGpuToBlockedGpu
     COMETBlockedGpuToTriton
     COMETGpuToTriton
-    COMETTritonToCuda
-    COMETTritonToHIP
     COMETPrepareGpuHost
     ${triton_libs}
+  )
+endif()
+
+
+if(ENABLE_NVIDIA_GPU_BACKEND)
+  set(LIBS
+    ${LIBS}
+    COMETTritonToCuda
+  )
+endif()
+
+if(ENABLE_AMD_GPU_BACKEND)
+  set(LIBS
+    ${LIBS}
+    COMETTritonToHIP
   )
 endif()
 

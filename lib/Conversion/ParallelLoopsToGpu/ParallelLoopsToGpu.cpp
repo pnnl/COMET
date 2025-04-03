@@ -107,7 +107,7 @@ mlir::Value reassociateIndices(T op, mlir::OpBuilder& builder)
             }
         }
 
-        if(op.getIndices()[i].template isa<mlir::BlockArgument>()) 
+        if(mlir::isa<mlir::BlockArgument>(op.getIndices()[i])) 
         {
             dimVals.push_back(op.getIndices()[i]);
             expr =  expr * mlir::getAffineDimExpr(currDimPos++, op->getContext());

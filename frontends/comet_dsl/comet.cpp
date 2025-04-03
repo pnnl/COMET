@@ -673,30 +673,27 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
     if(GPUComputeCapability.getValue().find("sm_") != std::string::npos || GPUComputeCapability.getValue().find("compute_") != std::string::npos)
     {
+      #ifdef ENABLE_NVIDIA_GPU_BACKEND
       int32_t cudaCC = std::stoi(GPUComputeCapability.substr(GPUComputeCapability.find("_")+1));
       pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, cudaCC, GPUTargetCompilationFormat));
+      pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
+      #else
+      llvm::errs() << "Trying to lower to NVIDIA(?) device without enabling the NVIDIA backend \n";
+      return 6;
+      #endif
     }
     else {
+      #ifdef ENABLE_AMD_GPU_BACKEND
       pm.addPass(mlir::comet::createLowerTritonDeviceToHIPPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
-    }
-  }
-
-  if ((isLoweringToLLVM || emitLLVM) && CodegenTarget == TargetDevice::GPU)
-  {
-    pm.addPass(mlir::comet::createPrepareGpuHostPass());
-    if (GPUComputeCapability.getValue().find("sm_") != std::string::npos ||
-        GPUComputeCapability.getValue().find("compute_") != std::string::npos) 
-    {
-      pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
-    } 
-    else 
-    {
       pm.addPass(mlir::comet::createLowerGpuHostToHIPPass());
+      #else
+      llvm::errs() << "Trying to lower to AMDGPU(?) device without enabling the NVIDIA backend \n";
+      return 6;
+      #endif
     }
   }
 
 #endif
-
     optPM.addPass(mlir::createCanonicalizerPass());
     /// Blanket-convert any remaining high-level vector ops to loops if any remain.
 
@@ -772,17 +769,23 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::triton::TritonDialect>();
   mlir::func::registerInlinerExtension(registry);
   context.appendDialectRegistry(registry);
-  
   registerLLVMDialectTranslation(context);
   registerBuiltinDialectTranslation(context);
+mlir::registerGPUDialectTranslation(context);
+#endif
+
+#ifdef ENABLE_AMD_GPU_BACKED
+mlir::registerROCDLDialectTranslation(context);
+#endif
+
+#ifdef ENABLE_NVIDIA_GPU_BACKED
   registerNVVMDialectTranslation(context);
-  mlir::registerROCDLDialectTranslation(context);
-  mlir::registerGPUDialectTranslation(context);
   LLVMInitializeNVPTXTargetInfo();
   LLVMInitializeNVPTXTarget();
   LLVMInitializeNVPTXTargetMC();
   LLVMInitializeNVPTXAsmPrinter();
 #endif
+
   context.loadDialect<mlir::tensorAlgebra::TADialect>();
   context.loadDialect<mlir::indexTree::IndexTreeDialect>();
   context.loadDialect<mlir::arith::ArithDialect>();
@@ -791,7 +794,6 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::scf::SCFDialect>();
   context.loadDialect<mlir::bufferization::BufferizationDialect>();
   context.loadDialect<mlir::index::IndexDialect>();
-  context.loadDialect<mlir::omp::OpenMPDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
 
