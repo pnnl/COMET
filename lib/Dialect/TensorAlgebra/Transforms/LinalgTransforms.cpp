@@ -39,6 +39,8 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Pass/Pass.h"
@@ -267,12 +269,15 @@ static void addPatternForTiling(MLIRContext *context,
                                 StringRef filterName,
                                 StringRef updatedFilterName,
                                 ArrayRef<int64_t> tileSizes,
+                                bool parallel = false, 
                                 ArrayRef<int64_t> interchange = {})
 {
   scf::SCFTilingOptions tilingOptions;
   SmallVector<OpFoldResult> tileSizesOfr =
       getAsIndexOpFoldResult(context, tileSizes);
   tilingOptions.setTileSizes(tileSizesOfr).setInterchange(interchange);
+  tilingOptions.setLoopType(
+    parallel ? scf::SCFTilingOptions::LoopType::ForallOp: scf::SCFTilingOptions::LoopType::ForOp);
   LinalgTransformationFilter filter(StringAttr::get(context, filterName),
                                     StringAttr::get(context, updatedFilterName));
   patterns.add<LinalgTilingLoops>(context, tilingOptions, filter);
@@ -293,8 +298,8 @@ namespace
       int mc, kc, nc, mr, nr = 0;
       get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
 
-      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, {1, 2, 0});
-      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr, kc}, {1, 0, 2});
+      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, false, {1, 2, 0});
+      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr, kc}, false, {1, 0, 2});
 
       if (failed(applyPatternsAndFoldGreedily(getOperation(),
                                               std::move(tilingPatterns))))
@@ -338,7 +343,12 @@ static SmallVector<Type, 4> extractOperandTypes(Operation *op)
     /// information. Canonicalizing the type at the level of std when going into
     /// a library call avoids needing to introduce DialectCastOp.
     if (auto memrefType = dyn_cast<MemRefType>(type))
-      result.push_back(makeStridedLayoutDynamic(memrefType));
+    {
+      auto newShape = llvm::to_vector<4>(llvm::map_range(memrefType.getShape(), [](int64_t dimSize) {
+        return ShapedType::kDynamic;
+      }));
+      result.push_back(makeStridedLayoutDynamic(MemRefType::get(newShape, memrefType.getElementType(), memrefType.getLayout(), memrefType.getMemorySpace())));
+    }
     else
       result.push_back(type);
   }
@@ -360,8 +370,11 @@ createTypeCanonicalizedMemRefOperands(OpBuilder &b, Location loc,
       res.push_back(op);
       continue;
     }
+    auto newShape = llvm::to_vector<4>(llvm::map_range(memrefType.getShape(), [](int64_t dimSize) {
+      return ShapedType::kDynamic;
+    }));
     Value cast =
-        b.create<memref::CastOp>(loc, makeStridedLayoutDynamic(memrefType), op);
+        b.create<memref::CastOp>(loc, makeStridedLayoutDynamic(MemRefType::get(newShape, memrefType.getElementType(), memrefType.getLayout(), memrefType.getMemorySpace())), op);
     res.push_back(cast);
   }
   return res;

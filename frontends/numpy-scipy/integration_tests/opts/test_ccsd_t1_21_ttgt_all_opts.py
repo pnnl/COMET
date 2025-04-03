@@ -8,7 +8,7 @@ def run_numpy(v,t2):
 
 	return i0
 
-@comet.compile(flags="-opt-bestperm-ttgt -opt-matmul-tiling -opt-matmul-mkernel -opt-dense-transpose --convert-tc-to-ttgt")
+@comet.compile(flags="-opt-matmul-tiling -opt-matmul-mkernel -opt-dense-transpose --convert-tc-to-ttgt")
 def run_comet_with_jit(v,t2):
 	i0 = comet.einsum('icmn,mnca->ia', v,t2)
 

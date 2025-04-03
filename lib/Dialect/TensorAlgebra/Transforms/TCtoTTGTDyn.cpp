@@ -35,13 +35,19 @@
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <set>
 #include <unordered_map>
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
+#include "llvm/ADT/APFloat.h"
 
 using namespace mlir;
 using namespace mlir::linalg;
@@ -128,9 +134,9 @@ namespace
 
   struct TensorContractionOpLoweringTTGT : public ConversionPattern
   {
-    TensorContractionOpLoweringTTGT(MLIRContext *ctx, bool isSelectBestPerm, int whatPerm, bool printFlops)
+    TensorContractionOpLoweringTTGT(MLIRContext *ctx, int whatPerm, bool printFlops)
         : ConversionPattern(tensorAlgebra::TensorMultOp::getOperationName(), 1, ctx),
-          isSelectBestPerm(isSelectBestPerm), whatPerm(whatPerm), printFlops{printFlops} {}
+          whatPerm(whatPerm), printFlops{printFlops} {}
 
     /**
      * @brief Latest implementation with following optimizations:
@@ -177,11 +183,6 @@ namespace
         allPerms.push_back(perm);
       }
 
-      comet_pdump(op);
-      comet_debug() << "\n";
-      // auto rhs1Tensor = cast<ToTensorOp>(operands[0].getDefiningOp());
-      // auto rhs2Tensor = cast<ToTensorOp>(operands[1].getDefiningOp());
-      comet_debug() << "\n";
       Value lhsDef;
       tensorAlgebra::TensorSetOp setnewop;
       for (auto u : multop.getOperation()->getResult(0).getUsers())
@@ -196,66 +197,27 @@ namespace
           comet_vdump(lhsDef);
         }
       }
-      // auto lhsTensor = cast<ToTensorOp>(lhsDef.getDefiningOp());
 
       comet_vdump(setnewop);
       comet_debug() << "\n";
 
-      Value rhs1Memref, rhs2Memref, lhsMemref;
-      if(auto tensor_rhs1 = dyn_cast<TensorType>(operands[0].getType()))
-      {
-        rhs1Memref = rewriter.createOrFold<bufferization::ToMemrefOp>(loc, MemRefType::get(tensor_rhs1.getShape(), tensor_rhs1.getElementType()), operands[0]);
-      }
-      else if(mlir::isa<MemRefType>(operands[0].getType()))
-      {
-        rhs1Memref = operands[0];
-      }
-      else 
-      {
-        assert(false && "Unexpected type");
-      }
+      Value rhs1Tensor = operands[0], rhs2Tensor = operands[1], lhsTensor = lhsDef;
 
-      if(auto tensor_rhs2 = dyn_cast<TensorType>(operands[1].getType()))
-      {
-        rhs2Memref = rewriter.createOrFold<bufferization::ToMemrefOp>(loc, MemRefType::get(tensor_rhs2.getShape(), tensor_rhs2.getElementType()), operands[1]);
-      }
-      else if(mlir::isa<MemRefType>(operands[1].getType()))
-      {
-        rhs2Memref = operands[1];
-      }
-      else 
-      {
-        assert(false && "Unexpected type");
-      }
+      auto rhs1TensorType = cast<TensorType>(rhs1Tensor.getType());
+      auto rhs2TensorType = cast<TensorType>(rhs2Tensor.getType());
+      auto lhsTensorType = cast<TensorType>(lhsTensor.getType());
 
-      if(auto tensor_lhs = dyn_cast<TensorType>(lhsDef.getType()))
-      {
-        lhsMemref = rewriter.createOrFold<bufferization::ToMemrefOp>(loc, MemRefType::get(tensor_lhs.getShape(), tensor_lhs.getElementType()), lhsDef);
-      }
-      else if(mlir::isa<MemRefType>(lhsDef.getType()))
-      {
-        lhsMemref = lhsDef;
-      }
-      else 
-      {
-        assert(false && "Unexpected type");
-      }
+      std::vector<Value> allShapes{rhs1Tensor,
+        rhs2Tensor,
+        lhsTensor};
 
-      auto rhs1MemrefType = cast<MemRefType>(rhs1Memref.getType());
-      auto rhs2MemrefType = cast<MemRefType>(rhs2Memref.getType());
-      auto lhsMemrefType = cast<MemRefType>(lhsMemref.getType());
-
-      std::vector<TensorShape> allShapes{rhs1MemrefType.getShape(),
-                                         rhs2MemrefType.getShape(),
-                                         lhsMemrefType.getShape()};
-
-      ContractionPlan plan{allPerms[0], allShapes[0], allPerms[1],
-                           allShapes[1], allPerms[2], allShapes[2]};
+      ContractionPlanDyn plan(rewriter, loc, allPerms[0], allShapes[0], allPerms[1],
+                           allShapes[1], allPerms[2], allShapes[2]);
 
       /// computeBestPermutations identifies the optimal index permutation for TTGT
       /// it should enable and disable to heuristic
-      IndexVector rhs1OutPerm, rhs2OutPerm, lhsOutPerm;
-      std::tie(rhs1OutPerm, rhs2OutPerm, lhsOutPerm) = plan.computePermutations(isSelectBestPerm, whatPerm);
+      // IndexVector rhs1OutPerm, rhs2OutPerm, lhsOutPerm;
+      plan.computePermutations(rewriter, loc);
 
       comet_debug() << "Best permutation : " << plan.bestPermStr_ << "\n";
 
@@ -272,119 +234,138 @@ namespace
       std::vector<unsigned int> rhs1InPerm = getIdentityPermutation(allPerms[0].size());
       std::vector<unsigned int> rhs2InPerm = getIdentityPermutation(allPerms[1].size());
       std::vector<unsigned int> lhsInPerm = getIdentityPermutation(allPerms[2].size());
+      auto contractionTimes = rewriter.create<tensor::FromElementsOp>(loc, plan.m_contraction_time);
 
-      AffineMapAttr rhs1OutMapAttr = AffineMapAttr::get(AffineMap::getPermutationMap(rhs1OutPerm, ctx));
-      [[maybe_unused]] AffineMap rhs1InMap = AffineMap::getPermutationMap(rhs1InPerm, ctx);   /// [PT] Remove?
-      [[maybe_unused]] AffineMap rhs1OutMap = AffineMap::getPermutationMap(rhs1OutPerm, ctx); /// [PT] Remove?
-
-      AffineMapAttr rhs2OutMapAttr =
-          AffineMapAttr::get(AffineMap::getPermutationMap(rhs2OutPerm, ctx));
-      [[maybe_unused]] AffineMap rhs2InMap = AffineMap::getPermutationMap(rhs2InPerm, ctx);   /// [PT] Remove?
-      [[maybe_unused]] AffineMap rhs2OutMap = AffineMap::getPermutationMap(rhs2OutPerm, ctx); /// [PT] Remove?
-
-      AffineMapAttr lhsOutMapAttr =
-          AffineMapAttr::get(AffineMap::getPermutationMap(lhsOutPerm, ctx));
-      [[maybe_unused]] AffineMap lhsInMap = AffineMap::getPermutationMap(lhsInPerm, ctx);   /// [PT] Remove?
-      [[maybe_unused]] AffineMap lhsOutMap = AffineMap::getPermutationMap(lhsOutPerm, ctx); /// [PT] Remove?
-
-      Value rhs1Alloc = rhs1Memref;
-      Value rhs2Alloc = rhs2Memref;
-      Value lhsAlloc = lhsMemref;
-
-      std::vector<int64_t> rhs1OutPerm_int64(rhs1OutPerm.begin(), rhs1OutPerm.end());
-      std::vector<int64_t> rhs2OutPerm_int64(rhs2OutPerm.begin(), rhs2OutPerm.end());
-      std::vector<int64_t> lhsOutPerm_int64(lhsOutPerm.begin(), lhsOutPerm.end());
-
-      /// Do transpose if needed
-      if (!rhs1OutMapAttr.getValue().isIdentity())
+      Value minContractionTime =  rewriter.create<arith::ConstantFloatOp>(loc, llvm::APFloat(std::numeric_limits<double>::max()), FloatType::getF64(ctx));
+      Value argMin =  rewriter.create<arith::ConstantIndexOp>(loc, 0);
+      auto forOp = rewriter.create<scf::ForOp>(loc, rewriter.create<arith::ConstantIndexOp>(loc, 0),
+                                  rewriter.create<arith::ConstantIndexOp>(
+                                      loc, plan.m_contraction_time.size()), rewriter.create<arith::ConstantIndexOp>(
+                                        loc, 1), ValueRange({minContractionTime, argMin}),
+                                      [&](OpBuilder &b, Location loc, Value iv, ValueRange args) {
+                                        Value curContrationTime = b.create<tensor::ExtractOp>(
+                                            loc, contractionTimes,
+                                            ValueRange({iv}));
+                                        auto ifOp = b.create<scf::IfOp>(loc, b.create<arith::CmpFOp>(
+                                            loc, arith::CmpFPredicate::OLT,
+                                            curContrationTime, args[0]),
+                                            [&](OpBuilder &b2, Location loc2) {
+                                              // Update minContractionTime and argMin
+                                              b2.create<scf::YieldOp>(loc2, ValueRange({curContrationTime, iv})); // yield the new minContractionTime
+                                            },
+                                            [&](OpBuilder &b2, Location loc2) {
+                                              b2.create<scf::YieldOp>(loc2, ValueRange({args[0], args[1] })); // keep the previous minContractionTime
+                                            });
+                                        b.create<scf::YieldOp>(loc, ifOp->getResults()); // propagate the results of the ifOp
+                                      });
+      std::vector<int64_t> m_contraction_time_indices;
+      for (size_t i = 0; i < plan.m_contraction_time.size(); ++i)
       {
-        auto shape = rhs1MemrefType.getShape();
-        std::vector<Value> operands;
-        std::vector<int64_t> rhs1Dims;
-        for (auto idx : rhs1OutPerm)
+          m_contraction_time_indices.push_back(i);
+      }
+      scf::IndexSwitchOp switchOp;
+      Value permutation; 
+      if(whatPerm == -1) // -1 means select the best permutation based on contraction time
+      {
+        permutation = forOp.getResult(1); // this is the index from the contraction candidates with the best contraction time
+      }
+      else
+      {
+        permutation = rewriter.create<arith::ConstantIndexOp>(loc, whatPerm);  // use the specified permutation from the command line
+      }
+
+      switchOp = rewriter.create<scf::IndexSwitchOp>(loc, TypeRange(lhsTensor.getType()), permutation,  ArrayRef(m_contraction_time_indices), plan.m_contraction_time.size());
+
+      auto& defaultCaseRegion = switchOp.getDefaultRegion();
+      auto& defaultBlock = defaultCaseRegion.emplaceBlock(); // ensure the default case has a block
+      rewriter.setInsertionPointToStart(&defaultBlock);
+      rewriter.create<scf::YieldOp>(loc, ValueRange(lhsTensor)); // propagate the minContractionTime and argMin
+
+      auto caseRegions = switchOp.getCaseRegions();
+      for(size_t i = 0; i < plan.m_contraction_time.size(); ++i)
+      {
+        bool useLHSTranspose = false;
+        Value rhs1Final = rhs1Tensor; // default to the original tensor
+        Value rhs2Final = rhs2Tensor; // default to the original tensor
+        Value lhsFinal = lhsTensor;   // default to the original tensor
+        auto& caseBlock = caseRegions[i].emplaceBlock();
+        rewriter.setInsertionPointToStart(&caseBlock);
+        if(plan.m_transposeA[i])
         {
-          rhs1Dims.push_back(shape[idx]);
-          if (rhs1MemrefType.isDynamicDim(idx))
+          auto shape = rhs1TensorType.getShape();
+          std::vector<Value> operands;
+          std::vector<int64_t> rhs1Dims;
+          for (auto idx :plan.m_contraction_permutations[i][0]) // rhs1OutPerm
           {
-            operands.push_back(rewriter.create<memref::DimOp>(loc, rhs1Memref, idx));
+            rhs1Dims.push_back(shape[idx]);
+            if (rhs1TensorType.isDynamicDim(idx))
+            {
+              operands.push_back(rewriter.create<tensor::DimOp>(loc, rhs1Tensor, idx));
+            }
+          }
+
+          auto outputShape = rewriter.create<tensor::EmptyOp>(loc, rhs1Dims, rhs1TensorType.getElementType(), operands);
+  
+          std::vector<int64_t> rhs1OutPerm_int64(plan.m_contraction_permutations[i][0].begin(), plan.m_contraction_permutations[i][0].end());
+          rhs1Final = rewriter.create<linalg::TransposeOp>(loc, rhs1Tensor, outputShape, llvm::ArrayRef<int64_t>(rhs1OutPerm_int64)).getResults()[0];
+          comet_debug() << "\n";
+          comet_vdump(rhs1Final);
+        }
+        if(plan.m_transposeB[i])
+        {
+          std::vector<Value> operands;
+          std::vector<int64_t> rhs2Dims;
+          auto shape = rhs2TensorType.getShape();
+          for (auto idx : plan.m_contraction_permutations[i][1]) // use the perm for rhs2
+          {
+            rhs2Dims.push_back(shape[idx]);
+            if (rhs2TensorType.isDynamicDim(idx))
+            {
+              operands.push_back(rewriter.create<tensor::DimOp>(loc, rhs2Tensor, idx));
+            }
+          }
+
+          std::vector<int64_t> rhs2OutPerm_int64(plan.m_contraction_permutations[i][1].begin(), plan.m_contraction_permutations[i][1].end());
+
+          auto outputShape = rewriter.create<tensor::EmptyOp>(loc, rhs2Dims, rhs2TensorType.getElementType(), operands);
+          rhs2Final = rewriter.create<linalg::TransposeOp>(loc, rhs2Tensor, outputShape, llvm::ArrayRef<int64_t>(rhs2OutPerm_int64)).getResults()[0];
+          comet_debug() << " rhs2Transpose op: " << __LINE__ << "\n";
+          comet_vdump(rhs2Final);
+        }
+
+        if(plan.m_transposeC[i])
+        {
+          std::vector<Value> operands;
+          std::vector<int64_t> lhsDims;
+          auto shape = lhsTensorType.getShape();
+          for (auto idx : plan.m_contraction_permutations[i][2]) // lhsOutPerm
+          {
+            lhsDims.push_back(shape[idx]);
+            if (lhsTensorType.isDynamicDim(idx))
+            {
+              operands.push_back(rewriter.create<tensor::DimOp>(loc, lhsTensor, idx));
+            }
+          }
+
+          useLHSTranspose = true;
+          double beta_val = cast<FloatAttr>(betaAttr).getValueAsDouble();
+          auto outputShape = rewriter.create<tensor::EmptyOp>(loc, lhsDims, lhsTensorType.getElementType(), operands);
+  
+          if (beta_val == 0)
+          {
+            Value constantOp = rewriter.create<ConstantOp>(loc, rewriter.getF64FloatAttr(0.0));
+            lhsFinal = rewriter.create<linalg::FillOp>(loc, constantOp, ValueRange(outputShape)).getResults()[0];
+          }
+          else
+          {
+            std::vector<int64_t> lhsOutPerm_int64(plan.m_contraction_permutations[i][2].begin(), plan.m_contraction_permutations[i][2].end()); 
+            lhsFinal = rewriter.create<linalg::TransposeOp>(loc, lhsTensor, outputShape, llvm::ArrayRef<int64_t>(lhsOutPerm_int64)).getResults()[0];
           }
         }
 
-        rhs1Alloc = insertAllocAndDeallocDynamic(
-            MemRefType::get(rhs1Dims, rhs1MemrefType.getElementType()), operands, loc,
-            rewriter);
-
-#ifdef DEBUG_MODE_TTGT
-        auto rhs1LinalgCopy = rewriter.create<linalg::TransposeOp>(loc, rhs1Memref, rhs1Alloc, llvm::ArrayRef<int64_t>(rhs1OutPerm_int64));
-        comet_debug() << "\n";
-        comet_vdump(rhs1LinalgCopy);
-#else
-        rewriter.create<linalg::TransposeOp>(loc, rhs1Memref, rhs1Alloc, llvm::ArrayRef<int64_t>(rhs1OutPerm_int64));
-#endif
-      }
-
-      if (!rhs2OutMapAttr.getValue().isIdentity())
-      {
-        std::vector<Value> operands;
-        std::vector<int64_t> rhs2Dims;
-        auto shape = rhs2MemrefType.getShape();
-        for (auto idx : rhs2OutPerm)
-        {
-          rhs2Dims.push_back(shape[idx]);
-          if (rhs2MemrefType.isDynamicDim(idx))
-          {
-            operands.push_back(rewriter.create<memref::DimOp>(loc, rhs2Memref, idx));
-          }
-        }
-
-        rhs2Alloc = insertAllocAndDeallocDynamic(
-            MemRefType::get(rhs2Dims, rhs2MemrefType.getElementType()), operands, loc,
-            rewriter);
-#ifdef DEBUG_MODE_TTGT
-        auto rhs2LinalgCopy = rewriter.create<linalg::TransposeOp>(loc, rhs2Memref, rhs2Alloc, llvm::ArrayRef<int64_t>(rhs2OutPerm_int64));
-        comet_debug() << " rhs2LinalgCopy op: " << __LINE__ << "\n";
-        comet_vdump(rhs2LinalgCopy);
-#else
-        rewriter.create<linalg::TransposeOp>(loc, rhs2Memref, rhs2Alloc, llvm::ArrayRef<int64_t>(rhs2OutPerm_int64));
-
-#endif
-      }
-
-      bool useLHSTranspose = false;
-      if (!lhsOutMapAttr.getValue().isIdentity())
-      {
-        std::vector<Value> operands;
-        std::vector<int64_t> lhsDims;
-        auto shape = lhsMemrefType.getShape();
-        for (auto idx : lhsOutPerm)
-        {
-          lhsDims.push_back(shape[idx]);
-          if (lhsMemrefType.isDynamicDim(idx))
-          {
-            operands.push_back(rewriter.create<memref::DimOp>(loc, lhsMemref, idx));
-          }
-        }
-
-        lhsAlloc = insertAllocAndDeallocDynamic(
-            MemRefType::get(lhsDims, lhsMemrefType.getElementType()), operands, loc,
-            rewriter);
-        useLHSTranspose = true;
-        double beta_val = cast<FloatAttr>(betaAttr).getValueAsDouble();
-
-        if (beta_val == 0)
-        {
-          Value constantOp = rewriter.create<ConstantOp>(loc, rewriter.getF64FloatAttr(0.0));
-          rewriter.create<linalg::FillOp>(loc, constantOp, lhsAlloc);
-        }
-        else
-        {
-          rewriter.create<linalg::TransposeOp>(loc, lhsMemref, lhsAlloc, llvm::ArrayRef<int64_t>(lhsOutPerm_int64));
-        }
-      }
-
-      Value rhs1Reshape = rhs1Alloc;
-      Value rhs2Reshape = rhs2Alloc;
-      Value lhsReshape = lhsAlloc;
+        Value rhs1Reshape = rhs1Final;
+        Value rhs2Reshape = rhs2Final;
+        Value lhsReshape = lhsFinal;
 
       unsigned mIdxSize = plan.m_indices_.size();
       unsigned nIdxSize = plan.n_indices_.size();
@@ -403,7 +384,7 @@ namespace
       /// Do reshape if needed
       if (isRHS1SumPermutation)
       {
-        auto resultShape = rhs1MemrefType.getShape();
+        auto resultShape = rhs1TensorType.getShape();
 
         auto rhs1AffineMap = AffineMap::getPermutationMap(
             getIdentityPermutation(resultShape.size()), ctx);
@@ -414,17 +395,17 @@ namespace
             getReassociationIndices(rhs1IndexingMap);
 
         comet_debug() << "\n";
-        rhs1Reshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, rhs1Alloc, reassociationIndices);
+        rhs1Reshape = rewriter.create<tensor::CollapseShapeOp>(
+            loc, rhs1Final, reassociationIndices);
         comet_vdump(rhs1Reshape);
       }
-      else if (rhs1MemrefType.getShape().size() != 2)
+      else if (rhs1TensorType.getShape().size() != 2)
       {
-        auto resultShape = rhs1MemrefType.getShape();
+        auto resultShape = rhs1TensorType.getShape();
         /// Construct combined shape of 2D memrefc
         std::vector<unsigned> rhs1_0, rhs1_1;
 
-        if (plan.swapAB_)
+        if (plan.m_swapAB[i])
         {
           rhs1_0 = getIndexRange(0, kIdxSize);
           rhs1_1 = getIndexRange(kIdxSize, kIdxSize + mIdxSize);
@@ -453,16 +434,16 @@ namespace
         comet_vdump(rhs1Alloc);
         comet_vdump(rhs1MemrefType);
 
-        rhs1Reshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, rhs1Alloc, reassociationIndices);
+        rhs1Reshape = rewriter.create<tensor::CollapseShapeOp>(
+            loc, rhs1Final, reassociationIndices);
         comet_debug() << " Before rhs1Reshape: \n";
         comet_vdump(rhs1Reshape);
         comet_debug() << " After rhs1Reshape: \n";
       }
 
-      if (isRHS2SumPermutation && rhs2MemrefType.getShape().size() != 1)
+      if (isRHS2SumPermutation && rhs2TensorType.getShape().size() != 1)
       {
-        auto resultShape = rhs2MemrefType.getShape();
+        auto resultShape = rhs2TensorType.getShape();
 
         auto rhs2AffineMap = AffineMap::getPermutationMap(
             getIdentityPermutation(resultShape.size()), ctx);
@@ -472,20 +453,20 @@ namespace
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs2IndexingMap);
 
-        rhs2Reshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, rhs2Alloc, reassociationIndices);
+        rhs2Reshape = rewriter.create<tensor::CollapseShapeOp>(
+            loc, rhs2Final, reassociationIndices);
 
         comet_debug() << "\n";
         comet_vdump(rhs2Reshape);
       }
-      else if (rhs2MemrefType.getShape().size() != 2 && rhs2MemrefType.getShape().size() != 1)
+      else if (rhs2TensorType.getShape().size() != 2 && rhs2TensorType.getShape().size() != 1)
       {
-        auto resultShape = rhs2MemrefType.getShape();
+        auto resultShape = rhs2TensorType.getShape();
 
         /// Construct combined shape of 2D memref
         std::vector<unsigned> rhs2_0, rhs2_1;
 
-        if (plan.swapAB_)
+        if (plan.m_swapAB[i])
         {
           rhs2_0 = getIndexRange(0, nIdxSize);
           rhs2_1 = getIndexRange(nIdxSize, nIdxSize + kIdxSize);
@@ -509,8 +490,8 @@ namespace
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(rhs2IndexingMap);
 
-        rhs2Reshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, rhs2Alloc, reassociationIndices);
+        rhs2Reshape = rewriter.create<tensor::CollapseShapeOp>(
+            loc, rhs2Final, reassociationIndices);
 
         comet_debug() << "\n";
         comet_vdump(rhs2Reshape);
@@ -522,10 +503,10 @@ namespace
       SmallVector<ReassociationIndices> lhsReassociationIndices;
 
       comet_debug() << "\n";
-      if (isRHS1SumPermutation || (isRHS2SumPermutation && rhs2MemrefType.getShape().size() != 1))
+      if (isRHS1SumPermutation || (isRHS2SumPermutation && rhs2TensorType.getShape().size() != 1))
       {
         comet_debug() << "\n";
-        auto resultShape = lhsMemrefType.getShape();
+        auto resultShape = lhsTensorType.getShape();
 
         auto lhsAffineMap = AffineMap::getPermutationMap(
             getIdentityPermutation(resultShape.size()), ctx);
@@ -536,21 +517,21 @@ namespace
             getReassociationIndices(lhsIndexingMap);
 
         /// TODO(gkestor): should it be expandop?
-        lhsReshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, lhsAlloc, reassociationIndices);
+        lhsReshape = rewriter.create<tensor::CollapseShapeOp>(
+            loc, lhsFinal, reassociationIndices);
 
         comet_debug() << "\n";
         comet_vdump(lhsReshape);
         expandLHS = true;
         lhsReassociationIndices = reassociationIndices;
       }
-      else if (lhsMemrefType.getShape().size() != 2 && lhsMemrefType.getShape().size() != 1)
+      else if (lhsTensorType.getShape().size() != 2 && lhsTensorType.getShape().size() != 1)
       {
         comet_debug() << "\n";
-        auto resultShape = lhsMemrefType.getShape();
+        auto resultShape = lhsTensorType.getShape();
         /// Construct combined shape of 2D memref
         std::vector<unsigned> lhs_0, lhs_1;
-        if (plan.swapAB_)
+        if (plan.m_swapAB[i]) // swap A and B in the matmul
         {
           lhs_0 = getIndexRange(0, nIdxSize);
           lhs_1 = getIndexRange(nIdxSize, nIdxSize + mIdxSize);
@@ -575,7 +556,7 @@ namespace
             getReassociationIndices(lhsIndexingMap);
 
         lhsReshape = rewriter.create<memref::CollapseShapeOp>(
-            loc, lhsAlloc, reassociationIndices);
+            loc, lhsFinal, reassociationIndices);
         comet_debug() << "\n";
         comet_vdump(lhsReshape);
 
@@ -599,7 +580,7 @@ namespace
 
         matvecop.getOperation()->setAttr("__alpha__", alphaAttr);
         matvecop.getOperation()->setAttr("__beta__", betaAttr);
-
+        lhsReshape = matvecop.getResults()[0]; 
         /// TODO(gkestor): Add attribute to the linalg.matvec operations
         /// matvecop.setAttr(kLinalgTransformMarker, rewriter.getStringAttr(kLinalgTransformMarker));
       }
@@ -617,6 +598,7 @@ namespace
 
         matvecop.getOperation()->setAttr("__alpha__", alphaAttr);
         matvecop.getOperation()->setAttr("__beta__", betaAttr);
+        lhsReshape = matvecop.getResults()[0]; 
 
         /// TODO(gkestor): Add attribute to the linalg.matvec operations
         /// matvecop.setAttr(kLinalgTransformMarker, rewriter.getStringAttr(kLinalgTransformMarker));
@@ -624,65 +606,65 @@ namespace
       else
       {
         comet_debug() << "\n";
-        if (plan.swapAB_)
+
+        if (plan.m_swapAB[i])
         {
-          /// TODO(gkestor) - there is error with the building process
-          matmulop = rewriter.create<linalg::MatmulOp>(
-              loc, ValueRange{rhs2Reshape, rhs1Reshape},
-              ValueRange{lhsReshape});
-          comet_debug() << "\n";
-          comet_vdump(matmulop);
+          std::swap(rhs1Reshape, rhs2Reshape); // swap the operands for matmul when A and B are swapped in the contraction
+          comet_debug() << "Swapping rhs1 and rhs2 for matmul due to contraction swap\n";
         }
-        else
-        {
-          matmulop = rewriter.create<linalg::MatmulOp>(
-              loc, ValueRange{rhs1Reshape, rhs2Reshape},
-              ValueRange{lhsReshape});
-          comet_debug() << "\n";
-          comet_vdump(rhs1Reshape);
-          comet_vdump(rhs2Reshape);
-          comet_vdump(lhsReshape);
-          comet_vdump(matmulop);
-        }
+
+        matmulop = rewriter.create<linalg::MatmulOp>(
+            loc, ValueRange{rhs1Reshape, rhs2Reshape},
+            ValueRange{lhsReshape});
+        comet_debug() << "\n";
+        comet_vdump(rhs1Reshape);
+        comet_vdump(rhs2Reshape);
+        comet_vdump(lhsReshape);
+        comet_vdump(matmulop);
         comet_debug() << "\n";
         /// Add attribute to the linalg.matmul operations
+        auto iterator_types = matmulop.getIteratorTypesArray();
+        
         matmulop.getOperation()->setAttr(kLinalgTransformMarker,
                                          rewriter.getStringAttr(kLinalgTransformMarker));
         matmulop.getOperation()->setAttr("__alpha__", alphaAttr);
         matmulop.getOperation()->setAttr("__beta__", betaAttr);
+        lhsReshape = matmulop.getResults()[0]; 
       }
 
       Value lhsExpand = lhsReshape;
       if (expandLHS) /// LHS tensor was collapsed and now needs to be re-expanded using the same reassociation indices
       {
-        auto expandedTensorType = MemRefType::get(cast<MemRefType>(lhsAlloc.getType()).getShape(), cast<MemRefType>(lhsAlloc.getType()).getElementType());
+        auto expandedTensorType = RankedTensorType::get(cast<RankedTensorType>(lhsFinal.getType()).getShape(), cast<RankedTensorType>(lhsFinal.getType()).getElementType());
 
         comet_debug() << "\nExpanded:\n";
-        lhsExpand = rewriter.create<memref::ExpandShapeOp>(
+        lhsExpand = rewriter.create<tensor::ExpandShapeOp>(
             loc, expandedTensorType, lhsReshape, lhsReassociationIndices);
-#ifdef DEBUG_MODE_TTGT
         comet_debug() << "\n";
         comet_vdump(lhsExpand);
-#endif
       }
 
       /// Copy back the result if needed
-      if (lhsAlloc != lhsMemref && useLHSTranspose)
+      if (lhsFinal != lhsTensor && useLHSTranspose)
       {
-        std::vector<int64_t> revLhsOutPerm(lhsOutPerm_int64.size());
-        for (size_t i = 0; i < revLhsOutPerm.size(); i++)
-          revLhsOutPerm[lhsOutPerm_int64[i]] = i;
+        std::vector<int64_t> revLhsOutPerm(plan.m_contraction_permutations[i][2].size());
+        for (size_t j = 0; j < revLhsOutPerm.size(); j++)
+          revLhsOutPerm[plan.m_contraction_permutations[i][2][j]] = j;
 
-#ifdef DEBUG_MODE_TTGT
-        auto lhsFinalCopy =
-            rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(revLhsOutPerm));
+        lhsExpand = rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsTensor, llvm::ArrayRef<int64_t>(revLhsOutPerm)).getResults()[0];
+        comet_vdump(lhsExpand);
         comet_debug() << "\n";
-        comet_vdump(lhsFinalCopy);
-#else
-        rewriter.create<linalg::TransposeOp>(loc, lhsExpand, lhsMemref, llvm::ArrayRef<int64_t>(revLhsOutPerm));
 
-#endif
       }
+      rewriter.create<scf::YieldOp>(loc, ValueRange({lhsExpand}));
+      }
+      rewriter.setInsertionPointAfter(switchOp);
+
+      // auto argInt = rewriter.create<arith::IndexCastOp>(loc, rewriter.getIntegerType(64), switchOp.getArg());
+      // auto argFloat =
+      //     rewriter.create<arith::SIToFPOp>(loc, f64Type, argInt);
+      // rewriter.create<tensorAlgebra::PrintOp>(loc, forOp.getResult(0)); // for debugging purposes, print the minimum time found
+      // rewriter.create<tensorAlgebra::PrintOp>(loc, argFloat); // for debugging purposes, print the minimum permutation index found
 
       if (printFlops)
       {
@@ -694,14 +676,19 @@ namespace
 
         Value totalTimeValue =
             rewriter.create<SubFOp>(loc, f64Type, end, start);
-
-        double opNums = 2.0 * plan.m_size_ * plan.n_size_ * plan.k_size_;
-
-        Value numFlopsOp =
-            rewriter.create<ConstantOp>(loc, FloatAttr::get(f64Type, opNums));
+        
+        Value opNums = rewriter.create<ConstantIndexOp>(loc, 2);
+        opNums = rewriter.create<MulIOp>(loc, opNums,
+          plan.m_size_); // m size
+        opNums = rewriter.create<MulIOp>(loc, opNums,
+          plan.n_size_); // n size
+        opNums = rewriter.create<MulIOp>(loc, opNums,
+          plan.k_size_); // k size
+        opNums = rewriter.create<arith::IndexCastOp>(loc, rewriter.getIntegerType(64), opNums);
+        opNums = rewriter.create<arith::SIToFPOp>(loc, f64Type, opNums); // convert to f64 for division
 
         Value flopsOp =
-            rewriter.create<DivFOp>(loc, f64Type, numFlopsOp, totalTimeValue);
+            rewriter.create<DivFOp>(loc, f64Type, opNums, totalTimeValue);
 
         ///   call @print_flops(%flops) : (f64) -> ()
         std::string printFlopsStr = "print_flops";
@@ -710,33 +697,39 @@ namespace
             loc, printFlopsStr, SmallVector<Type, 2>{}, ValueRange{flopsOp});
       }
 
+      rewriter.replaceAllUsesWith(
+          op->getResults(), switchOp.getResults()); // Replace the original op with the final result of the matmul or matvec
+      rewriter.replaceUsesWithIf(setnewop->getOperand(1), switchOp.getResult(0), [&](OpOperand& use) { 
+        auto user = use.getOwner();
+        auto ancestor = switchOp->getBlock()->findAncestorOpInBlock(*user);
+        return (ancestor && switchOp->isBeforeInBlock(ancestor)); 
+      });
+      // op->replaceAllUsesWith(switchOp);
       rewriter.eraseOp(setnewop);
       rewriter.eraseOp(op);
       return success();
     }
 
   private:
-    bool isSelectBestPerm;
     int whatPerm;
     bool printFlops;
   }; /// namespace
 
-  struct TALoweringTTGTPass
-      : public PassWrapper<TALoweringTTGTPass, OperationPass<func::FuncOp>>
+  struct TALoweringTTGTDynPass
+      : public PassWrapper<TALoweringTTGTDynPass, OperationPass<func::FuncOp>>
   {
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TALoweringTTGTPass)
-    TALoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops) : isSelectBestPerm(isSelectBestPerm), whatPerm(whatPerm), printFlops{printFlops} {};
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(TALoweringTTGTDynPass)
+    TALoweringTTGTDynPass(int whatPerm, bool printFlops) : whatPerm(whatPerm), printFlops{printFlops} {};
     void runOnOperation() override;
 
   private:
-    bool isSelectBestPerm;
     int whatPerm;
     bool printFlops;
   };
 
 } /// end anonymous namespace.
 
-void TALoweringTTGTPass::runOnOperation()
+void TALoweringTTGTDynPass::runOnOperation()
 {
   func::FuncOp function = getOperation();
   auto module = function.getOperation()->getParentOfType<ModuleOp>();
@@ -764,14 +757,15 @@ void TALoweringTTGTPass::runOnOperation()
   }
 
   RewritePatternSet patterns(&getContext());
-  patterns.insert<TensorContractionOpLoweringTTGT>(&getContext(), isSelectBestPerm, whatPerm, printFlops);
+  patterns.insert<TensorContractionOpLoweringTTGT>(&getContext(), whatPerm, printFlops);
 
   ConversionTarget target(getContext());
-  target.addLegalDialect<LinalgDialect, ArithDialect, memref::MemRefDialect, bufferization::BufferizationDialect>();
+  target.addLegalDialect<func::FuncDialect, LinalgDialect, ArithDialect, memref::MemRefDialect, bufferization::BufferizationDialect, scf::SCFDialect, tensor::TensorDialect, tensorAlgebra::TADialect>();
+  target.addIllegalOp<tensorAlgebra::TensorMultOp>();
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {
-    llvm::errs() << "Failed to applyPartialConversion in TALoweringTTGTPass\n";
+    llvm::errs() << "Failed to applyPartialConversion in TALoweringTTGTDynPass\n";
     signalPassFailure();
   }
 }
@@ -779,7 +773,7 @@ void TALoweringTTGTPass::runOnOperation()
 /// Create a pass for lowering operations in the `LinAlg` and `Std` dialects,
 /// for a subset of the TA IR (e.g. matmul).
 /// ordering of permutation starts with one
-std::unique_ptr<Pass> mlir::comet::createLoweringTTGTPass(bool isSelectBestPerm, int whatPerm, bool printFlops)
+std::unique_ptr<Pass> mlir::comet::createLoweringTTGTDynPass(int whatPerm, bool printFlops)
 {
-  return std::make_unique<TALoweringTTGTPass>(isSelectBestPerm, whatPerm, printFlops);
+  return std::make_unique<TALoweringTTGTDynPass>(whatPerm, printFlops);
 }

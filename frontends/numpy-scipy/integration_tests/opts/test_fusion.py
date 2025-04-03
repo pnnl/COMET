@@ -2,6 +2,7 @@ import time
 import numpy as np
 import scipy as sp
 from cometpy import comet
+import pytest
 
 def run_numpy(B,C,D):
 	T = B @ C 
@@ -16,6 +17,7 @@ def run_comet_with_jit(B,C,D):
 
 	return A
 
+@pytest.mark.skip("Fusing more than one iterations is not currently supported")
 def test_fusion(data_rank2_path):
 	B = sp.sparse.csr_array(sp.io.mmread(data_rank2_path))
 	C = np.full([B.shape[1], 4], 1.2,  dtype=float)

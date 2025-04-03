@@ -19,4 +19,6 @@ lit.site.cfg.py
 .vscode
 /.idea
 
-# External software
+# Clangd
+/.cache
+
