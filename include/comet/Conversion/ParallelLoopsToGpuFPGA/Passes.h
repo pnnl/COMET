@@ -19,19 +19,15 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef COMET_CONVERSION_PARALLELLOOPSTOGPU_H
-#define COMET_CONVERSION_PARALLELLOOPSTOGPU_H
+#ifndef COMET_PARALLEL_LOOPS_TO_GPU_FPGA_CONVERSION_PASSES
+#define COMET_PARALLEL_LOOPS_TO_GPU_FPGA_CONVERSION_PASSES
 
-#include <memory>
+#include "comet/Conversion/ParallelLoopsToGpuFPGA/ParallelLoopsToGpuFPGA.h"
+
 namespace mlir {
-class ModuleOp;
-namespace func{
-class FuncOp;
-}
-template <typename T> class OperationPass;
 namespace comet {
-std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuPass();
-std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuPass(int blockX, int blockY, int blockR);
+#define GEN_PASS_REGISTRATION
+#include "comet/Conversion/ParallelLoopsToGpuFPGA/Passes.h.inc"
 }
 }
 

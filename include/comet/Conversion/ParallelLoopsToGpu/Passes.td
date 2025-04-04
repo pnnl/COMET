@@ -44,11 +44,6 @@ def CometParallelLoopsToGpu : Pass<"comet-parallel-loops-to-gpu", "mlir::func::F
        Option<"blockR", "blockR",
        "int32_t", /*default*/"32",
        "triton block size for reduction dim">,
-              
-       Option<"target_device", "target_device",
-       "mlir::tensorAlgebra::TargetDevice", /*default*/"mlir::tensorAlgebra::TargetDevice::GPU",
-       "Target device (GPU or FPGA)">,
-
    ];
 }
 

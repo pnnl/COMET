@@ -19,20 +19,37 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef COMET_CONVERSION_PARALLELLOOPSTOGPU_H
-#define COMET_CONVERSION_PARALLELLOOPSTOGPU_H
+#ifndef COMET_PARALLEL_LOOPS_TO_GPU_FPGA_CONVERSION_PASSES
+#define COMET_PARALLEL_LOOPS_TO_GPU_FPGA_CONVERSION_PASSES
 
-#include <memory>
-namespace mlir {
-class ModuleOp;
-namespace func{
-class FuncOp;
-}
-template <typename T> class OperationPass;
-namespace comet {
-std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuPass();
-std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuPass(int blockX, int blockY, int blockR);
-}
+include "mlir/Pass/PassBase.td"
+
+def CometParallelLoopsToGpuFPGA : Pass<"comet-parallel-loops-to-gpu-fpga", "mlir::func::FuncOp"> {
+  let summary = "Map loops to gpu";
+
+  let constructor = "mlir::comet::createConvertParallelLoopsToGpuFPGAPass()";
+
+  let dependentDialects = ["mlir::scf::SCFDialect", "mlir::gpu::GPUDialect", "mlir::affine::AffineDialect", "mlir::DLTIDialect"];
+
+
+     let options = [
+       Option<"blockX", "blockX",
+              "int32_t", /*default*/"32",
+              "triton block size for dim X">,
+
+       Option<"blockY", "blockY",
+              "int32_t", /*default*/"8",
+              "triton block size for dim Y">,
+              
+       Option<"blockR", "blockR",
+       "int32_t", /*default*/"32",
+       "triton block size for reduction dim">,
+              
+       Option<"target_device", "target_device",
+       "mlir::tensorAlgebra::TargetDevice", /*default*/"mlir::tensorAlgebra::TargetDevice::GPU",
+       "Target device (GPU or FPGA)">,
+
+   ];
 }
 
 #endif

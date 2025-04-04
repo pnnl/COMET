@@ -22,24 +22,41 @@ set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
 #-------------------------------------------------------------------------------
 # Options and settings
 #-------------------------------------------------------------------------------
-  option(ENABLE_GPU_TARGET OFF) 
-  option(ENABLE_FPGA_TARGET OFF) 
-  
-  option(LLVM_INCLUDE_TOOLS "Generate build targets for the LLVM tools." ON)
-  option(LLVM_BUILD_TOOLS "Build the LLVM tools. If OFF, just generate build targets." ON)
+option(ENABLE_AMD_GPU_BACKEND OFF) 
+option(ENABLE_NVIDIA_GPU_BACKEND OFF) 
+option(ENABLE_FPGA_TARGET OFF) 
 
+option(LLVM_INCLUDE_TOOLS "Generate build targets for the LLVM tools." ON)
+option(LLVM_BUILD_TOOLS "Build the LLVM tools. If OFF, just generate build targets." ON)
+
+set(CODEGEN_BACKENDS "" CACHE INTERNAL "TRITON BACKENDS")
 if (MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHs-c- /GR-")
 else ()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
 endif ()
 
-if(${ENABLE_GPU_TARGET})
-  add_definitions(-DENABLE_GPU_TARGET)
+if(${ENABLE_AMD_GPU_BACKEND})
+  add_definitions(-DENABLE_AMD_GPU_BACKEND)
+  set(CODEGEN_BACKENDS ${CODEGEN_BACKENDS}amd;nvidia) # Triton is looking for some NVGPUIR library 
+                                                      # even if we only enable AMDGPU
+  set(ENABLE_GPU_TARGET ON)
+endif()
+
+if(${ENABLE_NVIDIA_GPU_BACKEND})
+  if(NOT ENABLE_AMD_GPU_BACKEND)
+  set(CODEGEN_BACKENDS ${CODEGEN_BACKENDS}nvidia;)
+  endif()
+  add_definitions(-DENABLE_NVIDIA_GPU_BACKEND)
+  set(ENABLE_GPU_TARGET ON)
 endif()
 
 if(${ENABLE_FPGA_TARGET})
   add_definitions(-DENABLE_FPGA_TARGET)
+endif()
+
+if(${ENABLE_GPU_TARGET})
+  add_definitions(-DENABLE_GPU_TARGET)
 endif()
 
 
@@ -108,7 +125,8 @@ endif()
 if(${ENABLE_GPU_TARGET})
   set(TRITON_PATH "" CACHE PATH "Path to Triton")
   set(TRITON_BUILD_PATH "${CMAKE_BINARY_DIR}/triton" CACHE INTERNAL "Path to Triton Build")
-  set(TRITON_CODEGEN_BACKENDS "nvidia;amd" CACHE STRING "Enable different codegen backends" FORCE)
+  set(TRITON_BUILD_UT OFF CACHE BOOL "Disable triton unittests" FORCE)
+  set(TRITON_CODEGEN_BACKENDS "${CODEGEN_BACKENDS}" CACHE STRING "Enable different codegen backends" FORCE)
   if(NOT DEFINED DEVICE_COMPUTE_CAPABILITY)
     message(FATAL_ERROR "Please specify cuda compute capability requested")
   endif()

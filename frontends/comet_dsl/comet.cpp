@@ -27,6 +27,7 @@
 
 
 #ifdef ENABLE_FPGA_TARGET
+#include "comet/Conversion/ParallelLoopsToGpuFPGA/ParallelLoopsToGpuFPGA.h"
 #include "comet/Conversion/GpuToOCLSPIRV/GpuToOCLSPIRVPass.h"
 #include "comet/Conversion/GpuHostToMCLRT/GpuHostToMCLRTPass.h"
 #include "mlir/Conversion/GPUToSPIRV/GPUToSPIRVPass.h"
@@ -53,6 +54,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/Extensions/InlinerExtension.h"
 #include "mlir/Dialect/Func/Transforms/Passes.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
@@ -100,10 +102,11 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
-#if defined(ENABLE_FPGA_TARGET) | defined(ENABLE_GPU_TARGET)
-#include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
-#endif
 #ifdef ENABLE_GPU_TARGET
+#include "comet/Conversion/PrepareGpuHost/PrepareGpuHostPass.h"
+#include "comet/Conversion/BlockedGpuToTriton/BlockedGpuToTriton.h"
+#include "comet/Conversion/GpuToBlockedGpu/GpuToBlockedGpu.h"
+#include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
 #include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
@@ -580,13 +583,36 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
     pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createLinAlgMatmulMicroKernelPass());
   }
+  pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
+  /// Blanket-convert any remaining linalg ops to loops if any remain.
+  pm.addNestedPass<mlir::func::FuncOp>(
+    mlir::createConvertLinalgToLoopsPass());
+  /// Blanket-convert any remaining affine ops if any remain.
+  pm.addPass(mlir::createLowerAffinePass());
+  /// Convert SCF to CF (always needed).
+  pm.addPass(mlir::createForallToParallelLoopPass());
+  pm.addPass(mlir::createLoopInvariantCodeMotionPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+
 #ifndef ENABLE_GPU_TARGET
   [[maybe_unused]] bool IsLoweringToTriton = false;
 #endif
 #if defined(ENABLE_GPU_TARGET) | defined(ENABLE_FPGA_TARGET)
   if ((CodegenTarget == TargetDevice::GPU || CodegenTarget == TargetDevice::FPGA) && (emitTriton_ || emitLLVM || isLoweringToLLVM || IsLoweringToTriton))
   {
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
+    #ifdef ENABLE_FPGA_TARGET
+    if (CodegenTarget == TargetDevice::FPGA)
+    {
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuFPGAPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, CodegenTarget));
+    }
+    #endif
+    #ifdef ENABLE_GPU_TARGET
+    if (CodegenTarget == TargetDevice::GPU)
+    {
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
+    }
+    #endif
+
     pm.addPass(mlir::createLoopInvariantCodeMotionPass());
     pm.addPass(mlir::createParallelLoopToGpuPass());
     pm.addPass(mlir::createGpuKernelOutliningPass());
@@ -597,10 +623,17 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if(CodegenTarget == TargetDevice::GPU && (emitTriton_ || emitLLVM || IsLoweringToTriton || isLoweringToLLVM))
   {
 
-    pm.addPass(mlir::comet::createConvertGpuKernelToTritonPass());
+    pm.nest<mlir::gpu::GPUModuleOp>().addNestedPass<mlir::gpu::GPUFuncOp>(mlir::comet::createConvertGpuToBlockedGpuPass());
+    pm.addPass(mlir::comet::createConvertBlockedGpuToTritonPass());
+    pm.addPass(mlir::createLoopInvariantCodeMotionPass());
+    pm.addPass(mlir::createCSEPass());;
+    pm.addPass(mlir::createSymbolDCEPass());;
+    pm.addPass(mlir::createCanonicalizerPass());
+    // pm.addPass(mlir::comet::createConvertGpuKernelToTritonPass());
 
     if (emitTriton_)
     {
+
       if (mlir::failed(pm.run(*module)))
         return 4;
       return 0;
@@ -640,40 +673,32 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   {
     if(GPUComputeCapability.getValue().find("sm_") != std::string::npos || GPUComputeCapability.getValue().find("compute_") != std::string::npos)
     {
+      #ifdef ENABLE_NVIDIA_GPU_BACKEND
       int32_t cudaCC = std::stoi(GPUComputeCapability.substr(GPUComputeCapability.find("_")+1));
       pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, cudaCC, GPUTargetCompilationFormat));
+      pm.addPass(mlir::comet::createPrepareGpuHostPass());
+      pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
+      #else
+      llvm::errs() << "Trying to lower to NVIDIA(?) device without enabling the NVIDIA backend \n";
+      return 6;
+      #endif
     }
     else {
+      #ifdef ENABLE_AMD_GPU_BACKEND
       pm.addPass(mlir::comet::createLowerTritonDeviceToHIPPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
-    }
-  }
-
-  if ((isLoweringToLLVM || emitLLVM) && CodegenTarget == TargetDevice::GPU)
-  {
-    if (GPUComputeCapability.getValue().find("sm_") != std::string::npos ||
-        GPUComputeCapability.getValue().find("compute_") != std::string::npos) 
-    {
-      pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
-    } 
-    else 
-    {
+      pm.addPass(mlir::comet::createPrepareGpuHostPass());
       pm.addPass(mlir::comet::createLowerGpuHostToHIPPass());
+      #else
+      llvm::errs() << "Trying to lower to AMDGPU(?) device without enabling the NVIDIA backend \n";
+      return 6;
+      #endif
     }
   }
 
 #endif
-
     optPM.addPass(mlir::createCanonicalizerPass());
     /// Blanket-convert any remaining high-level vector ops to loops if any remain.
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
-    /// Blanket-convert any remaining linalg ops to loops if any remain.
 
-
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
-    /// Blanket-convert any remaining affine ops if any remain.
-    pm.addPass(mlir::createLowerAffinePass());
-    /// Convert SCF to CF (always needed).
-    pm.addPass(mlir::createForallToParallelLoopPass());
     pm.addPass(mlir::createConvertSCFToOpenMPPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());
@@ -746,17 +771,23 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::triton::TritonDialect>();
   mlir::func::registerInlinerExtension(registry);
   context.appendDialectRegistry(registry);
-  
   registerLLVMDialectTranslation(context);
   registerBuiltinDialectTranslation(context);
-  registerNVVMDialectTranslation(context);
-  mlir::registerROCDLDialectTranslation(context);
   mlir::registerGPUDialectTranslation(context);
+  #endif
+  
+  #ifdef ENABLE_AMD_GPU_BACKEND
+  mlir::registerROCDLDialectTranslation(context);
+  #endif
+  
+  #ifdef ENABLE_NVIDIA_GPU_BACKEND
+  registerNVVMDialectTranslation(context);
   LLVMInitializeNVPTXTargetInfo();
   LLVMInitializeNVPTXTarget();
   LLVMInitializeNVPTXTargetMC();
   LLVMInitializeNVPTXAsmPrinter();
 #endif
+
   context.loadDialect<mlir::tensorAlgebra::TADialect>();
   context.loadDialect<mlir::indexTree::IndexTreeDialect>();
   context.loadDialect<mlir::arith::ArithDialect>();
@@ -765,7 +796,6 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::scf::SCFDialect>();
   context.loadDialect<mlir::bufferization::BufferizationDialect>();
   context.loadDialect<mlir::index::IndexDialect>();
-  context.loadDialect<mlir::omp::OpenMPDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
 

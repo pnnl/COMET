@@ -34,11 +34,17 @@ set(LIBS
   # COMETIndexTreeToSCF
 )
 
+if(ENABLE_FPGA_TARGET)
+  set(LIBS
+    ${LIBS}
+    COMETParallelLoopsToGpuFPGA
+  )
+endif()
+
 if(ENABLE_GPU_TARGET OR ENABLE_FPGA_TARGET)
   set(LIBS
     ${LIBS}
     MLIRGPUToLLVMIRTranslation
-    COMETParallelLoopsToGpu
   )
 endif()
 
@@ -46,10 +52,28 @@ endif()
 if(ENABLE_GPU_TARGET)
   set(LIBS
     ${LIBS}
-    COMETGpuToTriton
-    COMETTritonToCuda
-    COMETTritonToHIP
+    COMETGPUUtils
+    COMETParallelLoopsToGpu
+    COMETGpuToBlockedGpu
+    COMETBlockedGpuToTriton
+    #COMETGpuToTriton
+    COMETPrepareGpuHost
     ${triton_libs}
+  )
+endif()
+
+
+if(ENABLE_NVIDIA_GPU_BACKEND)
+  set(LIBS
+    ${LIBS}
+    COMETTritonToCuda
+  )
+endif()
+
+if(ENABLE_AMD_GPU_BACKEND)
+  set(LIBS
+    ${LIBS}
+    COMETTritonToHIP
   )
 endif()
 

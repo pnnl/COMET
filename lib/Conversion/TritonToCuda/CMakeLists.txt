@@ -14,4 +14,5 @@ add_llvm_library(COMETTritonToCuda
     TritonGPUTransforms
     TritonNvidiaGPUTransforms
     NVGPUIR
+    COMETGPUUtils
 )

@@ -19,8 +19,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef COMET_CONVERSION_PARALLELLOOPSTOGPU_H
-#define COMET_CONVERSION_PARALLELLOOPSTOGPU_H
+#ifndef COMET_CONVERSION_PARALLELLOOPSTOGPUFPGA_H
+#define COMET_CONVERSION_PARALLELLOOPSTOGPUFPGA_H
+#include "comet/Dialect/Utils/Utils.h"
 
 #include <memory>
 namespace mlir {
@@ -30,8 +31,8 @@ class FuncOp;
 }
 template <typename T> class OperationPass;
 namespace comet {
-std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuPass();
-std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuPass(int blockX, int blockY, int blockR);
+std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuFPGAPass();
+std::unique_ptr<OperationPass<mlir::func::FuncOp>> createConvertParallelLoopsToGpuFPGAPass(int blockX, int blockY, int blockR, mlir::tensorAlgebra::TargetDevice target_device);
 }
 }
 
