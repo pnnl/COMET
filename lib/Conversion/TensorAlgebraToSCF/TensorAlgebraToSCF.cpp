@@ -261,9 +261,8 @@ namespace
           i++;
         }
 
-        ArrayAttr opFormatsArrayAttr = op.getFormats();
-        std::string formats_strIn(cast<mlir::StringAttr>(opFormatsArrayAttr[0]).getValue());
-        std::string formats_strOut(cast<mlir::StringAttr>(opFormatsArrayAttr[1]).getValue());
+        std::string formats_strIn(getTensorFormatString(op.getOperandTypes()[0]));
+        std::string formats_strOut(getTensorFormatString(op->getResultTypes()[0]));
         IntegerType i32Type = IntegerType::get(ctx, 32);
         IndexType indexType = IndexType::get(ctx);
 

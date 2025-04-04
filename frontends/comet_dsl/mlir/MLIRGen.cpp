@@ -45,8 +45,10 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Operation.h"
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopedHashTable.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdint>
 #include <iostream>
@@ -588,7 +590,7 @@ namespace
         }
         comet_debug() << "\n";
 
-        auto lhs_tensor = lhs.getDefiningOp()->getOpResult(0).getType();
+        auto lhs_tensor = lhs.getType();
 
         comet_pdump(lhs.getDefiningOp());
         
@@ -829,102 +831,29 @@ namespace
             if (auto pos = map.getResultPosition(v))
             {
               mlir::Value operand = i == 0 ? lhs_labeledtensor : rhs_labeledtensor;
-              if(auto spTensorType = mlir::dyn_cast<mlir::tensorAlgebra::SparseTensorType>(operand.getType()))
+              if(auto spTensorType = mlir::dyn_cast<mlir::ShapedType>(operand.getType()))
               {
                 result_dims.push_back(spTensorType.getDimSize(*pos));
               }
-              else if(auto denseTensorType = mlir::dyn_cast<mlir::TensorType>(operand.getType()))
-              {
-                result_dims.push_back(denseTensorType.getDimSize(*pos));
-              }
               else{
-                assert(false && "Unexpected Tensor type");
+                assert(false && "Unexpected Input type");
               }
               break;
             }
           }
         }
 
-        SmallVector<mlir::StringRef, 8> formats;
+        SmallVector<std::string, 8> formats;
         std::vector<mlir::Value> exprs{lhs_labeledtensor, rhs_labeledtensor};
         std::vector<mlir::Value> tensors;
         // TODO(gkestor): URGENT refactor the following code -  too much repetition
         for (auto e : exprs)
         {
-          if (isa<DenseTensorDeclOp>(e.getDefiningOp()))
+          if (isa<DenseTensorDeclOp, SparseTensorDeclOp, TensorMultOp, TensorElewsMultOp, TensorAddOp, TensorSubtractOp>(e.getDefiningOp()))
           {
-            comet_debug() << " is TensorDeclOp\n";
-            /// infer the format
-            auto lhs_format = dyn_cast<DenseTensorDeclOp>(e.getDefiningOp()).getFormat();
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
+            auto lhs_format = getTensorFormatString(e.getType());
             formats.push_back(lhs_format);
-
-            tensors.push_back(dyn_cast<DenseTensorDeclOp>(e.getDefiningOp()));
-          }
-          else if (isa<SparseTensorDeclOp>(e.getDefiningOp()))
-          {
-            comet_debug() << " is TensorDeclOp\n";
-            /// infer the format
-            auto lhs_format = dyn_cast<SparseTensorDeclOp>(e.getDefiningOp()).getFormat();
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-
-            tensors.push_back(dyn_cast<SparseTensorDeclOp>(e.getDefiningOp()));
-          }
-          else if (isa<TensorMultOp>(e.getDefiningOp()))
-          {
-            comet_debug() << " is TensorMultOp\n";
-            /// infer the format
-            mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorMultOp>(e.getDefiningOp()).getFormats();
-            unsigned int i = opFormatsArrayAttr.size() - 1;
-            mlir::StringRef lhs_format = mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue();
-            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-
-            tensors.push_back(dyn_cast<TensorMultOp>(e.getDefiningOp()).getOperation()->getResult(0));
-          }
-          else if (isa<TensorElewsMultOp>(e.getDefiningOp()))
-          {
-            comet_debug() << " is TensorElewsMultOp\n";
-            /// infer the format
-            mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getFormats();
-            unsigned int i = opFormatsArrayAttr.size() - 1;
-            mlir::StringRef lhs_format = mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue();
-            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
-
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-
-            tensors.push_back(dyn_cast<TensorElewsMultOp>(e.getDefiningOp()).getOperation()->getResult(0));
-          }
-          else if (isa<TensorAddOp>(e.getDefiningOp()))
-          {
-            comet_debug() << " is TensorAddOp\n";
-            /// infer the format
-            mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorAddOp>(e.getDefiningOp()).getFormats();
-            unsigned int i = opFormatsArrayAttr.size() - 1;
-            mlir::StringRef lhs_format = mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue();
-            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
-
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-
-            tensors.push_back(dyn_cast<TensorAddOp>(e.getDefiningOp()).getOperation()->getResult(0));
-          }
-          else if (isa<TensorSubtractOp>(e.getDefiningOp()))
-          {
-            comet_debug() << " is TensorSubstract Op\n";
-            /// infer the format
-            mlir::ArrayAttr opFormatsArrayAttr = dyn_cast<TensorSubtractOp>(e.getDefiningOp()).getFormats();
-            unsigned int i = opFormatsArrayAttr.size() - 1;
-            mlir::StringRef lhs_format = mlir::cast<mlir::StringAttr>(opFormatsArrayAttr[i]).getValue();
-            comet_debug() << __LINE__ << " lhs_format: " << lhs_format << "\n";
-
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-
-            tensors.push_back(dyn_cast<TensorSubtractOp>(e.getDefiningOp()).getOperation()->getResult(0));
+            tensors.push_back(e);
           }
           else if (isa<mlir::tensorAlgebra::TransposeOp>(e.getDefiningOp()))
           {
@@ -944,20 +873,7 @@ namespace
             }
 
             /// get the format of transposeOut tensor
-            if (isa<DenseTensorDeclOp>(transposeOut.getDefiningOp()))
-            {
-              auto denseFormat = dyn_cast<DenseTensorDeclOp>(transposeOut.getDefiningOp()).getFormat();
-              formats.push_back(denseFormat);
-            }
-            else if (isa<SparseTensorDeclOp>(transposeOut.getDefiningOp()))
-            {
-              auto sparseFormat = dyn_cast<SparseTensorDeclOp>(transposeOut.getDefiningOp()).getFormat();
-              formats.push_back(sparseFormat);
-            }
-            else
-            {
-              llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: Can not determine tensor format with transpose op\n";
-            }
+            formats.push_back(getTensorFormatString(transposeOut.getType()));
             tensors.push_back(transposeOut);
           }
           else
@@ -1023,7 +939,6 @@ namespace
           llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: the format of output tensor could not be determined during generation of binOp\n";
         }
         comet_debug() << " formats.size(): " << formats.size() << "\n";
-        auto strAttr = builder.getStrArrayAttr(formats);
 
         assert(tensors.size() == 2 && " less than 2 input tensors for ta.mul or ta.elews_mul\n");
 
@@ -1052,14 +967,14 @@ namespace
           SemiringAttr = builder.getStringAttr("noop_plusxy"); // this is for standard elementwise addition
           MaskingAttr = builder.getStringAttr("none");         // default for standard elementwise addition
           return builder.create<TensorAddOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                             labels, affineMapArrayAttr, strAttr, SemiringAttr,
+                                             labels, affineMapArrayAttr, SemiringAttr,
                                              MaskingAttr);
         case '-':
           comet_debug() << "creating TensorSubtractOp\n";
           SemiringAttr = builder.getStringAttr("noop_minus"); // this is for standard elementwise subtraction
           MaskingAttr = builder.getStringAttr("none");        // default for standard elementwise subtraction
           return builder.create<TensorSubtractOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                                  labels, affineMapArrayAttr, strAttr, SemiringAttr,
+                                                  labels, affineMapArrayAttr, SemiringAttr,
                                                   MaskingAttr);
         case '*':
         {
@@ -1071,7 +986,7 @@ namespace
           SemiringAttr = builder.getStringAttr("plusxy_times"); // this is for standard matrix multiplication
           MaskingAttr = builder.getStringAttr("none");          // default for standard matrix multiplication
           mlir::Value tcop = builder.create<TensorMultOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                                          labels, affineMapArrayAttr, strAttr, SemiringAttr,
+                                                          labels, affineMapArrayAttr, SemiringAttr,
                                                           MaskingAttr, nullptr); // TODO: masking is an optional operand
           tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
           tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
@@ -1089,7 +1004,7 @@ namespace
           auto SemiringAttr = builder.getStringAttr("noop_times"); /// this is for standard element-wise multiplication
           MaskingAttr = builder.getStringAttr("none");             /// default for standard element-wise multiplication
           mlir::Value tcop = builder.create<TensorElewsMultOp>(location, ret_tensor_type, tensors[0], tensors[1], labels,
-                                                               affineMapArrayAttr, strAttr, SemiringAttr,
+                                                               affineMapArrayAttr, SemiringAttr,
                                                                MaskingAttr);
 
           comet_vdump(tcop);
@@ -1302,25 +1217,7 @@ namespace
         return nullptr;
       comet_debug() << " get lhs\n";
 
-      mlir::Value lhs_decl;
-      std::string out_format;
-      if (isa<DenseTensorDeclOp>(lhs.getDefiningOp()))
-      {
-        lhs_decl = lhs;
-        out_format = "Dense";
-      }
-      else if (isa<SparseTensorDeclOp>(lhs.getDefiningOp()))
-      {
-        lhs_decl = lhs;
-        auto lhs_decl_op = cast<SparseTensorDeclOp>(lhs_decl.getDefiningOp());
-        std::string formatStr(lhs_decl_op.getFormatAttr().getValue());
-        out_format = formatStr;
-      }
-      else
-      {
-        emitError(loc(tensor_op.loc()),
-                  "error: Tensor Decl Not Found! '");
-      }
+      std::string out_format = getTensorFormatString(lhs.getType());
 
       auto out_lbls_vec =
           cast<tensorAlgebra::LabeledTensorExprAST>(*tensor_op.getLHS())
@@ -1341,7 +1238,7 @@ namespace
 
       auto tens_beta = tensor_op.getBeta();
 
-      auto ret_op = builder.create<TensorSetOp>(loc(tensor_op.loc()), rhs, lhs_decl);
+      auto ret_op = builder.create<TensorSetOp>(loc(tensor_op.loc()), rhs, lhs);
       ret_op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
       return rhs;
@@ -1533,7 +1430,7 @@ namespace
         }
         auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), dims_sizes, format);
         value = builder.create<SparseTensorDeclOp>(loc(tensordecl.loc()),
-                                                   sp_tensor_type, labels, tensor_format, false);
+                                                   sp_tensor_type, labels, false);
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
         comet_vdump(value);
 
@@ -1550,7 +1447,7 @@ namespace
       else
       {
         value = builder.create<DenseTensorDeclOp>(loc(tensordecl.loc()),
-                                                  tensor_type, labels, tensor_format);
+                                                  tensor_type, labels);
         comet_debug() << "MLIRGen DenseTensorDeclaration creation\n";
         comet_vdump(value);
       }
@@ -1610,72 +1507,12 @@ namespace
 
       auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
 
-      SmallVector<mlir::StringRef, 8> formats;
-
-      /// Firstly, Look at the rhs
-      if (isa<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()))
-      {
-        comet_debug() << " is TensorDeclOp\n";
-        /// infer the format
-        auto rhs_format = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
-        comet_debug() << " rhs_format: " << rhs_format << "\n";
-        formats.push_back(rhs_format);
-      }
-      else if (isa<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()))
-      {
-        comet_debug() << " is TensorDeclOp\n";
-        /// infer the format
-        auto rhs_format = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
-        comet_debug() << " rhs_format: " << rhs_format << "\n";
-        formats.push_back(rhs_format);
-      }
-      else
-      {
-        comet_debug() << " not TensorDeclOp\n";
-      }
-
-      /// Secondly, Look at the lhs
-      std::vector<LabeledTensorExprAST *> exprs{&lhsLT};
-      std::vector<mlir::Value> lhs_lbls_value;
-
-      for (auto e : exprs)
-      {
-        auto lhsLT_tensor_name = e->getTensorName();
-        mlir::Value lhsLT_op;
-        if ((lhsLT_op = symbolTable.lookup(lhsLT_tensor_name)) != NULL)
-        {
-          if (isa<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()))
-          {
-            comet_debug() << " is TensorDeclOp\n";
-            /// infer the format
-            auto lhs_format = dyn_cast<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()).getFormat();
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-          }
-          else if (isa<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()))
-          {
-            comet_debug() << " is TensorDeclOp\n";
-            /// infer the format
-            auto lhs_format = dyn_cast<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()).getFormat();
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-          }
-          else
-          {
-            comet_debug() << " not TensorDeclOp\n";
-          }
-        }
-      }
-
-      comet_debug() << " formats.size(): " << formats.size() << "\n";
-      auto strAttr = builder.getStrArrayAttr(formats);
-
       auto lhs_tensor = symbolTable.lookup(lhsLT.getTensorName());
 
       comet_debug() << " create TransposeOp\n";
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), lhs_tensor.getType(),
-                                                                       rhs_tensor, all_lbls_value, affineMapArrayAttr, strAttr);
-      builder.create<TensorSetOp>(loc(transpose.loc()), t.getDefiningOp()->getResult(0), lhs_tensor);
+                                                                       rhs_tensor, all_lbls_value, affineMapArrayAttr);
+      builder.create<TensorSetOp>(loc(transpose.loc()), t, lhs_tensor);
       comet_vdump(t);
 
       return t;
@@ -1725,30 +1562,6 @@ namespace
           mlir::AffineMap::get(dim, 0, lhs_exprs, context)};
 
       auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
-
-      SmallVector<mlir::StringRef, 8> formats;
-
-      /// Firstly, Look at the rhs
-      if (isa<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()))
-      {
-        comet_debug() << " is TensorDeclOp\n";
-        /// infer the format
-        auto rhs_format = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
-        comet_debug() << " rhs_format: " << rhs_format << "\n";
-        formats.push_back(rhs_format);
-      }
-      else if (isa<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()))
-      {
-        comet_debug() << " is TensorDeclOp\n";
-        /// infer the format
-        auto rhs_format = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
-        comet_debug() << " rhs_format: " << rhs_format << "\n";
-        formats.push_back(rhs_format);
-      }
-      else
-      {
-        comet_debug() << " not TensorDeclOp\n";
-      }
 
       /// Secondly, Look at the lhs
       /// Collect labels values
@@ -1823,53 +1636,33 @@ namespace
 
       /// Create Tensor Declarations Ops and populate formats (for lhs)
       mlir::Value lhs_tensor;
-      if (isa<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()))
+      if (auto tensorT = dyn_cast<mlir::TensorType>(rhs_tensor.getType()))
       {
-        /// for DenseTensorDeclOp create
-        mlir::StringRef format_strref = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
-        mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
-        mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
-
-        lhs_tensor = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, shapedT.getElementType()), indices, formatAttr);
-
-        /// populate formats
-        /// assumes lhs and rhs formats are same
-        auto lhs_format = dyn_cast<DenseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
-        formats.push_back(lhs_format);
+        auto declOp = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, tensorT.getElementType()), indices);
+        
+        lhs_tensor = declOp;
       }
-      else if (isa<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()))
+      else if (auto SparseTensorT = dyn_cast<SparseTensorType>(rhs_tensor.getType()))
       {
 
-        /// for SparseTensorDeclOp create
-        mlir::StringRef format_strref = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
-        mlir::StringAttr formatAttr = builder.getStringAttr(format_strref);
-
-        std::vector<TensorFormatEnum> format = mlir::tensorAlgebra::getFormats(format_strref, shape.size(), builder.getContext());
+        ArrayRef<TensorFormatEnum> format = SparseTensorT.getFormat();
         mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
         mlir::Type element_type = shapedT.getElementType();
         return_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), shape, format);
-        /// no lhs_LabeledTensor has been created. The output tensor of tranpose doesn't have explicit declaration,
-        /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
         auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), shape, format);
-
-        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), sp_tensor_type, indices, formatAttr, builder.getBoolAttr(true));
+        
+        /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
+        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), sp_tensor_type, indices, builder.getBoolAttr(true));
         comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
         comet_vdump(lhs_tensor);
-
-        /// populate formats
-        /// assumes lhs and rhs formats are same
-        auto lhs_format = dyn_cast<SparseTensorDeclOp>(rhs_tensor.getDefiningOp()).getFormat();
-        formats.push_back(lhs_format);
       }
 
-      comet_debug() << " formats.size(): " << formats.size() << "\n";
-      auto strAttr = builder.getStrArrayAttr(formats);
 
       comet_debug() << " create TransposeOp\n";
       mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, shapedT.getElementType()),
-                                                                       rhs_tensor, all_labels_val, affineMapArrayAttr, strAttr);
-      builder.create<TensorSetOp>(loc(transpose.loc()), t.getDefiningOp()->getResult(0), lhs_tensor);
+                                                                       rhs_tensor, all_labels_val, affineMapArrayAttr);
+      builder.create<TensorSetOp>(loc(transpose.loc()), t, lhs_tensor);
       comet_vdump(t);
 
       return t;
@@ -2291,7 +2084,6 @@ namespace
 
       std::vector<mlir::Value> tensors;
       auto binop = tensor_op.getOp();
-      SmallVector<mlir::StringRef, 8> formats;
       std::vector<LabeledTensorExprAST *> exprs{rhsLT, lhsLT};
       for (auto e : exprs)
       {
@@ -2299,23 +2091,14 @@ namespace
         mlir::Value lhsLT_op;
         if ((lhsLT_op = symbolTable.lookup(lhsLT_tensor_name)) != NULL)
         {
-          if (isa<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()))
+          if (isa<mlir::TensorType, SparseTensorType>(lhsLT_op.getType()))
           {
             /// infer the format
-            auto lhs_format = dyn_cast<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()).getFormat();
-            formats.push_back(lhs_format);
-            tensors.push_back(dyn_cast<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()));
-          }
-          else if (isa<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()))
-          {
-            /// infer the format
-            auto lhs_format = dyn_cast<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()).getFormat();
-            formats.push_back(lhs_format);
-            tensors.push_back(dyn_cast<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()));
+            tensors.push_back(lhsLT_op);
           }
           else
           {
-            comet_debug() << " not TensorDeclOp\n";
+            return mlir::failure(); /// this should not happen, we expect a tensor type here.
           }
         }
       }
@@ -2530,7 +2313,6 @@ namespace
 
       auto affineMapArrayAttr = builder.getAffineMapArrayAttr(affine_maps);
 
-      SmallVector<mlir::StringRef, 8> formats;
       std::vector<LabeledTensorExprAST *> exprs{rhs1LT, rhs2LT, lhsLT};
       std::vector<mlir::Value> tensors;
       for (auto e : exprs)
@@ -2539,27 +2321,9 @@ namespace
         mlir::Value lhsLT_op;
         if ((lhsLT_op = symbolTable.lookup(lhsLT_tensor_name)) != NULL)
         {
-          if (isa<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()))
+          if (isa<DenseTensorDeclOp, SparseTensorDeclOp, SparseTensorDeclOp>(lhsLT_op.getDefiningOp()))
           {
-            comet_debug() << " is TensorDeclOp\n";
-
-            /// infer the format
-            auto lhs_format = dyn_cast<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()).getFormat();
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-
-            tensors.push_back(dyn_cast<DenseTensorDeclOp>(lhsLT_op.getDefiningOp()));
-          }
-          else if (isa<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()))
-          {
-            comet_debug() << " is TensorDeclOp\n";
-
-            /// infer the format
-            auto lhs_format = dyn_cast<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()).getFormat();
-            comet_debug() << " lhs_format: " << lhs_format << "\n";
-            formats.push_back(lhs_format);
-
-            tensors.push_back(dyn_cast<SparseTensorDeclOp>(lhsLT_op.getDefiningOp()));
+            tensors.push_back(lhsLT_op);
           }
           else
           {
@@ -2567,8 +2331,6 @@ namespace
           }
         }
       }
-      comet_debug() << " formats.size(): " << formats.size() << "\n";
-      auto strAttr = builder.getStrArrayAttr(formats);
 
       assert(tensors.size() == 3 && "Not 3 tensors for ta.tc or ta.elews_mul\n");
 
@@ -2589,7 +2351,7 @@ namespace
                                               tensors[0], tensors[1],
                                               all_lbls_value,
                                               affineMapArrayAttr,
-                                              strAttr, SemiringAttr,
+                                              SemiringAttr,
                                               MaskingAttr);
 
         comet_vdump(op);
@@ -2604,7 +2366,7 @@ namespace
                                                    tensors[0], tensors[1],
                                                    all_lbls_value,
                                                    affineMapArrayAttr,
-                                                   strAttr, SemiringAttr,
+                                                   SemiringAttr,
                                                    MaskingAttr);
         comet_vdump(op);
         /// source is 1st parameter, dest is the second
@@ -2617,7 +2379,7 @@ namespace
                                                tensors[0], tensors[1],
                                                all_lbls_value,
                                                affineMapArrayAttr,
-                                               strAttr, SemiringAttr,
+                                               SemiringAttr,
                                                MaskingAttr, maskVal);
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
@@ -2628,7 +2390,7 @@ namespace
       }
       else if (binop == tok_elews || binop == tok_monoid)
       {
-        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], all_lbls_value, affineMapArrayAttr, strAttr, SemiringAttr, MaskingAttr);
+        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], all_lbls_value, affineMapArrayAttr, SemiringAttr, MaskingAttr);
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
@@ -2648,7 +2410,7 @@ namespace
                                           StringRef tensor_name, double value)
     {
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
-      auto tensorElType = cast<mlir::TensorType>(tensorValue.getDefiningOp()->getOpResult(0).getType()).getElementType();
+      auto tensorElType = cast<mlir::TensorType>(tensorValue.getType()).getElementType();
 
       mlir::FloatAttr valueAttr;
       if (tensorElType.isF64())
@@ -2677,23 +2439,24 @@ namespace
       comet_debug() << " in mlirGenTensorFillRandom\n";
 
       mlir::Value tensorValue = symbolTable.lookup(tensor_name);
-      auto lhs_labeledtensor = tensorValue.getDefiningOp()->getOpResult(0);
+      auto lhs_labeledtensor = tensorValue;
       comet_debug() << "\n";
       comet_vdump(lhs_labeledtensor);
       std::vector<int64_t> result_dims;
 
       std::vector<mlir::Value> lhs_lbls_value;
-      if (isa<DenseTensorDeclOp>(lhs_labeledtensor.getDefiningOp()))
+      if (mlir::TensorType tensorT = dyn_cast<mlir::TensorType>(lhs_labeledtensor.getType()))
       {
-        mlir::TensorType tensor = cast<mlir::TensorType>(lhs_labeledtensor.getType());
-        result_dims = tensor.getShape();
+        // mlir::TensorType tensor = cast<mlir::TensorType>(lhs_labeledtensor.getType());
+        result_dims = tensorT.getShape();
       }
       else
       {
-        if (isa<SparseTensorDeclOp>(lhs_labeledtensor.getDefiningOp()))
+        if (isa<SparseTensorType>(lhs_labeledtensor.getType()))
           llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: random initialization is currently not supported for sparse tensors.\n";
 
         llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: Not supported format encountered during random initialization of tensor.\n";
+        return mlir::failure();
       }
 
       comet_debug() << " dims size: " << result_dims.size() << "\n";

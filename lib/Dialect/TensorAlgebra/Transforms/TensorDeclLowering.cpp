@@ -41,6 +41,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/ValueRange.h"
+#include "mlir/Support/LLVM.h"
 
 #include <limits>
 #include <map>
@@ -176,7 +177,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                std::vector<Value>& array_sizes_vec,
                                std::vector<std::vector<int64_t>>& allPerms,
                                std::vector<Value>& dimSizes,
-                               std::string formats_str,
                                Type ty)
   {
     comet_debug() << " Get users after ";
@@ -184,9 +184,9 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
     comet_debug() << " tensorload_sizes_vec.size(): " << tensorload_sizes_vec.size() << ", rank_size: " << rank_size << "\n";
     /// create sptensor_construct
     
-    std::vector<TensorFormatEnum> dim_formats = mlir::tensorAlgebra::getFormats(formats_str, rank_size, ctx);
+    ArrayRef<TensorFormatEnum> dim_formats = mlir::cast<SparseTensorType>(ty).getFormat();
     llvm::SmallVector<Attribute, 4> dim_formats_attr;
-    for(TensorFormatEnum& format: dim_formats)
+    for(TensorFormatEnum format: dim_formats)
     {
       dim_formats_attr.push_back(TensorFormatEnumAttr::get(ctx,format));
     }
@@ -214,7 +214,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                                                               tensorload_sizes_vec[7], /// A2tile_crd
                                                                           },
                                                                           tensorload_sizes_vec[8], /// Aval
-                                                                           2, ArrayAttr::get(ctx, dim_formats_attr));
+                                                                           2, ArrayAttr::get(rewriter.getContext(), dim_formats_attr));
     }
     else if (rank_size == 3)
     {
@@ -243,7 +243,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                                                                           },
                                                                           // ValueRange{
                                                                           tensorload_sizes_vec[12], /// Aval
-                                                                          3, ArrayAttr::get(ctx, dim_formats_attr));
+                                                                          3, ArrayAttr::get(rewriter.getContext(), dim_formats_attr));
     }
     else
     {
@@ -278,9 +278,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
     comet_vdump(op);
     auto loc = op.getLoc();
-    StringRef formatsAttr = op.getFormat();
-    std::string formats_str(formatsAttr.data());
-    comet_debug() << " --- " << formats_str << "\n";
 
     comet_debug() << " " << op.getNumOperands() << "\n";
     auto rank_size = mlir::cast<SparseTensorType>(op.getResult().getType()).getRank();
@@ -293,12 +290,11 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
     auto dynamicmemTy_1d_vals_type = MemRefType::get({ShapedType::kDynamic}, valsType);     /// memref<?xf64>
     auto dynamicmemTy_1d_indices_type = MemRefType::get({ShapedType::kDynamic}, indicesType); 
 
-    comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
     Value new_tensor;
 
     /// sparse output
-    if (isDense(formats_str, ", ") == false)
+    if (!isa<TensorType>(op.getResult().getType()))
     {
       /// search read_from_file function call to get the input file name
       /// Currently, has no filename
@@ -378,15 +374,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
             dstIndexLocInSrcVec.push_back(dstIndexLocInSrc);
           }
 
-          ArrayAttr allFormats = transpose_op.getFormats();
-          std::vector<std::string> allFormatsStr;
-          for (unsigned int i = 0; i < allFormats.size(); i++)
-          {
-            std::string formats_str(cast<mlir::StringAttr>(allFormats[i]).getValue());
-            allFormatsStr.push_back(formats_str);
-          }
-          std::string src_format = allFormatsStr[0];
-          std::string dst_format = allFormatsStr[1];
 
           /// If in COO format, then the sizes are the same as the input
           /// for A and B: 2x+1 + 2x+1 + x = 5x+2
@@ -396,7 +383,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           comet_vdump(dst_input);
           comet_debug() << " ";
           comet_pdump(dst_input.getDefiningOp());
-          mlir::tensorAlgebra::SparseTensorType type =  cast<tensorAlgebra::SparseTensorType>(dst_input.getDefiningOp()->getResult(0).getType());
+          mlir::tensorAlgebra::SparseTensorType type =  cast<tensorAlgebra::SparseTensorType>(dst_input.getType());
 
           // unsigned int dst_rank = dst_input.getDefiningOp()->getNumOperands();
           unsigned int dst_rank = type.getRank();
@@ -415,7 +402,9 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
 
           /// For COO format, 2D and 3D are the same
           /// if src format is in COO format,
-          if (src_format.compare("COO") == 0)
+          auto srcType = cast<tensorAlgebra::SparseTensorType>(transpose_op.getOperand(0).getType());
+          auto src_format = getTensorFormatString(srcType);
+          if (src_format.compare("COO"))
           {
             for (unsigned int i = 0; i < dst_rank; i++)
             {
@@ -545,7 +534,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
             Value tensorload_sizes = rewriter.create<ToTensorOp>(loc, alloc_sizes, rewriter.getUnitAttr(), rewriter.getUnitAttr());
             tensorload_sizes_vec.push_back(tensorload_sizes);
           }
-          new_tensor = insertSparseTensorDeclOp(rewriter, op.getContext(), loc, rank_size, tensorload_sizes_vec, array_sizes_vec, allPerms, dimSizes, formats_str, op.getResult().getType());
+          new_tensor = insertSparseTensorDeclOp(rewriter, op.getContext(), loc, rank_size, tensorload_sizes_vec, array_sizes_vec, allPerms, dimSizes, op.getResult().getType());
           break;
         }
         else if (isa<indexTree::IndexTreeOp>(u))
@@ -714,8 +703,8 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       bool isOutputTensor = false;
 
       auto loc = op.getLoc();
-      StringRef formatsAttr = op.getFormat();
-      std::string formats_str(formatsAttr.data());
+      // StringRef formatsAttr = op.getFormat();
+      std::string formats_str(getTensorFormatString(op.getType()));
       comet_debug() << " --- " << formats_str << "\n";
 
       comet_debug() << " " << op.getNumOperands() << "\n";
@@ -844,7 +833,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       comet_debug() << " " << formats_str << " isDense: " << isDense(formats_str, ", ") << "\n";
 
       /// tensor is sparse and input.
-      if (isDense(formats_str, ", ") == false && isOutputTensor == false)
+      if (!isa<TensorType>(op.getType()) && isOutputTensor == false)
       {
         comet_debug() << " Sparse input tensor \n";
 
@@ -1178,7 +1167,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         /// Is sparse output ,lower to ta.output_tensor_decl
         auto tensor_decl_value = cast<tensorAlgebra::SparseTensorDeclOp>(op);
         auto labels = tensor_decl_value.getLabels();
-        auto tensor_format = tensor_decl_value.getFormat();
         auto tensor_type = tensor_decl_value.getType();
         auto is_temporal_tensor = tensor_decl_value.getTemporalTensor();
 
@@ -1187,13 +1175,13 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         {
           /// TempSparseOutputTensorDeclOp should be lowered before SparseOutputTensorDeclOp
           outputtensordecl = rewriter.create<TempSparseOutputTensorDeclOp>(loc,
-                                                                           tensor_type, labels, tensor_format);
+                                                                           tensor_type, labels);
           comet_debug() << "Gokcen\n";
           comet_vdump(outputtensordecl);
         }
         else
           outputtensordecl = rewriter.create<SparseOutputTensorDeclOp>(loc,
-                                                                       tensor_type, labels, tensor_format);
+                                                                       tensor_type, labels);
         comet_debug() << "SparseOutputTensorDecl or TempSparseOutputTensorDeclOp Operation is generated\n";
         comet_vdump(outputtensordecl);
         op.replaceAllUsesWith(outputtensordecl);

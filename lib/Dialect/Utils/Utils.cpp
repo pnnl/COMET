@@ -32,10 +32,12 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Support/LLVM.h"
 
 #include "llvm/Support/Debug.h"
 
 #include <set>
+#include <string>
 
 #define DEBUG_TYPE "ta-utils"
 
@@ -981,6 +983,77 @@ namespace mlir
       }
       comet_debug() << "\n";
       return dim_format;
+    }
+
+    std::string getTensorFormatString(Type tensorT)
+    {
+      if(isa<TensorType>(tensorT))
+      {
+        return "Dense";
+      }
+
+      auto sparseTensorT = cast<SparseTensorType>(tensorT);
+      auto formats = sparseTensorT.getFormat();
+      if(sparseTensorT.getRank() == 2)
+      {
+        if(formats[0] == TensorFormatEnum::CN && formats[1] == TensorFormatEnum::UNK &&  formats[2] == TensorFormatEnum::S && formats[3] == TensorFormatEnum::UNK)
+        {
+          return "COO";
+        }
+        else if(formats[0] == TensorFormatEnum::D && formats[1] == TensorFormatEnum::UNK && formats[2] == TensorFormatEnum::CU && formats[3] == TensorFormatEnum::UNK)
+        {
+          return "CSR"; /// CSR format
+        }
+        else if(formats[0] == TensorFormatEnum::CU && formats[1] == TensorFormatEnum::UNK && formats[2] == TensorFormatEnum::CU && formats[3] == TensorFormatEnum::UNK)
+        {
+          return "DCSR"; /// DCSR format
+        }
+        else if(formats[0] == TensorFormatEnum::D && formats[1] == TensorFormatEnum::D && formats[2] == TensorFormatEnum::S && formats[3] == TensorFormatEnum::UNK)
+        {
+          return "ELL"; /// ELL format
+        }
+        else if(formats[0] == TensorFormatEnum::D && formats[1] == TensorFormatEnum::CN && formats[2] == TensorFormatEnum::D && formats[3] == TensorFormatEnum::D)
+        {
+          return "BCSR"; /// BCSR format
+        }
+        else if(formats[0] == TensorFormatEnum::D && formats[1] == TensorFormatEnum::D && formats[2] == TensorFormatEnum::CU && formats[3] == TensorFormatEnum::S)
+        {
+          return "CSB"; /// CSB format
+        }
+        else 
+        {
+          //Handle errors for unsupported formats
+          llvm::errs() << "Unsupported 2D sparse tensor format detected: " 
+                       << formats[0] << ", " 
+                       << formats[1] << ", "
+                       << formats[2] << ", "
+                       << formats[3] << "\n";
+          return ""; // Return empty string to indicate unsupported format
+        }
+      }
+      else if(sparseTensorT.getRank() == 3)
+      {
+        if(formats[0] == TensorFormatEnum::CU && formats[1] == TensorFormatEnum::UNK && formats[2] == TensorFormatEnum::CU && formats[3] == TensorFormatEnum::UNK && formats[4] == TensorFormatEnum::CU && formats[5] == TensorFormatEnum::UNK)
+        {
+          return "CSF";
+        }
+        else if(formats[0] == TensorFormatEnum::CN && formats[1] == TensorFormatEnum::UNK && formats[2] == TensorFormatEnum::S && formats[3] == TensorFormatEnum::UNK && formats[4] == TensorFormatEnum::D && formats[5] == TensorFormatEnum::UNK)
+        {
+          return "ModeGeneric";
+        }
+        else if(formats[0] == TensorFormatEnum::CN && formats[1] == TensorFormatEnum::UNK && formats[2] == TensorFormatEnum::S && formats[3] == TensorFormatEnum::UNK && formats[4] == TensorFormatEnum::S && formats[5] == TensorFormatEnum::UNK)
+        {
+          return "COO"; /// COO format for 3D
+        }
+        else
+        {
+          llvm::errs() << "Unsupported 3D sparse tensor format detected: " << formats[0] << ", " << formats[1] << ", " << formats[2] << "\n";
+        }
+      }
+
+      // Handle cases for unsupported tensor ranks/formats
+      llvm::errs() << "Unsupported sparse tensor format detected for rank: " << sparseTensorT.getRank() << "\n";
+      return ""; // Return empty string to indicate unsupported format
     }
 
     std::vector<Value> getFormatsValueInt(llvm::StringRef formats_str, int rank_size, PatternRewriter &rewriter, Location loc, IntegerType intType)
@@ -2158,45 +2231,14 @@ namespace mlir
 
       auto affineMapArrayAttr = rewriter.getAffineMapArrayAttr(affineMaps);
       comet_debug() << "\n";
-      SmallVector<mlir::StringRef, 8> formats;
-      std::vector<mlir::Operation *> defops{rhs1Tensor.getDefiningOp(), rhs2Tensor.getDefiningOp(), lhsTensor.getDefiningOp()};
-      for (auto defop : defops)
-      {
-        comet_debug() << " ";
-        comet_pdump(defop);
-        if (isa<DenseTensorDeclOp>(defop))
-        {
-          comet_debug() << " is TensorDeclOp\n";
 
-          /// infer the format
-          auto lhs_format = dyn_cast<DenseTensorDeclOp>(defop).getFormat();
-          comet_debug() << " lhs_format: " << lhs_format << "\n";
-          formats.push_back(lhs_format);
-        }
-        else if (isa<SparseTensorDeclOp>(defop))
-        {
-          comet_debug() << " is TensorDeclOp\n";
-
-          /// infer the format
-          auto lhs_format = dyn_cast<SparseTensorDeclOp>(defop).getFormat();
-          comet_debug() << " lhs_format: " << lhs_format << "\n";
-          formats.push_back(lhs_format);
-        }
-        else
-        {
-          comet_debug() << " not TensorDeclOp\n";
-        }
-      }
-
-      auto formatAttr = rewriter.getStrArrayAttr(formats);
-      comet_debug() << " formatAttr: " << formatAttr << "\n";
 
       auto SemiringAttr = rewriter.getStringAttr("none");
       auto MaskingAttr = rewriter.getStringAttr("none");
       auto tc = rewriter.create<tensorAlgebra::TensorMultOp>(loc, lhsTensor.getType(),
                                                              rhs1Tensor, rhs2Tensor,
                                                              lhsLabels, affineMapArrayAttr,
-                                                             formatAttr, SemiringAttr, MaskingAttr,
+                                                             SemiringAttr, MaskingAttr,
                                                              nullptr); /// TODO: masking is an optional operand
       tc.getOperation()->setAttr("__alpha__", rewriter.getF64FloatAttr(alpha));
       tc.getOperation()->setAttr("__beta__", rewriter.getF64FloatAttr(beta));
