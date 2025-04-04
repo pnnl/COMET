@@ -17,6 +17,8 @@ def main() {
     var time0 = getTime();
     i0[i, a] = v[i, c, m, n] * t2[m, n, c, a];   #ccsd_t1 21st expression
     var time1 = getTime();
+    var ntri = SUM(i0[i, a]);
+    print(ntri);
 	printElapsedTime(time0, time1);
     
 }

@@ -37,7 +37,7 @@ $COMET_BIN_DIR/comet-opt   \
 
 command_nonopt="$MLIR_BIN_DIR/mlir-cpu-runner ../IRs/$fname-no-opt.llvm \
     -O3 -e main -entry-point-result=void \
-    -shared-libs=$COMET_LIB_DIR/libcomet_runner_utils$sharedlib_ext,$MLIR_LIB_DIR/libomp$sharedlib_ext"
+    -shared-libs=$COMET_LIB_DIR/libcomet_runner_utils$sharedlib_ext,$MLIR_LIB_DIR/libomp$sharedlib_ext,${MLIR_LIB_DIR}/libmlir_c_runner_utils${sharedlib_ext}"
 
 
 for i in $(seq 1 $iterations); do
@@ -69,12 +69,13 @@ total_time=0.0
 $COMET_BIN_DIR/comet-opt   \
     --convert-tc-to-ttgt \
     --convert-to-llvm    \
+    --convert-to-loops   \
     ../benchs/$fname &> ../IRs/$fname-opt.llvm
 
 
 command_opt="$MLIR_BIN_DIR/mlir-cpu-runner ../IRs/$fname-opt.llvm \
     -O3 -e main -entry-point-result=void \
-    -shared-libs=$COMET_LIB_DIR/libcomet_runner_utils$sharedlib_ext,$MLIR_LIB_DIR/libomp$sharedlib_ext"
+    -shared-libs=$COMET_LIB_DIR/libcomet_runner_utils$sharedlib_ext,$MLIR_LIB_DIR/libomp$sharedlib_ext,${MLIR_LIB_DIR}/libmlir_c_runner_utils${sharedlib_ext}"
 
 for i in $(seq 1 $iterations); do
     # Capture the output of the command

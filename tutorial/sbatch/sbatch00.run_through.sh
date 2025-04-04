@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A CENATE
+#####SBATCH -A CENATE
 #SBATCH -t 24:24:24
 #SBATCH -N 1
 #####SBATCH -p all
@@ -7,7 +7,7 @@
 #####SBATCH -p h100_shared
 #####SBATCH -p h100
 #####SBATCH -p a100
-#SBATCH -p slurm
+#####SBATCH -p slurm
 #SBATCH -J DSL_bench
 #SBATCH -e out_sb.%x.%j.log
 #SBATCH -o out_sb.%x.%j.log
@@ -25,7 +25,8 @@ module purge
 # module load rocm/5.6.0
 #module load cuda/12.3
 # Modules needed by Orca
-module load gcc/11.2.0 binutils/2.35 cmake/3.29.0
+# module load gcc/11.2.0 binutils/2.35 cmake/3.29.0
+module load gcc/11.2.0
 #module load openmpi/4.1.4
 #module load mkl
 module list &> _modules.lis_
@@ -75,7 +76,7 @@ printenv
 
 start=$(date +%s.%N)
 
-cd "/people/peng599/pppp/twotruth_project/COMET-indextree-rewrite-performance_mac/tutorial/session-1/cometdsl/run"
+cd "/people/peng599/pppp/twotruth_project/COMET-dev-new-performance_mac/tutorial/session-1/cometdsl/run"
 bash run_cometdsl.sh
 
 end=$(date +%s.%N)

@@ -76,13 +76,21 @@ total_time=0.0
 #    --convert-to-llvm    \
 #    ../benchs/$fname &> ../IRs/$fname-opt.llvm
 
-## Removed -opt-dense-transpose
+# ## Removed -opt-dense-transpose
+# $COMET_BIN_DIR/comet-opt   \
+#     -opt-bestperm-ttgt   \
+#     -opt-matmul-tiling   \
+#     -opt-matmul-mkernel  \
+#     --convert-tc-to-ttgt \
+#     --convert-to-loops \
+#     --convert-to-llvm    \
+#     ../benchs/$fname &> ../IRs/$fname-opt.llvm
+
+## Removed -opt-bestperm-ttgt --convert-to-loops
 $COMET_BIN_DIR/comet-opt   \
-    -opt-bestperm-ttgt   \
     -opt-matmul-tiling   \
     -opt-matmul-mkernel  \
     --convert-tc-to-ttgt \
-    --convert-to-loops \
     --convert-to-llvm    \
     ../benchs/$fname &> ../IRs/$fname-opt.llvm
 

@@ -19,5 +19,7 @@ def main() {
 	var time0 = getTime();
 	C[i, k] = A[i, j] * B[j, k];
 	var time1 = getTime();
+	var ntri = SUM(C[i, k]);
+	print(ntri);
 	printElapsedTime(time0, time1);
 }
