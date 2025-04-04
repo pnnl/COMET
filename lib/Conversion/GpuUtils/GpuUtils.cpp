@@ -467,7 +467,12 @@ mlir::LogicalResult specializeGpuKernel(mlir::OpBuilder& builder, mlir::ModuleOp
       }
       else
       {
-        op.setAttrs(llvm_func_attrs);
+        if (mlir::isa<LLVM::LLVMFuncOp>(op)) {
+          auto new_attrs = op.getAttrs().vec();
+          new_attrs.insert(new_attrs.end(), llvm_func_attrs.begin(),
+                          llvm_func_attrs.end());
+          op.setAttrs(new_attrs);
+        }
         builder.clone(op);
       }
     }
