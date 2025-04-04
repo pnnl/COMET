@@ -149,7 +149,8 @@ public:
                                         "amdgcn-amd-amdhsa", computeCapability);
     auto add_ttgir_passes = [this](ModuleOp& modOp) { return hip_device::add_ttgir_passes(modOp, numWarps, threadsPerWarp, numStages, numCTAs, computeCapability); };
     auto add_llir_passes = [this](ModuleOp& modOp) { return hip_device::add_llir_passes(modOp, computeCapability); };
-    if(failed(specializeGpuKernel(builder, modOp, this->codeFormat, target, hip_device::add_ttir_passes, add_ttgir_passes, add_llir_passes)))
+    std::vector<mlir::NamedAttribute> llvm_func_attrs = {builder.getNamedAttr(mlir::gpu::GPUDialect::getKernelFuncAttrName(), builder.getUnitAttr()), builder.getNamedAttr(mlir::ROCDL::ROCDLDialect::getKernelFuncAttrName(), builder.getUnitAttr()) };
+    if(failed(specializeGpuKernel(builder, modOp, this->codeFormat, target, hip_device::add_ttir_passes, add_ttgir_passes, add_llir_passes, llvm_func_attrs)))
     {
       return signalPassFailure();
     }

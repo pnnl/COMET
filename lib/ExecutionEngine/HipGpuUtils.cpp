@@ -161,5 +161,4 @@ extern "C" __attribute__((visibility("default"))) void HipFinit()
 {
   HIP_CHECK(hipModuleUnload(hipModule));
   hipModule = NULL;
-  moduleImg = NULL;
 }

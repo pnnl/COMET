@@ -13,5 +13,5 @@ add_llvm_library(COMETGpuToTriton
     TritonGPUIR
     TritonGPUTransforms
     #TritonNvidiaGPUTransforms
-    NVGPUIR
+    #NVGPUIR
 )

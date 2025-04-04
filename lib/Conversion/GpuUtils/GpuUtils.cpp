@@ -410,7 +410,7 @@ void declare_vendor_funcs(OpBuilder& builder, ModuleOp modOp, std::string vendor
   modOp.push_back(cudaFinit);
 }
 
-mlir::LogicalResult specializeGpuKernel(mlir::OpBuilder& builder, mlir::ModuleOp modOp, mlir::tensorAlgebra::GPUCompilationFormat codeFormat, Attribute target, std::function<bool (ModuleOp& mod)> add_ttir_passes, std::function<bool (ModuleOp& mod)> add_ttgir_passes, std::function<bool (ModuleOp& mod)> add_llir_passes)
+mlir::LogicalResult specializeGpuKernel(mlir::OpBuilder& builder, mlir::ModuleOp modOp, mlir::tensorAlgebra::GPUCompilationFormat codeFormat, Attribute target, std::function<bool (ModuleOp& mod)> add_ttir_passes, std::function<bool (ModuleOp& mod)> add_ttgir_passes, std::function<bool (ModuleOp& mod)> add_llir_passes, std::vector<mlir::NamedAttribute> llvm_func_attrs)
 {
   std::vector<mlir::triton::FuncOp> TTFuncs;
   modOp->walk([&TTFuncs](mlir::triton::FuncOp op) { TTFuncs.push_back(op); });
@@ -467,6 +467,7 @@ mlir::LogicalResult specializeGpuKernel(mlir::OpBuilder& builder, mlir::ModuleOp
       }
       else
       {
+        op.setAttrs(llvm_func_attrs);
         builder.clone(op);
       }
     }

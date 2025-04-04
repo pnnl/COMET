@@ -8,6 +8,6 @@
 
 mlir::LogicalResult specializeGpuHost(mlir::OpBuilder& builder, mlir::ModuleOp modOp, std::string vendor_prefix);
 void declare_vendor_funcs(mlir::OpBuilder& builder, mlir::ModuleOp modOp, std::string vendor_prefix);
-mlir::LogicalResult specializeGpuKernel(mlir::OpBuilder& builder, mlir::ModuleOp modOp, mlir::tensorAlgebra::GPUCompilationFormat codeFormat, mlir::Attribute target, std::function<bool (mlir::ModuleOp& mod)> add_ttir_passes, std::function<bool (mlir::ModuleOp& mod)> add_ttgir_passes, std::function<bool (mlir::ModuleOp& mod)> add_llir_passes);
+mlir::LogicalResult specializeGpuKernel(mlir::OpBuilder& builder, mlir::ModuleOp modOp, mlir::tensorAlgebra::GPUCompilationFormat codeFormat, mlir::Attribute target, std::function<bool (mlir::ModuleOp& mod)> add_ttir_passes, std::function<bool (mlir::ModuleOp& mod)> add_ttgir_passes, std::function<bool (mlir::ModuleOp& mod)> add_llir_passes, std::vector<mlir::NamedAttribute> llvm_func_attrs={});
 
 #endif
