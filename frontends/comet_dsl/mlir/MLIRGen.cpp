@@ -494,29 +494,16 @@ namespace
         comet_vdump(rhs);
         comet_vdump(lhs);
 
-        /// lookup the output of the binary operation
-        auto theOutput = symbolTable.lookup(out_format);
-        if (theOutput == nullptr)
-        { /// the variable for output of binary operation was not declared by user,
-          /// we will create a new DenseConstantOp here.
-          comet_debug() << "creating a new variable declaration, since the user did not declare it\n";
-
-          double data = 0.0;
-          auto dataAttribute = mlir::DenseElementsAttr::get(mlir::RankedTensorType::get({1}, builder.getF64Type()), llvm::ArrayRef(data));
-          auto denseConst = builder.create<DenseConstantOp>(location, returnDataType, dataAttribute);
-
-          theOutput = denseConst;
-        }
         comet_vdump(theOutput);
         auto scalarOp = builder.create<ScalarOp>(location, returnDataType, rhs, lhs, opAttr);
         comet_vdump(scalarOp);
-        builder.create<TensorSetOp>(location, scalarOp, theOutput);
+        symbolTable.insert(out_format, scalarOp);
 
         /// the value returned here will be used in subsequent ops.
         /// for example, in the code below, 'g' should be returned.
         ///   $ var g = a + b;
         ///   $ print(g);
-        return theOutput;
+        return scalarOp;
       }
 
       else if (isa<DenseConstantOp>(lhs.getDefiningOp()))
@@ -1966,8 +1953,7 @@ namespace
               LabeledTensorExprAST *lhsLabeledTensorExprAST = llvm::cast<LabeledTensorExprAST>(tensor_op->getLHS());
               CallExprAST *call = llvm::cast<CallExprAST>(tensor_op->getRHS());
               auto call_res = mlirGen(*call);
-              auto lhs_tensor = symbolTable.lookup(lhsLabeledTensorExprAST->getTensorName());
-              builder.create<TensorSetOp>(loc(tensor_op->loc()), call_res, lhs_tensor);
+              symbolTable.insert(lhsLabeledTensorExprAST->getTensorName(), call_res);
               continue;
             }
             /// TODO(gkestor): evaluate use of Expr_LabeledTensor for slicing
@@ -2109,18 +2095,11 @@ namespace
         llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: Unsupported tensor elementwise addition\n";
         /// TODO(gkestor): look at tensor elementwise addition
         /// auto SemiringAttr = builder.getStringAttr("eltwise_add"); /// this is for standard elementwise addition
-        /// auto op = builder.create<TensorAddOp>(loc(tensor_op.loc()), mlir::UnrankedTensorType::get(builder.getF64Type()),
-        ///                                       tensors[1], tensors[0], builder.getStrArrayAttr(formats), );
-        /// builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
       }
 
       else if (binop == TensorOpKind::Tensor_Red_Sub)
       {
         llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: Unsupported tensor elementwise substraction\n";
-        /// TODO(gkestor): look at tensor elementwise subtraction
-        /// auto op = builder.create<TensorSubtractOp>(loc(tensor_op.loc()), mlir::UnrankedTensorType::get(builder.getF64Type()),
-        ///                                             tensors[1], tensors[0], builder.getStrArrayAttr(formats));
-        /// builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[1]);
       }
 
       return mlir::success();
@@ -2321,14 +2300,14 @@ namespace
         mlir::Value lhsLT_op;
         if ((lhsLT_op = symbolTable.lookup(lhsLT_tensor_name)) != NULL)
         {
-          if (isa<DenseTensorDeclOp, SparseTensorDeclOp, SparseTensorDeclOp>(lhsLT_op.getDefiningOp()))
+          // if (isa<DenseTensorDeclOp, SparseTensorDeclOp, SparseTensorDeclOp>(lhsLT_op.getDefiningOp()))
           {
             tensors.push_back(lhsLT_op);
           }
-          else
-          {
-            comet_debug() << " not TensorDeclOp\n";
-          }
+          // elsez
+          // {
+          //   comet_debug() << " not TensorDeclOp\n";
+          // }
         }
       }
 
@@ -2355,8 +2334,7 @@ namespace
                                               MaskingAttr);
 
         comet_vdump(op);
-        /// source is 1st parameter, dest is the second
-        builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
+        symbolTable.insert(exprs[2]->getTensorName(), op);
       }
       else if (binop == '-')
       {
@@ -2369,8 +2347,7 @@ namespace
                                                    SemiringAttr,
                                                    MaskingAttr);
         comet_vdump(op);
-        /// source is 1st parameter, dest is the second
-        builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
+        symbolTable.insert(exprs[2]->getTensorName(), op);
       }
       else if (binop == '*' || binop == tok_semiring)
       {
@@ -2384,9 +2361,8 @@ namespace
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
-        /// source is 1st parameter, dest is the second
-        auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
-        setop.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
+        symbolTable.insert(exprs[2]->getTensorName(), op);
+
       }
       else if (binop == tok_elews || binop == tok_monoid)
       {
@@ -2394,8 +2370,7 @@ namespace
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
-        auto setop = builder.create<TensorSetOp>(loc(tensor_op.loc()), op.getOperation()->getResult(0), tensors[2]);
-        setop.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
+        symbolTable.insert(exprs[2]->getTensorName(), op);
       }
       else
       {

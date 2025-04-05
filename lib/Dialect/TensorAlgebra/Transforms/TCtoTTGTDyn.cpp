@@ -189,29 +189,46 @@ namespace
         allPerms.push_back(perm);
       }
 
-      Value lhsDef;
-      tensorAlgebra::TensorSetOp setnewop;
-      for (auto u : multop.getOperation()->getResult(0).getUsers())
-      {
-        comet_pdump(u);
-        if (isa<tensorAlgebra::TensorSetOp>(u))
-        {
-          setnewop = cast<tensorAlgebra::TensorSetOp>(u);
-          Value dstTensor = u->getOperand(1);
-
-          lhsDef = dstTensor;
-          comet_vdump(lhsDef);
-        }
-      }
 
       comet_vdump(setnewop);
       comet_debug() << "\n";
 
-      Value rhs1Tensor = operands[0], rhs2Tensor = operands[1], lhsTensor = lhsDef;
+      Value rhs1Tensor = operands[0], rhs2Tensor = operands[1], lhsTensor;
 
       auto rhs1TensorType = cast<TensorType>(rhs1Tensor.getType());
       auto rhs2TensorType = cast<TensorType>(rhs2Tensor.getType());
-      auto lhsTensorType = cast<TensorType>(lhsTensor.getType());
+
+      SmallVector<Value, 4> dims; 
+      auto shapeT = cast<ShapedType>(multop.getResult().getType());
+      ArrayAttr indexing_maps = cast<ArrayAttr>(multop.getIndexingMaps());
+      for(auto [index, v]: enumerate(cast<AffineMapAttr>(indexing_maps[2]).getValue().getResults()))
+      {
+        if(!cast<ShapedType>(rhs1Tensor.getType()).isDynamicDim(index))
+        {
+          continue;
+        }
+    
+        AffineMap map = cast<AffineMapAttr>(indexing_maps[0]).getValue();
+        if (auto pos = map.getResultPosition(v))
+        {
+          auto dim = rewriter.create<TensorDimOp>(loc, rhs1Tensor, *pos);
+          dims.push_back(dim);
+          continue;
+        }
+    
+        map = cast<AffineMapAttr>(indexing_maps[1]).getValue(); // try the second map (rhs2)
+        if (auto pos = map.getResultPosition(v))
+        {
+          auto dim = rewriter.create<TensorDimOp>(loc, rhs2Tensor, *pos);
+          dims.push_back(dim);
+          continue;
+        }
+      }
+      
+      auto zero = rewriter.create<arith::ConstantOp>(loc, FloatAttr::get(shapeT.getElementType(), 0.0));
+      lhsTensor = rewriter.create<tensor::SplatOp>(loc, shapeT, zero, ValueRange(dims));
+
+      auto lhsTensorType =  cast<TensorType>(lhsTensor.getType());
 
       std::vector<Value> allShapes{rhs1Tensor,
         rhs2Tensor,
@@ -710,8 +727,9 @@ namespace
             loc, printFlopsStr, SmallVector<Type, 2>{}, ValueRange{flopsOp});
       }
 
-      rewriter.replaceAllUsesWith(
-          op->getResults(), switchOp.getResults()); // Replace the original op with the final result of the matmul or matvec
+      rewriter.replaceOp(op, switchOp);
+      // rewriter.replaceAllUsesWith(
+      //     op->getResults(), switchOp.getResults()); // Replace the original op with the final result of the matmul or matvec
       // rewriter.replaceUsesWithIf(setnewop->getOperand(1), switchOp.getResult(0), [&](OpOperand& use) { 
       //   auto user = use.getOwner();
       //   auto ancestor = switchOp->getBlock()->findAncestorOpInBlock(*user);
@@ -719,7 +737,7 @@ namespace
       // });
       // op->replaceAllUsesWith(switchOp);
       // rewriter.eraseOp(setnewop);
-      rewriter.eraseOp(op);
+      // rewriter.eraseOp(op);
       return success();
     }
 

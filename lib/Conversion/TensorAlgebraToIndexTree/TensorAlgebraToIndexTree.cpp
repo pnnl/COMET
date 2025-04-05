@@ -31,12 +31,20 @@
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
 #include "comet/Dialect/IndexTree/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/AffineExpr.h"
+#include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Block.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/Operation.h"
+#include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
+#include "mlir/Support/LLVM.h"
+#include "llvm/ADT/ArrayRef.h"
 
 using namespace mlir;
 using namespace mlir::indexTree;
@@ -235,9 +243,45 @@ mlir::LogicalResult generalIndexOperationRewrite(
   auto context = rewriter.getContext();
   TATensorOp mult_op = llvm::dyn_cast<TATensorOp>(op);
 
-  Value rhs1_tensor = getRealRhs(mult_op.getRhs1());
-  Value rhs2_tensor = getRealRhs(mult_op.getRhs2());
-  Value lhs_tensor = getRealLhs(op);
+  Value rhs1_tensor = mult_op.getRhs1();
+  Value rhs2_tensor = mult_op.getRhs2();
+  Value lhs_tensor;
+  SmallVector<Value, 4> dims; 
+  auto shapeT = cast<ShapedType>(mult_op.getResult().getType());
+  ArrayAttr indexing_maps = cast<ArrayAttr>(mult_op.getIndexingMaps());
+  for(auto [index, v]: enumerate(cast<AffineMapAttr>(indexing_maps[2]).getValue().getResults()))
+  {
+    if(!cast<ShapedType>(rhs1_tensor.getType()).isDynamicDim(index))
+    {
+      continue;
+    }
+
+    AffineMap map = cast<AffineMapAttr>(indexing_maps[0]).getValue();
+    if (auto pos = map.getResultPosition(v))
+    {
+      auto dim = rewriter.create<TensorDimOp>(loc, rhs1_tensor, *pos);
+      dims.push_back(dim);
+      continue;
+    }
+
+    map = cast<AffineMapAttr>(indexing_maps[1]).getValue(); // try the second map (rhs2)
+    if (auto pos = map.getResultPosition(v))
+    {
+      auto dim = rewriter.create<TensorDimOp>(loc, rhs2_tensor, *pos);
+      dims.push_back(dim);
+      continue;
+    }
+  }
+
+  if(auto spTensorT = dyn_cast<SparseTensorType>(op->getResultTypes()[0]))
+  {
+    lhs_tensor = rewriter.create<tensorAlgebra::SparseTensorDeclOp>(loc, shapeT, ValueRange(dims), false);
+  }
+  else if (auto tensorT = dyn_cast<TensorType>(op->getResultTypes()[0]))
+  {
+    lhs_tensor = rewriter.create<tensorAlgebra::DenseTensorDeclOp>(loc, shapeT, ValueRange(dims));
+    // lhs_tensor = rewriter.create<tensor::EmptyOp>(loc, shapeT, ValueRange(dims));
+  }
 
   comet_vdump(rhs1_tensor);
   comet_vdump(rhs2_tensor);
@@ -253,7 +297,6 @@ mlir::LogicalResult generalIndexOperationRewrite(
     }
   }
 
-  auto indexing_maps = mult_op.getIndexingMaps();
   auto semiring = cast<mlir::StringAttr>(mult_op.getSemiringAttr()).getValue();
 
   auto tensor_type = op->getResultTypes()[0];
@@ -482,8 +525,8 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
   comet_pdump(getOperation()->getParentOfType<ModuleOp>());
   mlir::ConversionTarget target(getContext());
 
-  target.addLegalDialect<indexTree::IndexTreeDialect>();
-  target.addLegalOp<tensorAlgebra::SpTensorAliasOp>();
+  target.addLegalDialect<indexTree::IndexTreeDialect, tensor::TensorDialect, arith::ArithDialect>();
+  target.addLegalOp<tensorAlgebra::SpTensorAliasOp, tensorAlgebra::DenseTensorDeclOp, tensorAlgebra::SparseTensorDeclOp, tensorAlgebra::TensorDimOp>();
   target.addIllegalOp<tensorAlgebra::TensorMultOp, tensorAlgebra::TensorElewsMultOp,
                       tensorAlgebra::TensorAddOp, tensorAlgebra::TensorSubtractOp>();
 

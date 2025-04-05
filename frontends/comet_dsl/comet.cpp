@@ -427,7 +427,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   ///  Check if there are missing tensor declaration operations introduced by compound expressions.
   ///  If so, add a new tensor declaration to represent intermediate tensors
   ///  =============================================================================
-  optPM.addPass(mlir::comet::createTensorAlgebraCheckImplicitTensorDeclPass());
+  // optPM.addPass(mlir::comet::createTensorAlgebraCheckImplicitTensorDeclPass());
   ///  =============================================================================
   /// Check to see if we are dumping to TA dialect.
   if (emitTA)
