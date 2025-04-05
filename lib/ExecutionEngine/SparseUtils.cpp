@@ -2118,22 +2118,22 @@ void read_input_sizes_3D(int32_t fileID,
     /// std::cout << "CSF format\n";
     Csf3DTensor<T> csf_3dtensor(FileReader.coo_3dtensor);
 
-    desc_sizes->data[0] = csf_3dtensor.A1pos_size;
-    desc_sizes->data[1] = csf_3dtensor.A1crd_size;
-    desc_sizes->data[2] = 0;
-    desc_sizes->data[3] = 0;
-    desc_sizes->data[4] = csf_3dtensor.A2pos_size;
-    desc_sizes->data[5] = csf_3dtensor.A2crd_size;
-    desc_sizes->data[6] = 0;
-    desc_sizes->data[7] = 0;
-    desc_sizes->data[8] = csf_3dtensor.A3pos_size;
-    desc_sizes->data[9] = csf_3dtensor.A3crd_size;
-    desc_sizes->data[10] = 0;
-    desc_sizes->data[11] = 0;
-    desc_sizes->data[12] = csf_3dtensor.Aval_size;
-    desc_sizes->data[13] = csf_3dtensor.num_index_i;
-    desc_sizes->data[14] = csf_3dtensor.num_index_j;
-    desc_sizes->data[15] = csf_3dtensor.num_index_k;
+    desc_sizes->data[0] = csf_3dtensor.A1pos_size;    /// A1pos
+    desc_sizes->data[1] = csf_3dtensor.A1crd_size;    /// A1crd
+    desc_sizes->data[2] = 0;                          /// A1_tile_pos
+    desc_sizes->data[3] = 0;                          /// A1_tile_crd
+    desc_sizes->data[4] = csf_3dtensor.A2pos_size;    /// A2pos
+    desc_sizes->data[5] = csf_3dtensor.A2crd_size;    /// A2crd
+    desc_sizes->data[6] = 0;                          /// A2_tile_pos
+    desc_sizes->data[7] = 0;                          /// A2_tile_crd
+    desc_sizes->data[8] = csf_3dtensor.A3pos_size;    /// A3pos
+    desc_sizes->data[9] = csf_3dtensor.A3crd_size;    /// A3crd
+    desc_sizes->data[10] = 0;                         /// A3_tile_pos
+    desc_sizes->data[11] = 0;                         /// A3_tile_crd
+    desc_sizes->data[12] = csf_3dtensor.Aval_size;    /// Aval
+    desc_sizes->data[13] = csf_3dtensor.num_index_i;  /// I
+    desc_sizes->data[14] = csf_3dtensor.num_index_j;  /// J
+    desc_sizes->data[15] = csf_3dtensor.num_index_k;  /// K
   }
   /// Mode-Generic
   else if (A1format == Compressed_nonunique && A2format == singleton && A3format == Dense)
@@ -2141,22 +2141,22 @@ void read_input_sizes_3D(int32_t fileID,
     /// std::cout << "Mode-Generic format\n";
     Mg3DTensor<T> mg_3dtensor(FileReader.coo_3dtensor);
 
-    desc_sizes->data[0] = mg_3dtensor.A1pos_size;
-    desc_sizes->data[1] = mg_3dtensor.A1crd_size;
-    desc_sizes->data[2] = 0;
-    desc_sizes->data[3] = 0;
-    desc_sizes->data[4] = mg_3dtensor.A2pos_size;
-    desc_sizes->data[5] = mg_3dtensor.A2crd_size;
-    desc_sizes->data[6] = 0;
-    desc_sizes->data[7] = 0;
-    desc_sizes->data[8] = mg_3dtensor.A3pos_size;
-    desc_sizes->data[9] = mg_3dtensor.A3crd_size;
-    desc_sizes->data[10] = 0;
-    desc_sizes->data[11] = 0;
-    desc_sizes->data[12] = mg_3dtensor.Aval_size;
-    desc_sizes->data[13] = mg_3dtensor.num_index_i;
-    desc_sizes->data[14] = mg_3dtensor.num_index_j;
-    desc_sizes->data[15] = mg_3dtensor.num_index_k;
+    desc_sizes->data[0] = mg_3dtensor.A1pos_size;    /// A1pos
+    desc_sizes->data[1] = mg_3dtensor.A1crd_size;    /// A1crd
+    desc_sizes->data[2] = 0;                         /// A1_tile_pos
+    desc_sizes->data[3] = 0;                         /// A1_tile_crd
+    desc_sizes->data[4] = mg_3dtensor.A2pos_size;    /// A2pos
+    desc_sizes->data[5] = mg_3dtensor.A2crd_size;    /// A2crd
+    desc_sizes->data[6] = 0;                         /// A2_tile_pos
+    desc_sizes->data[7] = 0;                         /// A2_tile_crd
+    desc_sizes->data[8] = mg_3dtensor.A3pos_size;    /// A3pos
+    desc_sizes->data[9] = mg_3dtensor.A3crd_size;    /// A3crd
+    desc_sizes->data[10] = 0;                        /// A3_tile_pos
+    desc_sizes->data[11] = 0;                        /// A3_tile_crd
+    desc_sizes->data[12] = mg_3dtensor.Aval_size;    /// Aval
+    desc_sizes->data[13] = mg_3dtensor.num_index_i;  /// I
+    desc_sizes->data[14] = mg_3dtensor.num_index_j;  /// J
+    desc_sizes->data[15] = mg_3dtensor.num_index_k;  /// K
   }
   else
   {
