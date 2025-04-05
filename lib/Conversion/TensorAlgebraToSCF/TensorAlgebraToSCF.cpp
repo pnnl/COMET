@@ -231,14 +231,9 @@ namespace
         SmallVector<Value, 4> dims;
         for(auto [index, perm]: llvm::enumerate(allPerms[1])) /// for the output tensor, we need to get the dims from the permute order
         {
-          if(perm < 0)
+          if(tensorT.isDynamicDim(perm))
           {
-            comet_debug() << "Invalid permutation found in transpose\n";
-            return failure();
-          }
-          if(tensorT.isDynamicDim(index))
-          {
-            auto dim = rewriter.create<tensor::DimOp>(loc, inputTensor, perm);
+            auto dim = rewriter.create<tensor::DimOp>(loc, inputTensor, perm); 
             dims.push_back(dim);
           }
         }
