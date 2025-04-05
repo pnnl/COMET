@@ -251,7 +251,6 @@ namespace
                         tensorAlgebra::TensorFillOp,
                         tensorAlgebra::GetTimeOp,
                         tensorAlgebra::PrintElapsedTimeOp,
-                        tensorAlgebra::TensorSetOp,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::DenseConstantOp,
                         tensorAlgebra::TensorMultOp,

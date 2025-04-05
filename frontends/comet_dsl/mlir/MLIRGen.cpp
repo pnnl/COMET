@@ -48,6 +48,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopedHashTable.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdint>
@@ -479,17 +480,55 @@ namespace
 
         mlir::StringAttr opAttr = builder.getStringAttr(op);
         mlir::RankedTensorType returnDataType;
-        if(mlir::cast<mlir::RankedTensorType>(lhs.getType()).getShape() != mlir::cast<mlir::RankedTensorType>(rhs.getType()).getShape())
+        auto lhsShapedType = llvm::dyn_cast<mlir::RankedTensorType>(lhs.getType());
+        auto rhsShapedType = llvm::dyn_cast<mlir::RankedTensorType>(rhs.getType());
+        if(!lhsShapedType && !rhsShapedType)
         {
-          returnDataType = mlir::cast<mlir::RankedTensorType>(lhs.getType());
-          auto bcastRhs = builder.create<DenseConstantOp>(location, returnDataType, mlir::cast<DenseConstantOp>(rhs.getDefiningOp()).getValueAttr());
-          comet_vdump(bcastRhs);
-          rhs.replaceAllUsesWith(bcastRhs);
-          rhs = bcastRhs;
-        }
-        else {
           mlir::Type elementType = builder.getF64Type();
           returnDataType = mlir::RankedTensorType::get(1, elementType);
+        }
+        else if (lhsShapedType && !rhsShapedType)
+        {
+          returnDataType = lhsShapedType;
+          SmallVector<mlir::Value, 4> dims;
+          for(int i = 0; i < lhsShapedType.getRank(); ++i)
+          {
+            if(lhsShapedType.isDynamicDim(i))
+            {
+              auto dim = builder.create<TensorDimOp>(location, lhs, i);
+              dims.push_back(dim);
+            }
+          }
+          auto bcastRhs = builder.create<mlir::tensor::SplatOp>(location, rhs, returnDataType, dims);
+          comet_vdump(bcastRhs);
+          rhs.replaceAllUsesExcept(bcastRhs, bcastRhs); // replace all uses of rhs with bcastRhs except the defining op
+          rhs = bcastRhs;
+        }
+        else if(!lhsShapedType && rhsShapedType)
+        {
+          returnDataType = rhsShapedType;
+          SmallVector<mlir::Value, 4> dims;
+          for(int i = 0; i < rhsShapedType.getRank(); ++i)
+          {
+            if(rhsShapedType.isDynamicDim(i))
+            {
+              auto dim = builder.create<TensorDimOp>(location, rhs, i);
+              dims.push_back(dim);
+            }
+          }
+          auto bcastLhs = builder.create<mlir::tensor::SplatOp>(location, lhs, returnDataType, dims);
+          comet_vdump(bcastLhs);
+          lhs.replaceAllUsesExcept(bcastLhs, bcastLhs); // replace all uses of lhs with bcastLhs except the defining op
+          lhs = bcastLhs;
+        }
+        else if (lhsShapedType && rhsShapedType)
+        {
+          if (lhsShapedType.getElementType() != rhsShapedType.getElementType())
+          {
+            comet_debug() << "ERROR: mismatched element types for binary operation\n";
+            return nullptr;
+          }
+          returnDataType = lhsShapedType;
         }
         comet_vdump(rhs);
         comet_vdump(lhs);
@@ -497,7 +536,7 @@ namespace
         comet_vdump(theOutput);
         auto scalarOp = builder.create<ScalarOp>(location, returnDataType, rhs, lhs, opAttr);
         comet_vdump(scalarOp);
-        symbolTable.insert(out_format, scalarOp);
+        // symbolTable.insert(out_format, scalarOp);
 
         /// the value returned here will be used in subsequent ops.
         /// for example, in the code below, 'g' should be returned.
@@ -1213,7 +1252,6 @@ namespace
       auto lhsName = cast<tensorAlgebra::LabeledTensorExprAST>(*tensor_op.getLHS())
           .getTensorName(); 
       symbolTable.insert(lhsName, rhs); 
-      // auto ret_op = builder.create<TensorSetOp>(loc(tensor_op.loc()), rhs, lhs);
       // ret_op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
       return rhs;
@@ -2447,7 +2485,6 @@ namespace
       /// method.
       auto denseConst = builder.create<DenseConstantOp>(loc, lhs_labeledtensor.getType(), dataAttribute);
       symbolTable.insert(tensor_name, denseConst);
-      // builder.create<TensorSetOp>(loc, denseConst, lhs_labeledtensor);
 
       return mlir::success();
     }

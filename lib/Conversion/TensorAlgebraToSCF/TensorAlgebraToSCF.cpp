@@ -43,6 +43,7 @@
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/Casting.h"
 #include <string>
 
 using namespace mlir;
@@ -87,40 +88,12 @@ namespace
       DenseElementsAttr constantValue = op.getValue();
       Location loc = op.getLoc();
 
-      tensorAlgebra::TensorSetOp setnewop;
-      bool user_setOp = false;
-      for (auto u : op.getOperation()->getResult(0).getUsers())
-      {
-        if (isa<tensorAlgebra::TensorSetOp>(u))
-        {
-          setnewop = cast<tensorAlgebra::TensorSetOp>(u);
-          user_setOp = true;
-        }
-      }
-
       /// When lowering the constant operation, we allocate and assign the constant
       /// values to a corresponding memref allocation.
       auto tensorType = cast<TensorType>(op.getType());
       auto memRefType = convertTensorToMemRef(tensorType);
 
-      comet_debug() << "User_setop: " << user_setOp << "/n";
-      Value alloc;
-      if (user_setOp)
-      {
-        if (auto toTensor = dyn_cast<ToTensorOp>(setnewop.getOperand(1).getDefiningOp()))
-        {
-          auto alloc_op = cast<memref::AllocOp>(toTensor->getOperand(0).getDefiningOp());
-          comet_vdump(alloc_op);
-          alloc = alloc_op;
-        }
-        else {
-          alloc = rewriter.create<memref::AllocOp>(loc, memRefType);
-        }
-      }
-      else
-      {
-        alloc = rewriter.create<memref::AllocOp>(loc, memRefType);
-      }
+      Value alloc = rewriter.create<memref::AllocOp>(loc, memRefType);
 
       /// We will be generating constant indices up-to the largest dimension.
       /// Create these constants up-front to avoid large amounts of redundant
@@ -537,32 +510,7 @@ namespace
       // auto lh = op->getOperand(1).getType();
 
       [[maybe_unused]] auto f64Type = rewriter.getF64Type();
-      Value const_index_0 = rewriter.create<ConstantIndexOp>(loc, 0);
       comet_vdump(const_index_0);
-      std::vector<Value> alloc_zero_loc = {const_index_0};
-
-      Value res;
-      bool res_comes_from_setop = false;
-      for (auto u : op.getOperation()->getResult(0).getUsers())
-      {
-        comet_debug() << "Users:\n";
-        comet_pdump(u);
-        if (isa<tensorAlgebra::TensorSetOp>(u))
-        {
-          // u->dump();
-          // u->getBlock()->dump();
-          res = cast<tensorAlgebra::TensorSetOp>(u).getOperation()->getOperand(1);
-          // (++res.getUsers().begin())->dump();
-          if(!res.getUsers().empty() &&  isa<TensorSetOp>(*(++res.getUsers().begin())))
-          {
-            res = cast<tensorAlgebra::TensorSetOp>(*(++res.getUsers().begin())).getRhs();
-          }
-          res_comes_from_setop = true;
-          break;
-        }
-      }
-
-      assert(res_comes_from_setop && "SetOp is needed to assign the scalar operation result to final variable");
 
       comet_debug() << "Scalar lowering Final step\n";
       comet_debug() << "RHS, LHS and result:\n";
@@ -574,22 +522,66 @@ namespace
       auto arith_op_attr = op.getOpAttr();
       std::string op_attr(arith_op_attr.getValue());
       comet_debug() << "aritmetic op: " << op_attr << "\n";
+      auto areTensors = dyn_cast<RankedTensorType>(rhs.getType()) && dyn_cast<RankedTensorType>(lhs.getType());
+      Value res;
+      if(areTensors)
+      {
+        SmallVector<Value, 4> dims;
+        auto lhs_type = dyn_cast<RankedTensorType>(lhs.getType());
+        for(int64_t i = 0; i < lhs_type.getRank(); i++)
+        {
+          if(lhs_type.isDynamicDim(i))
+          {
+            auto dim = rewriter.create<TensorDimOp>(loc, lhs, i);
+            dims.push_back(dim);
+          }
+        }
+        res = rewriter.create<tensor::EmptyOp>(loc, rhs.getType(), dims);
+      }
       Value res_val;
       if (op_attr.compare("+") == 0)
       {
-        res_val = rewriter.create<linalg::AddOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
+        if(areTensors)
+        {
+          res_val = rewriter.create<linalg::AddOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
+        }
+        else 
+        {
+          res_val = rewriter.create<AddFOp>(loc, lhs, rhs).getResult();
+        }
       }
       else if (op_attr.compare("-") == 0)
       {
-        res_val = rewriter.create<linalg::SubOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
+        if(areTensors)
+        {
+          res_val = rewriter.create<linalg::SubOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
+        }
+        else 
+        {
+          res_val = rewriter.create<SubFOp>(loc, lhs, rhs).getResult();
+        }
       }
       else if (op_attr.compare("*") == 0)
       {
-        res_val = rewriter.create<linalg::MulOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
+        if(areTensors)
+        {
+          res_val = rewriter.create<linalg::MulOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
+        }
+        else
+        {
+          res_val = rewriter.create<MulFOp>(loc, lhs, rhs).getResult();
+        }
       }
       else if (op_attr.compare("/") == 0)
       {
-        res_val = rewriter.create<linalg::DivOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
+        if(areTensors)
+        {
+          res_val = rewriter.create<linalg::DivOp>(loc, ValueRange{lhs, rhs}, ValueRange(res)).getResultTensors()[0];
+        }
+        else
+        {
+          res_val = rewriter.create<DivFOp>(loc, lhs, rhs).getResult();
+        }
       }
       else
       {

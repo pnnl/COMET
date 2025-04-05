@@ -133,57 +133,6 @@ bool check_chosen_operations(const std::vector<std::vector<int64_t>> &allPerms,
   return false;
 }
 
-Value getRealLhs(Operation *op)
-{
-  assert(isa<TensorMultOp>(op) || isa<TensorElewsMultOp>(op) || isa<TensorAddOp>(op) || isa<TensorSubtractOp>(op));
-  Operation *firstUser = nullptr;
-  for (auto user : op->getResult(0).getUsers())
-  {
-    firstUser = user;
-    break;
-  }
-
-  comet_pdump(firstUser);
-  assert(isa<TensorSetOp>(firstUser));
-  TensorSetOp setOp = cast<TensorSetOp>(firstUser);
-  return setOp.getOperand(1);
-}
-
-Value getRealRhs(Value val)
-{
-  /// this will return set_op for transpose, but messes up getUsers() or subsequent calls to it.
-
-  /// TODO(gkestor): need to find out why user set_op is not showing up in users of TransposeOp
-  ///       from the for loop below. once resolved, remove getNextNode().
-  /// Operation *firstUser;
-  /// for (auto user : op->getResult(0).getUsers())
-  //{
-  ///  firstUser = user;
-  ///  break;
-  //}
-  if(Operation* op = val.getDefiningOp())
-  {
-    Operation *firstUser = op->getNextNode();
-    comet_pdump(firstUser);
-
-    if (isa<tensorAlgebra::TransposeOp>(op))
-    {
-      if (isa<TensorSetOp>(firstUser))
-      {
-        TensorSetOp setOp = cast<TensorSetOp>(firstUser);
-        return setOp.getOperand(1);
-      }
-      else
-      {
-        llvm::errs() << "ERROR: Transpose has no set_op after it!\n";
-      }
-      
-    }
-  }
-
-  return val;
-}
-
 // void buildDefUseInfo(UnitExpression *e)
 // {
 //   auto lhs = e->getLHS();

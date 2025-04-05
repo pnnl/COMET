@@ -314,36 +314,17 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         comet_debug() << " Users:\n";
         comet_pdump(u);
 
-        if (isa<tensorAlgebra::TransposeOp>(u) ||
-            (isa<tensorAlgebra::TensorSetOp>(u) &&
-             isa<tensorAlgebra::TransposeOp>(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp())))
+        if (isa<tensorAlgebra::TransposeOp>(u)) //||
         {
-          if (!isa<tensorAlgebra::TransposeOp>(u))
-          {
-            comet_debug() << "User of sparse tensor is a set Operation. Src of setOp is transpose\n";
-            /// Set the insertion point before its user
-            rewriter.setInsertionPoint(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp());
-          }
-          else
-          {
-            comet_debug() << "User of sparse tensor is transpose operation\n";
-            /// Set the insertion point before its user
-            rewriter.setInsertionPoint(u);
-          }
+          comet_debug() << "User of sparse tensor is transpose operation\n";
+          /// Set the insertion point before its user
+          rewriter.setInsertionPoint(u);
 
           /// Get the freeIndices of the sparse input tensor
           /// Check the dimension size, if it is integer, format is dense and get dim_size
           /// If it is ?, get the sparse input and get the definition, and the freeindex,
           /// tensorAlgebra::TransposeOp transpose_op = cast<tensorAlgebra::TransposeOp>(u);
-          tensorAlgebra::TransposeOp transpose_op;
-          if (isa<tensorAlgebra::TransposeOp>(u))
-          {
-            transpose_op = cast<tensorAlgebra::TransposeOp>(u);
-          }
-          else
-          {
-            transpose_op = cast<tensorAlgebra::TransposeOp>(cast<tensorAlgebra::TensorSetOp>(u).getOperand(0).getDefiningOp());
-          }
+          tensorAlgebra::TransposeOp transpose_op = cast<tensorAlgebra::TransposeOp>(u);
 
           ArrayAttr indexMaps = transpose_op.getIndexingMaps();
           comet_debug() << " we get the indexMaps\n";
@@ -354,16 +335,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
           comet_debug() << " ";
           comet_vdump(src_input);
           mlir::Value dst_input;
-          for (auto u : op.getOperation()->getResult(0).getUsers())
-          {
-            comet_debug() << " ";
-            comet_pdump(u);
-            if (isa<tensorAlgebra::TensorSetOp>(u))
-            {
-              dst_input = u->getOperand(1); /// dest tensor is the 2nd
-              comet_vdump(dst_input);
-            }
-          }
 
           /// If in COO format, for every dimension, different dimensions are
           std::vector<unsigned int> dstIndexLocInSrcVec;
@@ -643,7 +614,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
       for (auto u : op->getUsers())
       {
         comet_pdump(u);
-        if (isa<tensorAlgebra::TensorFillOp>(u) || isa<tensorAlgebra::TensorSetOp>(u))
+        if (isa<tensorAlgebra::TensorFillOp>(u))
           is_filled = true;
       }
 
@@ -725,15 +696,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         {
           comet_debug() << " used in ta.tc op\n";
           auto p = u1->getOperand(2);
-          if(p == op)
-          {
-            isOutputTensor = true;
-          }
-        }
-        else if (isa<tensorAlgebra::TensorSetOp>(u1))
-        {
-          comet_debug() << " used in ta.set op\n";
-          auto p = u1->getOperand(1);
           if(p == op)
           {
             isOutputTensor = true;
@@ -1272,7 +1234,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::TensorFillOp,
                         tensorAlgebra::GetTimeOp,
                         tensorAlgebra::PrintElapsedTimeOp,
-                        tensorAlgebra::TensorSetOp,
                         tensorAlgebra::SparseOutputTensorDeclOp,
                         tensorAlgebra::TempSparseOutputTensorDeclOp,
                         tensorAlgebra::TensorMultOp,
@@ -1326,7 +1287,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::SparseTensorConstructOp,
                         tensorAlgebra::SparseOutputTensorDeclOp,
                         tensorAlgebra::TempSparseOutputTensorDeclOp,
-                        tensorAlgebra::TensorSetOp,
                         tensorAlgebra::DenseTensorDeclOp,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::TensorSortOp,
@@ -1374,7 +1334,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::TransposeOp,
                         tensorAlgebra::TensorFillOp,
                         tensorAlgebra::SparseTensorConstructOp,
-                        tensorAlgebra::TensorSetOp,
                         tensorAlgebra::DenseTensorDeclOp,
                         tensorAlgebra::SparseOutputTensorDeclOp,
                         tensorAlgebra::IndexLabelOp,
@@ -1434,7 +1393,6 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
                         tensorAlgebra::TransposeOp,
                         tensorAlgebra::TensorFillOp,
                         tensorAlgebra::SparseTensorConstructOp,
-                        tensorAlgebra::TensorSetOp,
                         tensorAlgebra::DenseTensorDeclOp,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::DenseConstantOp,
