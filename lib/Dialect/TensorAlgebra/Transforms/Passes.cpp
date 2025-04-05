@@ -24,6 +24,7 @@
 #include "comet/Dialect/Utils/Utils.h"
 
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/ValueRange.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -31,8 +32,11 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/LogicalResult.h"
 
 #include <algorithm>
 #include <map>
@@ -62,7 +66,7 @@ namespace
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(FindOptimalTCFactorizationPass)
     void runOnOperation() override;
 
-    void FindOptimalTCFactorization(tensorAlgebra::TensorSetOp op);
+    LogicalResult FindOptimalTCFactorization(tensorAlgebra::TensorMultOp op);
   }; ///  class FindOptimalTCFactorizationPass
 } ///  End anonymous namespace
 
@@ -220,14 +224,12 @@ optimalOrder(ArrayRef<void *> inLTOps, Operation *outLTOp,
   return std::make_tuple(minResult, minSumLabels, minLHSTensorShapes);
 }
 
-void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::TensorSetOp op)
+mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::TensorMultOp op)
 {
   OpBuilder builder(op);
   comet_pdump(op);
-  auto operands = op->getOperands();
   auto loc = op->getLoc();
-  auto lhsOp = operands[0].getDefiningOp(); ///  TensorMultOp
-
+  auto lhsOp = op;
   std::vector<Operation *> MultOpsToRemove;
   std::vector<Operation *> LTOpsToRemove;
 
@@ -240,11 +242,11 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   std::map<void*, std::vector<Operation *>> lblMaps;
 
   ///  collect all operands from series of ta.tc ops
-  if (isa<tensorAlgebra::TensorMultOp>(lhsOp))
+  if (isa<tensorAlgebra::TensorMultOp>(op))
   {
     std::stack<Operation *> stack;
 
-    Value currValue = operands[0];
+    Value currValue = op;
     comet_vdump(currValue);
     Operation *curr = currValue.getDefiningOp();
     while ((curr && isa<tensorAlgebra::TensorMultOp>(curr)) || !stack.empty())
@@ -580,33 +582,34 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
                                                                all_labels, affineMapArrayAttr, SemiringAttr,
                                                                MaskingAttr, nullptr);
-      tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
-      tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
       comet_debug() << "New operation " << tcop << "\n";
       newRhs1 = tcop;
     }
-
-    mlir::tensorAlgebra::TensorSetOp newSetOp = builder.create<tensorAlgebra::TensorSetOp>(loc, newRhs1, operands[1]);
-    newSetOp->setAttr("__beta__", builder.getF64FloatAttr(0.0));
+    
 
     comet_debug() << "are they previous multop\n";
-    for (auto oldTcOp : MultOpsToRemove)
+    MultOpsToRemove.front()->replaceAllUsesWith(ValueRange(newRhs1)); ///  replace the last multop with the new one
+    for (auto oldTcOp : ArrayRef(MultOpsToRemove).drop_front())
     {
-      comet_debug() << "Calling removeAllUsers\n";
       removeAllUsers(oldTcOp);
     }
+    return success();
   }
   comet_debug() << "MulOpFactorization end\n";
-  return;
+  return failure();
 }
 
 void FindOptimalTCFactorizationPass::runOnOperation()
 {
   comet_debug() << " start FindOptimalTCFactorizationPass pass \n";
   func::FuncOp func = getOperation();
+  SmallVector<tensorAlgebra::TensorMultOp> tensorMultOps;
 
-  func.walk([&](tensorAlgebra::TensorSetOp op)
-            { FindOptimalTCFactorization(op); });
+  do {
+    tensorMultOps.clear(); // clear the vector to find the next round of tensor mult ops
+    func.walk([&](tensorAlgebra::TensorMultOp op)
+              { tensorMultOps.push_back(op); });
+  }while(!tensorMultOps.empty() && succeeded(FindOptimalTCFactorization(tensorMultOps.back())));
 }
 
 void STCRemoveDeadOpsPass::runOnOperation()

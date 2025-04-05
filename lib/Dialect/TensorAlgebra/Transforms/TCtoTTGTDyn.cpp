@@ -225,7 +225,8 @@ namespace
         }
       }
       
-      auto zero = rewriter.create<arith::ConstantOp>(loc, FloatAttr::get(shapeT.getElementType(), 0.0));
+      auto zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(
+          shapeT.getElementType()));
       lhsTensor = rewriter.create<tensor::SplatOp>(loc, shapeT, zero, ValueRange(dims));
 
       auto lhsTensorType =  cast<TensorType>(lhsTensor.getType());

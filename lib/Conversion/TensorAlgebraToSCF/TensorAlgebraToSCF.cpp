@@ -594,26 +594,6 @@ namespace
     }
   }; /// ScalarOpsLowering
 
-class ConvertSetOp : public OpConversionPattern<TensorSetOp> {
-  using OpConversionPattern<TensorSetOp>::OpConversionPattern;
-
-  LogicalResult
-  matchAndRewrite(TensorSetOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const final {
-
-    auto opAdaptor = llvm::cast<TensorSetOpAdaptor>(adaptor);
-    Value lhs = opAdaptor.getLhs();
-    Value rhs = opAdaptor.getRhs();
-    rewriter.replaceUsesWithIf(rhs, lhs, [&](OpOperand& use) { 
-      auto user = use.getOwner();
-      auto ancestor = op->getBlock()->findAncestorOpInBlock(*user);
-      return (ancestor && op->isBeforeInBlock(ancestor)); 
-    });
-    rewriter.eraseOp(op);
-    return success();
-  }
-};
-
 } /// end anonymous namespace.
 
 /// This is a partial lowering to linear algebra of the tensor algebra operations that are
@@ -662,8 +642,7 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
   target.addIllegalOp<tensorAlgebra::TransposeOp, 
                       tensorAlgebra::ReduceOp,
                       tensorAlgebra::ScalarOp,
-                      tensorAlgebra::DenseConstantOp, 
-                      tensorAlgebra::TensorSetOp>();
+                      tensorAlgebra::DenseConstantOp>();
   /// Now that the conversion target has been defined, we just need to provide
   /// the set of patterns that will lower the TA operations.
 
@@ -671,8 +650,7 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
   patterns.insert<TensorTransposeLowering,
                   ReduceOpLowering,
                   ScalarOpsLowering,
-                  ConstantOpLowering,
-                  ConvertSetOp>(&getContext());
+                  ConstantOpLowering>(&getContext());
   /// With the target and rewrite patterns defined, we can now attempt the
   /// conversion. The conversion will signal failure if any of our `illegal`
   /// operations were not converted successfully.

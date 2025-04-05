@@ -1247,7 +1247,7 @@ namespace
         return nullptr;
       comet_debug() << " get rhs\n";
 
-      auto tens_beta = tensor_op.getBeta();
+      // auto tens_beta = tensor_op.getBeta();
 
       auto lhsName = cast<tensorAlgebra::LabeledTensorExprAST>(*tensor_op.getLHS())
           .getTensorName(); 
@@ -1645,7 +1645,6 @@ namespace
         }
       }
 
-      mlir::Type return_type = getType(shape);
 
       /// Create Tensor Declarations Ops and populate formats (for lhs)
       // mlir::Value lhs_tensor;
@@ -1952,7 +1951,6 @@ namespace
               {
                 LabeledTensorExprAST *lhsLabeledTensorExprAST = llvm::cast<LabeledTensorExprAST>(tensor_op->getLHS());
                 auto call_res = mlirGen(*call);
-                auto lhs_tensor = symbolTable.lookup(lhsLabeledTensorExprAST->getTensorName());
                 symbolTable.insert(lhsLabeledTensorExprAST->getTensorName(), call_res);
               }
               /// TODO: put check here, if the user mis-spells something...

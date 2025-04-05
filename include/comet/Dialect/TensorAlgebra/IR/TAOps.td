@@ -539,22 +539,6 @@ def TensorDimOp : TA_Op<"dim", [Pure]>{
   //let hasVerifier = 1;
 }
 
-
-def TensorSetOp : TA_Op<"set_op">{
-
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins  AnyTypeOf<[TA_AnyTensor,F64MemRef]>:$lhs,
-                        AnyTypeOf<[TA_AnyTensor,F64MemRef]>:$rhs);
-  
-  //let hasCanonicalizer = 1; 
-
-  //TODO(gkestor): add verifier
-  //let hasVerifier = 1;
-}
-
 def TransposeOp : TA_Op<"transpose",[Pure]> {
   let summary = "transpose operation";
 
