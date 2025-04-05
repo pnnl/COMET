@@ -251,7 +251,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
   ArrayAttr indexing_maps = cast<ArrayAttr>(mult_op.getIndexingMaps());
   for(auto [index, v]: enumerate(cast<AffineMapAttr>(indexing_maps[2]).getValue().getResults()))
   {
-    if(!cast<ShapedType>(rhs1_tensor.getType()).isDynamicDim(index))
+    if(!shapeT.isDynamicDim(index))
     {
       continue;
     }
@@ -272,6 +272,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
       continue;
     }
   }
+  assert(dims.size() == shapeT.getNumDynamicDims());
 
   if(auto spTensorT = dyn_cast<SparseTensorType>(op->getResultTypes()[0]))
   {
@@ -280,6 +281,10 @@ mlir::LogicalResult generalIndexOperationRewrite(
   else if (auto tensorT = dyn_cast<TensorType>(op->getResultTypes()[0]))
   {
     lhs_tensor = rewriter.create<tensorAlgebra::DenseTensorDeclOp>(loc, shapeT, ValueRange(dims));
+    rewriter.create<tensorAlgebra::TensorFillOp>(
+        loc, 
+        lhs_tensor,
+        rewriter.getZeroAttr(tensorT.getElementType())); // initialize the tensor to zero
     // lhs_tensor = rewriter.create<tensor::EmptyOp>(loc, shapeT, ValueRange(dims));
   }
 
@@ -526,7 +531,7 @@ void LowerTensorAlgebraToIndexTreePass::runOnOperation()
   mlir::ConversionTarget target(getContext());
 
   target.addLegalDialect<indexTree::IndexTreeDialect, tensor::TensorDialect, arith::ArithDialect>();
-  target.addLegalOp<tensorAlgebra::SpTensorAliasOp, tensorAlgebra::DenseTensorDeclOp, tensorAlgebra::SparseTensorDeclOp, tensorAlgebra::TensorDimOp>();
+  target.addLegalOp<tensorAlgebra::SpTensorAliasOp, tensorAlgebra::DenseTensorDeclOp, tensorAlgebra::SparseTensorDeclOp, tensorAlgebra::TensorDimOp, TensorFillOp>();
   target.addIllegalOp<tensorAlgebra::TensorMultOp, tensorAlgebra::TensorElewsMultOp,
                       tensorAlgebra::TensorAddOp, tensorAlgebra::TensorSubtractOp>();
 

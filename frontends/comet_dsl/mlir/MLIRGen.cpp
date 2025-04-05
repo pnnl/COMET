@@ -844,24 +844,9 @@ namespace
           }
           else if (isa<mlir::tensorAlgebra::TransposeOp>(e.getDefiningOp()))
           {
-            comet_debug() << " is TransposeOp\n";
-
-            /// get the real transpose op output via the set op.
-            mlir::Value transposeOut;
-            mlir::Operation *firstUser = e.getDefiningOp()->getNextNode();
-            if (isa<TensorSetOp>(firstUser))
-            {
-              TensorSetOp setOp = cast<TensorSetOp>(firstUser);
-              transposeOut = setOp.getOperand(1);
-            }
-            else
-            {
-              llvm::errs() << __FILE__ << ":" << __LINE__ << " ERROR: Transpose has no set_op after it!\n";
-            }
-
             /// get the format of transposeOut tensor
-            formats.push_back(getTensorFormatString(transposeOut.getType()));
-            tensors.push_back(transposeOut);
+            formats.push_back(getTensorFormatString(e.getType()));
+            tensors.push_back(e);
           }
           else
           {
@@ -1225,8 +1210,11 @@ namespace
 
       auto tens_beta = tensor_op.getBeta();
 
-      auto ret_op = builder.create<TensorSetOp>(loc(tensor_op.loc()), rhs, lhs);
-      ret_op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
+      auto lhsName = cast<tensorAlgebra::LabeledTensorExprAST>(*tensor_op.getLHS())
+          .getTensorName(); 
+      symbolTable.insert(lhsName, rhs); 
+      // auto ret_op = builder.create<TensorSetOp>(loc(tensor_op.loc()), rhs, lhs);
+      // ret_op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
       return rhs;
     }
@@ -1499,7 +1487,7 @@ namespace
       comet_debug() << " create TransposeOp\n";
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), lhs_tensor.getType(),
                                                                        rhs_tensor, all_lbls_value, affineMapArrayAttr);
-      builder.create<TensorSetOp>(loc(transpose.loc()), t, lhs_tensor);
+      symbolTable.insert(lhsLT.getTensorName(), t)
       comet_vdump(t);
 
       return t;
@@ -1622,34 +1610,33 @@ namespace
       mlir::Type return_type = getType(shape);
 
       /// Create Tensor Declarations Ops and populate formats (for lhs)
-      mlir::Value lhs_tensor;
-      if (auto tensorT = dyn_cast<mlir::TensorType>(rhs_tensor.getType()))
-      {
-        auto declOp = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, tensorT.getElementType()), indices);
+      // mlir::Value lhs_tensor;
+      // if (auto tensorT = dyn_cast<mlir::TensorType>(rhs_tensor.getType()))
+      // {
+      //   auto declOp = builder.create<DenseTensorDeclOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, tensorT.getElementType()), indices);
         
-        lhs_tensor = declOp;
-      }
-      else if (auto SparseTensorT = dyn_cast<SparseTensorType>(rhs_tensor.getType()))
-      {
+      //   lhs_tensor = declOp;
+      // }
+      // else if (auto SparseTensorT = dyn_cast<SparseTensorType>(rhs_tensor.getType()))
+      // {
 
-        ArrayRef<TensorFormatEnum> format = SparseTensorT.getFormat();
-        mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
-        mlir::Type element_type = shapedT.getElementType();
-        return_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), shape, format);
-        auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), shape, format);
+      //   ArrayRef<TensorFormatEnum> format = SparseTensorT.getFormat();
+      //   mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
+      //   mlir::Type element_type = shapedT.getElementType();
+      //   return_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), shape, format);
+      //   auto sp_tensor_type = SparseTensorType::get(builder.getContext(), element_type, builder.getIntegerType(defaultSpTensorIndiceBitWidth), shape, format);
         
-        /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
-        lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), sp_tensor_type, indices, builder.getBoolAttr(true));
-        comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
-        comet_vdump(lhs_tensor);
-      }
+      //   /// BoolAttr is true to speficy SparseTensorDeclOp is for temporaries
+      //   lhs_tensor = builder.create<SparseTensorDeclOp>(loc(transpose.loc()), sp_tensor_type, indices, builder.getBoolAttr(true));
+      //   comet_debug() << "MLIRGen SparseTensorDeclaration creation\n";
+      //   comet_vdump(lhs_tensor);
+      // }
 
 
       comet_debug() << " create TransposeOp\n";
       mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, shapedT.getElementType()),
                                                                        rhs_tensor, all_labels_val, affineMapArrayAttr);
-      builder.create<TensorSetOp>(loc(transpose.loc()), t, lhs_tensor);
       comet_vdump(t);
 
       return t;
@@ -1928,7 +1915,7 @@ namespace
                 LabeledTensorExprAST *lhsLabeledTensorExprAST = llvm::cast<LabeledTensorExprAST>(tensor_op->getLHS());
                 auto call_res = mlirGen(*call);
                 auto lhs_tensor = symbolTable.lookup(lhsLabeledTensorExprAST->getTensorName());
-                builder.create<TensorSetOp>(loc(tensor_op->loc()), call_res, lhs_tensor);
+                symbolTable.insert(lhsLabeledTensorExprAST->getTensorName(), call_res);
               }
               /// TODO: put check here, if the user mis-spells something...
 
@@ -2459,7 +2446,8 @@ namespace
       /// Build the MLIR op `ta.constant`. This invokes the `DenseConstantOp::build`
       /// method.
       auto denseConst = builder.create<DenseConstantOp>(loc, lhs_labeledtensor.getType(), dataAttribute);
-      builder.create<TensorSetOp>(loc, denseConst, lhs_labeledtensor);
+      symbolTable.insert(tensor_name, denseConst);
+      // builder.create<TensorSetOp>(loc, denseConst, lhs_labeledtensor);
 
       return mlir::success();
     }

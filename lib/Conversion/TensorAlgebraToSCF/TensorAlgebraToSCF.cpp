@@ -222,26 +222,28 @@ namespace
 
       /// There are tensors for transpose operation: input and output tensors
       unsigned int tensors_num = 2;
-      tensorAlgebra::TensorSetOp setOp;
       Value lhs;
 
-      if (isa<TensorType>(inputType))
+      if (auto tensorT = dyn_cast<TensorType>(inputType))
       { /// for dense
         comet_debug() << "Dense transpose\n";
 
-        
-        // auto inputTensorLoadOp = cast<ToTensorOp>(op->getOperand(0).getDefiningOp());
-        // auto inputMemref = inputTensorLoadOp.getMemref();
-
-        for (auto u : op.getOperation()->getResult(0).getUsers())
+        SmallVector<Value, 4> dims;
+        for(auto [index, perm]: llvm::enumerate(allPerms[1])) /// for the output tensor, we need to get the dims from the permute order
         {
-          if (isa<tensorAlgebra::TensorSetOp>(u))
+          if(perm < 0)
           {
-            setOp = cast<tensorAlgebra::TensorSetOp>(u);
-            Value dstTensor = u->getOperand(1);
-            lhs = dstTensor;
+            comet_debug() << "Invalid permutation found in transpose\n";
+            return failure();
+          }
+          if(tensorT.isDynamicDim(index))
+          {
+            auto dim = rewriter.create<tensor::DimOp>(loc, inputTensor, perm);
+            dims.push_back(dim);
           }
         }
+
+        lhs = rewriter.create<tensor::EmptyOp>(loc, op.getResult().getType(), dims); 
 
         comet_vdump(lhs);
         // auto outputMemref = lhs.getDefiningOp()->getOperand(0);
@@ -278,16 +280,6 @@ namespace
         std::vector<std::vector<mlir::Value>> alloc_sizes_cast_vecs{tensors_num};
         std::vector<std::vector<mlir::Value>> allocs_for_sparse_tensors{tensors_num};
         std::vector<mlir::Value> tensors = {op.getOperation()->getOperand(0)};
-
-        for (auto u : op.getOperation()->getResult(0).getUsers())
-        {
-          if (isa<tensorAlgebra::TensorSetOp>(u))
-          {
-            setOp = cast<tensorAlgebra::TensorSetOp>(u);
-            mlir::Value lhs = setOp->getOperand(1); /// dest tensor is the 2nd
-            tensors.push_back(lhs);
-          }
-        }
 
         for (unsigned int n = 0; n < tensors_num; n++)
         {
@@ -399,7 +391,6 @@ namespace
         
         rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{}, ValueRange(allInputs) );
 
-        rewriter.eraseOp(setOp);
         rewriter.eraseOp(op);
         return success();
 
@@ -680,6 +671,7 @@ void LowerTensorAlgebraToSCFPass::runOnOperation()
                          bufferization::BufferizationDialect>();
 
   target.addLegalDialect<tensorAlgebra::TADialect, indexTree::IndexTreeDialect, tensor::TensorDialect>();
+  target.addLegalOp<tensorAlgebra::TensorDimOp, tensorAlgebra::DenseTensorDeclOp>(); 
   target.addIllegalOp<tensorAlgebra::TransposeOp, 
                       tensorAlgebra::ReduceOp,
                       tensorAlgebra::ScalarOp,
