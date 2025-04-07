@@ -19,6 +19,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
+#include <cstddef>
 #include <cstdint>
 #include <stdint.h>
 #include <stdlib.h>
@@ -39,9 +40,9 @@ do { \
 
 CUcontext cuContext = NULL;
 CUmodule cuModule = NULL;
-char* moduleImg = NULL;
+// char* moduleImg = NULL;
 
-void initCudaCtx()
+void initCudaCtx(char* moduleImg)
 {
     if(!cuContext)
     {
@@ -49,9 +50,8 @@ void initCudaCtx()
         CU_CHECK(cuCtxCreate(&cuContext, 0, 0));
     }
 
-    if(!cuModule && moduleImg)
+    if(moduleImg)
     {
-        // printf("PTX: \n %s\n", moduleImg);
         CU_CHECK(cuModuleLoadData(&cuModule, moduleImg));       
     }
 }
@@ -59,7 +59,7 @@ void initCudaCtx()
 
 template<typename T>
 int64_t cudaMalloc(int64_t size) {
-    initCudaCtx();
+    initCudaCtx(NULL);
     CUdeviceptr device_ptr;
     CU_CHECK(cuMemAlloc(&device_ptr,   size * sizeof(T)));
 
@@ -69,12 +69,10 @@ int64_t cudaMalloc(int64_t size) {
 
 extern "C" __attribute__((visibility("default"))) void cudaSetModuleImage(char* ptx)
 {
-    // printf("Called cudaSetModuleImage");
-
-    if (moduleImg == NULL) 
+    // if (moduleImg == NULL) 
     {
         // printf("Setting PTX");
-        moduleImg = ptx;
+        initCudaCtx(ptx);
     }
 }
 
@@ -99,7 +97,8 @@ extern "C" __attribute__((visibility("default"))) int64_t cudaMallocI32(int64_t 
 }
 
 extern "C" __attribute__((visibility("default"))) void cudaFree(int64_t ptr) {
-    initCudaCtx();
+    initCudaCtx(NULL);
+
 
     // printf("Freeing memory\n");
     CU_CHECK(cuMemFree(ptr));
@@ -108,7 +107,7 @@ extern "C" __attribute__((visibility("default"))) void cudaFree(int64_t ptr) {
 
 template<typename T>
 void cudaMemcpy(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
-    initCudaCtx();
+    initCudaCtx(NULL);
 
     // printf("Memcpy memory of size: %ld\n", size);
 
@@ -124,6 +123,10 @@ void cudaMemcpy(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, in
     }
 }
 
+
+extern "C" __attribute__((visibility("default"))) void cudaMemcpyIndex(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
+    cudaMemcpy<int64_t>(device, ptr, aligned_ptr, offset, size, stride, direction);
+}
 
 extern "C" __attribute__((visibility("default"))) void cudaMemcpyI64(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
     cudaMemcpy<int64_t>(device, ptr, aligned_ptr, offset, size, stride, direction);
@@ -156,7 +159,6 @@ const int64_t MAX_NUM_BLOCKS_Z = 65535;
 
 extern "C" __attribute__((visibility("default"))) void cudaLaunchKernel(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ, int64_t tritonBlockX, int64_t tritonBlockY, int64_t tritonBlockZ, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, char* kernel, int64_t kernel_name_size, int64_t sharedMem) 
 {
-    initCudaCtx();
     CUfunction cuFunction = NULL;
     unsigned blocksPerGridX = std::min(realblocksX, MAX_NUM_BLOCKS_X);
     unsigned blocksPerGridY = std::min(realblocksY, MAX_NUM_BLOCKS_Y);
@@ -170,7 +172,4 @@ extern "C" __attribute__((visibility("default"))) void cudaFinit()
 {
     cuModuleUnload(cuModule);
     cuModule = NULL;
-    cuCtxDestroy(cuContext);
-    cuContext = NULL;
-    moduleImg = NULL;
 }
