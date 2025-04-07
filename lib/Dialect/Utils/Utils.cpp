@@ -2237,7 +2237,7 @@ namespace mlir
       auto MaskingAttr = rewriter.getStringAttr("none");
       auto tc = rewriter.create<tensorAlgebra::TensorMultOp>(loc, lhsTensor.getType(),
                                                              rhs1Tensor, rhs2Tensor,
-                                                             lhsLabels, affineMapArrayAttr,
+                                                             rhs1Labels, rhs2Labels, lhsLabels, affineMapArrayAttr,
                                                              SemiringAttr, MaskingAttr,
                                                              nullptr); /// TODO: masking is an optional operand
       tc.getOperation()->setAttr("__alpha__", rewriter.getF64FloatAttr(alpha));

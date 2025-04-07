@@ -256,7 +256,7 @@ mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(t
         auto multop = cast<tensorAlgebra::TensorMultOp>(curr);
         stack.push(curr);
         MultOpsToRemove.push_back(multop.getOperation());
-        std::vector<mlir::Value> labels = multop.getRhs2IndexLabels();
+        auto labels = multop.getRhs2IndexLabels();
         std::vector<Operation *> labelVec;
 
         for (size_t i = 0; i < labels.size(); i++)
@@ -507,11 +507,11 @@ mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(t
 
       std::vector<int> lhs_lbls;
       std::vector<int> rhs_lbls;
-      std::vector<Value> all_labels;
+      std::vector<Value> newRhs1Labels, newRhs2Labels, newResultLabels;
 
       for (auto e : new_rhs_lbls_value)
       {
-        all_labels.push_back(e);
+        newRhs1Labels.push_back(e);
         auto index = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) - new_all_lbls_value.begin();
         comet_debug() << index << " " << new_all_lbls_value[index] << "\n";
 
@@ -520,7 +520,7 @@ mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(t
 
       for (auto e : new_lhs_lbls_value)
       {
-        all_labels.push_back(e);
+        newRhs2Labels.push_back(e);
         auto index = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) - new_all_lbls_value.begin();
         comet_debug() << index << " " << new_all_lbls_value[index] << "\n";
         lhs_lbls.push_back(index);
@@ -530,7 +530,7 @@ mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(t
 
       for (auto e : newSumLabels)
       {
-        all_labels.push_back(e);
+        newResultLabels.push_back(e); 
         auto index = std::find(new_all_lbls_value.begin(), new_all_lbls_value.end(), e) - new_all_lbls_value.begin();
         comet_debug() << index << " " << new_all_lbls_value[index] << "\n";
 
@@ -580,7 +580,7 @@ mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(t
       auto SemiringAttr = builder.getStringAttr("plusxy_times");
       auto MaskingAttr = builder.getStringAttr("none");
       Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
-                                                               all_labels, affineMapArrayAttr, SemiringAttr,
+                                                               newRhs1Labels, newRhs2Labels, newResultLabels, affineMapArrayAttr, SemiringAttr,
                                                                MaskingAttr, nullptr);
       tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
       tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));

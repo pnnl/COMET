@@ -38,6 +38,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/ValueRange.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
@@ -160,8 +161,9 @@ namespace
   std::vector<mlir::Value> getOperationResultIndexLabels(mlir::Operation *op)
   {
     auto cast_op = cast<T>(op);
-    return cast_op.getResultIndexLabels();
+    return std::vector<mlir::Value>(cast_op.getResultIndexLabels().begin(), cast_op.getResultIndexLabels().end());
   }
+
   // Implementation of a simple MLIR emission from the Tensor Algebra AST.
   ///
   // This will emit operations that are specific to the Tensor Algebra language,
@@ -953,18 +955,22 @@ namespace
 
         assert(tensors.size() == 2 && " less than 2 input tensors for ta.mul or ta.elews_mul\n");
 
-        std::vector<mlir::Value> labels;
+        std::vector<mlir::Value> labels, newLhsLabels, newRhsLabels, newRetLabels;
         for (auto i : lhs_lbls)
         {
+
           labels.push_back(all_lbls_value[i]);
+          newLhsLabels.push_back(all_lbls_value[i]);
         }
         for (auto i : rhs_lbls)
         {
           labels.push_back(all_lbls_value[i]);
+          newRhsLabels.push_back(all_lbls_value[i]);
         }
         for (auto i : ret_lbls)
         {
           labels.push_back(all_lbls_value[i]);
+          newRetLabels.push_back(all_lbls_value[i]);
         }
 
         mlir::StringAttr SemiringAttr;
@@ -978,14 +984,14 @@ namespace
           SemiringAttr = builder.getStringAttr("noop_plusxy"); // this is for standard elementwise addition
           MaskingAttr = builder.getStringAttr("none");         // default for standard elementwise addition
           return builder.create<TensorAddOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                             labels, affineMapArrayAttr, SemiringAttr,
+                                            newLhsLabels, newRhsLabels, newRetLabels, affineMapArrayAttr, SemiringAttr,
                                              MaskingAttr);
         case '-':
           comet_debug() << "creating TensorSubtractOp\n";
           SemiringAttr = builder.getStringAttr("noop_minus"); // this is for standard elementwise subtraction
           MaskingAttr = builder.getStringAttr("none");        // default for standard elementwise subtraction
           return builder.create<TensorSubtractOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                                  labels, affineMapArrayAttr, SemiringAttr,
+                                                  newLhsLabels, newRhsLabels, newRetLabels, affineMapArrayAttr, SemiringAttr,
                                                   MaskingAttr);
         case '*':
         {
@@ -997,7 +1003,7 @@ namespace
           SemiringAttr = builder.getStringAttr("plusxy_times"); // this is for standard matrix multiplication
           MaskingAttr = builder.getStringAttr("none");          // default for standard matrix multiplication
           mlir::Value tcop = builder.create<TensorMultOp>(location, ret_tensor_type, tensors[0], tensors[1],
-                                                          labels, affineMapArrayAttr, SemiringAttr,
+                                                          newLhsLabels, newRhsLabels, newRetLabels, affineMapArrayAttr, SemiringAttr,
                                                           MaskingAttr, nullptr); // TODO: masking is an optional operand
           tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
           tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
@@ -1014,7 +1020,7 @@ namespace
           comet_debug() << "\n";
           auto SemiringAttr = builder.getStringAttr("noop_times"); /// this is for standard element-wise multiplication
           MaskingAttr = builder.getStringAttr("none");             /// default for standard element-wise multiplication
-          mlir::Value tcop = builder.create<TensorElewsMultOp>(location, ret_tensor_type, tensors[0], tensors[1], labels,
+          mlir::Value tcop = builder.create<TensorElewsMultOp>(location, ret_tensor_type, tensors[0], tensors[1], newLhsLabels, newRhsLabels, newRetLabels,
                                                                affineMapArrayAttr, SemiringAttr,
                                                                MaskingAttr);
 
@@ -1476,7 +1482,18 @@ namespace
 
       std::vector<std::string> all_lbls = rhs_lbls;
       all_lbls.insert(all_lbls.end(), lhs_lbls.begin(), lhs_lbls.end());
-      std::vector<mlir::Value> all_lbls_value;
+      std::vector<mlir::Value> all_lbls_value, lhs_lbls_value, rhs_lbls_value;
+      
+      for (auto s : lhs_lbls)
+      {
+        lhs_lbls_value.push_back(symbolTable.lookup(s));
+      }
+      
+      for (auto s : rhs_lbls)
+      {
+        rhs_lbls_value.push_back(symbolTable.lookup(s));
+      }
+      
       for (auto s : all_lbls)
       {
         all_lbls_value.push_back(symbolTable.lookup(s));
@@ -1516,7 +1533,7 @@ namespace
 
       comet_debug() << " create TransposeOp\n";
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), lhs_tensor.getType(),
-                                                                       rhs_tensor, all_lbls_value, affineMapArrayAttr);
+                                                                       rhs_tensor, rhs_lbls_value, lhs_lbls_value, affineMapArrayAttr);
       symbolTable.insert(lhsLT.getTensorName(), t)
       comet_vdump(t);
 
@@ -1570,7 +1587,7 @@ namespace
 
       /// Secondly, Look at the lhs
       /// Collect labels values
-      std::vector<mlir::Value> lhs_labels_val;
+      std::vector<mlir::Value> lhs_labels_val, rhs_labels_val;
       std::vector<mlir::Value> all_labels_val;
       for (const auto &lbl_str : rhs_lbls)
       {
@@ -1578,6 +1595,7 @@ namespace
         {
           if (isa<IndexLabelOp>(var.getDefiningOp()))
           {
+            rhs_labels_val.push_back(var);
             all_labels_val.push_back(var);
           }
           else
@@ -1665,7 +1683,7 @@ namespace
       comet_debug() << " create TransposeOp\n";
       mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, shapedT.getElementType()),
-                                                                       rhs_tensor, all_labels_val, affineMapArrayAttr);
+                                                                       rhs_tensor, rhs_labels_val, lhs_labels_val, affineMapArrayAttr);
       comet_vdump(t);
 
       return t;
@@ -2208,7 +2226,7 @@ namespace
       auto rhs2_lbls = rhs2LT->getLabelNames();
       auto all_lbls = rhsBinOp->getLabels();
 
-      std::vector<mlir::Value> lhs_lbls_value;
+      std::vector<mlir::Value> lhs_lbls_value, rhs1_lbls_value, rhs2_lbls_value;
       std::vector<mlir::Value> all_lbls_value;
       for (auto n : lhs_lbls)
       {
@@ -2216,10 +2234,12 @@ namespace
       }
       for (auto n : rhs1_lbls)
       {
+        rhs1_lbls_value.push_back(symbolTable.lookup(n));
         all_lbls_value.push_back(symbolTable.lookup(n));
       }
       for (auto n : rhs2_lbls)
       {
+        rhs2_lbls_value.push_back(symbolTable.lookup(n));
         all_lbls_value.push_back(symbolTable.lookup(n));
       }
       for (auto n : lhs_lbls)
@@ -2343,7 +2363,7 @@ namespace
         auto op = builder.create<TensorAddOp>(loc(tensor_op.loc()),
                                               tensors[2].getType(),
                                               tensors[0], tensors[1],
-                                              all_lbls_value,
+                                              rhs1_lbls_value, rhs2_lbls_value, lhs_lbls_value,
                                               affineMapArrayAttr,
                                               SemiringAttr,
                                               MaskingAttr);
@@ -2357,7 +2377,7 @@ namespace
         auto op = builder.create<TensorSubtractOp>(loc(tensor_op.loc()),
                                                    tensors[2].getType(),
                                                    tensors[0], tensors[1],
-                                                   all_lbls_value,
+                                                   rhs1_lbls_value, rhs2_lbls_value, lhs_lbls_value,
                                                    affineMapArrayAttr,
                                                    SemiringAttr,
                                                    MaskingAttr);
@@ -2369,7 +2389,7 @@ namespace
         auto op = builder.create<TensorMultOp>(loc(tensor_op.loc()),
                                                tensors[2].getType(),
                                                tensors[0], tensors[1],
-                                               all_lbls_value,
+                                               rhs1_lbls_value, rhs2_lbls_value, lhs_lbls_value,
                                                affineMapArrayAttr,
                                                SemiringAttr,
                                                MaskingAttr, maskVal);
@@ -2381,7 +2401,7 @@ namespace
       }
       else if (binop == tok_elews || binop == tok_monoid)
       {
-        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], all_lbls_value, affineMapArrayAttr, SemiringAttr, MaskingAttr);
+        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], rhs1_lbls_value, rhs2_lbls_value, lhs_lbls_value, affineMapArrayAttr, SemiringAttr, MaskingAttr);
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
