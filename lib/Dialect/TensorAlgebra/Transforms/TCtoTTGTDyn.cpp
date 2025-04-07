@@ -41,7 +41,6 @@
 #include <set>
 #include <unordered_map>
 
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -234,40 +233,28 @@ namespace
       std::vector<unsigned int> rhs1InPerm = getIdentityPermutation(allPerms[0].size());
       std::vector<unsigned int> rhs2InPerm = getIdentityPermutation(allPerms[1].size());
       std::vector<unsigned int> lhsInPerm = getIdentityPermutation(allPerms[2].size());
-      auto contractionTimes = rewriter.create<tensor::FromElementsOp>(loc, plan.m_contraction_time);
+      // auto contractionTimes = rewriter.create<tensor::FromElementsOp>(loc, plan.m_contraction_time);
 
-      Value minContractionTime =  rewriter.create<arith::ConstantFloatOp>(loc, llvm::APFloat(std::numeric_limits<double>::max()), FloatType::getF64(ctx));
-      Value argMin =  rewriter.create<arith::ConstantIndexOp>(loc, 0);
-      auto forOp = rewriter.create<scf::ForOp>(loc, rewriter.create<arith::ConstantIndexOp>(loc, 0),
-                                  rewriter.create<arith::ConstantIndexOp>(
-                                      loc, plan.m_contraction_time.size()), rewriter.create<arith::ConstantIndexOp>(
-                                        loc, 1), ValueRange({minContractionTime, argMin}),
-                                      [&](OpBuilder &b, Location loc, Value iv, ValueRange args) {
-                                        Value curContrationTime = b.create<tensor::ExtractOp>(
-                                            loc, contractionTimes,
-                                            ValueRange({iv}));
-                                        auto ifOp = b.create<scf::IfOp>(loc, b.create<arith::CmpFOp>(
-                                            loc, arith::CmpFPredicate::OLT,
-                                            curContrationTime, args[0]),
-                                            [&](OpBuilder &b2, Location loc2) {
-                                              // Update minContractionTime and argMin
-                                              b2.create<scf::YieldOp>(loc2, ValueRange({curContrationTime, iv})); // yield the new minContractionTime
-                                            },
-                                            [&](OpBuilder &b2, Location loc2) {
-                                              b2.create<scf::YieldOp>(loc2, ValueRange({args[0], args[1] })); // keep the previous minContractionTime
-                                            });
-                                        b.create<scf::YieldOp>(loc, ifOp->getResults()); // propagate the results of the ifOp
-                                      });
+      // Value minContractionTime =  rewriter.create<arith::ConstantFloatOp>(loc, llvm::APFloat(std::numeric_limits<double>::max()), FloatType::getF64(ctx));
       std::vector<int64_t> m_contraction_time_indices;
       for (size_t i = 0; i < plan.m_contraction_time.size(); ++i)
       {
-          m_contraction_time_indices.push_back(i);
+        m_contraction_time_indices.push_back(i);
       }
       scf::IndexSwitchOp switchOp;
       Value permutation; 
       if(whatPerm == -1) // -1 means select the best permutation based on contraction time
       {
-        permutation = forOp.getResult(1); // this is the index from the contraction candidates with the best contraction time
+        Value minTime = plan.m_contraction_time.front();
+        Value minIndex = rewriter.create<ConstantIndexOp>(loc, 0);
+        
+        for(size_t i = 1; i < plan.m_contraction_time.size(); i++)
+        {
+          Value thisIndex = rewriter.create<ConstantIndexOp>(loc, i);
+          auto foundMin = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ULT,  minTime, plan.m_contraction_time[i]);
+          minIndex = rewriter.create<arith::SelectOp>(loc, foundMin, minIndex, thisIndex);
+        }
+        permutation = minIndex;
       }
       else
       {
@@ -279,7 +266,7 @@ namespace
       auto& defaultCaseRegion = switchOp.getDefaultRegion();
       auto& defaultBlock = defaultCaseRegion.emplaceBlock(); // ensure the default case has a block
       rewriter.setInsertionPointToStart(&defaultBlock);
-      rewriter.create<scf::YieldOp>(loc, ValueRange(lhsTensor)); // propagate the minContractionTime and argMin
+      rewriter.create<scf::YieldOp>(loc, ValueRange(lhsTensor));
 
       auto caseRegions = switchOp.getCaseRegions();
       for(size_t i = 0; i < plan.m_contraction_time.size(); ++i)
@@ -555,7 +542,7 @@ namespace
         SmallVector<ReassociationIndices> reassociationIndices =
             getReassociationIndices(lhsIndexingMap);
 
-        lhsReshape = rewriter.create<memref::CollapseShapeOp>(
+        lhsReshape = rewriter.create<tensor::CollapseShapeOp>(
             loc, lhsFinal, reassociationIndices);
         comet_debug() << "\n";
         comet_vdump(lhsReshape);
@@ -760,7 +747,7 @@ void TALoweringTTGTDynPass::runOnOperation()
   patterns.insert<TensorContractionOpLoweringTTGT>(&getContext(), whatPerm, printFlops);
 
   ConversionTarget target(getContext());
-  target.addLegalDialect<func::FuncDialect, LinalgDialect, ArithDialect, memref::MemRefDialect, bufferization::BufferizationDialect, scf::SCFDialect, tensor::TensorDialect, tensorAlgebra::TADialect>();
+  target.addLegalDialect<func::FuncDialect, LinalgDialect, ArithDialect, bufferization::BufferizationDialect, scf::SCFDialect, tensor::TensorDialect, tensorAlgebra::TADialect>();
   target.addIllegalOp<tensorAlgebra::TensorMultOp>();
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
