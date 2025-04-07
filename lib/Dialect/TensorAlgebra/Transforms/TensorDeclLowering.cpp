@@ -1110,7 +1110,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         Value sptensor;
         if (rank_size == 2)
         {
-          Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange{array_sizes[9], array_sizes[10]});
+          Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange{array_sizes[9], array_sizes[10]});  /// I, J
           sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, 
                                                                                                 dims, /// Dim sizes
                                                                                                 ValueRange{
@@ -1134,7 +1134,7 @@ Value insertSparseTensorDeclOp(PatternRewriter & rewriter,
         }
         else if (rank_size == 3)
         {
-          Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange{array_sizes[16], array_sizes[17], array_sizes[18]});
+          Value dims = rewriter.create<tensor::FromElementsOp>(loc, ValueRange{array_sizes[13], array_sizes[14], array_sizes[15]});  /// I, J, K
 
           sptensor = rewriter.create<tensorAlgebra::SparseTensorConstructOp>(loc, ty, dims,
                                                                                       ValueRange {
