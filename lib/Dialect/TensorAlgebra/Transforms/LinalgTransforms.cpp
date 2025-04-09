@@ -299,7 +299,7 @@ namespace
       get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
 
       addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, false, {1, 2, 0});
-      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr, kc}, false, {1, 0, 2});
+      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr, kc}, true, {1, 0, 2});
 
       if (failed(applyPatternsAndFoldGreedily(getOperation(),
                                               std::move(tilingPatterns))))

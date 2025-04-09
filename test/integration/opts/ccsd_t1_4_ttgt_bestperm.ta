@@ -1,5 +1,5 @@
 # RUN: comet-opt --convert-tc-to-ttgt --convert-to-llvm %s &> ccsd_t1_4_ttgt_bestperm.llvm
-# RUN: mlir-cpu-runner ccsd_t1_4_ttgt_bestperm.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext | FileCheck %s
+# RUN: mlir-cpu-runner ccsd_t1_4_ttgt_bestperm.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
 
 def main() {
     #IndexLabel Declarations
