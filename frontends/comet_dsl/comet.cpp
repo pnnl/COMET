@@ -42,6 +42,7 @@
 #include "comet/Dialect/Utils/Utils.h"
 
 #include "comet/Conversion/Passes.h"
+#include "comet/Analysis/Passes.h"
 
 #include "MLIRGen.h"
 #include "Parser.h"
@@ -404,21 +405,18 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   bool emitTriton_ = false;
 #endif
 
-<<<<<<< HEAD
   /// Load debug options
   if (GenTensorAlgebraLabelsInAlphabeticalOrder)
   {
     tensorAlgebra::debugOptions.insert("debug-ta-labels-alphabet-order");
   }
   /// end Load debug options
-=======
   /// Allow unregistered dialects, such as some non-standard dialects not included in MLIR code base.
   if (allowUnregisteredDialect)
   {
     context.allowUnregisteredDialects(true);
   }
 
->>>>>>> 6ffb75e (Improved the Memory Access Analysis pass.)
   if (int error = loadMLIR(context, module))
     return error;
 

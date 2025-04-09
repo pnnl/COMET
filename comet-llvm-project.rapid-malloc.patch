@@ -1,0 +1,158 @@
+diff --git a/mlir/include/mlir/Dialect/LLVMIR/FunctionCallUtils.h b/mlir/include/mlir/Dialect/LLVMIR/FunctionCallUtils.h
+index 852490cf7..2f9832475 100644
+--- a/mlir/include/mlir/Dialect/LLVMIR/FunctionCallUtils.h
++++ b/mlir/include/mlir/Dialect/LLVMIR/FunctionCallUtils.h
+@@ -60,6 +60,14 @@ LLVM::LLVMFuncOp lookupOrCreateGenericAlignedAllocFn(Operation *moduleOp,
+ LLVM::LLVMFuncOp lookupOrCreateGenericFreeFn(Operation *moduleOp);
+ LLVM::LLVMFuncOp lookupOrCreateMemRefCopyFn(Operation *moduleOp, Type indexType,
+                                             Type unrankedDescriptorType);
++/// modified
++/// Functions for Rapid Allocator.
++LLVM::LLVMFuncOp lookupOrCreateRapidInitializeFn(ModuleOp moduleOp);
++LLVM::LLVMFuncOp lookupOrCreateRapidMallocFn(ModuleOp moduleOp,
++                                             Type rapidHandleType,
++                                             Type indexType);
++LLVM::LLVMFuncOp lookupOrCreateRapidFreeFn(ModuleOp moduleOp);
++/// end modified
+ 
+ /// Create a FuncOp with signature `resultType`(`paramTypes`)` and name `name`.
+ LLVM::LLVMFuncOp lookupOrCreateFn(Operation *moduleOp, StringRef name,
+diff --git a/mlir/lib/Conversion/MemRefToLLVM/AllocLikeConversion.cpp b/mlir/lib/Conversion/MemRefToLLVM/AllocLikeConversion.cpp
+index e48ca5180..a48a5fed1 100644
+--- a/mlir/lib/Conversion/MemRefToLLVM/AllocLikeConversion.cpp
++++ b/mlir/lib/Conversion/MemRefToLLVM/AllocLikeConversion.cpp
+@@ -34,6 +34,44 @@ LLVM::LLVMFuncOp getAlignedAllocFn(const LLVMTypeConverter *typeConverter,
+   return LLVM::lookupOrCreateAlignedAllocFn(module, indexType);
+ }
+ 
++/// modified
++LLVM::LLVMFuncOp getRapidInitializeFn(
++    const LLVMTypeConverter *typeConverter, ModuleOp module) {
++  return LLVM::lookupOrCreateRapidInitializeFn(module);
++}
++
++Value getRapidHandle(
++    const LLVMTypeConverter *typeConverter, Operation *op) {
++  StringRef name = "rapid_initialize";
++  ModuleOp moduleOp = op->getParentOfType<ModuleOp>();
++  Value rapidHandle = nullptr;
++  moduleOp.walk([&](LLVM::CallOp callOp) {
++    if (auto calleeAttr = callOp.getCalleeAttr()) {
++      if (calleeAttr.getValue() == name) {
++        rapidHandle = callOp.getResult();
++      }
++    }
++  });
++  if (!rapidHandle) {
++    LLVM::LLVMFuncOp rapidInitializeFuncOp =
++        getRapidInitializeFn(typeConverter, moduleOp);
++    /// Create the LLVM::CallOp
++    OpBuilder builder(op);
++    LLVM::CallOp callOp = builder.create<LLVM::CallOp>(
++        op->getLoc(), rapidInitializeFuncOp, ValueRange{});
++    rapidHandle = callOp.getResult();
++  }
++
++  return rapidHandle;
++}
++
++LLVM::LLVMFuncOp getNotalignedRapidAllocFn(
++    const LLVMTypeConverter *typeConverter, ModuleOp module,
++    Type rapidHandleType, Type indexType) {
++  return LLVM::lookupOrCreateRapidMallocFn(module, rapidHandleType, indexType);
++}
++/// end modified
++
+ } // end namespace
+ 
+ Value AllocationOpLLVMLowering::createAligned(
+@@ -74,10 +112,40 @@ std::tuple<Value, Value> AllocationOpLLVMLowering::allocateBufferManuallyAlign(
+   MemRefType memRefType = getMemRefResultType(op);
+   // Allocate the underlying buffer.
+   Type elementPtrType = this->getElementPtrType(memRefType);
+-  LLVM::LLVMFuncOp allocFuncOp = getNotalignedAllocFn(
+-      getTypeConverter(), op->getParentWithTrait<OpTrait::SymbolTable>(),
+-      getIndexType());
+-  auto results = rewriter.create<LLVM::CallOp>(loc, allocFuncOp, sizeBytes);
++  /// modified
++//  LLVM::LLVMFuncOp allocFuncOp = getNotalignedAllocFn(
++//      getTypeConverter(), op->getParentOfType<ModuleOp>(), getIndexType());
++//  auto results = rewriter.create<LLVM::CallOp>(loc, allocFuncOp, sizeBytes);
++  LLVM::LLVMFuncOp allocFuncOp = nullptr;
++  LLVM::CallOp results = nullptr;
++//  llvm::errs() << __FILE__ << ":" << __LINE__ << " "; op->dump();
++  if (StringAttr allocatorAttr = op->getAttrOfType<StringAttr>("allocator")) {
++    /// did indicate allocator
++    StringRef allocatorStr = allocatorAttr.getValue();
++    if ("rapid" == allocatorStr) {
++      /// Found the rapidHandle
++      Value rapidHandle = getRapidHandle(getTypeConverter(), op);
++//      llvm::errs() << __FILE__ << ":" << __LINE__ << " rapid_handle: " << rapidHandle << "\n";
++      allocFuncOp = getNotalignedRapidAllocFn(
++          getTypeConverter(), op->getParentOfType<ModuleOp>(),
++          getVoidPtrType()/*rapidHandleType=*/, getIndexType());
++      results = rewriter.create<LLVM::CallOp>(loc, allocFuncOp,
++            ValueRange{rapidHandle, sizeBytes});
++//      llvm::errs() << __FILE__ << ":" << __LINE__ << " rapid_malloc: " << results.getResult() << "\n";
++    } else if ("default" == allocatorStr) {
++      allocFuncOp = getNotalignedAllocFn(
++          getTypeConverter(), op->getParentOfType<ModuleOp>(), getIndexType());
++      results = rewriter.create<LLVM::CallOp>(loc, allocFuncOp, sizeBytes);
++    } else {
++      assert(false && "Unknown value for attribute `allocator`.");
++    }
++  } else {
++    /// did not indicate allocator, so use the default one.
++    allocFuncOp = getNotalignedAllocFn(
++        getTypeConverter(), op->getParentOfType<ModuleOp>(), getIndexType());
++    results = rewriter.create<LLVM::CallOp>(loc, allocFuncOp, sizeBytes);
++  }
++  /// modified
+ 
+   Value allocatedPtr =
+       castAllocFuncResult(rewriter, loc, results.getResult(), memRefType,
+diff --git a/mlir/lib/Dialect/LLVMIR/IR/FunctionCallUtils.cpp b/mlir/lib/Dialect/LLVMIR/IR/FunctionCallUtils.cpp
+index 88421a16c..013084dc7 100644
+--- a/mlir/lib/Dialect/LLVMIR/IR/FunctionCallUtils.cpp
++++ b/mlir/lib/Dialect/LLVMIR/IR/FunctionCallUtils.cpp
+@@ -43,6 +43,12 @@ static constexpr llvm::StringRef kGenericAlignedAlloc =
+     "_mlir_memref_to_llvm_aligned_alloc";
+ static constexpr llvm::StringRef kGenericFree = "_mlir_memref_to_llvm_free";
+ static constexpr llvm::StringRef kMemRefCopy = "memrefCopy";
++/// modified
++/// Functions for Rapid Allocator.
++static constexpr llvm::StringRef kRapidInitialize = "rapid_initialize";
++static constexpr llvm::StringRef kRapidMalloc = "rapid_malloc";
++static constexpr llvm::StringRef kRapidFree = "rapid_free";
++/// end modified
+ 
+ /// Generic print function lookupOrCreate helper.
+ LLVM::LLVMFuncOp mlir::LLVM::lookupOrCreateFn(Operation *moduleOp,
+@@ -179,3 +185,26 @@ mlir::LLVM::lookupOrCreateMemRefCopyFn(Operation *moduleOp, Type indexType,
+       ArrayRef<Type>{indexType, unrankedDescriptorType, unrankedDescriptorType},
+       LLVM::LLVMVoidType::get(moduleOp->getContext()));
+ }
++
++/// modified
++LLVM::LLVMFuncOp mlir::LLVM::lookupOrCreateRapidMallocFn(ModuleOp moduleOp,
++                                                         Type rapidHandleType,
++                                                         Type indexType) {
++  return LLVM::lookupOrCreateFn(moduleOp, kRapidMalloc,
++                                {rapidHandleType, indexType},
++                                getVoidPtr(moduleOp->getContext()));
++}
++
++LLVM::LLVMFuncOp mlir::LLVM::lookupOrCreateRapidInitializeFn(ModuleOp moduleOp) {
++  return LLVM::lookupOrCreateFn(moduleOp, kRapidInitialize,
++                                {},
++                                getVoidPtr(moduleOp->getContext()));
++}
++
++LLVM::LLVMFuncOp mlir::LLVM::lookupOrCreateRapidFreeFn(ModuleOp moduleOp) {
++  return LLVM::lookupOrCreateFn(
++      moduleOp, kRapidFree,
++      {getVoidPtr(moduleOp->getContext()), getVoidPtr(moduleOp->getContext())},
++      LLVM::LLVMVoidType::get(moduleOp->getContext()));
++}
++/// end modified
+\ No newline at end of file

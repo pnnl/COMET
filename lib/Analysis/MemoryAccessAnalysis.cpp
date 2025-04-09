@@ -372,7 +372,7 @@ namespace
   {
     if(op->getParentOfType<scf::ForOp>() ||
        op->getParentOfType<scf::ParallelOp>() ||
-       op->getParentOfType<omp::WsLoopOp>())
+       op->getParentOfType<omp::WsloopOp>())
     {
       return true;
     }
@@ -411,7 +411,7 @@ namespace
     llvm::raw_string_ostream rso(buffer);
     op->print(rso);
     comet_debug() << "buffer: " << buffer << "\n";
-    if (mlir::dyn_cast<omp::WsLoopOp>(op))
+    if (mlir::dyn_cast<omp::WsloopOp>(op))
     /// `omp.wsloop for  (%arg0) : index = (%c0) to (%22) step (%c1)`
     {
       auto i_start = buffer.find('%');
@@ -578,10 +578,10 @@ namespace
         {
           return parallelOp.getLowerBound()[0];
         }
-        else if (auto wsLoopOp = mlir::dyn_cast<omp::WsLoopOp>(op))
-        {
-          return wsLoopOp.getLowerBound()[0];
-        }
+        // else if (auto wsLoopOp = mlir::dyn_cast<omp::WsloopOp>(op))
+        // {
+        //   return wsLoopOp.getLowerBound()[0];
+        // }
         else
         {
           llvm::errs() << __FILE__ << ":" << __LINE__ << " Error: The for-loop type is not supported.\n";
@@ -599,10 +599,10 @@ namespace
         {
           return parallelOp.getUpperBound()[0];
         }
-        else if (auto wsLoopOp = mlir::dyn_cast<omp::WsLoopOp>(op))
-        {
-          return wsLoopOp.getUpperBound()[0];
-        }
+        // else if (auto wsLoopOp = mlir::dyn_cast<omp::WsloopOp>(op))
+        // {
+        //   return wsLoopOp.getUpperBound()[0];
+        // }
         else
         {
           llvm::errs() << __FILE__ << ":" << __LINE__ << " Error: The for-loop type is not supported.\n";
@@ -648,20 +648,20 @@ namespace
   void findInnerMostForLoop(mlir::Operation *op,
                            scf::ForOp &forOp /*output*/,
                            scf::ParallelOp &parallelOp /*output*/,
-                           omp::WsLoopOp &wsLoopOp /*output*/)
+                           omp::WsloopOp &wsLoopOp /*output*/)
   {
     mlir::DominanceInfo domInfo(op);
     mlir::Operation *curr = op;
     forOp = mlir::dyn_cast<scf::ForOp>(curr->getParentOp());
     parallelOp = mlir::dyn_cast<scf::ParallelOp>(curr->getParentOp());
-    wsLoopOp = mlir::dyn_cast<omp::WsLoopOp>(curr->getParentOp());
+    wsLoopOp = mlir::dyn_cast<omp::WsloopOp>(curr->getParentOp());
     curr = curr->getParentOp();
 
     while (curr && (!forOp && !parallelOp && !wsLoopOp))
     {
       forOp = mlir::dyn_cast<scf::ForOp>(curr->getParentOp());
       parallelOp = mlir::dyn_cast<scf::ParallelOp>(curr->getParentOp());
-      wsLoopOp = mlir::dyn_cast<omp::WsLoopOp>(curr->getParentOp());
+      wsLoopOp = mlir::dyn_cast<omp::WsloopOp>(curr->getParentOp());
       curr = curr->getParentOp();
     }
 
@@ -678,11 +678,11 @@ namespace
     comet::TimeTerm term;
     scf::ForOp forOp;
     scf::ParallelOp parallelOp;
-    omp::WsLoopOp wsLoopOp;
+    omp::WsloopOp wsLoopOp;
     findInnerMostForLoop(op, forOp /*output*/, parallelOp /*output*/, wsLoopOp /*output*/);
 //    scf::ForOp forOp = op->getParentOfType<scf::ForOp>();
 //    scf::ParallelOp parallelOp = op->getParentOfType<scf::ParallelOp>();
-//    omp::WsLoopOp wsLoopOp = op->getParentOfType<omp::WsLoopOp>();
+//    omp::WsloopOp wsLoopOp = op->getParentOfType<omp::WsloopOp>();
     auto getUpperLevelForLoop =
       [&](mlir::Operation *currOp) -> bool
       {
@@ -696,7 +696,7 @@ namespace
           forOp = nullptr;
           wsLoopOp = nullptr;
         }
-        else if ((wsLoopOp = currOp->getParentOfType<omp::WsLoopOp>()))
+        else if ((wsLoopOp = currOp->getParentOfType<omp::WsloopOp>()))
         {
           forOp = nullptr;
           parallelOp = nullptr;

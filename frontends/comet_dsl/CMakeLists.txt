@@ -29,6 +29,7 @@ set(LIBS
   MLIRFuncAllExtensions
   MLIRTransforms
   COMETUtils
+  COMETAnalysis
   COMETTensorAlgebraDialect
   COMETIndexTreeDialect
   # COMETIndexTreeToSCF
