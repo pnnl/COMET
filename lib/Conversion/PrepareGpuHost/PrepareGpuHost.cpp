@@ -16,6 +16,10 @@ class PrepareGpuHost
 public:
   PrepareGpuHost() = default;
 
+  PrepareGpuHost(bool generateAllocsAndTransfers) {
+    this->generateAllocsAndTransfers = generateAllocsAndTransfers;
+  }
+
   void runOnOperation() override {
     mlir::ModuleOp modOp = getOperation();
     OpBuilder builder(modOp);
@@ -138,51 +142,69 @@ public:
     };
     std::set<Value, bool (*)(Value, Value)> uniqueGpuAllocs(toAlloc.begin(),
                                                             toAlloc.end(), cmp);
-    
     for (Value alloc : uniqueGpuAllocs) {
+        bool isInDevice = false;
         MemRefType allocType = mlir::cast<MemRefType>(alloc.getType());
         mlir::gpu::AllocOp gpuAlloc;
         if (auto defOp = alloc.getDefiningOp()) {
             builder.setInsertionPointAfter(defOp);
         } else if (mlir::isa<BlockArgument>(alloc)) {
+            if(mlir::cast<mlir::func::FuncOp>(mlir::cast<BlockArgument>(alloc).getOwner()->getParentOp()).getArgAttr(mlir::cast<BlockArgument>(alloc).getArgNumber(), "gpu.indevice"))
+            {
+                isInDevice = true;
+            }
             builder.setInsertionPointToStart(alloc.getParentBlock());
         } else {
             assert(false &&
                     "Value has not defining Op and is not a block argument.");
         }
 
-        if (allocType.hasStaticShape()) {
-            gpuAlloc = builder.create<mlir::gpu::AllocOp>(
-                alloc.getLoc(), allocType, ValueRange(), ValueRange(),
-                ValueRange());
-        } else {
-            std::vector<Value> dynDims;
-            for (size_t i = 0; i < allocType.getShape().size(); i++) {
-                if (allocType.isDynamicDim(i)) {
-                dynDims.push_back(
-                    builder.create<memref::DimOp>(alloc.getLoc(), alloc, i));
+        if(!isInDevice)
+        {
+            if (allocType.hasStaticShape()) {
+                gpuAlloc = builder.create<mlir::gpu::AllocOp>(
+                    alloc.getLoc(), allocType, ValueRange(), ValueRange(),
+                    ValueRange());
+            } else {
+                std::vector<Value> dynDims;
+                for (size_t i = 0; i < allocType.getShape().size(); i++) {
+                    if (allocType.isDynamicDim(i)) {
+                    dynDims.push_back(
+                        builder.create<memref::DimOp>(alloc.getLoc(), alloc, i));
+                    }
+                }
+                gpuAlloc = builder.create<mlir::gpu::AllocOp>(
+                    alloc.getLoc(), allocType, ValueRange(), dynDims, ValueRange());
+            }
+
+            
+            auto op = alloc.getDefiningOp() != NULL
+                        ? alloc.getDefiningOp()->getResult(0)
+                        : alloc;
+            for (auto &use : llvm::make_early_inc_range(op.getUses())) {
+                if (mlir::gpu::LaunchFuncOp launchOp =
+                        dyn_cast<mlir::gpu::LaunchFuncOp>(use.getOwner())) {
+                    builder.setInsertionPoint(launchOp);
+                    builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
+                                                        ValueRange(),
+                                                        gpuAlloc.getMemref(), alloc);
+                    use.set(gpuAlloc.getMemref());
+                    builder.setInsertionPointAfter(launchOp);
+                    builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
+                                                        ValueRange(), alloc,
+                                                        gpuAlloc.getMemref());
                 }
             }
-            gpuAlloc = builder.create<mlir::gpu::AllocOp>(
-                alloc.getLoc(), allocType, ValueRange(), dynDims, ValueRange());
         }
-
-        
-        auto op = alloc.getDefiningOp() != NULL
-                    ? alloc.getDefiningOp()->getResult(0)
-                    : alloc;
-        for (auto &use : llvm::make_early_inc_range(op.getUses())) {
-            if (mlir::gpu::LaunchFuncOp launchOp =
-                    dyn_cast<mlir::gpu::LaunchFuncOp>(use.getOwner())) {
-                builder.setInsertionPoint(launchOp);
-                builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
-                                                    ValueRange(),
-                                                    gpuAlloc.getMemref(), alloc);
-                use.set(gpuAlloc.getMemref());
-                builder.setInsertionPointAfter(launchOp);
-                builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
-                                                    ValueRange(), alloc,
-                                                    gpuAlloc.getMemref());
+        else
+        {
+            for (auto &use : llvm::make_early_inc_range(alloc.getUses())) {
+                if (mlir::gpu::LaunchFuncOp launchOp =
+                        dyn_cast<mlir::gpu::LaunchFuncOp>(use.getOwner())) {
+                    builder.setInsertionPoint(launchOp);
+                    auto ptr = builder.create<mlir::memref::ExtractAlignedPointerAsIndexOp>(launchOp->getLoc(), alloc);
+                    use.set(ptr);
+                }
             }
         }
     }
@@ -206,4 +228,11 @@ mlir::comet::createPrepareGpuHostPass() {
   // std::cout << "Running createPrepareGpuHostPass\n";
 
   return std::make_unique<::PrepareGpuHost>();
+}
+
+std::unique_ptr<OperationPass<mlir::ModuleOp>>
+mlir::comet::createPrepareGpuHostPass(bool generateAllocsAndTransfers) {
+  // std::cout << "Running createPrepareGpuHostPass\n";
+
+  return std::make_unique<::PrepareGpuHost>(generateAllocsAndTransfers);
 }

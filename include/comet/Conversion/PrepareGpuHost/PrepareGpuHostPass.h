@@ -13,6 +13,7 @@ namespace comet {
 
 
 std::unique_ptr<OperationPass<mlir::ModuleOp>> createPrepareGpuHostPass();
+std::unique_ptr<OperationPass<mlir::ModuleOp>> createPrepareGpuHostPass(bool generateAllocsAndTransfers);
 
 } // namespace triton
 } // namespace mlir

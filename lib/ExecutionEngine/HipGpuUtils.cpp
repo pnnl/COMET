@@ -141,7 +141,7 @@ const int64_t MAX_NUM_BLOCKS_Y = 65535;
 const int64_t MAX_NUM_BLOCKS_Z = 65535;
 
 extern "C" __attribute__((visibility("default"))) void
-HipLaunchKernel(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ,
+HipLaunchKernelMLIR(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ,
                 int64_t tritonBlockX, int64_t tritonBlockY,
                 int64_t tritonBlockZ, void *ptr, void *aligned_ptr,
                 int64_t offset, int64_t size, int64_t stride, char *kernel,

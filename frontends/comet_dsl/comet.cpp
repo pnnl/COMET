@@ -296,6 +296,10 @@ static cl::opt<bool> IsLoweringtoSCF("convert-to-loops",
 /// =============================================================================
 static cl::opt<bool> IsLoweringToTriton("convert-to-triton",
                                      cl::desc("Output Triton dialect after lowering all operations"));
+
+static cl::opt<bool> IsGeneratingGpuAllocsAndTransfers("gpu-generate-allocs-transfers", cl::init(true),
+  
+  cl::desc("Whether to generate GPU allocations and transfers"));
 #endif
 
 /// =============================================================================
@@ -669,31 +673,31 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (isLoweringToLLVM || emitLLVM)
   {
 #ifdef ENABLE_GPU_TARGET
-  if ((isLoweringToLLVM || emitLLVM) && CodegenTarget == TargetDevice::GPU)
-  {
-    if(GPUComputeCapability.getValue().find("sm_") != std::string::npos || GPUComputeCapability.getValue().find("compute_") != std::string::npos)
+    if ((isLoweringToLLVM || emitLLVM) && CodegenTarget == TargetDevice::GPU)
     {
-      #ifdef ENABLE_NVIDIA_GPU_BACKEND
-      int32_t cudaCC = std::stoi(GPUComputeCapability.substr(GPUComputeCapability.find("_")+1));
-      pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, cudaCC, GPUTargetCompilationFormat));
-      pm.addPass(mlir::comet::createPrepareGpuHostPass());
-      pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
-      #else
-      llvm::errs() << "Trying to lower to NVIDIA(?) device without enabling the NVIDIA backend \n";
-      return 6;
-      #endif
+      if(GPUComputeCapability.getValue().find("sm_") != std::string::npos || GPUComputeCapability.getValue().find("compute_") != std::string::npos)
+      {
+        #ifdef ENABLE_NVIDIA_GPU_BACKEND
+        int32_t cudaCC = std::stoi(GPUComputeCapability.substr(GPUComputeCapability.find("_")+1));
+        pm.addPass(mlir::comet::createLowerTritonDeviceToCudaPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, cudaCC, GPUTargetCompilationFormat));
+        pm.addPass(mlir::comet::createPrepareGpuHostPass(IsGeneratingGpuAllocsAndTransfers));
+        pm.addPass(mlir::comet::createLowerGpuHostToCudaPass());
+        #else
+        llvm::errs() << "Trying to lower to NVIDIA(?) device without enabling the NVIDIA backend \n";
+        return 6;
+        #endif
+      }
+      else {
+        #ifdef ENABLE_AMD_GPU_BACKEND
+        pm.addPass(mlir::comet::createLowerTritonDeviceToHIPPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
+        pm.addPass(mlir::comet::createPrepareGpuHostPass(IsGeneratingGpuAllocsAndTransfers));
+        pm.addPass(mlir::comet::createLowerGpuHostToHIPPass());
+        #else
+        llvm::errs() << "Trying to lower to AMDGPU(?) device without enabling the NVIDIA backend \n";
+        return 6;
+        #endif
+      }
     }
-    else {
-      #ifdef ENABLE_AMD_GPU_BACKEND
-      pm.addPass(mlir::comet::createLowerTritonDeviceToHIPPass(GPUNumWarps, GPUThreadsPerWarp, GPUNumCTAs, GPUNumStages, GPUComputeCapability, GPUTargetCompilationFormat));
-      pm.addPass(mlir::comet::createPrepareGpuHostPass());
-      pm.addPass(mlir::comet::createLowerGpuHostToHIPPass());
-      #else
-      llvm::errs() << "Trying to lower to AMDGPU(?) device without enabling the NVIDIA backend \n";
-      return 6;
-      #endif
-    }
-  }
 
 #endif
     optPM.addPass(mlir::createCanonicalizerPass());

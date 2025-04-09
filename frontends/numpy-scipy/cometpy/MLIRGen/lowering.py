@@ -107,7 +107,11 @@ def memref_from_np_array(np_array):
             constructor = memref_f64
         else: 
             constructor = create_memref_type(ctype,len(np_array.shape))
-    return constructor(np_array.ctypes.data_as(ctypes.POINTER(ctype)), np_array.ctypes.data_as(ctypes.POINTER(ctype)), 0, (c_int64*len(np_array.shape))(*np_array.shape), (c_int64*len(np_array.shape))(*[s//8 for s in np_array.strides])), constructor
+    if hasattr(np_array, '__cuda_array_interface__'):
+        ptr = np_array.__cuda_array_interface__['data'][0]
+        return constructor(ctypes.cast(ptr, ctypes.POINTER(ctype)), ctypes.cast(ptr, ctypes.POINTER(ctype)), 0, (c_int64*len(np_array.shape))(*np_array.shape), (c_int64*len(np_array.shape))(*[s//8 for s in np_array.strides])), constructor
+    else:
+        return constructor(np_array.ctypes.data_as(ctypes.POINTER(ctype)), np_array.ctypes.data_as(ctypes.POINTER(ctype)), 0, (c_int64*len(np_array.shape))(*np_array.shape), (c_int64*len(np_array.shape))(*[s//8 for s in np_array.strides])), constructor
 
 # llvm_args += [*expand_memref_ptr(dim_sizes), 0, *expand_memref_ptr(A1pos), 0, *expand_memref_ptr(A2pos), *expand_memref_ptr(A2crd), *expand_memref_ptr(Aval)]
 
@@ -412,10 +416,11 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     func = lib.__getattr__("_mlir_ciface_"+func_name)
 
     # Get the inputs, input types and the output containers
-    args, arg_types, all_output, aux = generate_llvm_args_from_ndarrays(len(inputs),*(inputs), *(outputs))
+    args, arg_types, all_output, aux = generate_llvm_args_from_ndarrays(len(inputs),  *(inputs), *(outputs))
     func.argtypes = arg_types
-    if outputs[0].shape == (1,):
-        func.restype = c_double
+    if outputs:
+        if outputs[0].shape == (1,):
+            func.restype = c_double
     # Uncomment to measure execution time without the compilation process
     # start = time.time()
     ret = func(*[byref(arg) if not isinstance(arg, int) else arg for arg in args])
@@ -573,14 +578,12 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
         if target.startswith("sm_") or target.startswith("compute_") or target.startswith("lto_"):
             if not cfg.gpu_target_enabled:
                 raise Exception("COMET gpu target is not enabled")
-            
-            scf_lower_flags += " " + " --convert-to-triton --target=GPU --gpu-compute-capability="+target.split("_")[1]
+            scf_lower_flags += " " + "--convert-to-triton --target=GPU --gpu-compute-capability="+target.split("_")[1]
             mlir_lower_flags += " " + "--target=GPU"
         elif target == "gpu":
             if not cfg.gpu_target_enabled:
                 raise Exception("COMET gpu target is not enabled")
-        
-            scf_lower_flags += " " + " --convert-to-triton --target=GPU"
+            scf_lower_flags += " " + "--convert-to-triton --target=GPU"
             mlir_lower_flags += " " + "--target=GPU"
         else :
             raise "Expected target formats:\

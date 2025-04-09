@@ -268,7 +268,7 @@ mlir::LogicalResult specializeGpuHost(mlir::OpBuilder& builder, mlir::ModuleOp m
             LLVM::linkage::Linkage::Private);
       }
       builder.create<mlir::func::CallOp>(
-          launchOp->getLoc(), vendor_prefix+"LaunchKernel", TypeRange(),
+          launchOp->getLoc(), vendor_prefix+"LaunchKernelMLIR", TypeRange(),
           ValueRange({launchOp.getGridSizeX(), launchOp.getGridSizeY(),
                       launchOp.getGridSizeZ(), launchOp.getBlockSizeX(),
                       launchOp.getBlockSizeY(), launchOp.getBlockSizeZ(),
@@ -388,7 +388,7 @@ void declare_vendor_funcs(OpBuilder& builder, ModuleOp modOp, std::string vendor
     builder.getIndexType(), builder.getIntegerType(32)},
     {});
   auto cudaLaunchKernel = builder.create<mlir::func::FuncOp>(
-    builder.getUnknownLoc(), vendor_prefix+"LaunchKernel", cudaLaunchKernelT);
+    builder.getUnknownLoc(), vendor_prefix+"LaunchKernelMLIR", cudaLaunchKernelT);
   cudaLaunchKernel.setVisibility(mlir::SymbolTable::Visibility::Private);
   modOp.push_back(cudaLaunchKernel);
 
