@@ -22,15 +22,13 @@ hipModule_t hipModule = NULL;
 // char* moduleImg = NULL;
 
 void initHipCtx(char *moduleImg) {
-  HIP_CHECK(hipInit(0));
-
   if (moduleImg) {
+    HIP_CHECK(hipFree(NULL)); 
     HIP_CHECK(hipModuleLoadData(&hipModule, moduleImg));
   }
 }
 
 template <typename T> int64_t HipMalloc(int64_t size) {
-  initHipCtx(NULL);
   hipDeviceptr_t device_ptr;
   HIP_CHECK(hipMalloc(&device_ptr, size * sizeof(T)));
 
@@ -72,7 +70,6 @@ HipMallocI32(int64_t size) {
 }
 
 extern "C" __attribute__((visibility("default"))) void HipFree(int64_t ptr) {
-  initHipCtx(NULL);
 
   // printf("Freeing memory\n");
   HIP_CHECK(hipFree((void *)ptr));
@@ -82,7 +79,6 @@ extern "C" __attribute__((visibility("default"))) void HipFree(int64_t ptr) {
 template <typename T>
 void HipMemcpy(int64_t device, void *ptr, void *aligned_ptr, int64_t offset,
                int64_t size, int64_t stride, int64_t direction) {
-  initHipCtx(NULL);
 
   // printf("Memcpy memory of size: %ld\n", size);
 
