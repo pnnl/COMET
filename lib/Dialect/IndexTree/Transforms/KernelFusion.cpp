@@ -154,8 +154,25 @@ void collectCommonIndices(const llvm::SmallVector<IndexTreeOp> &itree_list,
                        itree_to_DimCompound[tree_i] /*out*/);
   }
 
+  SmallVector<IndexTreeIndicesOp, 4> host_indices;
+  itree_list[0]->walk([&host_indices] (IndexTreeIndicesOp indice) {
+    host_indices.push_back(indice);
+  });
+
+
   for (uint32_t tree_i = 1; tree_i < itree_list.size(); ++tree_i) {
     itree_to_common_indices[tree_i] = findCommonIndex(itree_to_DimCompound[0], itree_to_DimCompound[tree_i]);
+    SmallVector<IndexTreeIndicesOp, 4> child_indices;
+    itree_list[tree_i]->walk([&child_indices] (IndexTreeIndicesOp indice) {
+      child_indices.push_back(indice);
+    });
+    for(size_t index: itree_to_common_indices[tree_i])
+    {
+      if(host_indices[index].getIsParallel() != child_indices[index].getIsParallel())
+      {
+        host_indices[index].setIsParallel(false);
+      }
+    }
 //    {/// test
 //      for (uint32_t idx : itree_to_common_indices[tree_i]) {
 //        comet_debug() << idx << "\n";
@@ -816,11 +833,6 @@ void fuseITrees(IndexTreeOp new_itree,
   indexTree::YieldOp yield_op = llvm::cast<indexTree::YieldOp>(new_itree.getRegion().getBlocks().front().getTerminator());
   OpBuilder::InsertionGuard guard(rewriter);
   rewriter.setInsertionPoint(yield_op);
-  /// TODO: Parallel execution does not seem to work properly when fusion is in place...
-  for(auto indexOp : host_index_ops)
-  {
-    indexOp.setIsParallel(false);
-  }
   /// Fuse each other itree to the new itree.
   for (uint32_t tree_i = 1; tree_i < num_itrees; ++tree_i) {
     /// Create Index Ops: 1) Record the common index ops, then 2) add the new index ops.
