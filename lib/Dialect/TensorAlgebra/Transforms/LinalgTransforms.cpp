@@ -31,21 +31,27 @@
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Linalg/TransformOps/LinalgTransformOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "llvm/ADT/SmallVector.h"
+#include <optional>
 
 // suppress all warnings coming from inclusion of blis.h in source tree
 #ifdef __clang__
@@ -739,40 +745,32 @@ struct OptDenseTranspose : public ConversionPattern
       currentOrder.push_back(i);
     }
 
-    SmallVector<mlir::Value, 6> in_ivs;
-    SmallVector<mlir::Value, 6> out_ivs;
+    SmallVector<OpFoldResult, 6> in_ivs;
+    SmallVector<OpFoldResult, 6> out_ivs;
     in_ivs.resize(optimalOrder.size());
     out_ivs.resize(outputIndices[0].size());
-    mlir::Value carried_val = output;
-    SmallVector<AffineForOp, 6> loops;
-
+    OpFoldResult one = rewriter.createOrFold<ConstantIndexOp>(loc, 1);
+    SmallVector<OpFoldResult, 4> ubs;
     for (unsigned i = 0; i < optimalOrder.size(); i++)
     {
-      int64_t upperBound = inputType.getDimSize(optimalOrder[i]);
-      if (upperBound == ShapedType::kDynamic)
-      {
-        assert(false && "TODO: This dimension is a dynamic size");
-      }
-
-      /// create for loops
-      auto loop = rewriter.create<AffineForOp>(loc, 0, upperBound, 1, carried_val);
-      loops.push_back(loop);
-      rewriter.setInsertionPointToStart(loop.getBody());
-      in_ivs[optimalOrder[i]]  = loop.getInductionVar();
-      out_ivs[optimalOrder[outputIndices[0][i]]] = loop.getInductionVar();
-      carried_val = loop.getRegionIterArgs().front();
+      Value upperBound = rewriter.create<tensor::DimOp>(loc, input, optimalOrder[i]);
+      ubs.push_back(upperBound);
     }
-    
-    auto load_rhs = rewriter.create<tensor::ExtractOp>(loc, input, in_ivs);
-    auto store_lhs = rewriter.create<tensor::InsertOp>(loc, load_rhs, carried_val, out_ivs);
-    rewriter.create<AffineYieldOp>(loc, store_lhs.getResult());
-    for(int64_t i = loops.size()-2; i>=0 ; i--)
+
+    SmallVector<OpFoldResult, 4> ones(optimalOrder.size(), one);
+    auto forAll = rewriter.create<scf::ForallOp>(loc, ubs, output, std::nullopt);
+    rewriter.setInsertionPointToStart(forAll.getBody());
+    auto ivs = forAll.getLoopInductionVars();
+    for(size_t i = 0; i< forAll.getLoopInductionVars()->size(); i++)
     {
-      rewriter.setInsertionPointToEnd(loops[i].getBody());
-      rewriter.create<AffineYieldOp>(loc, loops[i+1].getResult(0));
+      in_ivs[optimalOrder[i]]  = forAll.getLoopInductionVars()->data()[i];
+      out_ivs[optimalOrder[outputIndices[0][i]]] = forAll.getLoopInductionVars()->data()[i];
     }
+    auto extracts = rewriter.create<tensor::ExtractSliceOp>(loc, input, in_ivs, ones, ones);
+    rewriter.setInsertionPointToEnd(forAll.getTerminator().getBody());
+    rewriter.create<tensor::ParallelInsertSliceOp>(loc, extracts, forAll.getRegionIterArgs().front(), out_ivs, ones, ones);
 
-    rewriter.replaceAllUsesWith(op->getResult(0), loops[0].getResult(0));
+    rewriter.replaceAllUsesWith(op->getResult(0), forAll->getResult(0));
     rewriter.eraseOp(op);
 
     //module.dump();
@@ -796,7 +794,7 @@ namespace
       comet_debug() << "OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, FunctionPass>\n";
       func::FuncOp func = getOperation();
       ConversionTarget target(getContext());
-      target.addLegalDialect<TADialect, ArithDialect, AffineDialect, tensor::TensorDialect>();
+      target.addLegalDialect<TADialect, ArithDialect, scf::SCFDialect, AffineDialect, tensor::TensorDialect>();
       RewritePatternSet patterns(&getContext());
       patterns.insert<OptDenseTranspose>(&getContext(), tile_size, seperate_tiles);
 
