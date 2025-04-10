@@ -47,6 +47,7 @@ set(LIBS
 if(ENABLE_NVIDIA_GPU_BACKEND)
   if(${CUDAToolkit_FOUND})
     set(LIBS ${LIBS} CUDA::cuda_driver)
+    set(LIBS ${LIBS} CUDA::cudart)
   endif()
 endif()
 
