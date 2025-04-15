@@ -30,6 +30,7 @@
 # 
 
 # from _ast import  Attribute, BinOp, Call, Constant
+import time
 import ast_comments as ast
 import inspect
 # import comet
@@ -1318,6 +1319,7 @@ def compile(flags, target:str = "cpu", with_jit=True):
     def innerfunc(func):
 
         def wrapper(*pos_args, **kwargs):
+            # start = time.time()
             func_str = ast.parse(inspect.getsource(func))
             parsed_func = ast.parse(func_str)
             func_def = parsed_func.body[0]
@@ -1474,6 +1476,8 @@ def compile(flags, target:str = "cpu", with_jit=True):
                 if isinstance(op, ops.FuncOp):
                     op.func_name = func_name
             code = new_v.dump()
+            # end = time.time()
+            # print(f"Parsing time: {end-start}")
             # start = time.time()
             lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags, func_name, arg_vals, new_v.return_type)
             # end = time.time()

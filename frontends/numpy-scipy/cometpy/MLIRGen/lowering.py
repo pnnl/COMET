@@ -448,7 +448,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
 
 
     llvmir_file = uuid_s+'.ll'
-    # llvm_in = llvm_in.replace('call @comet_print_memref_', '//call @comet_print_memref_')
+    llvm_in = llvm_in.replace('call @comet_print_memref_', '//call @comet_print_memref_')
     # path_to_cometopt = cfg.comet_path+"/bin/comet-opt"
     path_to_cometopt = cfg.comet_path+"/bin/comet-opt -x mlir"
     to_llvm_command = path_to_cometopt + scf_lower_flags #+ llvm_in
@@ -461,12 +461,15 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     # 2. Call mlir-translate to convert llvm to llvmir 
     # 3. Call clang to generate library
     # p = subprocess.run(to_llvm_command, input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    # print(llvm_in)
+    # start = time.time()
     p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | ' + gcc_command , input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     if(p.returncode != 0):
         cleanup()
         raise AssertionError("gcc failed with error code: {}. Error: {} {}".format(p.returncode, p.stdout, p.stderr))
     files_to_cleanup.append(os.path.join( os.getcwd(), temp_dir +libname))
+    # end = time.time()
+    # print(f'To llvm time: {end-start}')
+    # start = time.time()
 
     # Load code generated from COMET
     lib = ctypes.cdll.LoadLibrary(temp_dir +libname)
@@ -489,12 +492,19 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
             else:
                 raise Exception("Unexpeted return type")
             
+    # end = time.time()
+    # print(f'dlopen time: {end-start}')
             
     # Uncomment to measure execution time without the compilation process
     # start = time.time()
-    ret = func(*[byref(arg) if not isinstance(arg, int) else arg for arg in args])
+    args = [byref(arg) if not isinstance(arg, int) else arg for arg in args]
+    # end = time.time()
+    # print("create args: {}".format(end-start))
+    # start = time.time()
+    ret = func(*args)
     # end = time.time()
     # print("Kernel execution time JIT: {}".format(end-start))
+    # start = time.time()
 
     out = None
     ret_outputs = []
@@ -525,7 +535,8 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     else:
         out = None
     # print("Kernel execution time JIT: {}".format(end-start))
-
+    # end = time.time()
+    # print(f'Return time: {end-start}')
     return out, llvmir_file
 
 def func_execute(func, args):
@@ -679,7 +690,11 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
 
     # Convert TA to SCF
     # scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals, uuid_s)
+    # start = time.time()
+
     scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_rep, mlir_lower_flags, args_vals, uuid_s)
+    # end = time.time()
+    # print(f"To SCF time: {end-start}")
 
     #lower the SCF dialect to LLVMIR and execute
     result,llvmir_file = translate_and_exec_llvm_with_jit(scf_out_file, scf_lower_flags, func_name, args_vals, outputs_types, uuid_s)
