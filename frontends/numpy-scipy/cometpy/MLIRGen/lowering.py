@@ -29,6 +29,8 @@ import time
 import ctypes
 from ctypes import *
 import cometpy.cfg as cfg
+from cometpy.MLIRGen import types
+from cometpy.MLIRGen import ops
 import atexit
 import uuid
 import scipy as scp
@@ -80,6 +82,35 @@ class memref_f64(Structure):
 
 class memref_f32(Structure):
     _fields_ = [ ('mem_aligned', POINTER(c_float)), ('mem', POINTER(c_float)), ('offset', c_int64), ('dim', c_int64 * 1), ('stride', c_int64 * 1)]
+
+def memref_from_shaped_type(tensor_type):
+    ctype = None
+    shape = tensor_type.shape
+    if tensor_type.element_type == 'i64':
+        ctype = c_int64
+        if(len(shape) == 1):
+            constructor = memref_i64
+        else: 
+            constructor = create_memref_type(ctype,len(shape))
+    elif tensor_type.element_type == 'i32':
+        ctype = c_int32
+        if(len(shape) == 1):
+            constructor = memref_i32
+        else: 
+            constructor = create_memref_type(ctype,len(shape))
+    elif tensor_type.element_type == 'f64':
+        ctype = c_double
+        if(len(shape) == 1):
+            constructor = memref_f64
+        else: 
+            constructor = create_memref_type(ctype,len(shape))
+    elif tensor_type.element_type == 'f32':
+        ctype = c_float
+        if(len(shape) == 1):
+            constructor = memref_f32
+        else: 
+            constructor = create_memref_type(ctype,len(shape))
+    return constructor(ctypes.cast(None, ctypes.POINTER(ctype)), ctypes.cast(None, ctypes.POINTER(ctype)), 0, (c_int64*len(shape))(*shape), (c_int64*len(shape))(*[0]*len(shape))), constructor
 
 def memref_from_np_array(np_array):
     ctype = None
@@ -265,134 +296,160 @@ def memref_index_type():
 def memref_f64_type():
     return [ctypes.POINTER(c_double), ctypes.POINTER(c_double), c_int64, c_int64, c_int64]
 
-def generate_llvm_args_from_ndarrays(num_in, *ndargs):
+def generate_llvm_args_from_ndarrays(inputs, output_types):
     llvm_args = []
     llvm_args_types = []
     all_outputs = []
     aux = [] # Used to make sure data created in this function are not freed prematurely.
-    for i, ndarray in enumerate(ndargs):
-        # Ndarray is dense
+    for out_type in output_types:
+        if isinstance(out_type, types.ShapedType):
+            if out_type.format == types.DENSE:
+                memref, type = memref_from_shaped_type(out_type)
+                llvm_args.append(memref)
+                llvm_args_types.append(POINTER(type))
+                all_outputs.append(memref)
+            
+                
+# 
+#     for i, ndarray in enumerate(ndargs):
+#         # Ndarray is dense
+#         if not scp.sparse.issparse(ndarray):
+#             memref, type = memref_from_np_array(ndarray)
+#             llvm_args.append(memref)
+#             llvm_args_types.append(POINTER(type))
+
+#             if i >= num_in:
+#                 all_outputs.append(ndarray)
+#         # Ndarray is sparse
+#         else:
+#             dims = np.array(ndarray.shape, dtype=np.int64)
+#             dim_sizes, dim_type = memref_from_np_array(dims)
+#             aux.append(dims)
+#             Aval, Aval_type = memref_from_np_array(ndarray.data)
+#             # Working on the output matrix
+#             if i >= num_in:
+#           
+            else:
+                dims = np.array(out_type.shape, dtype=np.int64)
+                dim_sizes, dim_type = memref_from_np_array(dims)
+                aux.append(dims)
+                Aval, Aval_type = memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.element_type))
+                if out_type.format == types.CSR:
+                    A1pos_temp = np.array([out_type.shape[0]], dtype= ops.mlir_type_to_dtype(out_type.indices_type))
+                    aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
+                    A1pos, A1pos_type = memref_from_np_array(A1pos_temp) #memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A2pos, A2pos_type = memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A2crd, A2crd_type = memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+
+
+                    if out_type.element_type == 'f64':
+                        if out_type.indices_type == 'i32':
+                            out_ctor = output_csr_f64_i32
+                        else:
+                            out_ctor = output_csr_f64_i64
+                    elif out_type.element_type == 'f32':
+                        if out_type.indices_type == 'i32':
+                            out_ctor = output_csr_f32_i32
+                        else:
+                            out_ctor = output_csr_f32_i64
+
+                    out = out_ctor(dim_sizes, 0, A1pos, 0, A2pos, A2crd, Aval)
+                elif out_type.format == types.COO:
+                    A1pos_temp = np.array([0, 1], dtype=ops.mlir_type_to_dtype(out_type.indices_type))
+                    aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
+                    A1pos, A1pos_type =  memref_from_np_array(A1pos_temp) #memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A1crd, A1crd_type =  memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A2crd, A2crd_type =  memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+
+                    if out_type.element_type == 'f64':
+                        if out_type.indices_type == 'i32':
+                            out_ctor = output_coo_f64_i32
+                        else:
+                            out_ctor = output_coo_f64_i64
+                    elif out_type.element_type == 'f32':
+                        if out_type.indices_type == 'i32':
+                            out_ctor = output_coo_f32_i32
+                        else:
+                            out_ctor = output_coo_f32_i64
+
+                    out = out_ctor(dim_sizes, 0, A1pos, A1crd, 0, A2crd, Aval)
+                else :
+                    raise Exception("Unsupported sparse matrix type")
+
+                llvm_args_types += [POINTER(out_ctor)]
+                llvm_args += [out]
+                all_outputs.append(out)
+
+    for ndarray in inputs:
+        
+
         if not scp.sparse.issparse(ndarray):
+            # ndarray = np.array(out_type.shape, dtype=ops.mlir_type_to_dtype(out_type.element_type)) ## [TODO] No need to allocate
             memref, type = memref_from_np_array(ndarray)
             llvm_args.append(memref)
             llvm_args_types.append(POINTER(type))
-
-            if i >= num_in:
-                all_outputs.append(ndarray)
-        # Ndarray is sparse
         else:
             dims = np.array(ndarray.shape, dtype=np.int64)
             dim_sizes, dim_type = memref_from_np_array(dims)
             aux.append(dims)
-            Aval, Aval_type = memref_from_np_array(ndarray.data)
+            Aval, Aval_type = memref_from_np_array(ndarray.data) # memref_from_shaped_type(types.TensorType([ndarray.shape[0]], out_type.element_type))
+            insert_pos_1 = 0
+            insert_pos_2 = 0
+            # CSR
+            if ndarray.format == 'csr':
+                A1tile_pos = np.array([-1], dtype=ndarray.indptr.dtype)
+                A1tile_crd = np.array([-1], dtype=ndarray.indptr.dtype)
+                A2tile_pos = np.array([-1], dtype=ndarray.indptr.dtype)
+                A2tile_crd = np.array([-1], dtype=ndarray.indptr.dtype)
+                A1pos_temp = np.array([ndarray.shape[0]], dtype=ndarray.indptr.dtype)
+                aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
+                A1pos, A1pos_type = memref_from_np_array(A1pos_temp)
+                A2pos, A2pos_type = memref_from_np_array(ndarray.indptr)
+                A2crd, A2crd_type = memref_from_np_array(ndarray.indices)
 
-            # Working on the output matrix
-            if i >= num_in:
-                if ndarray.format == 'csr':
-                    A1pos_temp = np.array([ndarray.shape[0]], dtype=ndarray.indptr.dtype)
-                    aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                    A1pos, A1pos_type = memref_from_np_array(A1pos_temp)
-                    A2pos, A2pos_type = memref_from_np_array(ndarray.indptr)
-                    A2crd, A2crd_type = memref_from_np_array(ndarray.indices)
+                # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
+                llvm_args += [dim_sizes, insert_pos_1, A1pos, insert_pos_2, A2pos, A2crd]
+                llvm_args_types += [POINTER(dim_type)] + [c_int64] + [POINTER(A1pos_type)] + [c_int64] + [POINTER(A2pos_type), POINTER(A2crd_type)]
+            # COO
+            elif ndarray.format == 'coo':
+                A1tile_pos = np.array([-1], dtype=ndarray.row.dtype)
+                A1tile_crd = np.array([-1], dtype=ndarray.row.dtype)
+                A2tile_pos = np.array([-1], dtype=ndarray.row.dtype)
+                A2tile_crd = np.array([-1], dtype=ndarray.row.dtype)
+                A1pos_temp = np.array([0, ndarray.nnz], dtype=ndarray.row.dtype)
+                aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
+                A1pos, A1pos_type = memref_from_np_array(A1pos_temp)
+                A1crd, A1crd_type = memref_from_np_array(ndarray.row)
+                A2crd, A2crd_type = memref_from_np_array(ndarray.col)
 
-
-                    if ndarray.data.dtype == 'float64':
-                        if ndarray.indices.dtype == 'int32':
-                            out_type = output_csr_f64_i32
-                        else:
-                            out_type = output_csr_f64_i64
-                    elif ndarray.data.dtype == 'float32':
-                        if ndarray.indices.dtype == 'int32':
-                            out_type = output_csr_f32_i32
-                        else:
-                            out_type = output_csr_f32_i64
-
-                    out = out_type(dim_sizes, 0, A1pos, 0, A2pos, A2crd, Aval)
-                elif ndarray.format == 'coo':
-                    A1pos_temp = np.array([0, ndarray.nnz], dtype=ndarray.row.dtype)
-                    aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                    A1pos, A1pos_type = memref_from_np_array(A1pos_temp)
-                    A1crd, A1crd_type = memref_from_np_array(ndarray.row)
-                    A2crd, A2crd_type = memref_from_np_array(ndarray.col)
-
-                    if ndarray.data.dtype == 'float64':
-                        if ndarray.row.dtype == 'int32':
-                            out_type = output_coo_f64_i32
-                        else:
-                            out_type = output_coo_f64_i64
-                    elif ndarray.data.dtype == 'float32':
-                        if ndarray.row.dtype == 'int32':
-                            out_type = output_coo_f32_i32
-                        else:
-                            out_type = output_coo_f32_i64
-
-                    out = out_type(dim_sizes, 0, A1pos, A1crd, 0, A2crd, Aval)
-                else :
-                    raise Exception("Unsupported sparse matrix type")
-
-                llvm_args_types = [POINTER(out_type)] + llvm_args_types
-                llvm_args = [out] + llvm_args
-                all_outputs.append(out)
-            else:
-
+                llvm_args += [dim_sizes, insert_pos_1, A1pos,  A1crd, insert_pos_2, A2crd]
+                llvm_args_types += [POINTER(dim_type)] + [c_int64] + [POINTER(A1pos_type), POINTER(A1crd_type)] + [c_int64] + [POINTER(A2crd_type)]
+            # # CSC
+            # elif ndarray.format == 'csc':
+            #     A1pos = ndarray.indptr.astype('int64')
+            #     A1crd = ndarray.indices.astype('int64')
+            #     A2pos = np.array([ndarray.shape[1]], dtype=np.int64)
                 
-                insert_pos_1 = 0
-                insert_pos_2 = 0
-                # CSR
-                if ndarray.format == 'csr':
-                    A1tile_pos = np.array([-1], dtype=ndarray.indptr.dtype)
-                    A1tile_crd = np.array([-1], dtype=ndarray.indptr.dtype)
-                    A2tile_pos = np.array([-1], dtype=ndarray.indptr.dtype)
-                    A2tile_crd = np.array([-1], dtype=ndarray.indptr.dtype)
-                    A1pos_temp = np.array([ndarray.shape[0]], dtype=ndarray.indptr.dtype)
-                    aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                    A1pos, A1pos_type = memref_from_np_array(A1pos_temp)
-                    A2pos, A2pos_type = memref_from_np_array(ndarray.indptr)
-                    A2crd, A2crd_type = memref_from_np_array(ndarray.indices)
-
-                    # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
-                    llvm_args += [dim_sizes, insert_pos_1, A1pos, insert_pos_2, A2pos, A2crd]
-                    llvm_args_types += [POINTER(dim_type)] + [c_int64] + [POINTER(A1pos_type)] + [c_int64] + [POINTER(A2pos_type), POINTER(A2crd_type)]
-                # COO
-                elif ndarray.format == 'coo':
-                    A1tile_pos = np.array([-1], dtype=ndarray.row.dtype)
-                    A1tile_crd = np.array([-1], dtype=ndarray.row.dtype)
-                    A2tile_pos = np.array([-1], dtype=ndarray.row.dtype)
-                    A2tile_crd = np.array([-1], dtype=ndarray.row.dtype)
-                    A1pos_temp = np.array([0, ndarray.nnz], dtype=ndarray.row.dtype)
-                    aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                    A1pos, A1pos_type = memref_from_np_array(A1pos_temp)
-                    A1crd, A1crd_type = memref_from_np_array(ndarray.row)
-                    A2crd, A2crd_type = memref_from_np_array(ndarray.col)
-
-                    llvm_args += [dim_sizes, insert_pos_1, A1pos,  A1crd, insert_pos_2, A2crd]
-                    llvm_args_types += [POINTER(dim_type)] + [c_int64] + [POINTER(A1pos_type), POINTER(A1crd_type)] + [c_int64] + [POINTER(A2crd_type)]
-                # # CSC
-                # elif ndarray.format == 'csc':
-                #     A1pos = ndarray.indptr.astype('int64')
-                #     A1crd = ndarray.indices.astype('int64')
-                #     A2pos = np.array([ndarray.shape[1]], dtype=np.int64)
-                    
-                #     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
-                
-                #     # llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 1, 1, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
-                #     # With tiles
-                #     llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 0, 0, 1, 1, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
-                
-                # Based on the  desc_A1pos/crd, desc_A2pos/crd, desc_Aval arrays in SparseUtils.cpp: read_input_2D
-                # Expand to memrefs llvmir implementation
-                
-                llvm_args += [Aval]
-                llvm_args_types += [POINTER(Aval_type)]
+            #     # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
+            
+            #     # llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 1, 1, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
+            #     # With tiles
+            #     llvm_args += [*np_array_to_memref(np.array([ndarray.shape[1] + 1, ndarray.nnz, 0, 0, 1, 1, 0, 0, ndarray.nnz, ndarray.shape[0], ndarray.shape[1]], dtype='int64'))]
+            
+            # Based on the  desc_A1pos/crd, desc_A2pos/crd, desc_Aval arrays in SparseUtils.cpp: read_input_2D
+            # Expand to memrefs llvmir implementation
+            
+            llvm_args += [Aval]
+            llvm_args_types += [POINTER(Aval_type)]
 
     return llvm_args, llvm_args_types, all_outputs, aux
 
 #Translating llvm dialect to llvm IR using mlir-translate and then executing the IR using lli
-def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs, outputs, uuid_s):
+def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs, output_types, uuid_s):
 
 
     llvmir_file = uuid_s+'.ll'
-    llvm_in = llvm_in.replace('call @comet_print_memref_', '//call @comet_print_memref_')
+    # llvm_in = llvm_in.replace('call @comet_print_memref_', '//call @comet_print_memref_')
     # path_to_cometopt = cfg.comet_path+"/bin/comet-opt"
     path_to_cometopt = cfg.comet_path+"/bin/comet-opt -x mlir"
     to_llvm_command = path_to_cometopt + scf_lower_flags #+ llvm_in
@@ -417,11 +474,23 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     func = lib.__getattr__("_mlir_ciface_"+func_name)
 
     # Get the inputs, input types and the output containers
-    args, arg_types, all_output, aux = generate_llvm_args_from_ndarrays(len(inputs),  *(inputs), *(outputs))
+    args, arg_types, all_output, aux = generate_llvm_args_from_ndarrays(inputs, output_types)
     func.argtypes = arg_types
-    if outputs:
-        if outputs[0].shape == (1,):
-            func.restype = c_double
+    if len(output_types) == 1:
+        if not isinstance(output_types[0], types.ShapedType):
+            type_str = str(output_types[0])
+            if type_str == 'i64':
+                func.restype = c_int64
+            elif type_str == 'i32':
+                func.restype = c_int32
+            elif type_str == 'f32':
+                func.restype = c_float
+            elif type_str == 'f64':
+                func.restype = c_double
+            else:
+                raise Exception("Unexpeted return type")
+            
+            
     # Uncomment to measure execution time without the compilation process
     # start = time.time()
     ret = func(*[byref(arg) if not isinstance(arg, int) else arg for arg in args])
@@ -430,29 +499,32 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
 
     out = None
     ret_outputs = []
-    for v0, v1 in zip(all_output, outputs):
-        if scp.sparse.issparse(v1):
-            if v1.format == 'csr':
+    for v0, v1 in zip(all_output, output_types):
+        if isinstance(v1, types.ShapedType):
+            if v1.format == types.CSR:
                 out_csr = v0
                 np_r_indices = np.ctypeslib.as_array(out_csr.A2pos.mem, [out_csr.A2pos.dim[0]])
                 np_c_indices = np.ctypeslib.as_array(out_csr.A2crd.mem, [out_csr.A2crd.dim[0]])
                 np_values = np.ctypeslib.as_array(out_csr.Aval.mem, [out_csr.Aval.dim[0]])
                 ret_outputs.append(scp.sparse.csr_array((np_values, np_c_indices, np_r_indices), copy=False))
-            elif v1.format == 'coo':
+            elif v1.format == types.COO:
                 out_coo = v0
                 rows = np.ctypeslib.as_array(out_coo.A1crd.mem, [out_coo.A1crd.dim[0]])
                 cols = np.ctypeslib.as_array(out_coo.A2crd.mem, [out_coo.A2crd.dim[0]])
                 np_values = np.ctypeslib.as_array(out_coo.Aval.mem, [out_coo.Aval.dim[0]])
                 ret_outputs.append(scp.sparse.coo_array((np_values, (rows, cols)), copy=False))
-        else:
-            if v1.shape == (1,):
-                ret_outputs.append(ret)
-            else:
-                ret_outputs.append(v1)
+            elif v1.format == types.DENSE:
+                ret_outputs.append(np.ctypeslib.as_array(v0.mem, v1.shape))
+    
+    if not ret_outputs and  not isinstance(output_types[0], types.ShapedType):
+        ret_outputs.append(ret)
+    
     if len(ret_outputs) == 1:
         out =  ret_outputs.pop()
-    else:
+    elif len(ret_outputs) > 1:
         out = ret_outputs
+    else:
+        out = None
 
     return out, llvmir_file
 
@@ -556,7 +628,7 @@ def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
     return result
 
 
-def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_flags,func_name, args_vals, outputs):
+def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_flags,func_name, args_vals, outputs_types):
 
     mlir_lower_flags = " "
         
@@ -607,9 +679,10 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
 
     # Convert TA to SCF
     # scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals, uuid_s)
+    print(ta_dialect_rep)
     scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_rep, mlir_lower_flags, args_vals, uuid_s)
 
     #lower the SCF dialect to LLVMIR and execute
-    result,llvmir_file = translate_and_exec_llvm_with_jit(scf_out_file, scf_lower_flags, func_name, args_vals, outputs, uuid_s)
+    result,llvmir_file = translate_and_exec_llvm_with_jit(scf_out_file, scf_lower_flags, func_name, args_vals, outputs_types, uuid_s)
 
     return result
