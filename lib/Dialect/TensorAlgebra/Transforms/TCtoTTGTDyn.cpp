@@ -686,13 +686,13 @@ namespace
 
       rewriter.replaceAllUsesWith(
           op->getResults(), switchOp.getResults()); // Replace the original op with the final result of the matmul or matvec
-      rewriter.replaceUsesWithIf(setnewop->getOperand(1), switchOp.getResult(0), [&](OpOperand& use) { 
-        auto user = use.getOwner();
-        auto ancestor = switchOp->getBlock()->findAncestorOpInBlock(*user);
-        return (ancestor && switchOp->isBeforeInBlock(ancestor)); 
-      });
+      // rewriter.replaceUsesWithIf(setnewop->getOperand(1), switchOp.getResult(0), [&](OpOperand& use) { 
+      //   auto user = use.getOwner();
+      //   auto ancestor = switchOp->getBlock()->findAncestorOpInBlock(*user);
+      //   return (ancestor && switchOp->isBeforeInBlock(ancestor)); 
+      // });
       // op->replaceAllUsesWith(switchOp);
-      rewriter.eraseOp(setnewop);
+      // rewriter.eraseOp(setnewop);
       rewriter.eraseOp(op);
       return success();
     }
