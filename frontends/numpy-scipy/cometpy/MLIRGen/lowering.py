@@ -238,7 +238,6 @@ def lower_ta_to_mlir_with_jit(mlir_in, mlir_lower_flags, arg_vals, uuid_s):
     #     files_to_cleanup.append(os.path.join( os.getcwd(), scf_out_file))
 
     scf_out  = p.stderr.decode()
-
     # scf_out = comment_unneeded_sparse(scf_out, arg_vals)
     # scf_out = comment_unneeded_dense(scf_out, arg_vals)
     # f.write(scf_out)
@@ -525,6 +524,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
         out = ret_outputs
     else:
         out = None
+    # print("Kernel execution time JIT: {}".format(end-start))
 
     return out, llvmir_file
 
@@ -679,7 +679,6 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
 
     # Convert TA to SCF
     # scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals, uuid_s)
-    print(ta_dialect_rep)
     scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_rep, mlir_lower_flags, args_vals, uuid_s)
 
     #lower the SCF dialect to LLVMIR and execute

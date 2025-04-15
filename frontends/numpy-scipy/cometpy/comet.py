@@ -57,16 +57,23 @@ def lower_einsum_expresion(args, kwargs, visitor):
     
     operands = [visitor.visit(arg) for arg in args[1:len(inputs_indices)+1]]
     semiring = None
+    masktype = "none"
+    mask = None
     if len(inputs_indices) < len(args[1:]):
         semiring = args[-1].value
-    elif kwargs and 'semiring' == kwargs[0].arg:
-        semiring = kwargs[0].value.value
+
+    for kwarg in kwargs:
+        if kwarg.arg == 'semiring':
+            semiring = kwarg.value.value
+        elif kwarg.arg == 'mask_type':
+            masktype = kwarg.value.value
+        elif kwarg.arg == 'mask':
+            mask = visitor.visit(kwarg.value)
 
     all_same = True
     for indices in inputs_indices[1:]:
         if indices != inputs_indices[0]:
             all_same = False
-    print(res_indices, inputs_indices[0])
     if len(inputs_indices) == 1 : # Tranpose
         res_symbol_indices = []
         
@@ -135,10 +142,9 @@ def lower_einsum_expresion(args, kwargs, visitor):
 
             res_format = visitor.sp_matmult_conversions[lhs.type.format][rhs.type.format]
             if semiring:
-                print(res_format)
-                res = visitor.build(ops.TensorMatMultOp(lhs, rhs, lhs_indices, rhs_indices, res_symbol_indices, res_format, semiring=semiring)).results[0]
+                res = visitor.build(ops.TensorMatMultOp(lhs, rhs, lhs_indices, rhs_indices, res_symbol_indices, res_format, 1.0, 0.0, mask, masktype, semiring=semiring)).results[0]
             else:
-                res = visitor.build(ops.TensorMatMultOp(lhs, rhs, lhs_indices, rhs_indices, res_symbol_indices, res_format)).results[0]
+                res = visitor.build(ops.TensorMatMultOp(lhs, rhs, lhs_indices, rhs_indices, res_symbol_indices, res_format, 1.0, 0.0, mask, masktype)).results[0]
             lhs, lhs_indices = res, res_symbol_indices
 
     if lhs.type.format != DENSE:
@@ -308,6 +314,7 @@ class NewAstParser(ast.NodeVisitor):
         if  isinstance(node.targets[0], ast.Name):
             self.symbol_table.insert(node.targets[0].id, rhs)
         elif isinstance(node.targets[0], ast.Subscript):
+            print(node.targets[0].slice)
             mem = self.visit(node.targets[0].value)
             indices = self.visit(node.targets[0].slice)
             if indices: # 
@@ -354,8 +361,6 @@ class NewAstParser(ast.NodeVisitor):
             else:
                 val = self.build(ops.MulOp(left, right))
         elif isinstance(node.op, ast.MatMult):
-            print(left.type)
-            print(right.type)
             assert(isinstance(left.type, ShapedType) and isinstance(right.type, ShapedType))
             lhs_indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in left.type.shape] 
             rhs_indices = [lhs_indices[-1]] + [self.build(ops.TensorIndexLabelOp()).results[0] for d in right.type.shape[1:]]

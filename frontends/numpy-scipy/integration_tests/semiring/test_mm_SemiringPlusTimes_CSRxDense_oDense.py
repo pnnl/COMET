@@ -4,7 +4,7 @@ import numpy as np
 
 @comet.compile(flags=None)
 def run_comet(A,B):
-    C = comet.einsum('ij,jk->ik', A,B,semiring='+,*')
+    C = comet.einsum('ij,jk->ik', A,B, '+,*')
 
     return C
 

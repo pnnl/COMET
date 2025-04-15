@@ -686,13 +686,11 @@ def tensor_type_from_dense_ndarray(ndarray):
 
 def mlir_type_from_sparse_ndarray(sp_ndarray):
     format = None
-    print("GGSDF")
     if sp_ndarray.format == 'csr':
         format = CSR
         return TASparseTensorType(sp_ndarray.shape, dtype_to_mlir_type(sp_ndarray.dtype), dtype_to_mlir_type(sp_ndarray.indices.dtype), format)
     elif sp_ndarray.format == 'coo':
         format = COO
-        print('coords', sp_ndarray.row)
         return TASparseTensorType(sp_ndarray.shape, dtype_to_mlir_type(sp_ndarray.dtype), dtype_to_mlir_type(sp_ndarray.row.dtype), format)
     else:
         raise Exception("Unsupported format")
@@ -821,7 +819,7 @@ class MulOp(BinaryElementwiseOp):
     )
 
 class TensorIndexBasedOp(Operation):
-    def __init__(self, name, inputs, inputs_indices, res_indices, res_format, alpha = None, beta = None , mask_type = None, semiring = None):
+    def __init__(self, name, inputs, inputs_indices, res_indices, res_format, alpha = None, beta = None , mask = None, mask_type = None, semiring = None):
         self.name = name
         self.inputs = inputs
         self.inputs_indices = inputs_indices
@@ -829,6 +827,7 @@ class TensorIndexBasedOp(Operation):
         self.semiring = semiring
         self.alpha = alpha
         self.beta = beta
+        self.mask = mask
 
         self.res_indices = res_indices
         all_indices = inputs_indices[0][:]
@@ -867,7 +866,6 @@ class TensorIndexBasedOp(Operation):
         affine_maps.append(affine_map_res)
         self.indexing_maps = ",".join(affine_maps)
 
-        print(inputs[0].type)
         if res_format != DENSE:
             for input in inputs:
                 if isinstance(input.type, TASparseTensorType):
@@ -882,19 +880,24 @@ class TensorIndexBasedOp(Operation):
         num_indices = len(self.res_indices)
         for indices in self.inputs_indices :
             num_indices += len(indices)
+        input_types = ", ".join([
+                ",".join([f'{input.type}' for input in self.inputs])
+                , ", ".join([f'{index.type}' for indices in self.inputs_indices for index in indices])
+                , ", ".join([f'{oper.type}' for oper in self.res_indices])]) 
+        if self.mask != None:
+            input_types += f", {self.mask.type}"
         return self.tensor_binary_op_text.render(
+            
             ssa = self.results[0].ssa,
             name = self.name,
             inputs = ",".join([f'%{input.ssa}' for input in self.inputs]),
             inputs_indices = ",".join([f'%{index.ssa}' for indices in self.inputs_indices for index in indices]),
             res_indices = ",".join([f'%{input.ssa}' for input in self.res_indices]),
             mask_type = self.mask_type,
+            mask = self.mask,
             formats = ",".join([",".join([f'"{format_to_string(input.type.format)}"' for input in self.inputs]), f'"{format_to_string(self.results[0].type.format)}"']),
             semiring = self.semiring,
-            input_types = ", ".join([
-                ",".join([f'{input.type}' for input in self.inputs])
-                , ", ".join([f'{index.type}' for indices in self.inputs_indices for index in indices])
-                , ", ".join([f'{oper.type}' for oper in self.res_indices])]),
+            input_types = input_types,
             res_type = self.results[0].type,
             affine_maps = self.indexing_maps,
             operand_segment_sizes = ", ".join([", ".join('1' * len(self.inputs)), str(num_indices), '1' if self.mask_type and self.mask_type != 'none' else '0']),
@@ -903,14 +906,14 @@ class TensorIndexBasedOp(Operation):
         )
     
     tensor_binary_op_text = jinja2.Template(
-        '%{{ssa}} = "{{name}}" ({{inputs}}, {{inputs_indices}}, {{res_indices}}) <{ {% if mask_type%} MaskType = "{{mask_type}}", {% endif%} formats = [{{formats}}], indexing_maps = [{{affine_maps}}] {% if semiring%}, operandSegmentSizes = array<i32: {{operand_segment_sizes}}>, semiring="{{semiring}}" {%endif%}}>  {%if alpha != None   or beta != None %} { {%endif%} {%if alpha!= None%} __alpha__ = {{alpha}} : f64 {%endif%} {%if alpha!= None and beta!= None %}, {%endif%} {%if beta!= None %} __beta__ = {{beta}}: f64 {%endif%} {%if alpha!= None or beta!= None %}} {%endif%} : ({{input_types}}) -> {{res_type}}',
+        '%{{ssa}} = "{{name}}" ({{inputs}}, {{inputs_indices}}, {{res_indices}} {%if mask!=None%}, %{{mask.ssa}}{%endif%} ) <{ {% if mask_type%} MaskType = "{{mask_type}}", {% endif%} formats = [{{formats}}], indexing_maps = [{{affine_maps}}] {% if semiring%}, operandSegmentSizes = array<i32: {{operand_segment_sizes}}>, semiring="{{semiring}}" {%endif%}}>  {%if alpha != None   or beta != None %} { {%endif%} {%if alpha!= None%} __alpha__ = {{alpha}} : f64 {%endif%} {%if alpha!= None and beta!= None %}, {%endif%} {%if beta!= None %} __beta__ = {{beta}}: f64 {%endif%} {%if alpha!= None or beta!= None %}} {%endif%} : ({{input_types}}) -> {{res_type}}',
         undefined=jinja2.StrictUndefined,
     )
 
 class TensorBinaryOp(TensorIndexBasedOp):
 
-    def __init__(self, name, lhs, rhs, lhs_indices, rhs_indices, res_indices, alpha, beta, masktype, semiring, res_format):
-        super().__init__(name, [lhs, rhs], [lhs_indices, rhs_indices], res_indices, res_format, alpha, beta, masktype, semiring)
+    def __init__(self, name, lhs, rhs, lhs_indices, rhs_indices, res_indices, alpha, beta, mask, masktype, semiring, res_format):
+        super().__init__(name, [lhs, rhs], [lhs_indices, rhs_indices], res_indices, res_format, alpha, beta, mask, masktype, semiring)
         self.lhs = lhs
         self.lhs_indices = lhs_indices
         self.rhs = rhs
@@ -926,7 +929,7 @@ class TensorBinaryOp(TensorIndexBasedOp):
 class TensorElewiseBinaryOp(TensorBinaryOp):
 
     def __init__(self, name, lhs, rhs, lhs_indices, alpha, beta, semiring, format):
-        super().__init__(name, lhs, rhs, lhs_indices, lhs_indices, lhs_indices, alpha, beta, "None", semiring, format)
+        super().__init__(name, lhs, rhs, lhs_indices, lhs_indices, lhs_indices, alpha, beta, None, "none", semiring, format)
 
     def dump(self):
         return super().dump()
@@ -1044,8 +1047,8 @@ class TensorPrintOp(Operation):
 
 class TensorMatMultOp(TensorBinaryOp):
 
-    def __init__(self, lhs, rhs, lhs_indices, rhs_indices, res_indices, res_format, alpha = 1.0, beta = 0.0, masktype='none', semiring='plusxy_times'):
-        super().__init__('ta.mul', lhs, rhs, lhs_indices, rhs_indices, res_indices, alpha, beta, masktype, semiring, res_format)
+    def __init__(self, lhs, rhs, lhs_indices, rhs_indices, res_indices, res_format, alpha = 1.0, beta = 0.0, mask = None, masktype='none', semiring='plusxy_times'):
+        super().__init__('ta.mul', lhs, rhs, lhs_indices, rhs_indices, res_indices, alpha, beta, mask, masktype, semiring, res_format)
 
 
 class AddOp(BinaryElementwiseOp):
