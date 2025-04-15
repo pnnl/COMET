@@ -405,7 +405,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     # 2. Call mlir-translate to convert llvm to llvmir 
     # 3. Call clang to generate library
     # p = subprocess.run(to_llvm_command, input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    print(llvm_in)
+    # print(llvm_in)
     p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | ' + gcc_command , input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     if(p.returncode != 0):
         cleanup()

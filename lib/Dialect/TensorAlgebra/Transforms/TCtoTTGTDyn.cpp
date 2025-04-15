@@ -251,8 +251,9 @@ namespace
         for(size_t i = 1; i < plan.m_contraction_time.size(); i++)
         {
           Value thisIndex = rewriter.create<ConstantIndexOp>(loc, i);
-          auto foundMin = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ULT,  minTime, plan.m_contraction_time[i]);
-          minIndex = rewriter.create<arith::SelectOp>(loc, foundMin, minIndex, thisIndex);
+          auto foundMin = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ULT,  plan.m_contraction_time[i], minTime);
+          minIndex = rewriter.create<arith::SelectOp>(loc, foundMin, thisIndex, minIndex);
+          minTime = rewriter.create<arith::SelectOp>(loc, foundMin, plan.m_contraction_time[i], minTime);
         }
         permutation = minIndex;
       }
