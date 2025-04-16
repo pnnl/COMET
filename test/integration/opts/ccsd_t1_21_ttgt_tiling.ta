@@ -1,4 +1,4 @@
-# RUN: comet-opt --opt-matmul-tiling --convert-tc-to-ttgt --convert-to-llvm %s &> ccsd_t1_21_ttgt_tiling.llvm
+# RUN: comet-opt --opt-matmul-tiling --convert-tc-to-ttgt --convert-to-loops --convert-to-llvm %s &> ccsd_t1_21_ttgt_tiling.llvm
 # RUN: mlir-cpu-runner ccsd_t1_21_ttgt_tiling.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
 
 def main() {

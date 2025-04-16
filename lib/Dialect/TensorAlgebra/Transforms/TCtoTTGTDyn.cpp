@@ -251,8 +251,9 @@ namespace
         for(size_t i = 1; i < plan.m_contraction_time.size(); i++)
         {
           Value thisIndex = rewriter.create<ConstantIndexOp>(loc, i);
-          auto foundMin = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ULT,  minTime, plan.m_contraction_time[i]);
-          minIndex = rewriter.create<arith::SelectOp>(loc, foundMin, minIndex, thisIndex);
+          auto foundMin = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ULT,  plan.m_contraction_time[i], minTime);
+          minIndex = rewriter.create<arith::SelectOp>(loc, foundMin, thisIndex, minIndex);
+          minTime = rewriter.create<arith::SelectOp>(loc, foundMin, plan.m_contraction_time[i], minTime);
         }
         permutation = minIndex;
       }
@@ -686,13 +687,13 @@ namespace
 
       rewriter.replaceAllUsesWith(
           op->getResults(), switchOp.getResults()); // Replace the original op with the final result of the matmul or matvec
-      rewriter.replaceUsesWithIf(setnewop->getOperand(1), switchOp.getResult(0), [&](OpOperand& use) { 
-        auto user = use.getOwner();
-        auto ancestor = switchOp->getBlock()->findAncestorOpInBlock(*user);
-        return (ancestor && switchOp->isBeforeInBlock(ancestor)); 
-      });
+      // rewriter.replaceUsesWithIf(setnewop->getOperand(1), switchOp.getResult(0), [&](OpOperand& use) { 
+      //   auto user = use.getOwner();
+      //   auto ancestor = switchOp->getBlock()->findAncestorOpInBlock(*user);
+      //   return (ancestor && switchOp->isBeforeInBlock(ancestor)); 
+      // });
       // op->replaceAllUsesWith(switchOp);
-      rewriter.eraseOp(setnewop);
+      // rewriter.eraseOp(setnewop);
       rewriter.eraseOp(op);
       return success();
     }

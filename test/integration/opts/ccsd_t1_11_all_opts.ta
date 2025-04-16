@@ -1,0 +1,26 @@
+
+# RUN: comet-opt --opt-matmul-tiling --opt-matmul-mkernel --opt-dense-transpose --convert-tc-to-ttgt --opt-multiop-factorize --convert-to-loops --convert-to-llvm %s &> ccsd_t1_11.llvm
+# RUN: mlir-cpu-runner ccsd_t1_11.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
+
+def main() {
+    # IndexLabel Declarations
+    IndexLabel [i, j, m, n] = [8];
+    IndexLabel [a, b, c, d] = [8];
+
+    # Tensor Declarations
+    Tensor<double> i0([i, a], {Dense});;
+    Tensor<double> t1([i, a], {Dense});;
+    Tensor<double> t2([i, j, a, b], {Dense});;
+    Tensor<double> v([a, b, i, j], {Dense});;
+
+    i0[i, a] = 0.0;
+    t1[i, a] = 2.6;
+    t2[i, j, a, b] = 3.5;
+    v[i, a, j, b] = 7.3;
+
+    i0[i, a] = v[c, d, m, n] * t2[i, n, a, d] * t1[m, c];     # 11
+    print(i0[i, a]);
+}
+
+# CHECK: data = 
+# CHECK: 272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,272097,
