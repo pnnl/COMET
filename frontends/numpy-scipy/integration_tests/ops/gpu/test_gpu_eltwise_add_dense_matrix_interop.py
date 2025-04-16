@@ -1,7 +1,6 @@
 import time
 import numpy as np
 import scipy as sp
-import cupy
 from cometpy import comet
 from conftest import gpu
 
@@ -14,6 +13,7 @@ def run_comet_with_jit(A,B,C):
 
 @gpu
 def test_gpu_eltwise_add_dense_matrix_interop():
+    import cupy
     A = np.full([4, 4], 2.2,  dtype=float)
     B = np.full([4, 4], 3.4,  dtype=float)
     C = np.full([4, 4], 0.0,  dtype=float)
