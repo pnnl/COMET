@@ -701,6 +701,15 @@ def mlir_type_from_ndarray(A):
     else:
         return mlir_type_from_sparse_ndarray(A)
 
+def mlir_type_from_python_type(value):
+    if isinstance(value, int):
+        mlir_type = 'index' 
+    elif isinstance(value, float):
+        mlir_type = 'f64' 
+    else:
+        raise Exception(f'Unsupported Python type {type(value)}')
+    return mlir_type
+        
 
 
 
@@ -795,7 +804,7 @@ class SubOp(BinaryElementwiseOp):
         name = self.text.render(
             type_suffix = 'i' if self.lhs.type == 'index' else 'f',
         )
-        super().dump(name)
+        return super().dump(name)
 
     text = jinja2.Template(
         'arith.sub{{type_suffix}}',
@@ -811,7 +820,7 @@ class MulOp(BinaryElementwiseOp):
         name = self.text.render(
             type_suffix = 'i' if self.lhs.type == 'index' else 'f',
         )
-        super().dump(name)
+        return super().dump(name)
 
     text = jinja2.Template(
         'arith.mul{{type_suffix}}',

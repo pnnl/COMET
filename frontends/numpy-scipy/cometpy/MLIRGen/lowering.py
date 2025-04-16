@@ -170,6 +170,13 @@ class output_coo_f64_i32(Structure):
 class output_coo_f32_i32(Structure):
     _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_int64), ('A1pos', memref_i32), ('A1crd', memref_i32), ('insert_2', c_int64), ('A2crd', memref_i32), ('Aval', memref_f32)]
 
+def python_type_to_ctype(t):
+    if isinstance(t, int):
+        ctype = c_int32
+    elif isinstance(t, float):
+        ctype = c_double
+    return ctype
+
 def np_array_to_memref(np_array):
     ctype = ctypes.c_int64
     if np_array.dtype == 'int32':
@@ -384,9 +391,13 @@ def generate_llvm_args_from_ndarrays(inputs, output_types):
 
         if not scp.sparse.issparse(ndarray):
             # ndarray = np.array(out_type.shape, dtype=ops.mlir_type_to_dtype(out_type.element_type)) ## [TODO] No need to allocate
-            memref, type = memref_from_np_array(ndarray)
-            llvm_args.append(memref)
-            llvm_args_types.append(POINTER(type))
+            if isinstance(ndarray, np.ndarray):
+                memref, type = memref_from_np_array(ndarray)
+                llvm_args.append(memref)
+                llvm_args_types.append(POINTER(type))
+            else: 
+                llvm_args.append(ndarray)
+                llvm_args_types.append(python_type_to_ctype(ndarray))
         else:
             dims = np.array(ndarray.shape, dtype=np.int64)
             dim_sizes, dim_type = memref_from_np_array(dims)
@@ -525,7 +536,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
             elif v1.format == types.DENSE:
                 ret_outputs.append(np.ctypeslib.as_array(v0.mem, v1.shape))
     
-    if not ret_outputs and  not isinstance(output_types[0], types.ShapedType):
+    if output_types and not ret_outputs and  not isinstance(output_types[0], types.ShapedType):
         ret_outputs.append(ret)
     
     if len(ret_outputs) == 1:
@@ -691,7 +702,6 @@ def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_f
     # Convert TA to SCF
     # scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals, uuid_s)
     # start = time.time()
-
     scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_rep, mlir_lower_flags, args_vals, uuid_s)
     # end = time.time()
     # print(f"To SCF time: {end-start}")

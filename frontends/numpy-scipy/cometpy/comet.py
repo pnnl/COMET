@@ -289,7 +289,11 @@ class NewAstParser(ast.NodeVisitor):
     def visit_FunctionDef(self, node):
         args = []
         for arg, val in zip(node.args.args, self.inputs):
-            new_arg = ops.Symbol(ops.mlir_type_from_ndarray(val))
+            if isinstance(val, np.ndarray) or sp.sparse.issparse(val):
+                new_arg = ops.Symbol(ops.mlir_type_from_ndarray(val))
+            else:
+                new_arg = ops.Symbol(ops.mlir_type_from_python_type(val))
+
             self.symbol_table.insert(arg.arg, new_arg)
             args.append(new_arg)
         funcOp = self.build(ops.FuncOp(node.name, args, [], False))
@@ -476,7 +480,6 @@ class NewAstParser(ast.NodeVisitor):
 
     def visit_Name(self, node):
         self.pragma = ''
-
 
         symbol = self.symbol_table.find(node.id)
         if symbol:
