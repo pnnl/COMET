@@ -586,6 +586,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (OptCallToMatMulMicroKernel)
   {
     pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createLinAlgMatmulMicroKernelPass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createMatvecToParallelLoopsPass());
+
   }
   pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertVectorToSCFPass());
   /// Blanket-convert any remaining linalg ops to loops if any remain.
