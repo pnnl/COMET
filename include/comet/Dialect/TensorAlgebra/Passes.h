@@ -70,6 +70,8 @@ namespace mlir
 
         std::unique_ptr<Pass> createLinAlgMatmulTilingPass();
         std::unique_ptr<Pass> createLinAlgMatmulMicroKernelPass();
+        std::unique_ptr<Pass> createMatvecToParallelLoopsPass();
+
 
         // Optimize dense transpose (linalg.copy) based on the following paper:
         // HPTT: A High-Performance Tensor Transposition C++ Library
