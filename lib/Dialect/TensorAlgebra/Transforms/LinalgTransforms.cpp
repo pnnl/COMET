@@ -36,6 +36,7 @@
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Linalg/TransformOps/LinalgTransformOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -51,6 +52,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "llvm/ADT/SmallVector.h"
+#include <memory>
 #include <optional>
 
 // suppress all warnings coming from inclusion of blis.h in source tree
@@ -810,6 +812,57 @@ namespace
     uint64_t tile_size;
     bool seperate_tiles;
   };
+} /// end anonym
+// ous namespace
+namespace
+{
+  struct MatvecToParallelLoops : public ConversionPattern
+  {
+    MatvecToParallelLoops(MLIRContext *ctx)
+        : ConversionPattern(linalg::MatvecOp::getOperationName(), 1, ctx)
+           {}
+    
+    LogicalResult
+    matchAndRewrite(Operation *input_op, ArrayRef<Value> operands,
+                    ConversionPatternRewriter &rewriter) const final
+    {
+
+      auto op = dyn_cast<linalg::MatvecOp>(input_op);
+
+      if(failed(mlir::linalg::linalgOpToParallelLoops(rewriter, op)))
+      {
+        return mlir::failure();
+      }
+      else{
+        rewriter.eraseOp(input_op);
+        return success();
+      }
+    }
+  };
+  
+  class MatvecToParallelLoopsPass : public PassWrapper<MatvecToParallelLoopsPass, OperationPass<func::FuncOp>>
+  {
+  public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(MatvecToParallelLoopsPass)
+    MatvecToParallelLoopsPass(){};
+    void runOnOperation() override
+    {
+      comet_debug() << "MatvecToParallelLoopsPass : public PassWrapper<MatvecToParallelLoopsPass, FunctionPass>\n";
+      func::FuncOp func = getOperation();
+      ConversionTarget target(getContext());
+      target.addLegalDialect<TADialect, ArithDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
+      RewritePatternSet patterns(&getContext());
+      patterns.insert<MatvecToParallelLoops>(&getContext()  );
+
+      if (failed(applyPartialConversion(func, target, std::move(patterns))))
+      {
+        llvm::errs() << "Failed to Lower dense transpose operation\n";
+        signalPassFailure();
+      }
+      comet_debug() << "MatvecToParallelLoopsPass done\n";
+    }
+
+  };
 } /// end anonymous namespace
 
 /// Create a pass to optimize LinAlg Matmul Op with tiling
@@ -832,4 +885,11 @@ std::unique_ptr<mlir::Pass> mlir::comet::createOptDenseTransposePass(uint64_t ti
 {
   comet_debug() << "LinAlgTransforms createOptDenseTransposePass\n";
   return std::make_unique<OptDenseTransposePass>(tile_size, seperate_tiles);
+}
+
+
+std::unique_ptr<mlir::Pass> mlir::comet::createMatvecToParallelLoopsPass()
+{
+  comet_debug() << "LinAlgTransforms createMatvecToParallelLoopsPass\n";
+  return std::make_unique<MatvecToParallelLoopsPass>();
 }
