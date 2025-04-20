@@ -28,6 +28,7 @@
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 
+#include "mlir/Dialect/Arith/Utils/Utils.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -43,10 +44,16 @@
 
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Utils/ReshapeOpsUtils.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
 
 using namespace mlir;
 using namespace mlir::linalg;
@@ -624,10 +631,28 @@ namespace
       if (expandLHS) /// LHS tensor was collapsed and now needs to be re-expanded using the same reassociation indices
       {
         auto expandedTensorType = RankedTensorType::get(cast<RankedTensorType>(lhsFinal.getType()).getShape(), cast<RankedTensorType>(lhsFinal.getType()).getElementType());
+        SmallVector<OpFoldResult, 4> dims;
+        for(int64_t i = 0; i < expandedTensorType.getRank(); i++)
+        {
+          if(expandedTensorType.isDynamicDim(i))
+          {
+            Value dim = rewriter.create<arith::ConstantIndexOp>(loc, i);
+            dims.push_back(rewriter.create<tensor::DimOp>(loc, lhsFinal, dim).getResult());
+          }
+          else
+          {
+            Value dim = rewriter.create<arith::ConstantIndexOp>(loc, expandedTensorType.getDimSize(i));
+            dims.push_back(dim);
+          }
+        }
+        
+        
 
         comet_debug() << "\nExpanded:\n";
+        // lhsExpand = rewriter.create<tensor::ExpandShapeOp>(
+        //     loc, expandedTensorType, lhsReshape, getReassociationIndicesAttribute(rewriter, lhsReassociationIndices), dims, expandedTensorType.getShape());
         lhsExpand = rewriter.create<tensor::ExpandShapeOp>(
-            loc, expandedTensorType, lhsReshape, lhsReassociationIndices);
+            loc, expandedTensorType, lhsReshape, lhsReassociationIndices, dims);
         comet_debug() << "\n";
         comet_vdump(lhsExpand);
       }

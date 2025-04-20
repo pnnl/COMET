@@ -56,7 +56,8 @@ setuptools.setup(
     install_requires=[
         'jinja2',
         'numpy',
-        'scipy>=1.14'
+        'scipy>=1.14',
+        'ast-comments>=1.2.2',
     ],
     python_requires=">=3.8",
 )

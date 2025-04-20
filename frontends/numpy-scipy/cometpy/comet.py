@@ -29,57 +29,484 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 
-from _ast import  Attribute, BinOp, Call, Constant
-import ast
+# from _ast import  Attribute, BinOp, Call, Constant
+import os
+import time
+import ast_comments as ast
 import inspect
 # import comet
+import jinja2
 import numpy as np
 import scipy as sp
 from cometpy.MLIRGen import lowering
-from cometpy.MLIRGen import builders
+from cometpy.MLIRGen import ops
+from cometpy.MLIRGen.utils import *
+from cometpy.MLIRGen import types
 from cometpy.MLIRGen.types import *
 #import time
-def dtype_to_mlir_type(dtype):
-    if dtype == 'int64':
-        return 'i64'
-    elif dtype == 'int32':
-        return 'i32'
-    elif dtype == 'float32':
-        return 'f32'
-    elif dtype == 'float64':
-        return 'f64'
-    else :
-        raise Exception("YBE")
+
+def lower_einsum_expresion(args, kwargs, visitor):
+    char_index_to_symbol_index = {}
+    all_input_indices, res_indices = args[0].value.split('->')
+    inputs_indices = all_input_indices.split(',')
+    inputs_symbol_indices = []
+    for input_indices in inputs_indices:
+        input_symbol_indices = []
+        for c in input_indices:
+            if c not in char_index_to_symbol_index:
+                char_index_to_symbol_index[c] = visitor.build(ops.TensorIndexLabelOp()).results[0]
+            input_symbol_indices.append(char_index_to_symbol_index[c])
+        inputs_symbol_indices.append(input_symbol_indices)
     
-def mlir_type_to_dtype(mlir_type):
-    if mlir_type == 'index':
-        return 'int64'
-    elif mlir_type == 'i64':
-        return 'int64'
-    elif mlir_type == 'i32':
-        return 'int32'
-    elif mlir_type == 'f32':
-        return 'float32'
-    elif mlir_type == 'f64':
-        return 'float64'
-    else :
-        raise Exception("YBE")
-    
+    operands = [visitor.visit(arg) for arg in args[1:len(inputs_indices)+1]]
+    semiring = None
+    masktype = "none"
+    mask = None
+    if len(inputs_indices) < len(args[1:]):
+        semiring = args[-1].value
 
-def get_format(A):
-    if not sp.sparse.issparse(A):
-        return DENSE
-    elif A.format == 'csr':
-        return CSR
-    elif A.format == 'coo':
-        return COO
-    elif A.format == 'csc':
-        return CSC
-    else:
-        raise RuntimeError('Unsupported sparse format')
+    for kwarg in kwargs:
+        if kwarg.arg == 'semiring':
+            semiring = kwarg.value.value
+        elif kwarg.arg == 'mask_type':
+            masktype = kwarg.value.value
+        elif kwarg.arg == 'mask':
+            mask = visitor.visit(kwarg.value)
+
+    all_same = True
+    for indices in inputs_indices[1:]:
+        if indices != inputs_indices[0]:
+            all_same = False
+    if len(inputs_indices) == 1 : # Tranpose
+        res_symbol_indices = []
+        
+        for res_indice in res_indices:
+            res_symbol_indices.append(char_index_to_symbol_index[res_indice])
+        input = operands[0]
+        input_indices = inputs_symbol_indices[0]
+        res_format = visitor.sp_mattr_conversions[input.type.format]
+        res = visitor.build(ops.TensorTransposeOp(input, input_indices, res_symbol_indices, res_format)).results[0]
+        lhs = res
+
+    elif all_same and inputs_indices[0] == res_indices: # Elementwise multiplication
+        if semiring:
+            if semiring == "min":
+                semiring = "noop_minxy"
+            elif semiring == "-":
+                semiring = "noop_minus"
+            elif semiring == "+":
+                semiring = "noop_plusxy"
+            elif semiring == "*":
+                semiring = "noop_times"
+        
+        lhs, lhs_indices = operands[0], inputs_symbol_indices[0]
+        for rhs in operands[1:]:
+            res_format = visitor.sp_elw_mult_conversions[lhs.type.format][rhs.type.format]
+            if semiring:
+                res = visitor.build(ops.TensorMulOp(lhs, rhs, lhs_indices, res_format, semiring=semiring)).results[0]
+            else:
+                res = visitor.build(ops.TensorMulOp(lhs, rhs, lhs_indices, res_format)).results[0]
+            lhs = res
+
+    else: # Tensor contraction
+        if semiring:
+            s1, s2 = semiring.split(",")
+            if s1 == "+":
+                semiring = "plusxy_"
+            elif s1 == "any":
+                semiring = "any_"
+            elif s1 == "min":
+                semiring = "minxy_"
+            if s2 == "*":
+                semiring += "times"
+            elif s2 == "pair":
+                semiring += "pairxy"
+            elif s2 == "first":
+                semiring += "first"
+            elif s2 == "+":
+                semiring += "plusxy"
+            elif s2 == "second":
+                semiring += "second"
+
+        lhs, lhs_indices = operands[0], inputs_symbol_indices[0]
+        for (i, (rhs, rhs_indices)) in enumerate(zip(operands[1:], inputs_symbol_indices[1:])):
+            if i == len(operands) - 2:
+                res_symbol_indices = []
+                for symbol in res_indices:
+                    res_symbol_indices.append(char_index_to_symbol_index[symbol])
+            else:
+                res_symbol_indices = [] 
+                for indice in lhs_indices:
+                    if indice not in rhs_indices:
+                        res_symbol_indices.append(indice)
+                for indice in rhs_indices:
+                    if indice not in lhs_indices:
+                        res_symbol_indices.append(indice)
+
+            res_format = visitor.sp_matmult_conversions[lhs.type.format][rhs.type.format]
+            if semiring:
+                res = visitor.build(ops.TensorMatMultOp(lhs, rhs, lhs_indices, rhs_indices, res_symbol_indices, res_format, 1.0, 0.0, mask, masktype, semiring=semiring)).results[0]
+            else:
+                res = visitor.build(ops.TensorMatMultOp(lhs, rhs, lhs_indices, rhs_indices, res_symbol_indices, res_format, 1.0, 0.0, mask, masktype)).results[0]
+            lhs, lhs_indices = res, res_symbol_indices
+
+    if lhs.type.format != DENSE:
+        visitor.need_opt_comp_workspace = True
+    return lhs
+    # for c in res_indices:
+    #     res_symbol_indices.append(visitor.build(TensorIndexLabelOp()))
 
 
 
+class NewAstParser(ast.NodeVisitor):
+
+    identation_default = 2
+    def __init__(self,inputs):
+        self.symbol_table = ops.SymbolTable()
+        self.inputs = inputs
+        self.insertion_point = [self]
+        self.identation = 0
+        self.return_type = []
+        self.pragma = ''
+        self.body = []
+        self.need_opt_comp_workspace = False
+        self.build(ops.ModuleOp())
+
+
+        # Output formats when multiply matrices of different formats
+        self.sp_matmult_conversions = {
+            CSR: {
+                CSR : CSR,
+                COO : CSR,
+                DENSE : DENSE,
+            },
+            COO: {
+                CSR : CSR,
+                COO : CSR,
+                DENSE : DENSE
+            },
+            DENSE: {
+                CSR : DENSE,
+                COO : DENSE,
+                DENSE : DENSE,
+            }
+        }
+
+        self.sp_indices_results = {
+            'i64': {
+                'i64': 'i64',
+                'i32': 'i64',
+                None: 'i64',
+            },
+
+            'i32': {
+                'i64': 'i64',
+                'i32': 'i32',
+                None: 'i32',
+            }
+            ,
+            None: {
+                'i64': 'i64',
+                'i32': 'i32',
+                None: None,
+            }
+        }
+
+        # Output formats when transposing matrices of different formats
+        # self.sp_mattr_conversions = {
+        #     CSR : CSC,
+        #     COO : COO,
+        #     DENSE : DENSE
+        # }
+
+        self.sp_mattr_conversions = {
+            CSR : CSR,
+            COO : COO,
+            DENSE : DENSE
+        }
+
+        # Output formats when elwise mult matrices of different formats
+        # self.sp_elw_mult_conversions = {
+        #     CSR: {
+        #         CSR : CSR,
+        #         COO : CSR,
+        #         DENSE : COO,
+        #     },
+        #     COO: {
+        #         CSR : CSR,
+        #         COO : CSR,
+        #         DENSE : COO
+        #     },
+        #     DENSE: {
+        #         CSR : DENSE,
+        #         COO : DENSE,
+        #         DENSE : DENSE,
+        #     }
+        # }
+        self.sp_elw_mult_conversions = {
+            CSR: {
+                CSR : CSR,
+                COO : CSR,
+                DENSE : DENSE,
+            },
+            COO: {
+                CSR : CSR,
+                COO : CSR,
+                DENSE : COO
+            },
+            DENSE: {
+                CSR : DENSE,
+                COO : DENSE,
+                DENSE : DENSE,
+            }
+        }
+        # Output formats when elwise add or subtract matrices of different formats
+        # Add and subtract is almost the same as elwise mult with two differences
+        self.sp_elw_add_sub_conversions = self.sp_elw_mult_conversions
+
+
+        # self.sp_elw_add_sub_conversions[CSR][DENSE] = DENSE
+        # self.sp_elw_add_sub_conversions[COO][DENSE] = DENSE
+
+        self.sp_elw_add_sub_conversions[CSR][DENSE] = CSR
+        self.sp_elw_add_sub_conversions[COO][DENSE] = COO
+
+
+    def dump(self):
+        return "\n".join([stmt.dump() for stmt in self.body])
+
+    def build(self, op):
+        # self.mlir_code.append(" " * self.identation + op.dump())
+        self.insertion_point[-1].body.append(op)
+        if op.startsBody:
+            self.identation += NewAstParser.identation_default
+            op.identation = self.identation
+            self.insertion_point.append(op)
+        elif op.endsBody:
+            self.identation -= NewAstParser.identation_default
+            # self.mlir_code.append(" " * self.identation  + "}")
+            self.insertion_point.pop()
+        return op
+
+    def visit_FunctionDef(self, node):
+        args = []
+        for arg, val in zip(node.args.args, self.inputs):
+            if isinstance(val, np.ndarray) or sp.sparse.issparse(val):
+                new_arg = ops.Symbol(mlir_type_from_ndarray(val))
+            else:
+                new_arg = ops.Symbol(mlir_type_from_python_type(val))
+
+            self.symbol_table.insert(arg.arg, new_arg)
+            args.append(new_arg)
+        funcOp = self.build(ops.FuncOp(node.name, args, [], False))
+        # for arg in args:
+        #     self.build(ops.TensorPrintOp(arg))
+        for stmt in node.body:
+            self.visit(stmt)
+
+
+        if self.return_type:
+            funcOp.return_types = self.return_type
+        else:
+            self.build(ops.ReturnOp([]))
+        # self.mlir_code.append("" *self.identation + "}")
+
+    def visit_Comment(self, node):
+        if node.value.startswith('#pragma'):
+            self.pragma = node.value
+
+    def visit_Assign(self, node):
+        self.pragma = ''
+        rhs = self.visit(node.value)
+        if  isinstance(node.targets[0], ast.Name):
+            self.symbol_table.insert(node.targets[0].id, rhs)
+        elif isinstance(node.targets[0], ast.Subscript):
+            print(node.targets[0].slice)
+            mem = self.visit(node.targets[0].value)
+            indices = self.visit(node.targets[0].slice)
+            if indices: # 
+                if not isinstance(indices, list):
+                    indices = [indices]
+                if isinstance(mem.type, TensorType):
+                    mem = self.build(ops.ToMemrefOp(mem))
+                    self.build(ops.StoreOp(rhs, mem.results[0], indices))
+            else:
+                self.build(ops.TensorSetOp(rhs, mem, 0.0))
+                self.build(ops.TensorPrintOp(mem))
+            # self.mlir_code.append(store.dump())
+        # lhs =  self.visit(node.targets[0].)
+        # if indices:
+        #     store = StoreOp(load.results[0], lhs)
+        
+
+    def visit_BinOp(self, node):
+        self.pragma = ''
+
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        val = None
+        res_format = DENSE
+        if isinstance(node.op, ast.Add):
+            if isinstance(left.type, ShapedType):
+                indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in left.type.shape] 
+                res_format = self.sp_elw_add_sub_conversions[left.type.format][right.type.format]
+                val = self.build(ops.TensorAddOp(left, right, indices, res_format))
+            else:
+                val = self.build(ops.AddOp(left, right))
+        elif isinstance(node.op, ast.Sub):
+            if isinstance(left.type, ShapedType):
+                indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in left.type.shape] 
+                res_format = self.sp_elw_add_sub_conversions[left.type.format][right.type.format]
+                val = self.build(ops.TensorSubOp(left, right, indices, res_format))
+            else:
+                val = self.build(ops.SubOp(left, right))
+        elif isinstance(node.op, ast.Mult):
+            if isinstance(left.type, ShapedType):
+                indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in left.type.shape] 
+                res_format = self.sp_elw_mult_conversions[left.type.format][right.type.format]
+                val = self.build(ops.TensorMulOp(left, right, indices, res_format))
+            else:
+                val = self.build(ops.MulOp(left, right))
+        elif isinstance(node.op, ast.MatMult):
+            assert(isinstance(left.type, ShapedType) and isinstance(right.type, ShapedType))
+            lhs_indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in left.type.shape] 
+            rhs_indices = [lhs_indices[-1]] + [self.build(ops.TensorIndexLabelOp()).results[0] for d in right.type.shape[1:]]
+            if len(lhs_indices) ==2 and len(rhs_indices)  == 2:
+                res_indices = [lhs_indices[0], rhs_indices[1]]
+            elif len(lhs_indices) == 2 and len(rhs_indices)  == 1:
+                res_indices = [lhs_indices[0]]
+            elif len(lhs_indices) == 1 and len(rhs_indices)  == 2:
+                res_indices = [rhs_indices[1]]
+            res_format = self.sp_matmult_conversions[left.type.format][right.type.format]
+            val  = self.build(ops.TensorMatMultOp(left, right, lhs_indices, rhs_indices, res_indices, res_format))
+        if res_format != DENSE:
+            self.need_opt_comp_workspace = True
+        if val:
+            return val.results[0]
+
+
+
+    def visit_For(self, node):
+        pragma = self.pragma
+        assert(isinstance(node.iter, ast.Call) and node.iter.func.id == 'range')
+        if len(node.iter.args) == 1:
+            lb = self.build(ops.ConstantOp(0))
+
+            lb = lb.results[0]
+            ub = self.visit(node.iter.args[0])
+            step = self.build(ops.ConstantOp(1))
+            step = step.results[0]
+        elif len(node.iter.args) == 2:
+            lb = self.visit(node.iter.args[0])
+            ub = self.visit(node.iter.args[1])
+            step = self.build(ops.ConstantOp(1))
+            step = step.results[0]
+        else:
+            lb = self.visit(node.iter.args[0])
+            ub = self.visit(node.iter.args[1])
+            step = self.visit(node.iter.args[2])
+        if pragma == "#pragma parallel":
+            forOp = self.build(ops.ForAllOp(lb, ub, step))
+        else:
+            forOp = self.build(ops.ForOp(lb, ub, step))
+        self.symbol_table.insert(node.target.id, forOp.iv)
+        for stmt in node.body:
+            self.visit(stmt)
+        if pragma == "#pragma parallel":
+            self.build(ops.ReduceOp([]))
+        else:
+            self.build(ops.YieldOp([]))
+        
+
+
+    def visit_Subscript(self, node):
+        self.pragma = ''
+        
+        mem = self.visit(node.value)
+        assert(mem != None)
+        indices = self.visit(node.slice)
+        if not isinstance(indices, list):
+            indices = [indices]
+        if isinstance(node.value.ctx, ast.Load):
+            if isinstance(mem.type, TensorType):
+                mem = self.build(ops.ToMemrefOp(mem)).results[0]
+            load = self.build(ops.LoadOp(mem, indices))
+            return load.results[0]
+        # elif isinstance(node.value.ctx, ast.Store):
+        #     store = StoreOp(mem, indices)
+        #     self.mlir_code.append(store.dump())
+
+    def visit_Tuple(self, node):
+        elts = [self.visit(elt) for elt in node.elts]
+        return elts
+
+
+
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Attribute):
+            value = self.visit(node.func.value)
+            if isinstance(value, ops.Symbol):
+                values = [value]
+            else :
+                assert(value == 'comet')
+            attr = node.func.attr
+        elif isinstance(node.func, ast.Name):
+            values = []
+            attr = self.visit(node.func.id)
+
+        if attr == 'sum':
+            res = self.build(ops.TensorSumOp(*values)).results[0]
+            return res
+        elif attr == 'transpose':
+            indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in values[0].type.shape]
+            transpose_indices = [indices[1], indices[0]]
+            format = None
+            if isinstance(values[0].type, TensorType) or isinstance(values[0].type, MemrefType):
+                format = DENSE
+            elif isinstance(values[0].type, types.TASparseTensorType):
+                format = values[0].type.format
+            res = self.build(ops.TensorTransposeOp(values[0], indices, transpose_indices,  format)).results[0]
+            return res
+        elif attr == 'einsum':
+            res = lower_einsum_expresion(node.args, node.keywords, self)
+            return res
+        elif attr == 'multiply':
+            indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in values[0].type.shape]
+            for arg in node.args:
+                values.append(self.visit(arg))    
+            res_format = self.sp_elw_mult_conversions[values[0].type.format][values[1].type.format]
+            res = self.build(ops.TensorMulOp(values[0], values[1], indices, res_format)).results[0]
+            return res
+            
+
+
+    def visit_Name(self, node):
+        self.pragma = ''
+
+        symbol = self.symbol_table.find(node.id)
+        if symbol:
+            return symbol
+        else:
+            return node.id
+
+    def visit_Constant(self, node):
+        self.pragma = ''
+
+        val = None
+        if isinstance(node.value, int):
+            val = self.build(ops.ConstantOp(node.value))
+        elif isinstance(node.value, float):
+            val = self.build(ops.ConstantOp(node.value))
+        if val:
+            return val.results[0]
+
+    def visit_Return(self, node):
+        ret = self.visit(node.value)
+        # self.build(ops.TensorPrintOp(ret))
+        if not isinstance(ret, list):
+            ret = [ret]
+        retOp = self.build(ops.ReturnOp(ret))
+        self.return_type = [ret.type for ret in retOp.results]
 
 
 class NewVisitor(ast.NodeVisitor):
@@ -235,15 +662,15 @@ class NewVisitor(ast.NodeVisitor):
     def visit_FunctionDef(self, node):
         for i, arg in enumerate(node.args.args):
             self.tsymbols[arg.arg] = self.tcurr
-            format = get_format(self.inputs[i])
+            format = ops.get_format(self.inputs[i])
             for s in self.inputs[i].shape :
                 indices_type = None
                 if format == DENSE :
                     indices_type = None
                 elif format == COO:
-                    indices_type = dtype_to_mlir_type(self.inputs[i].coords[0].dtype)
+                    indices_type = ops.dtype_to_mlir_type(self.inputs[i].coords[0].dtype)
                 elif format == CSR:
-                    indices_type = dtype_to_mlir_type(self.inputs[i].indices.dtype)
+                    indices_type = ops.dtype_to_mlir_type(self.inputs[i].indices.dtype)
                 else:
                     raise Exception("Unexpected sparse matrix type")
 
@@ -252,7 +679,7 @@ class NewVisitor(ast.NodeVisitor):
 
             self.tsemantics[self.tcurr] = {
                 'indices_type': indices_type,
-                'value_type' : dtype_to_mlir_type(self.inputs[i].dtype),
+                'value_type' : ops.dtype_to_mlir_type(self.inputs[i].dtype),
                 'shape': list(self.inputs[i].shape),
                 'in_device': hasattr(self.inputs[i], '__cuda_array_interface__'),
                 'format': format,
@@ -408,7 +835,7 @@ class NewVisitor(ast.NodeVisitor):
             res = self.create_binOp(node, [self.tsymbols[id], v], no_assign)
             self.tsymbols[id] = res
 
-    def visit_Call(self, node: Call) :
+    def visit_Call(self, node: ast.Call) :
         obj = None
         obj = NewVisitor.visit(self,node.func)
         if obj is not None:
@@ -418,13 +845,13 @@ class NewVisitor(ast.NodeVisitor):
                 return self.visit_Einsum_Call(node)
 
 
-    def visit_Attribute(self, node: Attribute) :
+    def visit_Attribute(self, node: ast.Attribute) :
         return NewVisitor.visit(self, node.value)
 
     def visit_Name(self, node: ast.Name):
         return self.tsymbols[node.id]
 
-    def visit_Constant(self, node: Constant) :
+    def visit_Constant(self, node: ast.Constant) :
         out_id = self.tcurr
         self.tsemantics[self.tcurr] = {'shape': [1,], 'format': DENSE, 'scalar': True}
         self.declarations.append(
@@ -578,13 +1005,13 @@ class NewVisitor(ast.NodeVisitor):
         self.tcurr +=1
         return self.tcurr-1
 
-    def visit_BinOp(self, node: BinOp) :
+    def visit_BinOp(self, node: ast.BinOp) :
         no_assign = self.no_assign
         self.no_assign = False
         operands = [NewVisitor.visit(self, node.left), NewVisitor.visit(self, node.right)]
         return self.create_binOp(node, operands, no_assign)
 
-    def visit_Method_Call(self, node: Call, obj):
+    def visit_Method_Call(self, node: ast.Call, obj):
         no_assign = self.no_assign
         self.no_assign = False
         # operands = []
@@ -780,7 +1207,7 @@ class NewVisitor(ast.NodeVisitor):
 
         return  self.tcurr - 1
 
-    def visit_Einsum_Call(self, node: Call):
+    def visit_Einsum_Call(self, node: ast.Call):
         no_assign =  self.no_assign
         self.no_assign = False
         out_id = self.tcurr
@@ -897,149 +1324,52 @@ def compile(flags, target:str = "cpu", with_jit=True):
     def innerfunc(func):
 
         def wrapper(*pos_args, **kwargs):
+            # start = time.time()
             func_str = ast.parse(inspect.getsource(func))
             parsed_func = ast.parse(func_str)
             func_def = parsed_func.body[0]
-            v = NewVisitor([*pos_args])
-            v.visit(parsed_func)
-            in_types = []
-            for arg in v.in_args:
-                if isinstance(v.tsemantics[arg]['shape'], int):
-                    in_types.append(("%t"+str(arg), "tensor<1x{}>".format(v.tsemantics[arg]['value_type'])))
+            func_name = ':'.join((os.path.abspath(inspect.getfile(func)), func_def.name))
+            arg_vals = [*pos_args]
+            input_types = [None] * len(arg_vals) 
+            for i, arg in enumerate(arg_vals):
+                if isinstance(arg, np.ndarray) or sp.sparse.issparse(arg):
+                    type = mlir_type_from_ndarray(arg)
+                    input_types[i] = f'{type}'
                 else:
-                    if v.tsemantics[arg]['format'] == DENSE:
-                        if 'in_device' in v.tsemantics[arg] and v.tsemantics[arg]['in_device']:
-                            in_types.append(("%t"+str(arg), "tensor<{}x{}> {{gpu.in_device}}".format("x".join(str(d) for d in v.tsemantics[arg]['shape']), v.tsemantics[arg]['value_type'])))
-                        else:
-                            in_types.append(("%t"+str(arg), "tensor<{}x{}>".format("x".join(str(d) for d in v.tsemantics[arg]['shape']), v.tsemantics[arg]['value_type'])))
-                    else:
-                        ssa = "!ta.sparse_tensor<{}, {}, {}".format(v.tsemantics[arg]['value_type'],v.tsemantics[arg]['indices_type'],"x".join(str(d) for d in v.tsemantics[arg]['shape']))
-                        if v.tsemantics[arg]['format'] == CSR:
-                            if v.tsemantics[arg]['in_device']:
-                                ssa = ssa + ", d, unk, cu, unk> {{gpu.indevice}}"
-                            else:
-                                ssa = ssa + ", d, unk, cu, unk>"
-                            in_types.append(("%t"+str(arg), ssa))
-                        elif v.tsemantics[arg]['format'] == COO:
-                            if v.tsemantics[arg]['in_device']:
-                                ssa = ssa + ", cn, unk, s, unk> {{gpu.indevice}}"
-                            else:
-                                ssa = ssa + ", cn, unk, s, unk>"
-                            in_types.append(("%t"+str(arg), ssa))
-
-            return_types=[]
-            outputs = []
-            ret_format = None
-            ret_shape = None
-
-            for r in  v.returns:
-                ret = v.tsemantics[r]
-                format = ret['format']
-                shape = ret['shape']
-                ret_shape = shape
-                ret_format = format
-                if format != DENSE:
-                    type = "!ta.sparse_tensor<{}, {}, {}".format(ret['value_type'], ret['indices_type'], "x".join(str(d) for d in ret['shape']))
-                    if format == CSR:
-                        type += ", d, unk, cu, unk>"
-                    elif format == COO:
-                        type += ", cn, unk, s, unk>"
-                    return_types.append(type)
-                elif shape == 1:
-                    type = ret['value_type']
-                    return_types.append(type)
-
-                if format == DENSE:
-                    outputs.append(np.zeros(ret['shape'],dtype=mlir_type_to_dtype(ret['value_type'] )))
-                elif format == CSR:
-                    outputs.append(sp.sparse.csr_array(np.empty(ret['shape'], dtype=mlir_type_to_dtype(ret['value_type']))))
-                elif format == COO:
-                    outputs.append(sp.sparse.coo_array(np.empty(ret['shape'], dtype=mlir_type_to_dtype(ret['value_type']))))
-                elif format == CSC:
-                    outputs.append(sp.sparse.csc_array(np.empty(ret['shape'], dtype=mlir_type_to_dtype(ret['value_type']))))
-
-            if flags:
-                func_name = func_def.name + flags.replace('-','_').replace(' ','').replace('=','_')
-            else:
-                func_name = func_def.name
-            irb = builders.MLIRFunctionBuilder(
-                func_name,
-                input_types=in_types,
-                return_types=return_types,
-            ) 
-
-            for i in range(v.currIndexLabel):
-                irb.add_statement('%i{} = "ta.index_label"() : () -> !ta.index'.format(i))
-
-
-            dense_tensors = []
-            scalars = []
-            for dec in v.declarations:
+                    type = mlir_type_from_python_type(arg)
+                    input_types[i] = f'{type}'
                 
-                if dec["type"] == "T":
-                    if dec["id"] in v.in_args:
-                        continue
-                    t = builders.Tensor_Decl_Builder(dec)
-                    if dec["format"] == DENSE:
-                        dense_tensors.append(t)
+            cached_kernel = lowering.cache.find(func_name, input_types)
+            code = None
+            new_flags = None
+            kernel_name = None
+            return_type = None
+
+            if not cached_kernel:
+                new_v = NewAstParser([*pos_args])
+                new_v.visit(parsed_func)
+
+                new_flags = flags
+                if new_v.need_opt_comp_workspace:
+                    if new_flags:
+                        new_flags = new_flags + ' --opt-comp-workspace'
                     else:
-                        irb.add_statement(t.build_tensor())
-                elif dec["type"] == "C":
-                    irb.add_statement('%d{} = arith.constant {} : index '.format(dec["id"], dec["value"]))
-                elif dec["type"] == "V":
-                    scalars.append('%t{} = ta.constant dense<{}> : tensor<1x{}> '.format(dec["id"], dec["value"], dec["value_type"]))
-
-
-            for t in dense_tensors:
-                if t not in v.in_args:
-                    irb.add_statement(t.build_tensor())
-
-            for t in scalars:
-                irb.add_statement(t)
-
-            for op in v.ops:
-                if op["op_type"] == 'c':
-                    op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
-                    if op["mask"][0] is not None :
-                        op["mask"] = (op["mask"][0], op["mask"][1], v.tsemantics[op["mask"][0]]['shape'])
-                        irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-                    else:
-                        op["mask"] = (op["mask"][0], op["mask"][1], None)
-                        irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-                elif op["op_type"] == 'scalar':
-                    irb.add_statement(builders.ScalarOp_Builder(op).build_op())
-                elif op["op_type"] == 's':
-                    op["formats"] = [v.tsemantics[op["operands"][0]]['format']] 
-                    irb.add_statement(builders.TensorSumBuilder(op).build_op())
-                elif op["op_type"] == 'p':
-                    op["formats"] = [v.tsemantics[op["operands"][0]]['format']] 
-                    irb.add_statement(builders.PrintBuilder(op).build_op())
-                elif op["op_type"] == 'r':
-                    op["formats"] = [v.tsemantics[op["operands"][0]]['format']] 
-                    irb.add_statement(builders.ReturnBuilder(op).build_op())
-                elif op["op_type"] == '*':
-                    op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
-                    irb.add_statement(builders.ArithOp_Builder(op).build_op())
-                elif op["op_type"] == '=':
-                    op["formats"] = [v.tsemantics[op['lhs']]['format']] + [v.tsemantics[op['rhs']]['format']] + [v.tsemantics[op['rhs']]['format']]
-                    irb.add_statement(builders.SetOp_Builder(op).build_op())
-                else:
-                    op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
-                    irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-            if ret_format is None  or (ret_format == DENSE and ret_shape != 1):
-                irb.add_statement("return")
-
-
-            arg_vals = v.inputs
-            new_flags = flags
-            if v.need_opt_comp_workspace:
+                        new_flags = ' --opt-comp-workspace'
                 if new_flags:
-                    new_flags = new_flags + ' --opt-comp-workspace'
+                    kernel_name = func_def.name + new_flags.replace('-','_').replace(' ','').replace('=','_')
                 else:
-                    new_flags = ' --opt-comp-workspace'
-            code = irb.compile()
+                    kernel_name = func_def.name
+                # code = irb.compile()
+                moduleOp = new_v.body[0]
+                for op in moduleOp.body:
+                    if isinstance(op, ops.FuncOp):
+                        op.func_name = kernel_name
+                code = new_v.dump()
+                return_type = new_v.return_type
+            # end = time.time()
+            # print(f"Parsing time: {end-start}")
             # start = time.time()
-            lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags,func_name, arg_vals, outputs)
+            lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags, kernel_name, arg_vals, return_type, func_name, input_types, cached_kernel)
             # end = time.time()
             # print("Time for JIT", end-start)
             return lowering_result
