@@ -30,6 +30,7 @@
 # 
 
 # from _ast import  Attribute, BinOp, Call, Constant
+import os
 import time
 import ast_comments as ast
 import inspect
@@ -39,6 +40,7 @@ import numpy as np
 import scipy as sp
 from cometpy.MLIRGen import lowering
 from cometpy.MLIRGen import ops
+from cometpy.MLIRGen.utils import *
 from cometpy.MLIRGen import types
 from cometpy.MLIRGen.types import *
 #import time
@@ -290,9 +292,9 @@ class NewAstParser(ast.NodeVisitor):
         args = []
         for arg, val in zip(node.args.args, self.inputs):
             if isinstance(val, np.ndarray) or sp.sparse.issparse(val):
-                new_arg = ops.Symbol(ops.mlir_type_from_ndarray(val))
+                new_arg = ops.Symbol(mlir_type_from_ndarray(val))
             else:
-                new_arg = ops.Symbol(ops.mlir_type_from_python_type(val))
+                new_arg = ops.Symbol(mlir_type_from_python_type(val))
 
             self.symbol_table.insert(arg.arg, new_arg)
             args.append(new_arg)
@@ -1326,163 +1328,48 @@ def compile(flags, target:str = "cpu", with_jit=True):
             func_str = ast.parse(inspect.getsource(func))
             parsed_func = ast.parse(func_str)
             func_def = parsed_func.body[0]
-            new_v = NewAstParser([*pos_args])
-            new_v.visit(parsed_func)
-            # for line in new_v.mlir_code:
-            #     print(line)
-            # exit(0)
-            '''
-            v = NewVisitor([*pos_args])
-            v.visit(parsed_func)
-            in_types = []
-            for arg in v.in_args:
-                if isinstance(v.tsemantics[arg]['shape'], int):
-                    in_types.append(("%t"+str(arg), "tensor<1x{}>".format(v.tsemantics[arg]['value_type'])))
+            func_name = ':'.join((os.path.abspath(inspect.getfile(func)), func_def.name))
+            arg_vals = [*pos_args]
+            input_types = [None] * len(arg_vals) 
+            for i, arg in enumerate(arg_vals):
+                if isinstance(arg, np.ndarray) or sp.sparse.issparse(arg):
+                    type = mlir_type_from_ndarray(arg)
+                    input_types[i] = f'{type}'
                 else:
-                    if v.tsemantics[arg]['format'] == DENSE:
-                        if 'in_device' in v.tsemantics[arg] and v.tsemantics[arg]['in_device']:
-                            in_types.append(("%t"+str(arg), "tensor<{}x{}> {{gpu.in_device}}".format("x".join(str(d) for d in v.tsemantics[arg]['shape']), v.tsemantics[arg]['value_type'])))
-                        else:
-                            in_types.append(("%t"+str(arg), "tensor<{}x{}>".format("x".join(str(d) for d in v.tsemantics[arg]['shape']), v.tsemantics[arg]['value_type'])))
-                    else:
-                        ssa = "!ta.sparse_tensor<{}, {}, {}".format(v.tsemantics[arg]['value_type'],v.tsemantics[arg]['indices_type'],"x".join(str(d) for d in v.tsemantics[arg]['shape']))
-                        if v.tsemantics[arg]['format'] == CSR:
-                            if v.tsemantics[arg]['in_device']:
-                                ssa = ssa + ", d, unk, cu, unk> {{gpu.indevice}}"
-                            else:
-                                ssa = ssa + ", d, unk, cu, unk>"
-                            in_types.append(("%t"+str(arg), ssa))
-                        elif v.tsemantics[arg]['format'] == COO:
-                            if v.tsemantics[arg]['in_device']:
-                                ssa = ssa + ", cn, unk, s, unk> {{gpu.indevice}}"
-                            else:
-                                ssa = ssa + ", cn, unk, s, unk>"
-                            in_types.append(("%t"+str(arg), ssa))
-
-            return_types=[]
-            outputs = []
-            ret_format = None
-            ret_shape = None
-
-            for r in  v.returns:
-                ret = v.tsemantics[r]
-                format = ret['format']
-                shape = ret['shape']
-                ret_shape = shape
-                ret_format = format
-                if format != DENSE:
-                    type = "!ta.sparse_tensor<{}, {}, {}".format(ret['value_type'], ret['indices_type'], "x".join(str(d) for d in ret['shape']))
-                    if format == CSR:
-                        type += ", d, unk, cu, unk>"
-                    elif format == COO:
-                        type += ", cn, unk, s, unk>"
-                    return_types.append(type)
-                elif shape == 1:
-                    type = ret['value_type']
-                    return_types.append(type)
-
-                if format == DENSE:
-                    outputs.append(np.zeros(ret['shape'],dtype=mlir_type_to_dtype(ret['value_type'] )))
-                elif format == CSR:
-                    outputs.append(sp.sparse.csr_array(np.empty(ret['shape'], dtype=mlir_type_to_dtype(ret['value_type']))))
-                elif format == COO:
-                    outputs.append(sp.sparse.coo_array(np.empty(ret['shape'], dtype=mlir_type_to_dtype(ret['value_type']))))
-                elif format == CSC:
-                    outputs.append(sp.sparse.csc_array(np.empty(ret['shape'], dtype=mlir_type_to_dtype(ret['value_type']))))
-
-            if flags:
-                func_name = func_def.name + flags.replace('-','_').replace(' ','').replace('=','_')
-            else:
-                func_name = func_def.name
-            irb = builders.MLIRFunctionBuilder(
-                func_name,
-                input_types=in_types,
-                return_types=return_types,
-            ) 
-
-            for i in range(v.currIndexLabel):
-                irb.add_statement('%i{} = "ta.index_label"() : () -> !ta.index'.format(i))
-
-
-            dense_tensors = []
-            scalars = []
-            for dec in v.declarations:
+                    type = mlir_type_from_python_type(arg)
+                    input_types[i] = f'{type}'
                 
-                if dec["type"] == "T":
-                    if dec["id"] in v.in_args:
-                        continue
-                    t = builders.Tensor_Decl_Builder(dec)
-                    if dec["format"] == DENSE:
-                        dense_tensors.append(t)
+            cached_kernel = lowering.cache.find(func_name, input_types)
+            code = None
+            new_flags = None
+            kernel_name = None
+            return_type = None
+
+            if not cached_kernel:
+                new_v = NewAstParser([*pos_args])
+                new_v.visit(parsed_func)
+
+                new_flags = flags
+                if new_v.need_opt_comp_workspace:
+                    if new_flags:
+                        new_flags = new_flags + ' --opt-comp-workspace'
                     else:
-                        irb.add_statement(t.build_tensor())
-                elif dec["type"] == "C":
-                    irb.add_statement('%d{} = arith.constant {} : index '.format(dec["id"], dec["value"]))
-                elif dec["type"] == "V":
-                    scalars.append('%t{} = ta.constant dense<{}> : tensor<1x{}> '.format(dec["id"], dec["value"], dec["value_type"]))
-
-
-            for t in dense_tensors:
-                if t not in v.in_args:
-                    irb.add_statement(t.build_tensor())
-
-            for t in scalars:
-                irb.add_statement(t)
-
-            for op in v.ops:
-                if op["op_type"] == 'c':
-                    op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
-                    if op["mask"][0] is not None :
-                        op["mask"] = (op["mask"][0], op["mask"][1], v.tsemantics[op["mask"][0]]['shape'])
-                        irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-                    else:
-                        op["mask"] = (op["mask"][0], op["mask"][1], None)
-                        irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-                elif op["op_type"] == 'scalar':
-                    irb.add_statement(builders.ScalarOp_Builder(op).build_op())
-                elif op["op_type"] == 's':
-                    op["formats"] = [v.tsemantics[op["operands"][0]]['format']] 
-                    irb.add_statement(builders.TensorSumBuilder(op).build_op())
-                elif op["op_type"] == 'p':
-                    op["formats"] = [v.tsemantics[op["operands"][0]]['format']] 
-                    irb.add_statement(builders.PrintBuilder(op).build_op())
-                elif op["op_type"] == 'r':
-                    op["formats"] = [v.tsemantics[op["operands"][0]]['format']] 
-                    irb.add_statement(builders.ReturnBuilder(op).build_op())
-                elif op["op_type"] == '*':
-                    op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
-                    irb.add_statement(builders.ArithOp_Builder(op).build_op())
-                elif op["op_type"] == '=':
-                    op["formats"] = [v.tsemantics[op['lhs']]['format']] + [v.tsemantics[op['rhs']]['format']] + [v.tsemantics[op['rhs']]['format']]
-                    irb.add_statement(builders.SetOp_Builder(op).build_op())
-                else:
-                    op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
-                    irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-            if ret_format is None  or (ret_format == DENSE and ret_shape != 1):
-                irb.add_statement("return")
-
-            '''
-            arg_vals = new_v.inputs
-            new_flags = flags
-            if new_v.need_opt_comp_workspace:
+                        new_flags = ' --opt-comp-workspace'
                 if new_flags:
-                    new_flags = new_flags + ' --opt-comp-workspace'
+                    kernel_name = func_def.name + new_flags.replace('-','_').replace(' ','').replace('=','_')
                 else:
-                    new_flags = ' --opt-comp-workspace'
-            if new_flags:
-                func_name = func_def.name + new_flags.replace('-','_').replace(' ','').replace('=','_')
-            else:
-                func_name = func_def.name
-            # code = irb.compile()
-            moduleOp = new_v.body[0]
-            for op in moduleOp.body:
-                if isinstance(op, ops.FuncOp):
-                    op.func_name = func_name
-            code = new_v.dump()
+                    kernel_name = func_def.name
+                # code = irb.compile()
+                moduleOp = new_v.body[0]
+                for op in moduleOp.body:
+                    if isinstance(op, ops.FuncOp):
+                        op.func_name = kernel_name
+                code = new_v.dump()
+                return_type = new_v.return_type
             # end = time.time()
             # print(f"Parsing time: {end-start}")
             # start = time.time()
-            lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags, func_name, arg_vals, new_v.return_type)
+            lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags, kernel_name, arg_vals, return_type, func_name, input_types, cached_kernel)
             # end = time.time()
             # print("Time for JIT", end-start)
             return lowering_result

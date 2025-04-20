@@ -46,4 +46,4 @@ class TASparseTensorType(ShapedType):
             self.sp_format = 'cn, unk, s, unk'
 
     def __str__(self):
-        return "!ta.sparse_tensor<{}, {}, {}, {}>".format(self.element_type, self.indices_type, "x".join([str(s) for s in self.shape]), self.sp_format) 
+        return "!ta.sparse_tensor<{}, {}, {}, {}>".format(self.element_type, self.indices_type, "x".join(['?' for s in self.shape]), self.sp_format) 

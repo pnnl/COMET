@@ -34,8 +34,47 @@ from cometpy.MLIRGen import ops
 import atexit
 import uuid
 import scipy as scp
+from cometpy.MLIRGen.utils import *
+
 debug = False
 temp_dir = '.cometpy/'
+class KernelCache:
+
+    def __init__(self):
+        self.map = {}
+
+    def find(self, func_name, input_types):
+        cached_kernels = self.map.get(func_name)
+        if cached_kernels:
+            cached_kernel = cached_kernels.get("_".join(input_types))
+            if not cached_kernel:
+                return None
+            if cached_kernel and cached_kernel.timestamp <  os.path.getmtime(func_name.split(':')[0]): 
+                return  None
+            return cached_kernel
+        else:
+            return None
+    
+    def insert(self, func_name, cached_kernel):
+        cached_kernels = self.map.get(func_name)
+        if cached_kernels:
+            cached_kernels["_".join(cached_kernel.input_types)]  = cached_kernel
+        else:
+            self.map[func_name] = { "_".join(cached_kernel.input_types) : cached_kernel}
+
+cache = KernelCache()
+
+class CachedKernelInfo:
+
+    def __init__(self, name, src_path, lib_path, timestamp, kernel_name, input_types, output_types):
+        self.name = name
+        self.src_path = src_path
+        self.lib_path = lib_path
+        self.timestamp = timestamp
+        self.kernel_name = kernel_name
+        self.input_types = input_types
+        self.output_types = output_types
+
 
 if not os.path.exists(temp_dir):
     try:
@@ -64,138 +103,6 @@ def cleanup():
             os.remove(f)
             # pass
 atexit.register(cleanup)
-
-def create_memref_type(type, rank):
-    class memref_template(Structure):
-        _fields_ = [ ('mem_aligned', POINTER(type)), ('mem', POINTER(type)), ('offset', c_int64), ('dims', c_int64 * rank), ('stride', c_int64 * rank)]
-    
-    return memref_template
-
-class memref_i64(Structure):
-    _fields_ = [ ('mem_aligned', POINTER(c_int64)), ('mem', POINTER(c_int64)), ('offset', c_int64), ('dim', c_int64 * 1), ('stride', c_int64 * 1)]
-
-class memref_i32(Structure):
-    _fields_ = [ ('mem_aligned', POINTER(c_int32)), ('mem', POINTER(c_int32)), ('offset', c_int64), ('dim', c_int64 * 1), ('stride', c_int64 * 1)]
-
-class memref_f64(Structure):
-    _fields_ = [ ('mem_aligned', POINTER(c_double)), ('mem', POINTER(c_double)), ('offset', c_int64), ('dim', c_int64 * 1), ('stride', c_int64 * 1)]
-
-class memref_f32(Structure):
-    _fields_ = [ ('mem_aligned', POINTER(c_float)), ('mem', POINTER(c_float)), ('offset', c_int64), ('dim', c_int64 * 1), ('stride', c_int64 * 1)]
-
-def memref_from_shaped_type(tensor_type):
-    ctype = None
-    shape = tensor_type.shape
-    if tensor_type.element_type == 'i64':
-        ctype = c_int64
-        if(len(shape) == 1):
-            constructor = memref_i64
-        else: 
-            constructor = create_memref_type(ctype,len(shape))
-    elif tensor_type.element_type == 'i32':
-        ctype = c_int32
-        if(len(shape) == 1):
-            constructor = memref_i32
-        else: 
-            constructor = create_memref_type(ctype,len(shape))
-    elif tensor_type.element_type == 'f64':
-        ctype = c_double
-        if(len(shape) == 1):
-            constructor = memref_f64
-        else: 
-            constructor = create_memref_type(ctype,len(shape))
-    elif tensor_type.element_type == 'f32':
-        ctype = c_float
-        if(len(shape) == 1):
-            constructor = memref_f32
-        else: 
-            constructor = create_memref_type(ctype,len(shape))
-    return constructor(ctypes.cast(None, ctypes.POINTER(ctype)), ctypes.cast(None, ctypes.POINTER(ctype)), 0, (c_int64*len(shape))(*shape), (c_int64*len(shape))(*[0]*len(shape))), constructor
-
-def memref_from_np_array(np_array):
-    ctype = None
-    if np_array.dtype == 'int64':
-        ctype = c_int64
-        if(len(np_array.shape) == 1):
-            constructor = memref_i64
-        else: 
-            constructor = create_memref_type(ctype,len(np_array.shape))
-    elif np_array.dtype == 'int32':
-        ctype = c_int32
-        if(len(np_array.shape) == 1):
-            constructor = memref_i32
-        else: 
-            constructor = create_memref_type(ctype,len(np_array.shape))
-    elif np_array.dtype == 'float32':
-        ctype = c_float
-        if(len(np_array.shape) == 1):
-            constructor = memref_f32
-        else: 
-            constructor = create_memref_type(ctype,len(np_array.shape))
-    elif np_array.dtype == 'float64':
-        ctype = c_double
-        if(len(np_array.shape) == 1):
-            constructor = memref_f64
-        else: 
-            constructor = create_memref_type(ctype,len(np_array.shape))
-    if hasattr(np_array, '__cuda_array_interface__'):
-        ptr = np_array.__cuda_array_interface__['data'][0]
-        return constructor(ctypes.cast(ptr, ctypes.POINTER(ctype)), ctypes.cast(ptr, ctypes.POINTER(ctype)), 0, (c_int64*len(np_array.shape))(*np_array.shape), (c_int64*len(np_array.shape))(*[s//8 for s in np_array.strides])), constructor
-    else:
-        return constructor(np_array.ctypes.data_as(ctypes.POINTER(ctype)), np_array.ctypes.data_as(ctypes.POINTER(ctype)), 0, (c_int64*len(np_array.shape))(*np_array.shape), (c_int64*len(np_array.shape))(*[s//8 for s in np_array.strides])), constructor
-
-# llvm_args += [*expand_memref_ptr(dim_sizes), 0, *expand_memref_ptr(A1pos), 0, *expand_memref_ptr(A2pos), *expand_memref_ptr(A2crd), *expand_memref_ptr(Aval)]
-
-class output_csr_f64_i64(Structure):
-    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_int64), ('A1pos', memref_i64), ('insert_2', c_int64), ('A2pos', memref_i64), ('A2crd', memref_i64), ('Aval', memref_f64)]
-    
-class output_csr_f32_i64(Structure):
-    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_int64), ('A1pos', memref_i64), ('insert_2', c_int64), ('A2pos', memref_i64), ('A2crd', memref_i64), ('Aval', memref_f32)]
-
-class output_coo_f64_i64(Structure):
-    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_int64), ('A1pos', memref_i64), ('A1crd', memref_i64), ('insert_2', c_int64), ('A2crd', memref_i64), ('Aval', memref_f64)]
-
-class output_coo_f32_i64(Structure):
-    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_int64), ('A1pos', memref_i64), ('A1crd', memref_i64), ('insert_2', c_int64), ('A2crd', memref_i64), ('Aval', memref_f32)]
-
-class output_csr_f64_i32(Structure):
-    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_int64), ('A1pos', memref_i32), ('insert_2', c_int64), ('A2pos', memref_i32), ('A2crd', memref_i32), ('Aval', memref_f64)]
-    
-class output_csr_f32_i32(Structure):
-    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_int64), ('A1pos', memref_i32), ('insert_2', c_int64), ('A2pos', memref_i32), ('A2crd', memref_i32), ('Aval', memref_f32)]
-
-class output_coo_f64_i32(Structure):
-    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_int64), ('A1pos', memref_i32), ('A1crd', memref_i32), ('insert_2', c_int64), ('A2crd', memref_i32), ('Aval', memref_f64)]
-
-class output_coo_f32_i32(Structure):
-    _fields_ = [('dims_sizes', memref_i64), ('insert_1', c_int64), ('A1pos', memref_i32), ('A1crd', memref_i32), ('insert_2', c_int64), ('A2crd', memref_i32), ('Aval', memref_f32)]
-
-def python_type_to_ctype(t):
-    if isinstance(t, int):
-        ctype = c_int32
-    elif isinstance(t, float):
-        ctype = c_double
-    return ctype
-
-def np_array_to_memref(np_array):
-    ctype = ctypes.c_int64
-    if np_array.dtype == 'int32':
-        ctype = c_int32
-    elif np_array.dtype == 'float32':
-        ctype = c_float
-    elif np_array.dtype == 'float64':
-        ctype = c_double
-    return np_array.ctypes.data_as(ctypes.POINTER(ctype)), np_array.ctypes.data_as(ctypes.POINTER(ctype)), 0, np_array.shape[0], 1
-
-def expand_memref_ptr(memref):
-    return byref(memref), byref(memref), 0, 1, 1
-
-def len_dense(vals):
-    num = 0
-    for v in vals:
-        if not scp.sparse.issparse(v):
-            num+=1
-    return num
 
 
 
@@ -303,49 +210,35 @@ def memref_f64_type():
     return [ctypes.POINTER(c_double), ctypes.POINTER(c_double), c_int64, c_int64, c_int64]
 
 def generate_llvm_args_from_ndarrays(inputs, output_types):
-    llvm_args = []
-    llvm_args_types = []
-    all_outputs = []
-    aux = [] # Used to make sure data created in this function are not freed prematurely.
+    llvm_args_types_len = 0 
     for out_type in output_types:
         if isinstance(out_type, types.ShapedType):
-            if out_type.format == types.DENSE:
-                memref, type = memref_from_shaped_type(out_type)
-                llvm_args.append(memref)
-                llvm_args_types.append(POINTER(type))
-                all_outputs.append(memref)
-            
-                
-# 
-#     for i, ndarray in enumerate(ndargs):
-#         # Ndarray is dense
-#         if not scp.sparse.issparse(ndarray):
-#             memref, type = memref_from_np_array(ndarray)
-#             llvm_args.append(memref)
-#             llvm_args_types.append(POINTER(type))
+            llvm_args_types_len += 1
+    llvm_args_len = llvm_args_types_len
+    for input in inputs:
+        if scp.sparse.issparse(input):
+            llvm_args_len += 7
+        else:
+            llvm_args_len += 1
 
-#             if i >= num_in:
-#                 all_outputs.append(ndarray)
-#         # Ndarray is sparse
-#         else:
-#             dims = np.array(ndarray.shape, dtype=np.int64)
-#             dim_sizes, dim_type = memref_from_np_array(dims)
-#             aux.append(dims)
-#             Aval, Aval_type = memref_from_np_array(ndarray.data)
-#             # Working on the output matrix
-#             if i >= num_in:
-#           
+    llvm_args = [None] * llvm_args_len
+    aux = [] # Used to make sure data created in this function are not freed prematurely.
+    
+    for i, out_type in enumerate(output_types):
+        if isinstance(out_type, types.ShapedType):
+            if out_type.format == types.DENSE:
+                memref = memref_from_shaped_type(out_type)
+                llvm_args[i] = memref
             else:
-                dims = np.array(out_type.shape, dtype=np.int64)
-                dim_sizes, dim_type = memref_from_np_array(dims)
-                aux.append(dims)
-                Aval, Aval_type = memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.element_type))
+                dim_sizes = memref_from_shaped_type(types.TensorType([1], 'index') )
+                aux.append(dim_sizes)
+                Aval = memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.element_type))
                 if out_type.format == types.CSR:
                     A1pos_temp = np.array([out_type.shape[0]], dtype= ops.mlir_type_to_dtype(out_type.indices_type))
                     aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                    A1pos, A1pos_type = memref_from_np_array(A1pos_temp) #memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
-                    A2pos, A2pos_type = memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
-                    A2crd, A2crd_type = memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A1pos = memref_from_np_array(A1pos_temp) #memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A2pos = memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A2crd = memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
 
 
                     if out_type.element_type == 'f64':
@@ -363,9 +256,9 @@ def generate_llvm_args_from_ndarrays(inputs, output_types):
                 elif out_type.format == types.COO:
                     A1pos_temp = np.array([0, 1], dtype=ops.mlir_type_to_dtype(out_type.indices_type))
                     aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                    A1pos, A1pos_type =  memref_from_np_array(A1pos_temp) #memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
-                    A1crd, A1crd_type =  memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
-                    A2crd, A2crd_type =  memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A1pos =  memref_from_np_array(A1pos_temp) #memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A1crd =  memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
+                    A2crd =  memref_from_shaped_type(types.TensorType([out_type.shape[0]], out_type.indices_type))
 
                     if out_type.element_type == 'f64':
                         if out_type.indices_type == 'i32':
@@ -382,58 +275,73 @@ def generate_llvm_args_from_ndarrays(inputs, output_types):
                 else :
                     raise Exception("Unsupported sparse matrix type")
 
-                llvm_args_types += [POINTER(out_ctor)]
-                llvm_args += [out]
-                all_outputs.append(out)
-
-    for ndarray in inputs:
+                llvm_args[i] = out
+    offset = llvm_args_types_len
+    for i, ndarray in enumerate(inputs):
         
 
         if not scp.sparse.issparse(ndarray):
             # ndarray = np.array(out_type.shape, dtype=ops.mlir_type_to_dtype(out_type.element_type)) ## [TODO] No need to allocate
             if isinstance(ndarray, np.ndarray):
-                memref, type = memref_from_np_array(ndarray)
-                llvm_args.append(memref)
-                llvm_args_types.append(POINTER(type))
+                memref = memref_from_np_array(ndarray)
+                llvm_args[offset + i] = memref
             else: 
-                llvm_args.append(ndarray)
-                llvm_args_types.append(python_type_to_ctype(ndarray))
+                llvm_args[offset + i] = ndarray
         else:
             dims = np.array(ndarray.shape, dtype=np.int64)
-            dim_sizes, dim_type = memref_from_np_array(dims)
+            dim_sizes = memref_from_np_array(dims)
             aux.append(dims)
-            Aval, Aval_type = memref_from_np_array(ndarray.data) # memref_from_shaped_type(types.TensorType([ndarray.shape[0]], out_type.element_type))
+            Aval = memref_from_np_array(ndarray.data) # memref_from_shaped_type(types.TensorType([ndarray.shape[0]], out_type.element_type))
             insert_pos_1 = 0
             insert_pos_2 = 0
             # CSR
             if ndarray.format == 'csr':
-                A1tile_pos = np.array([-1], dtype=ndarray.indptr.dtype)
-                A1tile_crd = np.array([-1], dtype=ndarray.indptr.dtype)
-                A2tile_pos = np.array([-1], dtype=ndarray.indptr.dtype)
-                A2tile_crd = np.array([-1], dtype=ndarray.indptr.dtype)
+                # A1tile_pos = np.array([-1], dtype=ndarray.indptr.dtype)
+                # A1tile_crd = np.array([-1], dtype=ndarray.indptr.dtype)
+                # A2tile_pos = np.array([-1], dtype=ndarray.indptr.dtype)
+                # A2tile_crd = np.array([-1], dtype=ndarray.indptr.dtype)
                 A1pos_temp = np.array([ndarray.shape[0]], dtype=ndarray.indptr.dtype)
                 aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                A1pos, A1pos_type = memref_from_np_array(A1pos_temp)
-                A2pos, A2pos_type = memref_from_np_array(ndarray.indptr)
-                A2crd, A2crd_type = memref_from_np_array(ndarray.indices)
+                A1pos = memref_from_np_array(A1pos_temp)
+                A2pos = memref_from_np_array(ndarray.indptr)
+                A2crd = memref_from_np_array(ndarray.indices)
 
                 # Based on the desc_sizes array in SparseUtils.cpp:read_input_sizes_2D
-                llvm_args += [dim_sizes, insert_pos_1, A1pos, insert_pos_2, A2pos, A2crd]
-                llvm_args_types += [POINTER(dim_type)] + [c_int64] + [POINTER(A1pos_type)] + [c_int64] + [POINTER(A2pos_type), POINTER(A2crd_type)]
+                llvm_args[offset + i] = dim_sizes
+                offset += 1 
+                llvm_args[offset + i] = insert_pos_1
+                offset += 1 
+                llvm_args[offset + i] = A1pos
+                offset += 1 
+                llvm_args[offset + i] = insert_pos_2
+                offset += 1 
+                llvm_args[offset + i] = A2pos
+                offset += 1 
+                llvm_args[offset + i] = A2crd
+                offset += 1 
             # COO
             elif ndarray.format == 'coo':
-                A1tile_pos = np.array([-1], dtype=ndarray.row.dtype)
-                A1tile_crd = np.array([-1], dtype=ndarray.row.dtype)
-                A2tile_pos = np.array([-1], dtype=ndarray.row.dtype)
-                A2tile_crd = np.array([-1], dtype=ndarray.row.dtype)
+                # A1tile_pos = np.array([-1], dtype=ndarray.row.dtype)
+                # A1tile_crd = np.array([-1], dtype=ndarray.row.dtype)
+                # A2tile_pos = np.array([-1], dtype=ndarray.row.dtype)
+                # A2tile_crd = np.array([-1], dtype=ndarray.row.dtype)
                 A1pos_temp = np.array([0, ndarray.nnz], dtype=ndarray.row.dtype)
                 aux.append(A1pos_temp) # Make sure the array we created persists until we actually call the mlir-generated function
-                A1pos, A1pos_type = memref_from_np_array(A1pos_temp)
-                A1crd, A1crd_type = memref_from_np_array(ndarray.row)
-                A2crd, A2crd_type = memref_from_np_array(ndarray.col)
-
-                llvm_args += [dim_sizes, insert_pos_1, A1pos,  A1crd, insert_pos_2, A2crd]
-                llvm_args_types += [POINTER(dim_type)] + [c_int64] + [POINTER(A1pos_type), POINTER(A1crd_type)] + [c_int64] + [POINTER(A2crd_type)]
+                A1pos = memref_from_np_array(A1pos_temp)
+                A1crd = memref_from_np_array(ndarray.row)
+                A2crd = memref_from_np_array(ndarray.col)
+                llvm_args[offset + i] = dim_sizes
+                offset += 1 
+                llvm_args[offset + i] = insert_pos_1
+                offset += 1 
+                llvm_args[offset + i] = A1pos
+                offset += 1 
+                llvm_args[offset + i] = A1crd
+                offset += 1 
+                llvm_args[offset + i] = insert_pos_2
+                offset += 1 
+                llvm_args[offset + i] = A2crd
+                offset += 1
             # # CSC
             # elif ndarray.format == 'csc':
             #     A1pos = ndarray.indptr.astype('int64')
@@ -448,78 +356,81 @@ def generate_llvm_args_from_ndarrays(inputs, output_types):
             
             # Based on the  desc_A1pos/crd, desc_A2pos/crd, desc_Aval arrays in SparseUtils.cpp: read_input_2D
             # Expand to memrefs llvmir implementation
-            
-            llvm_args += [Aval]
-            llvm_args_types += [POINTER(Aval_type)]
-
-    return llvm_args, llvm_args_types, all_outputs, aux
+            llvm_args[offset + i] = Aval
+    return llvm_args, aux
 
 #Translating llvm dialect to llvm IR using mlir-translate and then executing the IR using lli
-def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs, output_types, uuid_s):
+def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, kernel_name, inputs, output_types, uuid_s, func_name, input_types, cached_kernel):
+    llvmir_file = None
+    if not cached_kernel:
+        llvmir_file = uuid_s+'.ll'
+        llvm_in = llvm_in.replace('call @comet_print_memref_', '//call @comet_print_memref_')
+        # path_to_cometopt = cfg.comet_path+"/bin/comet-opt"
+        path_to_cometopt = cfg.comet_path+"/bin/comet-opt -x mlir"
+        to_llvm_command = path_to_cometopt + scf_lower_flags #+ llvm_in
+        translate_mlir_command = cfg.llvm_path+"/bin/mlir-translate --mlir-to-llvmir -- " 
+        libname =   "./lib"+llvmir_file+kernel_name+".so"
+        gcc_command = cfg.llvm_path+"/bin/clang -march=native -mtune=native -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L {0}/lib/ -Wl,-rpath,{0}/lib/ -lcomet_runner_utils -L {1}/lib/ -Wl,-rpath,{1}/lib/ -fopenmp -".format(cfg.comet_path, cfg.llvm_path)
+
+        # We merge all several calls in a single call to the shell in order to only pay the overhead of process creation once.
+        # 1. Call comet to lower scf code to llvm
+        # 2. Call mlir-translate to convert llvm to llvmir 
+        # 3. Call clang to generate library
+        # p = subprocess.run(to_llvm_command, input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        # start = time.time()
+        p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | ' + gcc_command , input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        if(p.returncode != 0):
+            cleanup()
+            raise AssertionError("gcc failed with error code: {}. Error: {} {}".format(p.returncode, p.stdout, p.stderr))
+        files_to_cleanup.append(os.path.join( os.getcwd(), temp_dir +libname))
+        # end = time.time()
+        # print(f'To llvm time: {end-start}')
+        # start = time.time()
+
+        # Load code generated from COMET
+        lib = ctypes.cdll.LoadLibrary(temp_dir +libname)
+        func = lib.__getattr__("_mlir_ciface_"+kernel_name)
+        timestamp = os.path.getmtime(temp_dir +libname)
+
+        # Get the inputs, input types and the output containers
+        args, aux = generate_llvm_args_from_ndarrays(inputs, output_types)
+        # func.argtypes = arg_types
+        
+        # end = time.time()
+        # print(f'dlopen time: {end-start}')
+                
+        # Uncomment to measure execution time without the compilation process
+        # start = time.time()
+        cache.insert(func_name, CachedKernelInfo(func_name, func_name.split(':')[0], func, timestamp, kernel_name, input_types, output_types))
+    else:
+        args, aux = generate_llvm_args_from_ndarrays(inputs, cached_kernel.output_types)
+        output_types = cached_kernel.output_types
+        func = cached_kernel.lib_path
 
 
-    llvmir_file = uuid_s+'.ll'
-    llvm_in = llvm_in.replace('call @comet_print_memref_', '//call @comet_print_memref_')
-    # path_to_cometopt = cfg.comet_path+"/bin/comet-opt"
-    path_to_cometopt = cfg.comet_path+"/bin/comet-opt -x mlir"
-    to_llvm_command = path_to_cometopt + scf_lower_flags #+ llvm_in
-    translate_mlir_command = cfg.llvm_path+"/bin/mlir-translate --mlir-to-llvmir -- " 
-    libname =   "./lib"+llvmir_file+func_name+".so"
-    gcc_command = cfg.llvm_path+"/bin/clang -march=native -mtune=native -x ir -Wno-everything --shared -O3 "+platform_args+ " -o "+ temp_dir + libname+" -fpic -L {0}/lib/ -Wl,-rpath,{0}/lib/ -lcomet_runner_utils -L {1}/lib/ -Wl,-rpath,{1}/lib/ -fopenmp -".format(cfg.comet_path, cfg.llvm_path)
-
-    # We merge all several calls in a single call to the shell in order to only pay the overhead of process creation once.
-    # 1. Call comet to lower scf code to llvm
-    # 2. Call mlir-translate to convert llvm to llvmir 
-    # 3. Call clang to generate library
-    # p = subprocess.run(to_llvm_command, input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    # start = time.time()
-    p = subprocess.run(to_llvm_command +' 2>&1 |  '+ translate_mlir_command +' | ' + gcc_command , input=llvm_in.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    if(p.returncode != 0):
-        cleanup()
-        raise AssertionError("gcc failed with error code: {}. Error: {} {}".format(p.returncode, p.stdout, p.stderr))
-    files_to_cleanup.append(os.path.join( os.getcwd(), temp_dir +libname))
-    # end = time.time()
-    # print(f'To llvm time: {end-start}')
-    # start = time.time()
-
-    # Load code generated from COMET
-    lib = ctypes.cdll.LoadLibrary(temp_dir +libname)
-    func = lib.__getattr__("_mlir_ciface_"+func_name)
-
-    # Get the inputs, input types and the output containers
-    args, arg_types, all_output, aux = generate_llvm_args_from_ndarrays(inputs, output_types)
-    func.argtypes = arg_types
     if len(output_types) == 1:
-        if not isinstance(output_types[0], types.ShapedType):
-            type_str = str(output_types[0])
-            if type_str == 'i64':
-                func.restype = c_int64
-            elif type_str == 'i32':
-                func.restype = c_int32
-            elif type_str == 'f32':
-                func.restype = c_float
-            elif type_str == 'f64':
-                func.restype = c_double
-            else:
-                raise Exception("Unexpeted return type")
-            
-    # end = time.time()
-    # print(f'dlopen time: {end-start}')
-            
-    # Uncomment to measure execution time without the compilation process
-    # start = time.time()
-    args = [byref(arg) if not isinstance(arg, int) else arg for arg in args]
+            if not isinstance(output_types[0], types.ShapedType):
+                type_str = str(output_types[0])
+                if type_str == 'i64':
+                    func.restype = c_int64
+                elif type_str == 'i32':
+                    func.restype = c_int32
+                elif type_str == 'f32':
+                    func.restype = c_float
+                elif type_str == 'f64':
+                    func.restype = c_double
+                else:
+                    raise Exception("Unexpeted return type")
     # end = time.time()
     # print("create args: {}".format(end-start))
     # start = time.time()
-    ret = func(*args)
+    ret = func(*[byref(arg) if not isinstance(arg, int) else arg for arg in args])
     # end = time.time()
     # print("Kernel execution time JIT: {}".format(end-start))
-    # start = time.time()
 
     out = None
     ret_outputs = []
-    for v0, v1 in zip(all_output, output_types):
+    for v0, v1 in zip(args, output_types):
         if isinstance(v1, types.ShapedType):
             if v1.format == types.CSR:
                 out_csr = v0
@@ -546,12 +457,7 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, func_name, inputs,
     else:
         out = None
     # print("Kernel execution time JIT: {}".format(end-start))
-    # end = time.time()
-    # print(f'Return time: {end-start}')
     return out, llvmir_file
-
-def func_execute(func, args):
-    func(*(args))
 
 def translate_and_exec_llvm(llvm_in,func_name, out_dims, uuid_s):
 
@@ -600,113 +506,54 @@ def translate_and_exec_llvm(llvm_in,func_name, out_dims, uuid_s):
     else:
         return output_arrays_list.pop(),llvmir_file
 
-def lower_dialect(ta_dialect_rep, out_dims, compile_with_flags,func_name):
+def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_flags,kernel_name, args_vals, outputs_types, func_name, input_types, cached_kernel):
 
-    #lower TA dialect to the SCF dialect
-    mlir_lower_flags = ""
-
-    if isinstance(compile_with_flags,tuple):
-        for i in range(len(compile_with_flags)):
-            mlir_lower_flags += compile_with_flags[i] + " "
-    
-    elif(isinstance(compile_with_flags,str)):
-        mlir_lower_flags += compile_with_flags 
-    
-    mlir_lower_flags += " --convert-ta-to-it --convert-to-loops "
-
-    # scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
-    scf_lower_flags =  " --convert-to-llvm "
-
-    if("-emit-ta" in mlir_lower_flags):
-        print(ta_dialect_rep)
-        return
-
-     #write the TA dialect rep to file
-    uuid_s = str(uuid.uuid4())
-    ta_dialect_file = uuid_s+'.mlir'
-    # print("uuid_s: ", uuid_s)
-    if(os.path.exists(ta_dialect_file) is False):
-        f = open(os.path.join( os.getcwd(), ta_dialect_file), 'w')
-        files_to_cleanup.append(os.path.join( os.getcwd(), ta_dialect_file))
-    else:
-        f = open(ta_dialect_file, 'w')
-    
-    f.write(ta_dialect_rep)
-    f.close()
-
-    # Uncomment for debugging pusposes
-    scf_out_file = lower_ta_to_mlir(ta_dialect_file, mlir_lower_flags, uuid_s)
-    # scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals)
-    
-    # Running --convert-ta-to-it --convert-to-loops and  --convert-to-llvm in separate steps 
-    # does not produce correct output. This is an issue with the backend.
-
-    #lower the SCF dialect to first STD dialect and then to the llvm dialect
-    llvm_out_file = lower_scf_to_llvm(scf_out_file, scf_lower_flags, uuid_s)
-    # llvm_out_file = lower_scf_to_llvm(ta_dialect_file, mlir_lower_flags + scf_lower_flags)
-   
-    result,llvmir_file = translate_and_exec_llvm(llvm_out_file,func_name, out_dims, uuid_s)
-    
-    return result
-
-
-def lower_dialect_with_jit(ta_dialect_rep, target: str, out_dims, compile_with_flags,func_name, args_vals, outputs_types):
-
-    mlir_lower_flags = " "
+    scf_lower_flags = None
+    scf_out_file = None
+    uuid_s = None
+    if not cached_kernel:
+        mlir_lower_flags = " "
+            
+        if compile_with_flags != None:
+            if "--convert-tc-to-ttgt" not in compile_with_flags:
+                mlir_lower_flags += "  --convert-ta-to-it "
+            if "--opt-fusion"  in compile_with_flags:
+                mlir_lower_flags += "--opt-fusion"
+                compile_with_flags = compile_with_flags.replace("--opt-fusion","")
+                compile_with_flags = compile_with_flags.replace("--opt-comp-workspace","")
+            # if "-opt-matmul-tiling" not in compile_with_flags:
+            mlir_lower_flags += "   --convert-to-loops "
+            mlir_lower_flags =" "+compile_with_flags + mlir_lower_flags
+        else:
+            mlir_lower_flags = "  --convert-ta-to-it --convert-to-loops "
+        # scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
+        scf_lower_flags =  " --convert-to-llvm "
         
-    if compile_with_flags != None:
-        if "--convert-tc-to-ttgt" not in compile_with_flags:
-            mlir_lower_flags += "  --convert-ta-to-it "
-        if "--opt-fusion"  in compile_with_flags:
-            mlir_lower_flags += "--opt-fusion"
-            compile_with_flags = compile_with_flags.replace("--opt-fusion","")
-            compile_with_flags = compile_with_flags.replace("--opt-comp-workspace","")
-        # if "-opt-matmul-tiling" not in compile_with_flags:
-        mlir_lower_flags += "   --convert-to-loops "
-        mlir_lower_flags =" "+compile_with_flags + mlir_lower_flags
-    else:
-        mlir_lower_flags = "  --convert-ta-to-it --convert-to-loops "
-    # scf_lower_flags =  " --lower-affine --convert-linalg-to-loops --convert-scf-to-std --convert-linalg-to-llvm --convert-std-to-llvm "
-    scf_lower_flags =  " --convert-to-llvm "
-    
-    if target != "cpu":
-        if target.startswith("sm_") or target.startswith("compute_") or target.startswith("lto_"):
-            if not cfg.gpu_target_enabled:
-                raise Exception("COMET gpu target is not enabled")
-            scf_lower_flags += " " + "--convert-to-triton --target=GPU --gpu-compute-capability="+target.split("_")[1]
-            mlir_lower_flags += " " + "--target=GPU"
-        elif target == "gpu":
-            if not cfg.gpu_target_enabled:
-                raise Exception("COMET gpu target is not enabled")
-            scf_lower_flags += " " + "--convert-to-triton --target=GPU"
-            mlir_lower_flags += " " + "--target=GPU"
-        else :
-            raise "Expected target formats:\
-                    cpu, compute_<version>, sm_<version>, lto_<version>"
-    
-    if("-emit-ta" in mlir_lower_flags):
-        print(ta_dialect_rep)
-        return
+        if target != "cpu":
+            if target.startswith("sm_") or target.startswith("compute_") or target.startswith("lto_"):
+                if not cfg.gpu_target_enabled:
+                    raise Exception("COMET gpu target is not enabled")
+                scf_lower_flags += " " + "--convert-to-triton --target=GPU --gpu-compute-capability="+target.split("_")[1]
+                mlir_lower_flags += " " + "--target=GPU"
+            elif target == "gpu":
+                if not cfg.gpu_target_enabled:
+                    raise Exception("COMET gpu target is not enabled")
+                scf_lower_flags += " " + "--convert-to-triton --target=GPU"
+                mlir_lower_flags += " " + "--target=GPU"
+            else :
+                raise "Expected target formats:\
+                        cpu, compute_<version>, sm_<version>, lto_<version>"
+        
+        if("-emit-ta" in mlir_lower_flags):
+            print(ta_dialect_rep)
+            return
 
-    uuid_s = str(uuid.uuid4())
-    ta_dialect_file = temp_dir+uuid_s+'.mlir'
-    # if(os.path.exists(ta_dialect_file) == False):
-    #     f = open(os.path.join( os.getcwd(), ta_dialect_file), 'w')
-    #     files_to_cleanup.append(os.path.join( os.getcwd(), ta_dialect_file))
-    # else:
-    #     f = open(ta_dialect_file, 'w')
-    
-    # f.write(ta_dialect_rep)
-    # f.close()
-
-    # Convert TA to SCF
-    # scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_file, mlir_lower_flags, args_vals, uuid_s)
-    # start = time.time()
-    scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_rep, mlir_lower_flags, args_vals, uuid_s)
+        uuid_s = str(uuid.uuid4())
+        scf_out_file = lower_ta_to_mlir_with_jit(ta_dialect_rep, mlir_lower_flags, args_vals, uuid_s)
     # end = time.time()
     # print(f"To SCF time: {end-start}")
 
     #lower the SCF dialect to LLVMIR and execute
-    result,llvmir_file = translate_and_exec_llvm_with_jit(scf_out_file, scf_lower_flags, func_name, args_vals, outputs_types, uuid_s)
+    result,llvmir_file = translate_and_exec_llvm_with_jit(scf_out_file, scf_lower_flags, kernel_name, args_vals, outputs_types, uuid_s, func_name, input_types, cached_kernel)
 
     return result
