@@ -437,13 +437,13 @@ def translate_and_exec_llvm_with_jit(llvm_in,scf_lower_flags, kernel_name, input
                 np_r_indices = np.ctypeslib.as_array(out_csr.A2pos.mem, [out_csr.A2pos.dim[0]])
                 np_c_indices = np.ctypeslib.as_array(out_csr.A2crd.mem, [out_csr.A2crd.dim[0]])
                 np_values = np.ctypeslib.as_array(out_csr.Aval.mem, [out_csr.Aval.dim[0]])
-                ret_outputs.append(scp.sparse.csr_array((np_values, np_c_indices, np_r_indices), copy=False))
+                ret_outputs.append(scp.sparse.csr_array((np_values, np_c_indices, np_r_indices), (out_csr.dims_sizes.mem[0], out_csr.dims_sizes.mem[1]) , copy=False))
             elif v1.format == types.COO:
                 out_coo = v0
                 rows = np.ctypeslib.as_array(out_coo.A1crd.mem, [out_coo.A1crd.dim[0]])
                 cols = np.ctypeslib.as_array(out_coo.A2crd.mem, [out_coo.A2crd.dim[0]])
                 np_values = np.ctypeslib.as_array(out_coo.Aval.mem, [out_coo.Aval.dim[0]])
-                ret_outputs.append(scp.sparse.coo_array((np_values, (rows, cols)), copy=False))
+                ret_outputs.append(scp.sparse.coo_array((np_values, (rows, cols)), (out_coo.dims_sizes.mem[0], out_coo.dims_sizes.mem[1]) , copy=False))
             elif v1.format == types.DENSE:
                 ret_outputs.append(np.ctypeslib.as_array(v0.mem, v1.shape))
     
