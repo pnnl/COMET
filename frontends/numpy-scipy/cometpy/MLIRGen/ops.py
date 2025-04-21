@@ -153,7 +153,6 @@ class TensorIndexBasedOp(Operation):
             res_indices = ",".join([f'%{input.ssa}' for input in self.res_indices]),
             mask_type = self.mask_type,
             mask = self.mask,
-            formats = ",".join([",".join([f'"{format_to_string(input.type.format)}"' for input in self.inputs]), f'"{format_to_string(self.results[0].type.format)}"']),
             semiring = self.semiring,
             input_types = input_types,
             res_type = self.results[0].type,
@@ -164,7 +163,7 @@ class TensorIndexBasedOp(Operation):
         )
     
     tensor_binary_op_text = jinja2.Template(
-        '%{{ssa}} = "{{name}}" ({{inputs}}, {{inputs_indices}}, {{res_indices}} {%if mask!=None%}, %{{mask.ssa}}{%endif%} ) <{ {% if mask_type%} MaskType = "{{mask_type}}", {% endif%} formats = [{{formats}}], indexing_maps = [{{affine_maps}}] {% if semiring%}, operandSegmentSizes = array<i32: {{operand_segment_sizes}}>, semiring="{{semiring}}" {%endif%}}>  {%if alpha != None   or beta != None %} { {%endif%} {%if alpha!= None%} __alpha__ = {{alpha}} : f64 {%endif%} {%if alpha!= None and beta!= None %}, {%endif%} {%if beta!= None %} __beta__ = {{beta}}: f64 {%endif%} {%if alpha!= None or beta!= None %}} {%endif%} : ({{input_types}}) -> {{res_type}}',
+        '%{{ssa}} = "{{name}}" ({{inputs}}, {{inputs_indices}}, {{res_indices}} {%if mask!=None%}, %{{mask.ssa}}{%endif%} ) <{ {% if mask_type%} MaskType = "{{mask_type}}", {% endif%} indexing_maps = [{{affine_maps}}] {% if semiring%}, operandSegmentSizes = array<i32: {{operand_segment_sizes}}>, semiring="{{semiring}}" {%endif%}}>  {%if alpha != None   or beta != None %} { {%endif%} {%if alpha!= None%} __alpha__ = {{alpha}} : f64 {%endif%} {%if alpha!= None and beta!= None %}, {%endif%} {%if beta!= None %} __beta__ = {{beta}}: f64 {%endif%} {%if alpha!= None or beta!= None %}} {%endif%} : ({{input_types}}) -> {{res_type}}',
         undefined=jinja2.StrictUndefined,
     )
 

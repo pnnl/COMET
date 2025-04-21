@@ -120,11 +120,11 @@ def DenseTensorDeclOp : TA_Op<"dense_tensor_decl", [Pure]> {
   }];
 
   /// The constant operation takes an attribute as the only input.
-  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format);
+  let arguments = (ins Variadic<Index>:$labels);
 
   /// The constant operation returns a single value of TensorType.
   let results = (outs AnyTensor);
-
+  
   /// Invoke a static verify method to verify this constant operation.
   
   //TODO(gkestor): add verifier
@@ -147,7 +147,7 @@ def SparseTensorDeclOp : TA_Op<"spTensor_decl", [Pure]> {
   }];
 
   /// The constant operation takes an attribute as the only input.
-  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format, BoolAttr:$temporal_tensor);
+  let arguments = (ins Variadic<Index>:$labels, BoolAttr:$temporal_tensor);
 
   /// The constant operation returns a single value of TensorType.
   let results = (outs TA_AnyTensor);
@@ -197,7 +197,7 @@ def SparseOutputTensorDeclOp : TA_Op<"sparse_output_tensor_decl", [Pure]> {
   }];
 
   /// The constant operation takes an attribute as the only input.
-  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format);
+  let arguments = (ins Variadic<Index>:$labels);
 
   /// The constant operation returns a single value of TensorType.
   let results = (outs TA_AnyTensor);
@@ -227,7 +227,7 @@ def TempSparseOutputTensorDeclOp : TA_Op<"temp_sparse_output_tensor_decl", [Pure
   }];
 
   /// The constant operation takes an attribute as the only input.
-  let arguments = (ins Variadic<Index>:$labels, StrAttr:$format);
+  let arguments = (ins Variadic<Index>:$labels);
 
   /// The constant operation returns a single value of TensorType.
   let results = (outs TA_AnyTensor);
@@ -352,7 +352,7 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
   }];
 
   let arguments = (ins TA_AnyTensor:$rhs1, TA_AnyTensor:$rhs2, Variadic<IndexLabel>:$index_labels, 
-                   AffineMapArrayAttr:$indexing_maps, StrArrayAttr:$formats, StrAttr:$semiring, 
+                   AffineMapArrayAttr:$indexing_maps, StrAttr:$semiring, 
                    OptionalAttr<StrAttr>:$MaskType,  /// TODO: try to use: DefaultValuedAttr
                    Optional<AnyType>:$mask);
 
@@ -442,7 +442,6 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
                    TA_AnyTensor:$rhs2, 
                    Variadic<IndexLabel>:$index_labels, 
                    AffineMapArrayAttr:$indexing_maps, 
-                   StrArrayAttr:$formats, 
                    StrAttr:$semiring,
                    OptionalAttr<StrAttr>:$MaskType); 
   
@@ -559,7 +558,7 @@ def TensorSetOp : TA_Op<"set_op">{
 def TransposeOp : TA_Op<"transpose",[Pure]> {
   let summary = "transpose operation";
 
-  let arguments = (ins TA_AnyTensor:$rhs, Variadic<IndexLabel>:$index_labels, AffineMapArrayAttr:$indexing_maps, StrArrayAttr:$formats);
+  let arguments = (ins TA_AnyTensor:$rhs, Variadic<IndexLabel>:$index_labels, AffineMapArrayAttr:$indexing_maps);
   
   let results = (outs TA_AnyTensor); 
 
@@ -642,7 +641,6 @@ def TensorAddOp : TA_Op<"add",
                    TA_AnyTensor:$rhs2, 
                    Variadic<IndexLabel>:$index_labels, 
                    AffineMapArrayAttr:$indexing_maps, 
-                   StrArrayAttr:$formats, 
                    StrAttr:$semiring,
                    OptionalAttr<StrAttr>:$MaskType); 
   
@@ -724,7 +722,6 @@ def TensorSubtractOp : TA_Op<"subtract",
                    TA_AnyTensor:$rhs2, 
                    Variadic<IndexLabel>:$index_labels, 
                    AffineMapArrayAttr:$indexing_maps, 
-                   StrArrayAttr:$formats, 
                    StrAttr:$semiring,
                    OptionalAttr<StrAttr>:$MaskType); 
   

@@ -336,8 +336,7 @@ uint32_t collectIntermediateIdx(Value prev_lhs_tensor,
       Value new_tensor = builder.create<tensorAlgebra::DenseTensorDeclOp>(
           loc,
           mlir::RankedTensorType::get(shape, old_tensor_tt.getElementType()),
-          operands,
-          llvm::cast<tensorAlgebra::DenseTensorDeclOp>(old_tensor.getDefiningOp()).getFormatAttr());
+          operands);
       itree_to_new_tensors[tree_i] = new_tensor;
       mlir::TypedAttr zero = builder.getZeroAttr(old_tensor_tt.getElementType());
       builder.create<tensorAlgebra::TensorFillOp>(loc,

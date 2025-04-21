@@ -502,7 +502,6 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       //   formats.push_back(lhs_format);
       //   formats.push_back(lhs_format);
       // }
-      auto strAttr = builder.getStrArrayAttr(formats);
 
       std::vector<int> lhs_lbls;
       std::vector<int> rhs_lbls;
@@ -579,7 +578,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       auto SemiringAttr = builder.getStringAttr("plusxy_times");
       auto MaskingAttr = builder.getStringAttr("none");
       Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
-                                                               all_labels, affineMapArrayAttr, strAttr, SemiringAttr,
+                                                               all_labels, affineMapArrayAttr, SemiringAttr,
                                                                MaskingAttr, nullptr);
       tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
       tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));

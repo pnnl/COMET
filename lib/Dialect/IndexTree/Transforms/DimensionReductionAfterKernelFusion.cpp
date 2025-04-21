@@ -225,8 +225,7 @@ std::unordered_map<uint32_t, Value> createNewLhsTensors(
       Value new_tensor = rewriter.create<tensorAlgebra::DenseTensorDeclOp>(
           loc,
           mlir::RankedTensorType::get(shape, old_tensor_tt.getElementType()),
-          operands,
-          llvm::cast<tensorAlgebra::DenseTensorDeclOp>(old_tensor.getDefiningOp()).getFormatAttr());
+          operands);
       computeOp_to_new_tensors[computeOp_i] = new_tensor;
       mlir::TypedAttr zero = rewriter.getZeroAttr(old_tensor_tt.getElementType());
       rewriter.create<tensorAlgebra::TensorFillOp>(loc,

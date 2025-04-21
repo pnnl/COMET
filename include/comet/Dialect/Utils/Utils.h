@@ -144,6 +144,8 @@ namespace mlir
 
     std::vector<Value> getFormatsValue(llvm::StringRef formats_str, int rank_size,
                                        PatternRewriter &rewriter, Location loc, IndexType indexType);
+    std::string getTensorFormatString(Type tensorT);
+
     std::vector<Value> getFormatsValueInt(llvm::StringRef formats_str, int rank_size,
                                           PatternRewriter &rewriter, Location loc, IntegerType intType);
     std::vector<TensorFormatEnum> getFormats(llvm::StringRef formats_str, int rank_size, MLIRContext* ctx);
