@@ -1247,12 +1247,12 @@ namespace
         return nullptr;
       comet_debug() << " get rhs\n";
 
-      // auto tens_beta = tensor_op.getBeta();
+      auto tens_beta = tensor_op.getBeta();
 
       auto lhsName = cast<tensorAlgebra::LabeledTensorExprAST>(*tensor_op.getLHS())
           .getTensorName(); 
       symbolTable.insert(lhsName, rhs); 
-      // ret_op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
+      lhs.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
       return rhs;
     }
@@ -1266,16 +1266,8 @@ namespace
 
       mlir::Value tensor_op;
       std::vector<mlir::Value> labels;
-
-      if ((tensor_op = symbolTable.lookup(tensor_name)) != NULL)
-      {
-        if (!isa<DenseTensorDeclOp>(tensor_op.getDefiningOp()) && !isa<SparseTensorDeclOp>(tensor_op.getDefiningOp()))
-        {
-          emitError(loc(lbl_tensor.loc()), "Tensor declaration required '")
-              << tensor_name << "'";
-        }
-      }
-      else
+      
+      if ((tensor_op = symbolTable.lookup(tensor_name)) == NULL)
       {
         emitError(loc(lbl_tensor.loc()),
                   "Unknown variable LabeledTensorExprAST'");

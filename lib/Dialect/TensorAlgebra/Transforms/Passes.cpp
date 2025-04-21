@@ -582,6 +582,8 @@ mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(t
       Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
                                                                all_labels, affineMapArrayAttr, SemiringAttr,
                                                                MaskingAttr, nullptr);
+      tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
+      tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
       comet_debug() << "New operation " << tcop << "\n";
       newRhs1 = tcop;
     }
