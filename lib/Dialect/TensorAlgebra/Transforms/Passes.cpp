@@ -230,6 +230,7 @@ mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(t
   comet_pdump(op);
   auto loc = op->getLoc();
   auto lhsOp = op;
+  auto out_val = op.getLhs();
   std::vector<Operation *> MultOpsToRemove;
   std::vector<Operation *> LTOpsToRemove;
 
@@ -581,6 +582,7 @@ mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(t
       auto MaskingAttr = builder.getStringAttr("none");
       Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
                                                                newRhs1Labels, newRhs2Labels, newResultLabels, affineMapArrayAttr, SemiringAttr,
+                                                               nullptr,
                                                                MaskingAttr, nullptr);
       tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
       tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
@@ -591,6 +593,7 @@ mlir::LogicalResult FindOptimalTCFactorizationPass::FindOptimalTCFactorization(t
 
     comet_debug() << "are they previous multop\n";
     MultOpsToRemove.front()->replaceAllUsesWith(ValueRange(newRhs1)); ///  replace the last multop with the new one
+    cast<TensorMultOp>(newRhs1.getDefiningOp()).getLhsMutable().assign(out_val);
     for (auto oldTcOp : ArrayRef(MultOpsToRemove).drop_front())
     {
       removeAllUsers(oldTcOp);

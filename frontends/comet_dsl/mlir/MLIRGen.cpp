@@ -52,11 +52,13 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <map>
 #include <numeric>
 #include <cstdlib> /// for random num generation
+#include <optional>
 #include <random>  /// for seed of random num generation
 #include <unordered_set>
 
@@ -82,7 +84,7 @@ int32_t defaultSpTensorIndiceBitWidth = 64; // TODO: We should be able to pass t
 using StringSet = std::set<std::string>;
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+// #define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 #undef COMET_DEBUG_MODE
 // *********** For debug purpose *********//
@@ -349,7 +351,7 @@ namespace
 
     // Emit a binary operation
     mlir::Value mlirGen(BinaryExprAST &binop,
-                        const std::set<std::string> &out_lbls = {}, std::string out_format = "")
+                        const std::set<std::string> &out_lbls = {}, std::string out_format = "", mlir::Value out_val = nullptr)
     {
       comet_debug() << " mlirGen for  BinaryExprAST \n";
       /// First emit the operations for each side of the operation before emitting
@@ -442,10 +444,10 @@ namespace
                       << __LINE__ << " rhsAST is not Expr_BinOp/Expr_LabeledTensor/CallExprAST/TransposeExprAST  \n";
       }
 
-      mlir::Value lhs = mlirGen(*binop.getLHS(), rhs_lbls);
+      mlir::Value lhs = mlirGen(*binop.getLHS(), rhs_lbls, "", binop.getOp() != '*' ?  out_val : nullptr);
       if (!lhs)
         return nullptr;
-      mlir::Value rhs = mlirGen(*binop.getRHS(), lhs_lbls);
+      mlir::Value rhs = mlirGen(*binop.getRHS(), lhs_lbls, "", nullptr);
       if (!rhs)
         return nullptr;
       auto location = loc(binop.loc());
@@ -535,7 +537,6 @@ namespace
         comet_vdump(rhs);
         comet_vdump(lhs);
 
-        comet_vdump(theOutput);
         auto scalarOp = builder.create<ScalarOp>(location, returnDataType, rhs, lhs, opAttr);
         comet_vdump(scalarOp);
         // symbolTable.insert(out_format, scalarOp);
@@ -977,6 +978,10 @@ namespace
         mlir::StringAttr MaskingAttr;
         /// Derive the operation name from the binary operator. At the moment we
         /// only support '+', '-','*'.
+        if(out_val && out_val.getType() != ret_tensor_type)
+        {
+          out_val = nullptr;
+        }
         switch (binop.getOp())
         {
         case '+':
@@ -985,6 +990,7 @@ namespace
           MaskingAttr = builder.getStringAttr("none");         // default for standard elementwise addition
           return builder.create<TensorAddOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                             newLhsLabels, newRhsLabels, newRetLabels, affineMapArrayAttr, SemiringAttr,
+                                            out_val,
                                              MaskingAttr);
         case '-':
           comet_debug() << "creating TensorSubtractOp\n";
@@ -992,6 +998,7 @@ namespace
           MaskingAttr = builder.getStringAttr("none");        // default for standard elementwise subtraction
           return builder.create<TensorSubtractOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                                   newLhsLabels, newRhsLabels, newRetLabels, affineMapArrayAttr, SemiringAttr,
+                                                  out_val,
                                                   MaskingAttr);
         case '*':
         {
@@ -1004,6 +1011,7 @@ namespace
           MaskingAttr = builder.getStringAttr("none");          // default for standard matrix multiplication
           mlir::Value tcop = builder.create<TensorMultOp>(location, ret_tensor_type, tensors[0], tensors[1],
                                                           newLhsLabels, newRhsLabels, newRetLabels, affineMapArrayAttr, SemiringAttr,
+                                                          out_val,
                                                           MaskingAttr, nullptr); // TODO: masking is an optional operand
           tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
           tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));
@@ -1022,6 +1030,7 @@ namespace
           MaskingAttr = builder.getStringAttr("none");             /// default for standard element-wise multiplication
           mlir::Value tcop = builder.create<TensorElewsMultOp>(location, ret_tensor_type, tensors[0], tensors[1], newLhsLabels, newRhsLabels, newRetLabels,
                                                                affineMapArrayAttr, SemiringAttr,
+                                                               out_val,
                                                                MaskingAttr);
 
           comet_vdump(tcop);
@@ -1248,17 +1257,17 @@ namespace
       }
       comet_debug() << "\n";
 
-      auto rhs = mlirGen(*tensor_op.getRHS(), out_labels, out_format);
+      auto rhs = mlirGen(*tensor_op.getRHS(), out_labels, out_format, lhs);
       if (!rhs)
         return nullptr;
       comet_debug() << " get rhs\n";
 
-      auto tens_beta = tensor_op.getBeta();
+      // auto tens_beta = tensor_op.getBeta();
 
       auto lhsName = cast<tensorAlgebra::LabeledTensorExprAST>(*tensor_op.getLHS())
           .getTensorName(); 
       symbolTable.insert(lhsName, rhs); 
-      lhs.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
+      // lhs.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 
       return rhs;
     }
@@ -1284,13 +1293,13 @@ namespace
 
     /// Dispatch codegen for the right expression subclass using RTTI.
     mlir::Value mlirGen(ExprAST &expr,
-                        const std::set<std::string> out_lbls = {}, std::string out_format = "")
+                        const std::set<std::string> out_lbls = {}, std::string out_format = "", mlir::Value val = nullptr)
     {
       comet_debug() << " mlirGen ExprAST " << expr.getKind() << " \n";
       switch (expr.getKind())
       {
       case tensorAlgebra::ExprAST::Expr_BinOp:
-        return mlirGen(cast<BinaryExprAST>(expr), out_lbls, out_format);
+        return mlirGen(cast<BinaryExprAST>(expr), out_lbls, out_format, val);
       case tensorAlgebra::ExprAST::Expr_Var:
         return mlirGen(cast<VariableExprAST>(expr));
       case tensorAlgebra::ExprAST::Expr_Literal:
@@ -1298,7 +1307,7 @@ namespace
       case tensorAlgebra::ExprAST::Expr_Call:
         return mlirGen(cast<CallExprAST>(expr));
       case tensorAlgebra::ExprAST::Expr_Transpose:
-        return mlirGen(cast<TransposeExprAST>(expr));
+        return mlirGen(cast<TransposeExprAST>(expr), out_lbls, out_format, val);
       case tensorAlgebra::ExprAST::Expr_Num:
         return mlirGen(cast<NumberExprAST>(expr));
       case tensorAlgebra::ExprAST::Expr_LabeledTensor:
@@ -1533,15 +1542,15 @@ namespace
 
       comet_debug() << " create TransposeOp\n";
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), lhs_tensor.getType(),
-                                                                       rhs_tensor, rhs_lbls_value, lhs_lbls_value, affineMapArrayAttr);
-      symbolTable.insert(lhsLT.getTensorName(), t)
+                                                                       rhs_tensor, rhs_lbls_value, lhs_lbls_value, affineMapArrayAttr, lhs_tensor);
+      symbolTable.insert(lhsLT.getTensorName(), t);
       comet_vdump(t);
 
       return t;
     }
 
     /// Handle tranpose(A[i,j], {j, i}) in DSL, when no lhs_LabeledTensor has been created.
-    mlir::Value mlirGen(TransposeExprAST &transpose)
+    mlir::Value mlirGen(TransposeExprAST &transpose,  const std::set<std::string> out_lbls = {}, std::string out_format = "", mlir::Value val= nullptr)
     {
       comet_debug() << "TransposeExprAST with no lhs labeled tensor \n";
 
@@ -1682,8 +1691,13 @@ namespace
 
       comet_debug() << " create TransposeOp\n";
       mlir::ShapedType shapedT = mlir::cast<mlir::ShapedType>(rhs_tensor.getType());
+      auto out_type = mlir::RankedTensorType::get(shape, shapedT.getElementType());
+      if(val && val.getType() != out_type)
+      {
+        val = nullptr;
+      }
       mlir::Value t = builder.create<mlir::tensorAlgebra::TransposeOp>(loc(transpose.loc()), mlir::RankedTensorType::get(shape, shapedT.getElementType()),
-                                                                       rhs_tensor, rhs_labels_val, lhs_labels_val, affineMapArrayAttr);
+                                                                       rhs_tensor, rhs_labels_val, lhs_labels_val, affineMapArrayAttr, val);
       comet_vdump(t);
 
       return t;
@@ -2366,6 +2380,7 @@ namespace
                                               rhs1_lbls_value, rhs2_lbls_value, lhs_lbls_value,
                                               affineMapArrayAttr,
                                               SemiringAttr,
+                                              tensors[2],
                                               MaskingAttr);
 
         comet_vdump(op);
@@ -2380,6 +2395,7 @@ namespace
                                                    rhs1_lbls_value, rhs2_lbls_value, lhs_lbls_value,
                                                    affineMapArrayAttr,
                                                    SemiringAttr,
+                                                   tensors[2],
                                                    MaskingAttr);
         comet_vdump(op);
         symbolTable.insert(exprs[2]->getTensorName(), op);
@@ -2392,6 +2408,7 @@ namespace
                                                rhs1_lbls_value, rhs2_lbls_value, lhs_lbls_value,
                                                affineMapArrayAttr,
                                                SemiringAttr,
+                                               tensors[2],
                                                MaskingAttr, maskVal);
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
@@ -2401,7 +2418,7 @@ namespace
       }
       else if (binop == tok_elews || binop == tok_monoid)
       {
-        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], rhs1_lbls_value, rhs2_lbls_value, lhs_lbls_value, affineMapArrayAttr, SemiringAttr, MaskingAttr);
+        auto op = builder.create<TensorElewsMultOp>(loc(tensor_op.loc()), tensors[2].getType(), tensors[0], tensors[1], rhs1_lbls_value, rhs2_lbls_value, lhs_lbls_value, affineMapArrayAttr, SemiringAttr, tensors[2], MaskingAttr);
         op.getOperation()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
         op.getOperation()->setAttr("__beta__", builder.getF64FloatAttr(tens_beta));
 

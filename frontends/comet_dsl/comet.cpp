@@ -467,7 +467,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// Concretize the domains of all the index variables
   optPM.addPass(mlir::comet::createIndexTreeDomainConcretizationPass());
 
-  if (OptKernelFusion || OptDimensionReduction)
+  if (OptDimensionReduction)
   {
     /// Reduce intermediate tensors' dimension after kernel fusion
     optPM.addPass(mlir::comet::createIndexTreeDimensionReductionPass());

@@ -166,13 +166,13 @@ namespace mlir
                  const std::vector<Operation *> &rhs2Labels,
                  const std::vector<Operation *> &lhsLabels);
 
-    void createTensorContraction(Location loc, Value rhs1Tensor,
-                                 ArrayRef<Value> rhs1Labels,
-                                 Value rhs2Tensor,
-                                 ArrayRef<Value> rhs2Labels, Value lhsTensor,
-                                 ArrayRef<Value> lhsLabels,
-                                 ConversionPatternRewriter &rewriter,
-                                 double beta = 0.0);
+    // void createTensorContraction(Location loc, Value rhs1Tensor,
+    //                              ArrayRef<Value> rhs1Labels,
+    //                              Value rhs2Tensor,
+    //                              ArrayRef<Value> rhs2Labels, Value lhsTensor,
+    //                              ArrayRef<Value> lhsLabels,
+    //                              ConversionPatternRewriter &rewriter,
+    //                              double beta = 0.0);
 
     std::vector<unsigned> constructPermutationMapAttr(const std::vector<Operation *> &rhs_labels,
                                                       const std::vector<Operation *> &lhs_labels);

@@ -832,10 +832,10 @@ void fuseITrees(IndexTreeOp new_itree,
   OpBuilder::InsertionGuard guard(rewriter);
   rewriter.setInsertionPoint(yield_op);
   /// TODO: Parallel execution does not seem to work properly when fusion is in place...
-  for(auto indexOp : host_index_ops)
-  {
-    indexOp.setIsParallel(false);
-  }
+  // for(auto indexOp : host_index_ops)
+  // {
+  //   indexOp.setIsParallel(false);
+  // }
   /// Fuse each other itree to the new itree.
   for (uint32_t tree_i = 1; tree_i < num_itrees; ++tree_i) {
     /// Create Index Ops: 1) Record the common index ops, then 2) add the new index ops.

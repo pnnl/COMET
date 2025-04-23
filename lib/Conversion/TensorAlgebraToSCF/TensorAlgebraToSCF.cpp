@@ -195,7 +195,7 @@ namespace
 
       /// There are tensors for transpose operation: input and output tensors
       unsigned int tensors_num = 2;
-      Value lhs;
+      Value lhs = op.getLhs();
 
       if (auto tensorT = dyn_cast<TensorType>(inputType))
       { /// for dense
@@ -210,8 +210,10 @@ namespace
             dims.push_back(dim);
           }
         }
-
-        lhs = rewriter.create<tensor::EmptyOp>(loc, op.getResult().getType(), dims); 
+        if(!lhs)
+        {
+          lhs = rewriter.create<tensor::EmptyOp>(loc, op.getResult().getType(), dims); 
+        }
 
         comet_vdump(lhs);
         // auto outputMemref = lhs.getDefiningOp()->getOperand(0);

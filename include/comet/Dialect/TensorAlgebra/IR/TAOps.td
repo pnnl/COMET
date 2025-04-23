@@ -353,6 +353,7 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
 
   let arguments = (ins TA_AnyTensor:$rhs1, TA_AnyTensor:$rhs2, Variadic<IndexLabel>:$rhs1_index_labels, Variadic<IndexLabel>:$rhs2_index_labels, Variadic<IndexLabel>:$result_index_labels, 
                    AffineMapArrayAttr:$indexing_maps, StrAttr:$semiring, 
+                   Optional<TA_AnyTensor>:$lhs,
                    OptionalAttr<StrAttr>:$MaskType,  /// TODO: try to use: DefaultValuedAttr
                    Optional<AnyType>:$mask);
 
@@ -373,6 +374,7 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure, AttrSizedOperandSegments]>{
                    Variadic<IndexLabel>:$rhs1_index_labels, Variadic<IndexLabel>:$rhs2_index_labels, Variadic<IndexLabel>:$result_index_labels, 
                    AffineMapArrayAttr:$indexing_maps, 
                    StrAttr:$semiring,
+                   Optional<TA_AnyTensor>:$lhs,
                    OptionalAttr<StrAttr>:$MaskType); 
   
   let results = (outs TA_AnyTensor);
@@ -403,7 +405,7 @@ def TensorDimOp : TA_Op<"dim", [Pure]>{
 def TransposeOp : TA_Op<"transpose",[Pure, AttrSizedOperandSegments]> {
   let summary = "transpose operation";
 
-  let arguments = (ins TA_AnyTensor:$rhs, Variadic<IndexLabel>:$rhs_index_labels, Variadic<IndexLabel>:$result_index_labels,  AffineMapArrayAttr:$indexing_maps);
+  let arguments = (ins TA_AnyTensor:$rhs, Variadic<IndexLabel>:$rhs_index_labels, Variadic<IndexLabel>:$result_index_labels,  AffineMapArrayAttr:$indexing_maps, Optional<TA_AnyTensor>:$lhs);
   
   let results = (outs TA_AnyTensor); 
 
@@ -437,6 +439,7 @@ def TensorAddOp : TA_Op<"add",
                    Variadic<IndexLabel>:$rhs1_index_labels, Variadic<IndexLabel>:$rhs2_index_labels, Variadic<IndexLabel>:$result_index_labels, 
                    AffineMapArrayAttr:$indexing_maps, 
                    StrAttr:$semiring,
+                   Optional<TA_AnyTensor>:$lhs,
                    OptionalAttr<StrAttr>:$MaskType); 
   
   let results = (outs TA_AnyTensor);
@@ -456,6 +459,7 @@ def TensorSubtractOp : TA_Op<"subtract",
                    Variadic<IndexLabel>:$rhs1_index_labels, Variadic<IndexLabel>:$rhs2_index_labels, Variadic<IndexLabel>:$result_index_labels, 
                    AffineMapArrayAttr:$indexing_maps, 
                    StrAttr:$semiring,
+                   Optional<TA_AnyTensor>:$lhs,
                    OptionalAttr<StrAttr>:$MaskType); 
   
   let results = (outs TA_AnyTensor);

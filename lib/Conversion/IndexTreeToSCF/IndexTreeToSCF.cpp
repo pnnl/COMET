@@ -1224,7 +1224,7 @@ namespace
         /// RHS operand is a constant value.
         return tensor;
       } else if((tensor_type = llvm::dyn_cast<mlir::TensorType>(tensor.getType()))){
-        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, crds);
+        return rewriter.create<tensor::ExtractOp>(loc, tensor_type.getElementType(), tensor, positions);
       } else {
         // LHS may not be constant (i.e. if we are inserting into a tensor that we need to resize), 
         // so cannot directly lower like we can the RHS

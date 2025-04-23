@@ -194,7 +194,8 @@ mlir::LogicalResult generalIndexOperationRewrite(
 
   Value rhs1_tensor = mult_op.getRhs1();
   Value rhs2_tensor = mult_op.getRhs2();
-  Value lhs_tensor;
+  Value lhs_tensor = mult_op.getLhs();
+
   SmallVector<Value, 4> dims; 
   auto shapeT = cast<ShapedType>(mult_op.getResult().getType());
   ArrayAttr indexing_maps = cast<ArrayAttr>(mult_op.getIndexingMaps());
@@ -223,18 +224,22 @@ mlir::LogicalResult generalIndexOperationRewrite(
   }
   assert(dims.size() == shapeT.getNumDynamicDims());
 
-  if(auto spTensorT = dyn_cast<SparseTensorType>(op->getResultTypes()[0]))
+  if(!lhs_tensor)
   {
-    lhs_tensor = rewriter.create<tensorAlgebra::SparseTensorDeclOp>(loc, shapeT, ValueRange(dims), false);
-  }
-  else if (auto tensorT = dyn_cast<TensorType>(op->getResultTypes()[0]))
-  {
-    lhs_tensor = rewriter.create<tensorAlgebra::DenseTensorDeclOp>(loc, shapeT, ValueRange(dims));
-    rewriter.create<tensorAlgebra::TensorFillOp>(
+
+    if(auto spTensorT = dyn_cast<SparseTensorType>(op->getResultTypes()[0]))
+    {
+      lhs_tensor = rewriter.create<tensorAlgebra::SparseTensorDeclOp>(loc, shapeT, ValueRange(dims), false);
+    }
+    else if (auto tensorT = dyn_cast<TensorType>(op->getResultTypes()[0]))
+    {
+      lhs_tensor = rewriter.create<tensorAlgebra::DenseTensorDeclOp>(loc, shapeT, ValueRange(dims));
+      rewriter.create<tensorAlgebra::TensorFillOp>(
         loc, 
         lhs_tensor,
         rewriter.getZeroAttr(tensorT.getElementType())); // initialize the tensor to zero
-    // lhs_tensor = rewriter.create<tensor::EmptyOp>(loc, shapeT, ValueRange(dims));
+        // lhs_tensor = rewriter.create<tensor::EmptyOp>(loc, shapeT, ValueRange(dims));
+    }
   }
 
   comet_vdump(rhs1_tensor);

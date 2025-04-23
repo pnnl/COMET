@@ -193,7 +193,7 @@ namespace
       comet_vdump(setnewop);
       comet_debug() << "\n";
 
-      Value rhs1Tensor = operands[0], rhs2Tensor = operands[1], lhsTensor;
+      Value rhs1Tensor = operands[0], rhs2Tensor = operands[1], lhsTensor = multop.getLhs();
 
       auto rhs1TensorType = cast<TensorType>(rhs1Tensor.getType());
       auto rhs2TensorType = cast<TensorType>(rhs2Tensor.getType());
@@ -227,7 +227,10 @@ namespace
       
       auto zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getZeroAttr(
           shapeT.getElementType()));
-      lhsTensor = rewriter.create<tensor::SplatOp>(loc, shapeT, zero, ValueRange(dims));
+      if(!lhsTensor)
+      {
+        lhsTensor = rewriter.create<tensor::SplatOp>(loc, shapeT, zero, ValueRange(dims));
+      }
 
       auto lhsTensorType =  cast<TensorType>(lhsTensor.getType());
 
