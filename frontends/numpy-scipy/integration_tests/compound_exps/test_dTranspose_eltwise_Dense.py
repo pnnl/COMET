@@ -1,26 +1,31 @@
-import time
 import numpy as np
-import scipy as sp
 from cometpy import comet
 
-def run_numpy(A, B):
-	C = A.transpose() * B
-
-	return C
+def run_numpy(A,B):
+	return A.transpose() * B
 
 @comet.compile(flags=None)
-def run_comet_with_jit(A, B):
-	C = A.transpose() * B
+def run_comet_return(A,B,C):
+	return A.transpose() * B
 
-	return C
+@comet.compile(flags=None)
+def run_comet_in_place(A,B,C):
+	C[:] = A.transpose() * B
 
-def test_dTranspose_eltwise_Dense():
+
+def init():
 	A = np.full([4, 4], 3.2,  dtype=float)
-	B = np.full([4, 4], 2.0,  dtype=float)
-	C = np.full([4, 4], 0.0,  dtype=float)
-	expected_result = run_numpy(A, B)
-	result_with_jit = run_comet_with_jit(A, B)
-	if sp.sparse.issparse(expected_result):
-		expected_result = expected_result.todense()
-		result_with_jit = result_with_jit.todense()
-	np.testing.assert_almost_equal(result_with_jit, expected_result)
+	B = np.full([4, 4], 2.0,  dtype=float)	
+	Cnp = run_numpy(A, B)
+	return A, B, Cnp
+
+def test_dTranspose_eltwise_Dense_in_place():
+	A, B, Cnp = init()
+	Ccp = np.full([4, 4], 0.0,  dtype=float)
+	run_comet_in_place(A, B, Ccp)
+	np.testing.assert_almost_equal(Ccp, Cnp)
+
+def test_dTranspose_eltwise_Dense_return():
+	A, B, Cnp = init()
+	Ccp = run_comet_return(A, B)
+	np.testing.assert_almost_equal(Ccp, Cnp)

@@ -167,7 +167,6 @@ def lower_einsum_expresion(args, kwargs, visitor, res_val = None):
                         res_symbol_indices.append(indice)
 
             res_format = visitor.sp_matmult_conversions[lhs.type.format][rhs.type.format]
-            print('EINSUM', actual_res_val)
             if semiring:
                 res = visitor.build(ops.TensorMatMultOp, lhs, rhs, lhs_indices, rhs_indices, res_symbol_indices, res_format, actual_res_val, 1.0, 0.0, mask, masktype, semiring).results[0]
             else:
@@ -283,7 +282,7 @@ class NewAstParser(ast.NodeVisitor):
                 DENSE : COO
             },
             DENSE: {
-                CSR : DENSE,
+                CSR : CSR,
                 COO : DENSE,
                 DENSE : DENSE,
             }
@@ -376,8 +375,6 @@ class NewAstParser(ast.NodeVisitor):
                         ip = self.get_insertion_point()
                         ip_to_insert = self.insertion_point[0]
                         while mem.block != ip_to_insert.block:
-                            print(mem.block)
-                            print(ip_to_insert)
                             ip_to_insert = ip_to_insert.block
                         self.set_insertion_point(ip_to_insert)
                         memref = self.build(ops.ToMemrefOp, mem)
@@ -458,21 +455,21 @@ class NewAstParser(ast.NodeVisitor):
             if isinstance(left.type, ShapedType):
                 indices = [self.build(ops.TensorIndexLabelOp).results[0] for d in left.type.shape] 
                 res_format = self.sp_elw_add_sub_conversions[left.type.format][right.type.format]
-                val = self.build(ops.TensorAddOp, left, right, indices, res_format, res_val)
+                val = self.build(ops.TensorAddOp, left, right, indices, res_format, res_val if res_val and res_format == res_val.type.format else None)
             else:
                 val = self.build(ops.AddOp, left, right)
         elif op == self.SUBOP:
             if isinstance(left.type, ShapedType):
                 indices = [self.build(ops.TensorIndexLabelOp).results[0] for d in left.type.shape] 
                 res_format = self.sp_elw_add_sub_conversions[left.type.format][right.type.format]
-                val = self.build(ops.TensorSubOp, left, right, indices, res_format, res_val)
+                val = self.build(ops.TensorSubOp, left, right, indices, res_format, res_val if res_val and res_format == res_val.type.format else None)
             else:
                 val = self.build(ops.SubOp, left, right)
         elif op == self.MULOP:
             if isinstance(left.type, ShapedType):
                 indices = [self.build(ops.TensorIndexLabelOp).results[0] for d in left.type.shape] 
                 res_format = self.sp_elw_mult_conversions[left.type.format][right.type.format]
-                val = self.build(ops.TensorMulOp, left, right, indices, res_format, res_val)
+                val = self.build(ops.TensorMulOp, left, right, indices, res_format, res_val if res_val and res_format == res_val.type.format else None)
             else:
                 val = self.build(ops.MulOp, left, right)
         elif op == self.MATMULOP:
@@ -486,7 +483,7 @@ class NewAstParser(ast.NodeVisitor):
             elif len(lhs_indices) == 1 and len(rhs_indices)  == 2:
                 res_indices = [rhs_indices[1]]
             res_format = self.sp_matmult_conversions[left.type.format][right.type.format]
-            val  = self.build(ops.TensorMatMultOp, left, right, lhs_indices, rhs_indices, res_indices, res_format, res_val)
+            val  = self.build(ops.TensorMatMultOp, left, right, lhs_indices, rhs_indices, res_indices, res_format, res_val if res_val and res_format == res_val.type.format else None)
         if res_format != DENSE:
             self.need_opt_comp_workspace = True
         if val:
@@ -571,16 +568,12 @@ class NewAstParser(ast.NodeVisitor):
         elif attr == 'transpose':
             indices = [self.build(ops.TensorIndexLabelOp).results[0] for d in values[0].type.shape]
             transpose_indices = [indices[1], indices[0]]
-            format = None
-            if isinstance(values[0].type, TensorType) or isinstance(values[0].type, MemrefType):
-                format = DENSE
-            elif isinstance(values[0].type, types.TASparseTensorType):
-                format = values[0].type.format
+            res_format = self.sp_mattr_conversions[values[0].type.format]
             if isinstance(values[0], MemrefType):
                 values[0] = self.build(ops.ToTensorOp, values[0]).results[0]
                 if isinstance(node.func.value, ast.Name):
                     self.symbol_table.insert(node.func.value.id, values[0])
-            res = self.build(ops.TensorTransposeOp, values[0], indices, transpose_indices,  format, res_val).results[0]
+            res = self.build(ops.TensorTransposeOp, values[0], indices, transpose_indices,  res_format, res_val if res_val and res_format == res_val.type.format else None).results[0]
             return res
         elif attr == 'einsum':
             res = lower_einsum_expresion(node.args, node.keywords, self, res_val)
@@ -735,7 +728,7 @@ class NewVisitor(ast.NodeVisitor):
                 DENSE : COO
             },
             DENSE: {
-                CSR : DENSE,
+                CSR : CSR,
                 COO : DENSE,
                 DENSE : DENSE,
             }
@@ -1442,7 +1435,7 @@ class NewVisitor(ast.NodeVisitor):
 
 
 #Wrapper function. The input function (in the form of an object) is passed an arguement to this function.
-def compile(flags, target:str = "cpu", with_jit=True):
+def compile(flags=None, target:str = "cpu", with_jit=True):
     def innerfunc(func):
 
         def wrapper(*pos_args, **kwargs):
