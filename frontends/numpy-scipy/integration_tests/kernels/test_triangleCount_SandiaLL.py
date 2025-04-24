@@ -13,7 +13,6 @@ def run_comet_with_jit(L0):
 	C =  ((L0 @ L0) * L0).sum()
 	return C
 
-@pytest.mark.skip(reason="Triangle counting currently fails")
 def test_triangleCount_SandiaLL(data_tc_path):
 	A = sp.sparse.csr_array(sp.io.mmread(data_tc_path))
 	L0 = sp.sparse.csr_array(sp.sparse.tril(A, format='csr'))

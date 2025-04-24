@@ -51,6 +51,7 @@
 #include "llvm/ADT/ScopedHashTable.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstddef>
 #include <cstdint>
@@ -445,6 +446,31 @@ namespace
       }
 
       mlir::Value lhs = mlirGen(*binop.getLHS(), rhs_lbls, "", binop.getOp() != '*' ?  out_val : nullptr);
+      mlir::Value lhs_res_val = nullptr;
+      if(auto tensor_op = mlir::dyn_cast_if_present<TensorMultOp>(lhs.getDefiningOp()))
+      {
+        lhs_res_val = tensor_op.getLhs();
+      }
+      else if(auto tensor_op = mlir::dyn_cast_if_present<TensorAddOp>(lhs.getDefiningOp()))
+      {
+        lhs_res_val = tensor_op.getLhs();
+      }
+      else if(auto tensor_op = mlir::dyn_cast_if_present<TensorElewsMultOp>(lhs.getDefiningOp()))
+      {
+        lhs_res_val = tensor_op.getLhs();
+      }
+      else if(auto tensor_op = mlir::dyn_cast_if_present<TensorSubtractOp>(lhs.getDefiningOp()))
+      {
+        lhs_res_val = tensor_op.getLhs();
+      }
+      else if(auto tensor_op = mlir::dyn_cast_if_present<mlir::tensorAlgebra::TransposeOp>(lhs.getDefiningOp()))
+      {
+        lhs_res_val = tensor_op.getLhs();
+      }
+      if(mlir::isa<BinaryExprAST, TransposeExprAST>(binop.getLHS()) && lhs_res_val)
+      {
+        out_val = lhs;
+      }
       if (!lhs)
         return nullptr;
       mlir::Value rhs = mlirGen(*binop.getRHS(), lhs_lbls, "", nullptr);
