@@ -263,6 +263,14 @@ mlir::LogicalResult generalIndexOperationRewrite(
   Region* body = &itree_op.getRegion();
   loc = body->getLoc();
   Block* block = rewriter.createBlock(body, {}, TypeRange(lhs_tensor.getType()), {lhs_tensor.getLoc()});
+  if(rhs1_tensor == lhs_tensor)
+  {
+    rhs1_tensor = block->getArgument(0);
+  }
+  if(rhs2_tensor == lhs_tensor)
+  {
+    rhs2_tensor = block->getArgument(0);
+  }
   lhs_tensor = block->getArgument(0);
   comet_vdump(itree_op);
   comet_pdump(block);
