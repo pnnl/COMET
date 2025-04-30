@@ -793,9 +793,14 @@ struct OptDenseTranspose : public ConversionPattern
       in_ivs[optimalOrder[i]]  = forAll.getLoopInductionVars()->data()[i];
       out_ivs[optimalOrder[outputIndices[0][i]]] = forAll.getLoopInductionVars()->data()[i];
     }
-    auto extracts = rewriter.create<tensor::ExtractSliceOp>(loc, input, in_ivs, ones, ones);
+    auto read_slice = rewriter.create<tensor::ExtractSliceOp>(loc, input, in_ivs, ones, ones);
+    auto write_slice = rewriter.create<tensor::ExtractSliceOp>(loc, forAll.getRegionIterArgs().front(), out_ivs, ones, ones);
+    SmallVector<Value, 4> zeros_indices(in_ivs.size(), rewriter.create<ConstantIndexOp>(loc, 0));
+
+    auto extracted = rewriter.create<tensor::ExtractOp>(loc, read_slice, zeros_indices); 
+    auto inserted = rewriter.create<tensor::InsertOp>(loc, extracted, write_slice, zeros_indices);
     rewriter.setInsertionPointToEnd(forAll.getTerminator().getBody());
-    rewriter.create<tensor::ParallelInsertSliceOp>(loc, extracts, forAll.getRegionIterArgs().front(), out_ivs, ones, ones);
+    rewriter.create<tensor::ParallelInsertSliceOp>(loc, inserted, forAll.getRegionIterArgs().front(), out_ivs, ones, ones);
 
     rewriter.replaceAllUsesWith(op->getResult(0), forAll->getResult(0));
     rewriter.eraseOp(op);
