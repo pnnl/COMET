@@ -45,8 +45,8 @@
     cntx) bli_dgemm_haswell_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
 
 #elif defined(__aarch64__) || defined(__arm__) || defined(_M_ARM) || defined(_ARCH_PPC)
-void bli_dgemm_arm_ukr(\
-    m,\ 
+#define bli_dgemm_arm_ukr(\
+    m,\
     n,\
     k,\
     alpha,\
@@ -54,7 +54,7 @@ void bli_dgemm_arm_ukr(\
     b,\
     beta,\
     c, rs_c0, cs_c0,\
-    data,\ 
+    data,\
     cntx) bli_dgemm_armv8a_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
 #endif
 
@@ -141,8 +141,8 @@ void dgemm_generic_noopt_mxn(
 };
 
 extern "C" void _mlir_ciface_linalg_matmul_viewsxs_viewsxs_viewsxs(
-    StridedMemRefType<double, 2> *A, StridedMemRefType<double, 2> *B,
-    StridedMemRefType<double, 2> *C, int mr, int nr, double alpha, double beta)
+    StridedMemRefType<double, 2> *restrict A, StridedMemRefType<double, 2> *restrict B,
+    StridedMemRefType<double, 2> *restrict C, int mr, int nr, double alpha, double beta)
 {
   auxinfo_t data;
   bli_auxinfo_set_next_a(A->data + A->offset, &data);
