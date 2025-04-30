@@ -338,8 +338,7 @@ void LateLoweringPass::runOnOperation()
 
   /// PrintOp Lowering insert function call, so mark some operations as a legal Operation
   target.addLegalOp<func::CallOp,                           /// for function calls
-                    tensorAlgebra::SparseTensorConstructOp, /// in the case printing sparse tensor
-                    tensorAlgebra::TensorSetOp              /// in the case assigning the result of the operation to the final output
+                    tensorAlgebra::SparseTensorConstructOp /// in the case printing sparse tensor
                     >();
 
   /// Now that the conversion target has been defined, we just need to provide

@@ -15,17 +15,19 @@ class Dialect:
 
 class Operation:
     
-    def __init__(self, operands, result_types, startsBody = False, endsBody = False):
+    def __init__(self, block, index_in_block, operands, result_types, startsBody = False, endsBody = False):
         self.startsBody = startsBody
         self.endsBody = endsBody
         self.operands = operands
-        self.results = [Symbol(t) for t in result_types]
+        self.index_in_block = index_in_block
+        self.block = block
+        self.results = [Symbol(t, self, block) for t in result_types]
 
 
 class BinaryElementwiseOp(Operation):
 
-    def __init__(self, lhs, rhs, _type = None):
-        super().__init__([lhs, rhs], [_type if _type else lhs.type])
+    def __init__(self, block, iiblock, lhs, rhs, _type = None):
+        super().__init__(block, iiblock, [lhs, rhs], [_type if _type else lhs.type])
         self.lhs = lhs
         self.rhs = rhs
     
@@ -46,8 +48,8 @@ class BinaryElementwiseOp(Operation):
 
 class SubOp(BinaryElementwiseOp):
 
-    def __init__(self, lhs, rhs):
-        super().__init__(lhs, rhs)
+    def __init__(self, block, iiblock, lhs, rhs):
+        super().__init__(block, iiblock, lhs, rhs)
 
     def dump(self):
         name = self.text.render(
@@ -62,8 +64,8 @@ class SubOp(BinaryElementwiseOp):
 
 class MulOp(BinaryElementwiseOp):
 
-    def __init__(self, lhs, rhs):
-        super().__init__(lhs, rhs)
+    def __init__(self, block, iiblock, lhs, rhs):
+        super().__init__(block, iiblock, lhs, rhs)
 
     def dump(self):
         name = self.text.render(
@@ -77,7 +79,7 @@ class MulOp(BinaryElementwiseOp):
     )
 
 class TensorIndexBasedOp(Operation):
-    def __init__(self, name, inputs, inputs_indices, res_indices, res_format, alpha = None, beta = None , mask = None, mask_type = None, semiring = None):
+    def __init__(self, block, iiblock, name, inputs, inputs_indices, res_indices, res_format, res_val = None, alpha = None, beta = None , mask = None, mask_type = None, semiring = None):
         self.name = name
         self.inputs = inputs
         self.inputs_indices = inputs_indices
@@ -86,6 +88,7 @@ class TensorIndexBasedOp(Operation):
         self.alpha = alpha
         self.beta = beta
         self.mask = mask
+        self.res_val = res_val
 
         self.res_indices = res_indices
         all_indices = inputs_indices[0][:]
@@ -123,7 +126,6 @@ class TensorIndexBasedOp(Operation):
 
         affine_maps.append(affine_map_res)
         self.indexing_maps = ",".join(affine_maps)
-
         if res_format != DENSE:
             for input in inputs:
                 if isinstance(input.type, TASparseTensorType):
@@ -131,46 +133,54 @@ class TensorIndexBasedOp(Operation):
             res_type = TASparseTensorType(res_shape, inputs[0].type.element_type, indices_type, res_format)
         else:
             res_type = TensorType(res_shape, inputs[0].type.element_type)
-            
-        super().__init__([*inputs, *inputs_indices, res_indices], [res_type])
+        if self.res_val:
+            super().__init__(block, iiblock, [*inputs, *inputs_indices, res_indices, self.res_val], [res_type])
+        else:
+            super().__init__(block, iiblock, [*inputs, *inputs_indices, res_indices], [res_type])
 
     def dump(self):
-        num_indices = len(self.res_indices)
-        for indices in self.inputs_indices :
-            num_indices += len(indices)
+        input_index_label_nums = ", ".join([str(len(indices)) for indices in self.inputs_indices])
+        all_index_label_nums = ", ".join([input_index_label_nums, (str(len(self.res_indices)))])
         input_types = ", ".join([
                 ",".join([f'{input.type}' for input in self.inputs])
                 , ", ".join([f'{index.type}' for indices in self.inputs_indices for index in indices])
                 , ", ".join([f'{oper.type}' for oper in self.res_indices])]) 
         if self.mask != None:
             input_types += f", {self.mask.type}"
+        if self.res_val != None:
+            input_types += f", {self.res_val.type}"
+        if self.mask_type:
+            segment_sizes = ", ".join([", ".join('1' * len(self.inputs)), all_index_label_nums, '1' if self.res_val else '0', '1' if self.mask_type != 'none' else '0'])
+        else:
+            segment_sizes = ", ".join([", ".join('1' * len(self.inputs)), all_index_label_nums, '1' if self.res_val else '0'])
         return self.tensor_binary_op_text.render(
             
             ssa = self.results[0].ssa,
             name = self.name,
-            inputs = ",".join([f'%{input.ssa}' for input in self.inputs]),
-            inputs_indices = ",".join([f'%{index.ssa}' for indices in self.inputs_indices for index in indices]),
-            res_indices = ",".join([f'%{input.ssa}' for input in self.res_indices]),
+            inputs = ", ".join([f'%{input.ssa}' for input in self.inputs]),
+            inputs_indices = ", ".join([f'%{index.ssa}' for indices in self.inputs_indices for index in indices]),
+            res_indices = ", ".join([f'%{input.ssa}' for input in self.res_indices]),
             mask_type = self.mask_type,
             mask = self.mask,
             semiring = self.semiring,
             input_types = input_types,
             res_type = self.results[0].type,
             affine_maps = self.indexing_maps,
-            operand_segment_sizes = ", ".join([", ".join('1' * len(self.inputs)), str(num_indices), '1' if self.mask_type and self.mask_type != 'none' else '0']),
+            operand_segment_sizes = segment_sizes,
+            res_val = self.res_val,
             alpha = self.alpha,
             beta = self.beta,
         )
     
     tensor_binary_op_text = jinja2.Template(
-        '%{{ssa}} = "{{name}}" ({{inputs}}, {{inputs_indices}}, {{res_indices}} {%if mask!=None%}, %{{mask.ssa}}{%endif%} ) <{ {% if mask_type%} MaskType = "{{mask_type}}", {% endif%} indexing_maps = [{{affine_maps}}] {% if semiring%}, operandSegmentSizes = array<i32: {{operand_segment_sizes}}>, semiring="{{semiring}}" {%endif%}}>  {%if alpha != None   or beta != None %} { {%endif%} {%if alpha!= None%} __alpha__ = {{alpha}} : f64 {%endif%} {%if alpha!= None and beta!= None %}, {%endif%} {%if beta!= None %} __beta__ = {{beta}}: f64 {%endif%} {%if alpha!= None or beta!= None %}} {%endif%} : ({{input_types}}) -> {{res_type}}',
+        '%{{ssa}} = "{{name}}" ({{inputs}}, {{inputs_indices}}, {{res_indices}}{%if res_val!=None%}, %{{res_val.ssa}}{%endif%}{%if mask!=None%}, %{{mask.ssa}}{%endif%}) <{ {% if mask_type%} MaskType = "{{mask_type}}", {% endif%} indexing_maps = [{{affine_maps}}], operandSegmentSizes = array<i32: {{operand_segment_sizes}}>{% if semiring%} , semiring="{{semiring}}" {%endif%}}>  {%if alpha != None   or beta != None %} { {%endif%} {%if alpha!= None%} __alpha__ = {{alpha}} : f64 {%endif%} {%if alpha!= None and beta!= None %}, {%endif%} {%if beta!= None %} __beta__ = {{beta}}: f64 {%endif%} {%if alpha!= None or beta!= None %}} {%endif%} : ({{input_types}}) -> {{res_type}}',
         undefined=jinja2.StrictUndefined,
     )
 
 class TensorBinaryOp(TensorIndexBasedOp):
 
-    def __init__(self, name, lhs, rhs, lhs_indices, rhs_indices, res_indices, alpha, beta, mask, masktype, semiring, res_format):
-        super().__init__(name, [lhs, rhs], [lhs_indices, rhs_indices], res_indices, res_format, alpha, beta, mask, masktype, semiring)
+    def __init__(self, block, iiblock, name, lhs, rhs, lhs_indices, rhs_indices, res_indices, res_val, alpha, beta, mask, masktype, semiring, res_format):
+        super().__init__(block, iiblock, name, [lhs, rhs], [lhs_indices, rhs_indices], res_indices, res_format, res_val, alpha, beta, mask, masktype, semiring)
         self.lhs = lhs
         self.lhs_indices = lhs_indices
         self.rhs = rhs
@@ -185,8 +195,8 @@ class TensorBinaryOp(TensorIndexBasedOp):
 
 class TensorElewiseBinaryOp(TensorBinaryOp):
 
-    def __init__(self, name, lhs, rhs, lhs_indices, alpha, beta, semiring, format):
-        super().__init__(name, lhs, rhs, lhs_indices, lhs_indices, lhs_indices, alpha, beta, None, "none", semiring, format)
+    def __init__(self, block, iiblock, name, lhs, rhs, lhs_indices, res_val, alpha, beta, semiring, format):
+        super().__init__(block, iiblock, name, lhs, rhs, lhs_indices, lhs_indices, lhs_indices, res_val, alpha, beta, None, None, semiring, format)
 
     def dump(self):
         return super().dump()
@@ -194,8 +204,8 @@ class TensorElewiseBinaryOp(TensorBinaryOp):
 
 class TensorIndexLabelOp(Operation):
 
-    def __init__(self):
-        super().__init__([], [TensorIndexType()])
+    def __init__(self, block, iiblock):
+        super().__init__(block, iiblock, [], [TensorIndexType()])
 
     def dump(self):
         return self.text.render(
@@ -209,32 +219,32 @@ class TensorIndexLabelOp(Operation):
 
 class TensorAddOp(TensorElewiseBinaryOp):
 
-    def __init__(self, lhs, rhs, res_indices, format, alpha = 1.0, beta= 0.0, semiring= "noop_plusxy"):
-        super().__init__('ta.add', lhs, rhs, res_indices, alpha, beta, semiring, format)
+    def __init__(self, block, iiblock, lhs, rhs, res_indices, format, res_val, alpha = 1.0, beta= 0.0, semiring= "noop_plusxy"):
+        super().__init__(block, iiblock, 'ta.add', lhs, rhs, res_indices, res_val, alpha, beta, semiring, format)
 
     def dump(self):
         return super().dump()
 
 class TensorSubOp(TensorElewiseBinaryOp):
 
-    def __init__(self, lhs, rhs, res_indices, format, alpha = 1.0, beta= 0.0, semiring= "noop_minus"):
-        super().__init__('ta.subtract', lhs, rhs, res_indices, alpha, beta, semiring, format)
+    def __init__(self, block, iiblock, lhs, rhs, res_indices, format, res_val, alpha = 1.0, beta= 0.0, semiring= "noop_minus"):
+        super().__init__(block, iiblock, 'ta.subtract', lhs, rhs, res_indices, res_val, alpha, beta, semiring, format)
 
     def dump(self):
         return super().dump()
 
 class TensorMulOp(TensorElewiseBinaryOp):
 
-    def __init__(self, lhs, rhs, res_indices, format, alpha = 1.0, beta= 0.0, semiring= "noop_times"):
-        super().__init__('ta.elews_mul', lhs, rhs, res_indices, alpha, beta, semiring, format)
+    def __init__(self, block, iiblock, lhs, rhs, res_indices, format, res_val, alpha = 1.0, beta= 0.0, semiring= "noop_times"):
+        super().__init__(block, iiblock, 'ta.elews_mul', lhs, rhs, res_indices, res_val, alpha, beta, semiring, format)
 
     def dump(self):
         return super().dump()
 
 class TensorTransposeOp(TensorIndexBasedOp):
 
-    def __init__(self, input, input_indices, res_indices, res_format):
-        super().__init__('ta.transpose', [input], [input_indices], res_indices, res_format)
+    def __init__(self, block, iiblock, input, input_indices, res_indices, res_format, res_val):
+        super().__init__(block, iiblock, 'ta.transpose', [input], [input_indices], res_indices, res_format, res_val)
         self.input = input
         self.input_indices = input_indices
         self.res_indices = res_indices
@@ -245,8 +255,8 @@ class TensorTransposeOp(TensorIndexBasedOp):
 
 class TensorSumOp(Operation):
 
-    def __init__(self, value):
-        super().__init__([value], [value.type.element_type])
+    def __init__(self, block, iiblock, value):
+        super().__init__(block, iiblock, [value], [value.type.element_type])
         self.value = value
 
     def dump(self):
@@ -263,8 +273,8 @@ class TensorSumOp(Operation):
 
 class TensorSetOp(Operation): 
 
-    def __init__(self, src, dst, beta):
-        super().__init__([src, dst], [])
+    def __init__(self, block, iiblock, src, dst, beta):
+        super().__init__(block, iiblock, [src, dst], [])
         self.src = src
         self.dst = dst
         self.beta = beta
@@ -286,8 +296,8 @@ class TensorSetOp(Operation):
 
 class TensorPrintOp(Operation):
 
-    def __init__(self, input):
-        super().__init__([input], [])
+    def __init__(self, block, iiblock, input):
+        super().__init__(block, iiblock, [input], [])
         self.input = input
     
     def dump(self):
@@ -304,14 +314,14 @@ class TensorPrintOp(Operation):
 
 class TensorMatMultOp(TensorBinaryOp):
 
-    def __init__(self, lhs, rhs, lhs_indices, rhs_indices, res_indices, res_format, alpha = 1.0, beta = 0.0, mask = None, masktype='none', semiring='plusxy_times'):
-        super().__init__('ta.mul', lhs, rhs, lhs_indices, rhs_indices, res_indices, alpha, beta, mask, masktype, semiring, res_format)
+    def __init__(self, block, iiblock, lhs, rhs, lhs_indices, rhs_indices, res_indices, res_format, res_val, alpha = 1.0, beta = 0.0, mask = None, masktype='none', semiring='plusxy_times'):
+        super().__init__(block, iiblock, 'ta.mul', lhs, rhs, lhs_indices, rhs_indices, res_indices, res_val, alpha, beta, mask, masktype, semiring, res_format)
 
 
 class AddOp(BinaryElementwiseOp):
 
-    def __init__(self, lhs, rhs):
-        super().__init__(lhs, rhs)
+    def __init__(self, bloc, iiblock, lhs, rhs):
+        super().__init__(bloc, iiblock, lhs, rhs)
 
     def dump(self):
         name = self.text.render(
@@ -327,7 +337,7 @@ class AddOp(BinaryElementwiseOp):
 
 class ConstantOp(Operation):
 
-    def __init__(self, val):
+    def __init__(self, block, iiblock, val):
         self.value = val
 
         if isinstance(val, int):
@@ -335,7 +345,7 @@ class ConstantOp(Operation):
         elif isinstance(val, float):
             _type = 'f64'
         
-        super().__init__([], [_type])
+        super().__init__(block, iiblock, [], [_type])
 
     def dump(self):
         return self.text.render(
@@ -351,8 +361,8 @@ class ConstantOp(Operation):
 
 class ToMemrefOp(Operation):
 
-    def __init__(self, src):
-        super().__init__([src], [MemrefType(src.type.shape, src.type.element_type)])
+    def __init__(self, block, iiblock, src):
+        super().__init__(block, iiblock, [src], [MemrefType(src.type.shape, src.type.element_type)])
         self.src = src
 
 
@@ -368,11 +378,30 @@ class ToMemrefOp(Operation):
         '%{{ssa}} = bufferization.to_memref %{{src}}: {{res_type}} '
     )
 
+class ToTensorOp(Operation):
+
+    def __init__(self, block, iiblock, src):
+        super().__init__(block, iiblock, [src], [TensorType(src.type.shape, src.type.element_type)])
+        self.src = src
+
+
+    def dump(self):
+        return self.text.render(
+            ssa = self.results[0].ssa,
+            src = self.src.ssa,
+            src_type = self.src.type,
+        )
+
+
+    text = jinja2.Template (
+        '%{{ssa}} = bufferization.to_tensor %{{src}} restrict writable : {{src_type}} '
+    )
+
 
 class LoadOp(Operation):
 
-    def __init__(self, src, indices):
-        super().__init__([src] + indices, [src.type.element_type])
+    def __init__(self, block, iiblock, src, indices):
+        super().__init__(block, iiblock, [src] + indices, [src.type.element_type])
         self.src = src
         self.indices = indices
 
@@ -391,8 +420,8 @@ class LoadOp(Operation):
 
 class StoreOp(Operation):
 
-    def __init__(self, value, dst, indices):
-        super().__init__([value, dst] + indices, [])
+    def __init__(self, block, iiblock, value, dst, indices):
+        super().__init__(block, iiblock, [value, dst] + indices, [])
         self.value = value
         self.dst = dst
         self.indices = indices
@@ -414,9 +443,11 @@ class StoreOp(Operation):
 class Symbol:
     curr_ssa = 0
 
-    def __init__(self, _type):
+    def __init__(self, _type, defining_op, block):
         self.ssa = Symbol.curr_ssa
         self.type = _type
+        self.defining_op = defining_op
+        self.block = block
         Symbol.curr_ssa += 1
 
 class SymbolTable:
@@ -436,8 +467,8 @@ class SymbolTable:
 
 class YieldOp(Operation):
 
-    def __init__(self, values):
-        super().__init__(values, [v.type for v in values], endsBody=True)
+    def __init__(self, block, iiblock, values):
+        super().__init__(block, iiblock, values, [v.type for v in values], endsBody=True)
         self. values = values
 
     def dump(self):
@@ -453,8 +484,8 @@ class YieldOp(Operation):
     
 class ReduceOp(Operation):
 
-    def __init__(self, values):
-        super().__init__(values, [v.type for v in values], endsBody=True)
+    def __init__(self, block, iiblock, values):
+        super().__init__(block, iiblock, values, [v.type for v in values], endsBody=True)
         self. values = values
 
     def dump(self):
@@ -471,8 +502,8 @@ class ReduceOp(Operation):
 
 class ReturnOp(Operation):
 
-    def __init__(self, values):
-        super().__init__(values, [v.type for v in values], endsBody=True)
+    def __init__(self, block, iiblock, values):
+        super().__init__(block, iiblock, values, [v.type for v in values], endsBody=True)
         self. values = values
 
     def dump(self):
@@ -489,8 +520,8 @@ class ReturnOp(Operation):
 
 class OperationWithBody(Operation):
 
-    def __init__(self, operands, return_types):
-        super().__init__(operands, return_types, True)
+    def __init__(self, block, iiblock, operands, return_types):
+        super().__init__(block, iiblock, operands, return_types, True)
         self.body = []
         self.identation  = 0
 
@@ -514,8 +545,8 @@ class OperationWithBody(Operation):
 
 class ModuleOp(OperationWithBody):
 
-    def __init__(self):
-        super().__init__([], [])
+    def __init__(self, block, iiblock):
+        super().__init__(block, iiblock, [], [])
 
     def dump(self) -> str:
         op = self.text.render()
@@ -536,12 +567,14 @@ class FuncOp(OperationWithBody):
 
     def __init__(
         self,
+        block,
+        iiblock,
         func_name: str,
         inputs,
         return_types,
         private: bool,
     ) -> None:
-        super().__init__([], return_types)
+        super().__init__(block, iiblock, [], return_types)
         self.func_name = func_name
         self.inputs = inputs
         self.return_types = return_types
@@ -559,12 +592,12 @@ class FuncOp(OperationWithBody):
 
 class ForOp(OperationWithBody):
 
-    def __init__(self, lb, ub, step):
-        super().__init__([lb, ub, step], [])
+    def __init__(self, block, iiblock, lb, ub, step):
+        super().__init__(block, iiblock, [lb, ub, step], [])
         self.lb = lb
         self.ub = ub
         self.step = step
-        self.iv = Symbol('index')
+        self.iv = Symbol('index', None, self)
 
     def dump(self):
         op =  self.text.render(
@@ -584,12 +617,12 @@ class ForOp(OperationWithBody):
 
 class ForAllOp(OperationWithBody):
 
-    def __init__(self, lb, ub, step):
-        super().__init__([lb, ub, step], [])
+    def __init__(self, block, iiblock, lb, ub, step):
+        super().__init__(block, iiblock, [lb, ub, step], [])
         self.lb = lb
         self.ub = ub
         self.step = step
-        self.iv = Symbol('index')
+        self.iv = Symbol('index', None, self)
 
     def dump(self):
         my_render = self.text.render(

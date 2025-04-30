@@ -1,26 +1,43 @@
-import time
 import numpy as np
 import scipy as sp
 from cometpy import comet
+import pytest
 
 def run_numpy(A, B):
 	C = A.transpose() * B
 
 	return C
 
-@comet.compile(flags=None)
-def run_comet_with_jit(A, B):
-	C = A.transpose() * B
+@comet.compile()
+def run_comet_return(A, B):
+	return A.transpose() * B
 
-	return C
+@comet.compile()
+def run_comet_in_place(A, B, C):
+	C[:] = A.transpose() * B
 
-def test_dTranspose_eltwise_CSR(data_rank2_path):
+def init(data_rank2_path):
 	B = sp.sparse.csr_array(sp.io.mmread(data_rank2_path))
 	A = np.full([B.shape[1], B.shape[0]], 3.2,  dtype=float)
-	expected_result = run_numpy(A, B)
-	result_with_jit = run_comet_with_jit(A, B)
-	if sp.sparse.issparse(expected_result):
-		expected_result = expected_result.todense()
-	if sp.sparse.issparse(result_with_jit):
-		result_with_jit = result_with_jit.todense()
-	np.testing.assert_almost_equal(result_with_jit, expected_result)
+	Cnp = run_numpy(A, B)
+	return A, B, Cnp
+
+def test_dTranspose_eltwise_CSR_return(data_rank2_path):
+	A, B, Cnp = init(data_rank2_path)
+	Ccp = run_comet_return(A, B)
+	if sp.sparse.issparse(Cnp):
+		Cnp = Cnp.todense()
+	if sp.sparse.issparse(Ccp):
+		Ccp = Ccp.todense()
+	np.testing.assert_almost_equal(Ccp, Cnp)
+
+@pytest.mark.skip('In place mutation of sparse matrices is not supported yet')
+def test_dTranspose_eltwise_CSR_in_place(data_rank2_path):
+	A, B, Cnp = init(data_rank2_path)
+	Ccp = sp.sparse.csr_array((B.shape[0], B.shape[1]), dtype = float) 
+	run_comet_in_place(A, B, Ccp)
+	if sp.sparse.issparse(Cnp):
+		Cnp = Cnp.todense()
+	if sp.sparse.issparse(Ccp):
+		Ccp = Ccp.todense()
+	np.testing.assert_almost_equal(Ccp, Cnp)

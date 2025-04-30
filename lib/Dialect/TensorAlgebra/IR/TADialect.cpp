@@ -41,6 +41,7 @@
 #include "mlir/Dialect/Bufferization/IR/DstBufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h"
 #include "llvm/ADT/TypeSwitch.h"
+#include "llvm/Support/LogicalResult.h"
 
 using namespace mlir;
 using namespace mlir::tensorAlgebra;
@@ -272,6 +273,107 @@ void TensorDimOp::build(mlir::OpBuilder &builder, mlir::OperationState &result,
   build(builder, result, builder.getIndexType(), source, indexValue);
 }
 
+
+LogicalResult TensorMultOp::verify()
+{
+  if(getRhs1IndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getRhs1().getType()).getRank()))
+  {
+    emitError("number of index labels for RHS1 does not match its rank");
+    return failure();
+  }
+  if(getRhs2IndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getRhs2().getType()).getRank()))
+  {
+    emitError("number of index labels for RHS2 does not match its rank");
+    return failure();
+  }
+  if(getResultIndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getResult().getType()).getRank()))
+  {
+    emitError("number of index labels for result does not match its rank");
+    return failure();
+  }
+
+  return success();
+}
+
+LogicalResult TensorAddOp::verify()
+{
+  if(getRhs1IndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getRhs1().getType()).getRank()))
+  {
+    emitError("number of index labels for RHS1 does not match its rank");
+    return failure();
+  }
+  if(getRhs2IndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getRhs2().getType()).getRank()))
+  {
+    emitError("number of index labels for RHS2 does not match its rank");
+    return failure();
+  }
+  if(getResultIndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getResult().getType()).getRank()))
+  {
+    emitError("number of index labels for result does not match its rank");
+    return failure();
+  }
+
+  return success();
+}
+
+LogicalResult TensorSubtractOp::verify()
+{
+  if(getRhs1IndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getRhs1().getType()).getRank()))
+  {
+    emitError("number of index labels for RHS1 does not match its rank");
+    return failure();
+  }
+  if(getRhs2IndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getRhs2().getType()).getRank()))
+  {
+    emitError("number of index labels for RHS2 does not match its rank");
+    return failure();
+  }
+  if(getResultIndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getResult().getType()).getRank()))
+  {
+    emitError("number of index labels for result does not match its rank");
+    return failure();
+  }
+
+  return success();
+}
+
+LogicalResult TensorElewsMultOp::verify()
+{
+  if(getRhs1IndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getRhs1().getType()).getRank()))
+  {
+    emitError("number of index labels for RHS1 does not match its rank");
+    return failure();
+  }
+  if(getRhs2IndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getRhs2().getType()).getRank()))
+  {
+    emitError("number of index labels for RHS2 does not match its rank");
+    return failure();
+  }
+  if(getResultIndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getResult().getType()).getRank()))
+  {
+    emitError("number of index labels for result does not match its rank");
+    return failure();
+  }
+
+  return success();
+}
+
+LogicalResult TransposeOp::verify()
+{
+  if(getRhsIndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getRhs().getType()).getRank()))
+  {
+    emitError("number of index labels for RHS1 does not match its rank");
+    return failure();
+  }
+
+  if(getResultIndexLabels().size() != static_cast<size_t>(mlir::cast<ShapedType>(getResult().getType()).getRank()))
+  {
+    emitError("number of index labels for result does not match its rank");
+    return failure();
+  }
+
+  return success();
+}
 
 /// Sort Op
 bool hasFuncDeclaration(ModuleOp &module, std::string funcName)

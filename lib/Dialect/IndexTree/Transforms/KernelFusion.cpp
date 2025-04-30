@@ -75,7 +75,7 @@ Value getRealLhsTensor(IndexTreeOp itree,
     block_args.push_back(arg);
   }
   llvm::SmallVector<Value> itree_args;
-  for (Value arg : itree.getInputs()) {
+  for (Value arg : itree->getResults()) {
     itree_args.push_back(arg);
   }
 
@@ -502,7 +502,6 @@ IndexTreeOp createNewITree(IndexTreeOp host_itree,
                            mlir::Location &loc)
 {
   OpBuilder::InsertionGuard guard(rewriter);
-  rewriter.setInsertionPoint(host_itree);
   /// Create the new itree
   llvm::SmallVector<Location> locs;
 //  for (Value arg : itree_arguments) {
@@ -833,10 +832,10 @@ void fuseITrees(IndexTreeOp new_itree,
   OpBuilder::InsertionGuard guard(rewriter);
   rewriter.setInsertionPoint(yield_op);
   /// TODO: Parallel execution does not seem to work properly when fusion is in place...
-  for(auto indexOp : host_index_ops)
-  {
-    indexOp.setIsParallel(false);
-  }
+  // for(auto indexOp : host_index_ops)
+  // {
+  //   indexOp.setIsParallel(false);
+  // }
   /// Fuse each other itree to the new itree.
   for (uint32_t tree_i = 1; tree_i < num_itrees; ++tree_i) {
     /// Create Index Ops: 1) Record the common index ops, then 2) add the new index ops.
@@ -977,6 +976,7 @@ void createITree(
 
   /// Create the new itree.
   llvm::SmallVector<Value> itree_to_new_compute_op;
+  rewriter.setInsertionPointAfter(itree_list.back());
   IndexTreeOp new_itree = createNewITree(host_itree,
                                          tree_types,
 //                                         itree_arguments,
@@ -989,7 +989,6 @@ void createITree(
                                          context,
                                          rewriter,
                                          loc);
-
   /// Fuse other itrees to the new itree
   fuseITrees(new_itree,
              num_itrees,
@@ -1012,26 +1011,23 @@ void createITree(
   /// Update the usage of results of itree
   /// Erase uses of output of kernels other than the last kernel
 
-  for (uint32_t tree_i = 0; tree_i < num_itrees - 1; ++tree_i) {
-    for (auto result : itree_list[tree_i].getResults()) {
-      for (auto user : result.getUsers()) {
-        if (auto set_op = dyn_cast<tensorAlgebra::TensorSetOp>(user)) {
-          rewriter.eraseOp(set_op);
-        }
-      }
-    }
-  }
   /// Replace the use of output of the last kernel
-  uint32_t new_r_i = 0;
-  uint32_t tree_i = num_itrees - 1;
-  for (auto old_result : itree_list[tree_i].getResults()) {
-    rewriter.replaceAllUsesWith(old_result, new_itree.getResult(new_r_i++));
-  }
-  assert(new_r_i == 1 && "Expect to output only one tensor");
-
-  /// Delete the old itrees
-  for (auto itree : itree_list) {
-    rewriter.eraseOp(itree);
+  // uint32_t new_r_i = 0;
+  // uint32_t tree_i = num_itrees - 1;
+  for(auto it : enumerate(ArrayRef(itree_list)))
+  {
+    auto index = itree_list.size() - 1 - it.index();
+    auto itree_to_remove = it.value();
+    rewriter.replaceUsesWithIf(
+        itree_to_remove.getResults(),
+        new_itree.getResults()[index],  
+        [&](OpOperand &use) {
+          auto user = use.getOwner();
+          auto ancestor = itree_to_remove->getBlock()->findAncestorOpInBlock(*user);
+          return (ancestor && new_itree->isBeforeInBlock(ancestor)); 
+    });
+        
+    rewriter.replaceOp(itree_to_remove, new_itree->getOperand(index));
   }
 }
 

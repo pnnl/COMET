@@ -427,7 +427,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   ///  Check if there are missing tensor declaration operations introduced by compound expressions.
   ///  If so, add a new tensor declaration to represent intermediate tensors
   ///  =============================================================================
-  optPM.addPass(mlir::comet::createTensorAlgebraCheckImplicitTensorDeclPass());
+  // optPM.addPass(mlir::comet::createTensorAlgebraCheckImplicitTensorDeclPass());
   ///  =============================================================================
   /// Check to see if we are dumping to TA dialect.
   if (emitTA)
@@ -467,7 +467,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// Concretize the domains of all the index variables
   optPM.addPass(mlir::comet::createIndexTreeDomainConcretizationPass());
 
-  if (OptKernelFusion || OptDimensionReduction)
+  if (OptDimensionReduction)
   {
     /// Reduce intermediate tensors' dimension after kernel fusion
     optPM.addPass(mlir::comet::createIndexTreeDimensionReductionPass());

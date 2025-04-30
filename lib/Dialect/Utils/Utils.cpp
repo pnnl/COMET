@@ -2159,92 +2159,92 @@ namespace mlir
       return result;
     }
 
-    void createTensorContraction(Location loc, Value rhs1Tensor,
-                                 ArrayRef<Value> rhs1Labels,
-                                 Value rhs2Tensor,
-                                 ArrayRef<Value> rhs2Labels, Value lhsTensor,
-                                 ArrayRef<Value> lhsLabels,
-                                 ConversionPatternRewriter &rewriter,
-                                 double beta)
-    {
+    // void createTensorContraction(Location loc, Value rhs1Tensor,
+    //                              ArrayRef<Value> rhs1Labels,
+    //                              Value rhs2Tensor,
+    //                              ArrayRef<Value> rhs2Labels, Value lhsTensor,
+    //                              ArrayRef<Value> lhsLabels,
+    //                              ConversionPatternRewriter &rewriter,
+    //                              double beta)
+    // {
 
-      std::map<Operation *, mlir::AffineExpr> allLabels;
-      double alpha = 1.0;
-      auto rhs1AlphaAttr = rhs1Tensor.getDefiningOp()->getAttr("__alpha__");
-      auto rhs2AlphaAttr = rhs2Tensor.getDefiningOp()->getAttr("__alpha__");
+    //   std::map<Operation *, mlir::AffineExpr> allLabels;
+    //   double alpha = 1.0;
+    //   auto rhs1AlphaAttr = rhs1Tensor.getDefiningOp()->getAttr("__alpha__");
+    //   auto rhs2AlphaAttr = rhs2Tensor.getDefiningOp()->getAttr("__alpha__");
 
-      alpha *= cast<FloatAttr>(rhs1AlphaAttr).getValueAsDouble();
-      alpha *= cast<FloatAttr>(rhs2AlphaAttr).getValueAsDouble();
+    //   alpha *= cast<FloatAttr>(rhs1AlphaAttr).getValueAsDouble();
+    //   alpha *= cast<FloatAttr>(rhs2AlphaAttr).getValueAsDouble();
 
-      unsigned idx = 0;
-      for (auto lbl : rhs1Labels)
-      {
-        if (allLabels.find(lbl.getDefiningOp()) == allLabels.end())
-        {
-          allLabels[lbl.getDefiningOp()] =
-              getAffineDimExpr(idx++, rewriter.getContext());
-        }
-      }
+    //   unsigned idx = 0;
+    //   for (auto lbl : rhs1Labels)
+    //   {
+    //     if (allLabels.find(lbl.getDefiningOp()) == allLabels.end())
+    //     {
+    //       allLabels[lbl.getDefiningOp()] =
+    //           getAffineDimExpr(idx++, rewriter.getContext());
+    //     }
+    //   }
 
-      for (auto lbl : rhs2Labels)
-      {
-        if (allLabels.find(lbl.getDefiningOp()) == allLabels.end())
-        {
-          allLabels[lbl.getDefiningOp()] =
-              getAffineDimExpr(idx++, rewriter.getContext());
-        }
-      }
+    //   for (auto lbl : rhs2Labels)
+    //   {
+    //     if (allLabels.find(lbl.getDefiningOp()) == allLabels.end())
+    //     {
+    //       allLabels[lbl.getDefiningOp()] =
+    //           getAffineDimExpr(idx++, rewriter.getContext());
+    //     }
+    //   }
 
-      for (auto lbl : lhsLabels)
-      {
-        if (allLabels.find(lbl.getDefiningOp()) == allLabels.end())
-        {
-          allLabels[lbl.getDefiningOp()] =
-              getAffineDimExpr(idx++, rewriter.getContext());
-        }
-      }
+    //   for (auto lbl : lhsLabels)
+    //   {
+    //     if (allLabels.find(lbl.getDefiningOp()) == allLabels.end())
+    //     {
+    //       allLabels[lbl.getDefiningOp()] =
+    //           getAffineDimExpr(idx++, rewriter.getContext());
+    //     }
+    //   }
 
-      std::vector<mlir::AffineExpr> rhs1Exprs;
-      std::vector<mlir::AffineExpr> rhs2Exprs;
-      std::vector<mlir::AffineExpr> lhsExprs;
+    //   std::vector<mlir::AffineExpr> rhs1Exprs;
+    //   std::vector<mlir::AffineExpr> rhs2Exprs;
+    //   std::vector<mlir::AffineExpr> lhsExprs;
 
-      for (const auto &lbl : rhs1Labels)
-      {
-        rhs1Exprs.push_back(allLabels[lbl.getDefiningOp()]);
-      }
+    //   for (const auto &lbl : rhs1Labels)
+    //   {
+    //     rhs1Exprs.push_back(allLabels[lbl.getDefiningOp()]);
+    //   }
 
-      for (const auto &lbl : rhs2Labels)
-      {
-        rhs2Exprs.push_back(allLabels[lbl.getDefiningOp()]);
-      }
+    //   for (const auto &lbl : rhs2Labels)
+    //   {
+    //     rhs2Exprs.push_back(allLabels[lbl.getDefiningOp()]);
+    //   }
 
-      for (const auto &lbl : lhsLabels)
-      {
-        lhsExprs.push_back(allLabels[lbl.getDefiningOp()]);
-      }
+    //   for (const auto &lbl : lhsLabels)
+    //   {
+    //     lhsExprs.push_back(allLabels[lbl.getDefiningOp()]);
+    //   }
 
-      auto context = rewriter.getContext();
-      SmallVector<mlir::AffineMap, 8> affineMaps{
-          mlir::AffineMap::get(idx, 0, rhs1Exprs, context),
-          mlir::AffineMap::get(idx, 0, rhs2Exprs, context),
-          mlir::AffineMap::get(idx, 0, lhsExprs, context)};
+    //   auto context = rewriter.getContext();
+    //   SmallVector<mlir::AffineMap, 8> affineMaps{
+    //       mlir::AffineMap::get(idx, 0, rhs1Exprs, context),
+    //       mlir::AffineMap::get(idx, 0, rhs2Exprs, context),
+    //       mlir::AffineMap::get(idx, 0, lhsExprs, context)};
 
-      auto affineMapArrayAttr = rewriter.getAffineMapArrayAttr(affineMaps);
-      comet_debug() << "\n";
+    //   auto affineMapArrayAttr = rewriter.getAffineMapArrayAttr(affineMaps);
+    //   comet_debug() << "\n";
 
 
-      auto SemiringAttr = rewriter.getStringAttr("none");
-      auto MaskingAttr = rewriter.getStringAttr("none");
-      auto tc = rewriter.create<tensorAlgebra::TensorMultOp>(loc, lhsTensor.getType(),
-                                                             rhs1Tensor, rhs2Tensor,
-                                                             lhsLabels, affineMapArrayAttr,
-                                                             SemiringAttr, MaskingAttr,
-                                                             nullptr); /// TODO: masking is an optional operand
-      tc.getOperation()->setAttr("__alpha__", rewriter.getF64FloatAttr(alpha));
-      tc.getOperation()->setAttr("__beta__", rewriter.getF64FloatAttr(beta));
-      comet_debug() << " ";
-      comet_vdump(tc);
-    }
+    //   auto SemiringAttr = rewriter.getStringAttr("none");
+    //   auto MaskingAttr = rewriter.getStringAttr("none");
+    //   auto tc = rewriter.create<tensorAlgebra::TensorMultOp>(loc, lhsTensor.getType(),
+    //                                                          rhs1Tensor, rhs2Tensor,
+    //                                                          rhs1Labels, rhs2Labels, lhsLabels, affineMapArrayAttr,
+    //                                                          SemiringAttr, MaskingAttr,
+    //                                                          nullptr); /// TODO: masking is an optional operand
+    //   tc.getOperation()->setAttr("__alpha__", rewriter.getF64FloatAttr(alpha));
+    //   tc.getOperation()->setAttr("__beta__", rewriter.getF64FloatAttr(beta));
+    //   comet_debug() << " ";
+    //   comet_vdump(tc);
+    // }
 
     std::vector<unsigned> constructPermutationMapAttr(const std::vector<Operation *> &rhs_labels,
                                                       const std::vector<Operation *> &lhs_labels)

@@ -805,7 +805,6 @@ struct OptDenseTranspose : public ConversionPattern
     rewriter.replaceAllUsesWith(op->getResult(0), forAll->getResult(0));
     rewriter.eraseOp(op);
 
-    //module.dump();
     return success();
   }
 
@@ -826,7 +825,7 @@ namespace
       comet_debug() << "OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, FunctionPass>\n";
       func::FuncOp func = getOperation();
       ConversionTarget target(getContext());
-      target.addLegalDialect<TADialect, ArithDialect, scf::SCFDialect, AffineDialect, tensor::TensorDialect>();
+      target.addLegalDialect<TADialect, ArithDialect, scf::SCFDialect, AffineDialect, tensor::TensorDialect, func::FuncDialect>();
       RewritePatternSet patterns(&getContext());
       patterns.insert<OptDenseTranspose>(&getContext(), tile_size, seperate_tiles);
 

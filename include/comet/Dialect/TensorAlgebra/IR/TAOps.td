@@ -351,88 +351,19 @@ def TensorMultOp : TA_Op<"mul", [Pure, AttrSizedOperandSegments]>{
   let description = [{
   }];
 
-  let arguments = (ins TA_AnyTensor:$rhs1, TA_AnyTensor:$rhs2, Variadic<IndexLabel>:$index_labels, 
+  let arguments = (ins TA_AnyTensor:$rhs1, TA_AnyTensor:$rhs2, Variadic<IndexLabel>:$rhs1_index_labels, Variadic<IndexLabel>:$rhs2_index_labels, Variadic<IndexLabel>:$result_index_labels, 
                    AffineMapArrayAttr:$indexing_maps, StrAttr:$semiring, 
+                   Optional<TA_AnyTensor>:$lhs,
                    OptionalAttr<StrAttr>:$MaskType,  /// TODO: try to use: DefaultValuedAttr
                    Optional<AnyType>:$mask);
 
   /// Return value
   let results = (outs TA_AnyTensor);
 
-  let extraClassDeclaration = [{
-      template<typename T>
-    size_t getTensorRank(T tensor)
-    {
-      if(auto denseT = mlir::dyn_cast<TensorType>(tensor.getType()))
-      {
-        return denseT.getRank();
-      }
-      else if(auto sparseT = mlir::dyn_cast<SparseTensorType>(tensor.getType()))
-      {
-        return sparseT.getRank();
-      }
-      else
-      {
-        assert(false&& "Unexpected Type");
-      }
-    }
-
-    std::vector<mlir::Value> getRhs1IndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = 0;
-
-      size_t end = getTensorRank(getRhs1());
-
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-
-    }
-
-    std::vector<mlir::Value> getRhs2IndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-
-
-      size_t start =getTensorRank(getRhs1());
-      
-      size_t end = getTensorRank(getRhs1()) + getTensorRank(getRhs2());
-
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-
-    }
-
-    std::vector<mlir::Value> getResultIndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t end = getIndexLabels().size();
-      
-      size_t start = getTensorRank(getRhs1()) + getTensorRank(getRhs2());
-
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-    }
-
-  }];
-  //TODO(gkestor): add verifier
-  //let hasVerifier = 1;
-  
+  let hasVerifier = 1;
 }
 
-def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
+def TensorElewsMultOp : TA_Op<"elews_mul", [Pure, AttrSizedOperandSegments]>{
 
   let summary = "";
   let description = [{
@@ -440,83 +371,15 @@ def TensorElewsMultOp : TA_Op<"elews_mul", [Pure]>{
 
   let arguments = (ins TA_AnyTensor:$rhs1, 
                    TA_AnyTensor:$rhs2, 
-                   Variadic<IndexLabel>:$index_labels, 
+                   Variadic<IndexLabel>:$rhs1_index_labels, Variadic<IndexLabel>:$rhs2_index_labels, Variadic<IndexLabel>:$result_index_labels, 
                    AffineMapArrayAttr:$indexing_maps, 
                    StrAttr:$semiring,
+                   Optional<TA_AnyTensor>:$lhs,
                    OptionalAttr<StrAttr>:$MaskType); 
   
   let results = (outs TA_AnyTensor);
 
-  let extraClassDeclaration = [{
-    template<typename T>
-    size_t getTensorRank(T tensor)
-    {
-      if(auto denseT = mlir::dyn_cast<TensorType>(tensor.getType()))
-      {
-        return denseT.getRank();
-      }
-      else if(auto sparseT = mlir::dyn_cast<SparseTensorType>(tensor.getType()))
-      {
-        return sparseT.getRank();
-      }
-      else
-      {
-        assert(false&& "Unexpected Type");
-      }
-    }
-
-    std::vector<mlir::Value> getRhs1IndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = 0;
-      size_t end = getTensorRank(getRhs1());
-
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-
-    }
-
-    std::vector<mlir::Value> getRhs2IndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = getTensorRank(getRhs1());
-      
-      size_t end = getTensorRank(getRhs1()) + getTensorRank(getRhs2());
-      
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-
-    }
-
-    std::vector<mlir::Value> getResultIndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t end = getIndexLabels().size();
-      
-      size_t start = getTensorRank(getRhs1()) + getTensorRank(getRhs2());
-      
-      
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-    }
-
-  }];
-
-  //TODO(gkestor): add verifier
-  //let hasVerifier = 1;
-  
+  let hasVerifier = 1;  
 }
 
 def TensorDimOp : TA_Op<"dim", [Pure]>{
@@ -539,80 +402,14 @@ def TensorDimOp : TA_Op<"dim", [Pure]>{
   //let hasVerifier = 1;
 }
 
-
-def TensorSetOp : TA_Op<"set_op">{
-
-  let summary = "";
-  let description = [{
-  }];
-
-  let arguments = (ins  AnyTypeOf<[TA_AnyTensor,F64MemRef]>:$lhs,
-                        AnyTypeOf<[TA_AnyTensor,F64MemRef]>:$rhs);
-  
-  //let hasCanonicalizer = 1; 
-
-  //TODO(gkestor): add verifier
-  //let hasVerifier = 1;
-}
-
-def TransposeOp : TA_Op<"transpose",[Pure]> {
+def TransposeOp : TA_Op<"transpose",[Pure, AttrSizedOperandSegments]> {
   let summary = "transpose operation";
 
-  let arguments = (ins TA_AnyTensor:$rhs, Variadic<IndexLabel>:$index_labels, AffineMapArrayAttr:$indexing_maps);
+  let arguments = (ins TA_AnyTensor:$rhs, Variadic<IndexLabel>:$rhs_index_labels, Variadic<IndexLabel>:$result_index_labels,  AffineMapArrayAttr:$indexing_maps, Optional<TA_AnyTensor>:$lhs);
   
   let results = (outs TA_AnyTensor); 
 
-
-
-  let extraClassDeclaration = [{
-    template<typename T>
-    size_t getTensorRank(T tensor)
-    {
-      if(auto denseT = mlir::dyn_cast<TensorType>(tensor.getType()))
-      {
-        return denseT.getRank();
-      }
-      else if(auto sparseT = mlir::dyn_cast<SparseTensorType>(tensor.getType()))
-      {
-        return sparseT.getRank();
-      }
-      else
-      {
-        assert(false&& "Unexpected Type");
-      }
-    }
-
-    std::vector<mlir::Value> getRhsIndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = 0;
-      size_t end = static_cast<size_t>(getTensorRank(getRhs()));
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-
-    }
-
-    std::vector<mlir::Value> getResultIndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = static_cast<size_t>(getTensorRank(getRhs()));
-      size_t end = getIndexLabels().size();
-
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-    }
-
-  }];
-  //TODO(gkestor): add verifier
-  //let hasVerifier = 1;
+  let hasVerifier = 1;
 }
 
 def ReduceOp : TA_Op<"reduce",[Pure]> {
@@ -630,7 +427,7 @@ def ReduceOp : TA_Op<"reduce",[Pure]> {
 }
 
 def TensorAddOp : TA_Op<"add",
-    [Pure]> {
+    [Pure, AttrSizedOperandSegments]> {
   let summary = "element-wise addition operation";
   let description = [{
     The "add" operation performs element-wise addition between two tensors.
@@ -639,79 +436,18 @@ def TensorAddOp : TA_Op<"add",
 
   let arguments = (ins TA_AnyTensor:$rhs1, 
                    TA_AnyTensor:$rhs2, 
-                   Variadic<IndexLabel>:$index_labels, 
+                   Variadic<IndexLabel>:$rhs1_index_labels, Variadic<IndexLabel>:$rhs2_index_labels, Variadic<IndexLabel>:$result_index_labels, 
                    AffineMapArrayAttr:$indexing_maps, 
                    StrAttr:$semiring,
+                   Optional<TA_AnyTensor>:$lhs,
                    OptionalAttr<StrAttr>:$MaskType); 
   
   let results = (outs TA_AnyTensor);
-
-  let extraClassDeclaration = [{
-    template<typename T>
-    size_t getTensorRank(T tensor)
-    {
-      if(auto denseT = mlir::dyn_cast<TensorType>(tensor.getType()))
-      {
-        return denseT.getRank();
-      }
-      else if(auto sparseT = mlir::dyn_cast<SparseTensorType>(tensor.getType()))
-      {
-        return sparseT.getRank();
-      }
-      else
-      {
-        assert(false&& "Unexpected Type");
-      }
-    }
-
-    std::vector<mlir::Value> getRhs1IndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = 0;
-      size_t end = getTensorRank(getRhs1());
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-
-    }
-
-    std::vector<mlir::Value> getRhs2IndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = getTensorRank(getRhs1());
-      size_t end = getTensorRank(getRhs1()) + getTensorRank(getRhs2());
-      
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-
-    }
-
-    std::vector<mlir::Value> getResultIndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start =  getTensorRank(getRhs1()) + getTensorRank(getRhs2());
-      size_t end = getIndexLabels().size();
-
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-    }
-
-  }];
+  let hasVerifier = 1;
 }
 
 def TensorSubtractOp : TA_Op<"subtract",
-    [Pure]> {
+    [Pure, AttrSizedOperandSegments]> {
   let summary = "element-wise subtract operation";
   let description = [{
     The "subtract" operation performs element-wise subtract between two tensors.
@@ -720,75 +456,14 @@ def TensorSubtractOp : TA_Op<"subtract",
 
   let arguments = (ins TA_AnyTensor:$rhs1, 
                    TA_AnyTensor:$rhs2, 
-                   Variadic<IndexLabel>:$index_labels, 
+                   Variadic<IndexLabel>:$rhs1_index_labels, Variadic<IndexLabel>:$rhs2_index_labels, Variadic<IndexLabel>:$result_index_labels, 
                    AffineMapArrayAttr:$indexing_maps, 
                    StrAttr:$semiring,
+                   Optional<TA_AnyTensor>:$lhs,
                    OptionalAttr<StrAttr>:$MaskType); 
   
   let results = (outs TA_AnyTensor);
-
-  let extraClassDeclaration = [{
-      template<typename T>
-    size_t getTensorRank(T tensor)
-    {
-      if(auto denseT = mlir::dyn_cast<TensorType>(tensor.getType()))
-      {
-        return denseT.getRank();
-      }
-      else if(auto sparseT = mlir::dyn_cast<SparseTensorType>(tensor.getType()))
-      {
-        return sparseT.getRank();
-      }
-      else
-      {
-        assert(false&& "Unexpected Type");
-      }
-    }
-
-    std::vector<mlir::Value> getRhs1IndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = 0;
-      size_t end = getTensorRank(getRhs1());
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-
-    }
-
-    std::vector<mlir::Value> getRhs2IndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = getTensorRank(getRhs1());
-      size_t end = getTensorRank(getRhs1()) + getTensorRank(getRhs2());
-      
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-
-    }
-
-    std::vector<mlir::Value> getResultIndexLabels()
-    {
-      std::vector<mlir::Value> labels;
-      size_t start = getTensorRank(getRhs1()) + getTensorRank(getRhs2());
-      size_t end = getIndexLabels().size();
-
-      for(size_t i = start; i < end; i++ )
-      {
-        labels.push_back(getIndexLabels()[i]);
-      }
-
-      return labels;
-    }
-
-  }];
+  let hasVerifier = 1;
 }
 
 //TODO(gkestor): support other datatypes
