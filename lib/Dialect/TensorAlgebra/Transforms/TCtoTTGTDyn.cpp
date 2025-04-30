@@ -348,8 +348,7 @@ namespace
   
           if (beta_val == 0)
           {
-            Value constantOp = rewriter.create<ConstantOp>(loc, rewriter.getF64FloatAttr(0.0));
-            lhsFinal = rewriter.create<linalg::FillOp>(loc, constantOp, ValueRange(outputShape)).getResults()[0];
+            lhsFinal = outputShape;
           }
           else
           {
