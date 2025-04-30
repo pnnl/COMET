@@ -306,8 +306,8 @@ namespace
       int mc, kc, nc, mr, nr = 0;
       get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
 
-      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, false, {1, 2, 0});
-      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr, kc}, true, {1, 0, 2});
+      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc}, false, {1, 0});
+      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr}, true, {1, 0});
 
       if (failed(applyPatternsAndFoldGreedily(getOperation(),
                                               std::move(tilingPatterns))))
@@ -408,6 +408,9 @@ static FailureOr<FlatSymbolRefAttr> getLibraryCallSymbolRef(Operation *op, Patte
   /// Add inputTypes for mr and nr
   inputTypes.push_back(IntegerType::get(rewriter.getContext(), 32));
   inputTypes.push_back(IntegerType::get(rewriter.getContext(), 32));
+  /// Add inputTypes for alpha and beta
+  inputTypes.push_back(rewriter.getF64Type());
+  inputTypes.push_back(rewriter.getF64Type());
 
   if (op->getNumResults() != 0)
   {
@@ -443,12 +446,32 @@ LogicalResult LinalgMatMulOpToLibraryCallPattern::matchAndRewrite(
   if (failed(libraryCallName))
     return failure();
 
+  const char *arch = bli_arch_string(bli_cpuid_query_id());
+
+  if (!((strcmp("haswell", arch) == 0) ||
+      (strcmp("zen", arch) == 0) ||
+      (strcmp("zen2", arch) == 0) ||
+      (strcmp("zen3", arch) == 0) ||
+      (strcmp("skx", arch) == 0) ||
+      (strcmp("knl", arch) == 0) ||
+      (strcmp("generic", arch) == 0) ||
+      (strcmp("firestorm", arch) == 0)))
+  {
+    assert(false && "Unsupported microkernel architecture for BLIS matmul" 
+                    " operation. Supported architectures are: haswell, zen, "
+                    "zen2, zen3, skx, knl, firestorm, generic.");
+    return failure();
+  }
+
   int mc, kc, nc, mr, nr = 0;
   get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
 
   IntegerType i32Type = IntegerType::get(rewriter.getContext(), 32);
   Value mrValue = rewriter.create<ConstantOp>(op->getLoc(), i32Type, rewriter.getIntegerAttr(i32Type, mr));
   Value nrValue = rewriter.create<ConstantOp>(op->getLoc(), i32Type, rewriter.getIntegerAttr(i32Type, nr));
+  Value alpha = rewriter.create<ConstantOp>(op->getLoc(), rewriter.getF64Type(), op->getAttrOfType<FloatAttr>("__alpha__"));
+  Value beta = rewriter.create<ConstantOp>(op->getLoc(), rewriter.getF64Type(), op->getAttrOfType<FloatAttr>("__beta__"));
+
 
   comet_vdump(mrValue);
   comet_vdump(nrValue);
@@ -457,6 +480,8 @@ LogicalResult LinalgMatMulOpToLibraryCallPattern::matchAndRewrite(
   operands.insert(operands.end(), op->getOperands().begin(), op->getOperands().end());
   operands.push_back(mrValue);
   operands.push_back(nrValue);
+  operands.push_back(alpha);
+  operands.push_back(beta);
 
   rewriter.replaceOpWithNewOp<func::CallOp>(
       op, libraryCallName->getValue(), TypeRange(),
