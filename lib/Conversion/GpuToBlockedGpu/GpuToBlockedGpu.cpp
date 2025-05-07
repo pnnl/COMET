@@ -273,6 +273,12 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                             if (inserts.find(insertOp) == inserts.end())
                             {
                                 llvm::SmallVector<BlockInfo, 2> vec;
+                                auto one = 1ull;
+                                for(size_t i = 0; i < insertOp.getIndices().size(); i++)
+                                {
+
+                                    vec.push_back(BlockInfo(i, one, insertOp.getIndices()[i], nullptr));
+                                }
                                 inserts[insertOp] = vec;
                             }
                             for(size_t i = 0; i < insertOp.getIndices().size(); i++)
@@ -281,7 +287,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                                 {
                                     builder.setInsertionPoint(insertOp);
                                     auto cast = builder.create<UnrealizedConversionCastOp>(inductionVar.getLoc(), builder.getIndexType(), inductionVar);
-                                    inserts[insertOp].push_back(BlockInfo(i, blockSize, cast->getResult(0), forOp.getUpperBound()));
+                                    inserts[insertOp][i]= BlockInfo(i, blockSize, cast->getResult(0), forOp.getUpperBound());
                                     SmallVector<Value, 2> indices;
                                     indices.push_back(blockedIndex.getResult(0));
                                     bool isDone = useToIndices.insert(std::make_pair(cast.getResult(0), indices)).second;
@@ -294,6 +300,12 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                             if (extracts.find(extractOp) == extracts.end())
                             {
                                 llvm::SmallVector<BlockInfo, 2> vec;
+                                auto one = 1ull;
+                                for(size_t i = 0; i < extractOp.getIndices().size(); i++)
+                                {
+
+                                    vec.push_back(BlockInfo(i, one, extractOp.getIndices()[i], nullptr));
+                                }
                                 extracts[extractOp] = vec;
                             }
                             for(size_t i = 0; i < extractOp.getIndices().size(); i++)
@@ -302,7 +314,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                                 {
                                     builder.setInsertionPoint(extractOp);
                                     auto cast = builder.create<UnrealizedConversionCastOp>(inductionVar.getLoc(), builder.getIndexType(), inductionVar);
-                                    extracts[extractOp].push_back(BlockInfo(i, blockSize, cast->getResult(0), forOp.getUpperBound()));
+                                    extracts[extractOp][i] = BlockInfo(i, blockSize, cast->getResult(0), forOp.getUpperBound());
                                     SmallVector<Value, 2> indices;
                                     indices.push_back(blockedIndex.getResult(0));
                                     bool isDone = useToIndices.insert(std::make_pair(cast.getResult(0), indices)).second;
@@ -326,25 +338,92 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
         // We also keep the information regarding the boolean masks that need to be generated in order to avoid
         // reading beyond memory boundaries
         funcOp->walk([&](tensor::ExtractOp extractOp){
-            auto extract = *extracts.find(extractOp);
+            auto extract = extracts.find(extractOp);
+            if(extract == extracts.end())
+            {
+                int64_t rank = extractOp.getTensor().getType().getRank();
+                builder.setInsertionPoint(extractOp);
+                bufferization::ToTensorOp toTensorOp = mlir::cast<bufferization::ToTensorOp>(extractOp.getTensor().getDefiningOp());
+                auto metaData = builder.create<memref::ExtractStridedMetadataOp>(extractOp->getLoc(), toTensorOp.getMemref());
+                mlir::SmallVector<Value, 2> blockSizes;
+                mlir::SmallVector<int64_t, 2> blockSizesLiteral;
+                mlir::SmallVector<int64_t, 2> static_offsets;
+                mlir::SmallVector<mlir::Value, 2> offsets;
+                mlir::SmallVector<int64_t, 2> stridesLiteral;
+                mlir::SmallVector<Value, 2> strides;
+                SmallVector<int64_t, 2> static_shape;
+                
+                for(int64_t i = 0; i < rank; i++)
+                {
+                    blockSizesLiteral.push_back(1);
+                    static_shape.push_back(1);
+                    offsets.push_back(extractOp.getIndices()[i]);
+                    stridesLiteral.push_back(ShapedType::kDynamic);
+                    static_offsets.push_back(ShapedType::kDynamic);
+                    Value stride = metaData->getResult(2 + rank + i); // tt.ptr + offset + (size) * rank + (stride) * rank 
+                    strides.push_back(stride);
+                }
+
+                auto type = mlir::RankedTensorType::get(blockSizesLiteral, extractOp.getTensor().getType().getElementType());
+                auto extractSlice = builder.create<mlir::tensor::ExtractSliceOp>(extractOp->getLoc(), type, extractOp.getTensor(), mlir::ValueRange(offsets), mlir::ValueRange(blockSizes), mlir::ValueRange(strides), static_offsets, mlir::ArrayRef(blockSizesLiteral), mlir::ArrayRef(stridesLiteral));
+                // extractSlice.dump();
+                
+                // for(auto block: extract->second)
+                // {
+                //     static_shape.push_back(block.blockSize);
+                // }
+                auto castSliceShape = builder.create<mlir::tensor::CastOp>(extractOp->getLoc(), mlir::RankedTensorType::get(static_shape, extractOp.getTensor().getType().getElementType()), extractSlice);
+                extractOp.replaceAllUsesWith(castSliceShape.getResult());
+                extractOp->erase();
+                // needCheck.push_back(castSliceShape);
+                // if(inserted)
+                // {
+                    // SmallVector<Value, 2> indices;
+                    // for(auto offset: offsets)
+                    // {
+                    //     assert(useToIndices.find(offset) != useToIndices.end());
+                    //     indices.insert(indices.end(),useToIndices[offset].begin(), useToIndices[offset].end());
+                    //     // if(auto index = dyn_cast_if_present<UnrealizedConversionCastOp>(offset.getDefiningOp()))
+                    //     // {
+                    //     //     indices.push_back(index->getOperand(0));
+                    //     // }
+                    //     // else
+                    //     // {
+                    //     //     indices.push_back(offset);
+                    //     // }
+                    // }
+                    // assert(!indices.empty());
+                    // bool isDone = useToIndices.insert(std::make_pair(castSliceShape,indices)).second;
+                    // assert(isDone);
+                    // isDone = useToIndices.insert(std::make_pair(extractSlice,indices)).second;
+                    // assert(isDone);
+                return WalkResult::advance(); // Continue walking
+            }
             mlir::SmallVector<Value, 2> blockSizes;
             mlir::SmallVector<int64_t, 2> blockSizesLiteral;
             mlir::SmallVector<int64_t, 2> static_offsets;
             mlir::SmallVector<mlir::Value, 2> offsets;
             mlir::SmallVector<int64_t, 2> stridesLiteral;
             mlir::SmallVector<Value, 2> strides;
-            std::sort(extract.second.begin(), extract.second.end(), [](BlockInfo& a, BlockInfo& b) {return a.argIndex < b.argIndex;} );
-            int64_t rank = extract.first.getTensor().getType().getRank();
-            bufferization::ToTensorOp toTensorOp = mlir::cast<bufferization::ToTensorOp>(extract.first.getTensor().getDefiningOp());
-            builder.setInsertionPoint(extract.first);
+            std::sort(extract->second.begin(), extract->second.end(), [](BlockInfo& a, BlockInfo& b) {return a.argIndex < b.argIndex;} );
+            int64_t rank = extract->first.getTensor().getType().getRank();
+            bufferization::ToTensorOp toTensorOp = mlir::cast<bufferization::ToTensorOp>(extract->first.getTensor().getDefiningOp());
+            builder.setInsertionPoint(extract->first);
 
             // Get information regarding the size and stride of the memref
-            auto metaData = builder.create<memref::ExtractStridedMetadataOp>(extract.first->getLoc(), toTensorOp.getMemref());
+            auto metaData = builder.create<memref::ExtractStridedMetadataOp>(extract->first->getLoc(), toTensorOp.getMemref());
             for(int64_t i = 0; i < rank; i++)
             {
-                blockSizes.push_back(extract.second[i].max);
-                blockSizesLiteral.push_back(ShapedType::kDynamic);
-                offsets.push_back(extract.second[i].index);
+                if(extract->second[i].max)
+                {
+                    blockSizes.push_back(extract->second[i].max);
+                    blockSizesLiteral.push_back(ShapedType::kDynamic);
+                }
+                else
+                {
+                    blockSizesLiteral.push_back(1);
+                }
+                offsets.push_back(extract->second[i].index);
                 stridesLiteral.push_back(ShapedType::kDynamic);
                 static_offsets.push_back(ShapedType::kDynamic);
                 Value stride = metaData->getResult(2 + rank + i); // tt.ptr + offset + (size) * rank + (stride) * rank 
@@ -352,25 +431,25 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             }
 
 
-            auto type = mlir::RankedTensorType::get(blockSizesLiteral, extract.first.getTensor().getType().getElementType());
-            auto extractSlice = builder.create<mlir::tensor::ExtractSliceOp>(extract.first->getLoc(), type, extract.first.getTensor(), mlir::ValueRange(offsets), mlir::ValueRange(blockSizes), mlir::ValueRange(strides), static_offsets, mlir::ArrayRef(blockSizesLiteral), mlir::ArrayRef(stridesLiteral));
+            auto type = mlir::RankedTensorType::get(blockSizesLiteral, extract->first.getTensor().getType().getElementType());
+            auto extractSlice = builder.create<mlir::tensor::ExtractSliceOp>(extract->first->getLoc(), type, extract->first.getTensor(), mlir::ValueRange(offsets), mlir::ValueRange(blockSizes), mlir::ValueRange(strides), static_offsets, mlir::ArrayRef(blockSizesLiteral), mlir::ArrayRef(stridesLiteral));
             // extractSlice.dump();
             
             SmallVector<int64_t, 2> static_shape;
-            for(auto block: extract.second)
+            for(auto block: extract->second)
             {
                 static_shape.push_back(block.blockSize);
             }
-            auto castSliceShape = builder.create<mlir::tensor::CastOp>(extract.first->getLoc(), mlir::RankedTensorType::get(static_shape, extract.first.getTensor().getType().getElementType()), extractSlice);
-            extract.first.replaceAllUsesWith(castSliceShape.getResult());
-            extract.first->erase();
+            auto castSliceShape = builder.create<mlir::tensor::CastOp>(extract->first->getLoc(), mlir::RankedTensorType::get(static_shape, extract->first.getTensor().getType().getElementType()), extractSlice);
+            extract->first.replaceAllUsesWith(castSliceShape.getResult());
+            extract->first->erase();
             needCheck.push_back(castSliceShape);
             // if(inserted)
             // {
                 SmallVector<Value, 2> indices;
                 for(auto offset: offsets)
                 {
-                    assert(useToIndices.find(offset) != useToIndices.end());
+                    // assert(useToIndices.find(offset) != useToIndices.end());
                     indices.insert(indices.end(),useToIndices[offset].begin(), useToIndices[offset].end());
                     // if(auto index = dyn_cast_if_present<UnrealizedConversionCastOp>(offset.getDefiningOp()))
                     // {
@@ -485,7 +564,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     }
                     else
                     {
-                        assert(useToIndices.find(operand) != useToIndices.end());
+                        // assert(useToIndices.find(operand) != useToIndices.end());
                     }
                 }
 
@@ -795,7 +874,42 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
         }
 
         funcOp->walk([&](tensor::InsertOp insertOp){
-            auto insert = *inserts.find(insertOp);
+            auto insert = inserts.find(insertOp);
+            if(insert == inserts.end())
+            {
+                bufferization::ToTensorOp toTensorOp = mlir::cast<bufferization::ToTensorOp>(insertOp.getDest().getDefiningOp());
+                builder.setInsertionPoint(insertOp);
+                auto metaData = builder.create<memref::ExtractStridedMetadataOp>(insertOp->getLoc(), toTensorOp.getMemref());
+                mlir::SmallVector<Value, 2> blockSizes;
+                mlir::SmallVector<int64_t, 2> blockSizesLiteral;
+    
+                mlir::SmallVector<int64_t, 2> static_offsets;
+                mlir::SmallVector<mlir::Value, 2> offsets;
+                mlir::SmallVector<int64_t, 2> stridesLiteral;
+                mlir::SmallVector<Value, 2> strides;
+
+                int64_t rank = insertOp.getResult().getType().getRank();
+                for(int64_t i = 0; i < rank; i++)
+                {
+                    blockSizesLiteral.push_back(1);
+                    offsets.push_back(insertOp.getIndices()[i]);
+                    stridesLiteral.push_back(ShapedType::kDynamic);
+                    static_offsets.push_back(ShapedType::kDynamic);
+                    Value stride = metaData.getResult(2 + rank + i); // tt.ptr + offset + (size) * rank + (stride) * rank 
+                    strides.push_back(stride);
+                }
+
+                auto type = mlir::RankedTensorType::get(blockSizesLiteral, insertOp.getResult().getType().getElementType());
+                builder.setInsertionPoint(insertOp);
+                auto castSliceShape = builder.create<mlir::tensor::CastOp>(insertOp->getLoc(), type, insertOp.getScalar());
+    
+                auto insertSlice = builder.create<mlir::tensor::InsertSliceOp>(insertOp->getLoc(), castSliceShape, insertOp.getDest(), mlir::ValueRange(offsets), mlir::ValueRange(blockSizes), mlir::ValueRange(strides), static_offsets, mlir::ArrayRef(blockSizesLiteral), mlir::ArrayRef(stridesLiteral));
+                // llvm::errs() << "Erasing: " << insertOp << insertOp.getAsOpaquePointer();
+                insertOp->erase();
+
+                return WalkResult::advance(); // Continue walking
+
+            }
             mlir::SmallVector<Value, 2> blockSizes;
             mlir::SmallVector<int64_t, 2> blockSizesLiteral;
 
@@ -803,32 +917,39 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             mlir::SmallVector<mlir::Value, 2> offsets;
             mlir::SmallVector<int64_t, 2> stridesLiteral;
             mlir::SmallVector<Value, 2> strides;
-            std::sort(insert.second.begin(), insert.second.end(), [](BlockInfo& a, BlockInfo& b) {return a.argIndex < b.argIndex;} );
-            bufferization::ToTensorOp toTensorOp = mlir::cast<bufferization::ToTensorOp>(insert.first.getDest().getDefiningOp());
-            builder.setInsertionPoint(insert.first);
-            auto metaData = builder.create<memref::ExtractStridedMetadataOp>(insert.first->getLoc(), toTensorOp.getMemref());
+            std::sort(insert->second.begin(), insert->second.end(), [](BlockInfo& a, BlockInfo& b) {return a.argIndex < b.argIndex;} );
+            bufferization::ToTensorOp toTensorOp = mlir::cast<bufferization::ToTensorOp>(insert->first.getDest().getDefiningOp());
+            builder.setInsertionPoint(insert->first);
+            auto metaData = builder.create<memref::ExtractStridedMetadataOp>(insert->first->getLoc(), toTensorOp.getMemref());
 
-            int64_t rank = insert.first.getResult().getType().getRank();
+            int64_t rank = insert->first.getResult().getType().getRank();
             for(int64_t i = 0; i < rank; i++)
             {
-                blockSizes.push_back(insert.second[i].max);
-                blockSizesLiteral.push_back(ShapedType::kDynamic);
-                offsets.push_back(insert.second[i].index);
+                if(insert->second[i].max)
+                {
+                    blockSizes.push_back(insert->second[i].max);
+                    blockSizesLiteral.push_back(ShapedType::kDynamic);
+                }
+                else
+                {
+                    blockSizesLiteral.push_back(1);
+                }
+                offsets.push_back(insert->second[i].index);
                 stridesLiteral.push_back(ShapedType::kDynamic);
                 static_offsets.push_back(ShapedType::kDynamic);
                 Value stride = metaData.getResult(2 + rank + i); // tt.ptr + offset + (size) * rank + (stride) * rank 
                 strides.push_back(stride);
             }
-            auto type = mlir::RankedTensorType::get(blockSizesLiteral, insert.first.getResult().getType().getElementType());
-            builder.setInsertionPoint(insert.first);
-            auto castSliceShape = builder.create<mlir::tensor::CastOp>(insert.first->getLoc(), type, insert.first.getScalar());
+            auto type = mlir::RankedTensorType::get(blockSizesLiteral, insert->first.getResult().getType().getElementType());
+            builder.setInsertionPoint(insert->first);
+            auto castSliceShape = builder.create<mlir::tensor::CastOp>(insert->first->getLoc(), type, insert->first.getScalar());
 
-            auto insertSlice = builder.create<mlir::tensor::InsertSliceOp>(insert.first->getLoc(), castSliceShape, insert.first.getDest(), mlir::ValueRange(offsets), mlir::ValueRange(blockSizes), mlir::ValueRange(strides), static_offsets, mlir::ArrayRef(blockSizesLiteral), mlir::ArrayRef(stridesLiteral));
-            // llvm::errs() << "Erasing: " << insert.first << insert.first.getAsOpaquePointer();
-            insert.first->erase();
+            auto insertSlice = builder.create<mlir::tensor::InsertSliceOp>(insert->first->getLoc(), castSliceShape, insert->first.getDest(), mlir::ValueRange(offsets), mlir::ValueRange(blockSizes), mlir::ValueRange(strides), static_offsets, mlir::ArrayRef(blockSizesLiteral), mlir::ArrayRef(stridesLiteral));
+            // llvm::errs() << "Erasing: " << insert->first << insert->first.getAsOpaquePointer();
+            insert->first->erase();
 
             /// TODO: It might make sense to replaceAll uses at some point later
-            // insert.first.replaceAllUsesWith(insertSlice.getResult());
+            // insert->first.replaceAllUsesWith(insertSlice.getResult());
         });
 
 

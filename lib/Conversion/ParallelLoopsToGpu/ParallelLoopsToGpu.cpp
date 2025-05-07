@@ -158,7 +158,7 @@ std::pair<scf::ParallelOp, llvm::SmallVector<scf::ForOp, 2>> tileParallelLoop(Co
     SmallVector<Value, 2> tileSizeConstants;
     tileSizeConstants.reserve(op.getUpperBound().size());
     for (size_t i = 0, end = op.getUpperBound().size(); i != end; ++i) {
-        if (i < tileSizes.size())
+        if (tileSizes[i] != -1)
         tileSizeConstants.push_back(
             rewriter.create<arith::ConstantIndexOp>(op.getLoc(), tileSizes[i]));
         else
@@ -231,6 +231,12 @@ std::pair<scf::ParallelOp, llvm::SmallVector<scf::ForOp, 2>> tileParallelLoop(Co
     SmallVector<Value, 2> inductionVars;
     for(size_t i = 0; i <  tileSizes.size(); i++)
     {
+        if(tileSizes[i] == -1)
+        {
+            newArgs.push_back(outerLoop.getBody()->getArgument(i));
+
+            continue;
+        }   
         auto innerLoop = rewriter.create<scf::ForOp>(op.getLoc(), zero, newBounds[i], op.getStep()[i]);
         innerLoop->setAttr("blockSize", rewriter.getUI32IntegerAttr(tileSizes[i]));
         innerLoops.push_back(innerLoop);
@@ -407,10 +413,39 @@ public:
         SmallVector<Attribute, 2> allGpuAttrs = {mlir::gpu::ParallelLoopDimMappingAttr::get(rewriter.getContext(), ::mlir::gpu::Processor::BlockY, yMap, yMap), mlir::gpu::ParallelLoopDimMappingAttr::get(rewriter.getContext(), ::mlir::gpu::Processor::BlockX, xMap, xMap)};
         SmallVector<Attribute, 2> gpuAttrs;
         std::copy(allGpuAttrs.begin(), allGpuAttrs.begin() + parOp.getInductionVars().size(), std::back_inserter(gpuAttrs));
-        auto tiledLoop = tileParallelLoop(rewriter, parOp, tileSizes);
+        if(!parOp->hasAttr("parallelDim"))
+        {
+            
+            auto tiledLoop = tileParallelLoop(rewriter, parOp, tileSizes);   
+            tiledLoop.first->setAttr("mapping", rewriter.getArrayAttr(gpuAttrs));
+            tiledLoop.first->setAttr("parallelDim", rewriter.getArrayAttr(stringAttrs));
+        }
+        else
+        {
+            auto parallelDimAttr = mlir::cast<mlir::ArrayAttr>(parOp->getAttr("parallelDim"));
+            if(parallelDimAttr.size() == parOp.getInductionVars().size())
+            {
+                rewriter.modifyOpInPlace(parOp, [&]() {
+                    parOp->setAttr("parallelDim", rewriter.getArrayAttr(stringAttrs));
+                    parOp->setAttr("mapping", rewriter.getArrayAttr(gpuAttrs));
+                });
+            }
+            else
+            {   
+                if(mlir::cast<StringAttr>(parallelDimAttr[0]).getValue() == "dimY_grid")
+                {
+                    tileSizes[0] = -1;
+                }
+                else if(mlir::cast<StringAttr>(parallelDimAttr[0]).getValue() == "dimX_grid")
+                {
+                    tileSizes[1] = -1;
+                }
 
-        tiledLoop.first->setAttr("parallelDim", rewriter.getArrayAttr(stringAttrs));
-        tiledLoop.first->setAttr("mapping", rewriter.getArrayAttr(gpuAttrs));
+                auto tiledLoop = tileParallelLoop(rewriter, parOp, tileSizes);   
+                tiledLoop.first->setAttr("mapping", rewriter.getArrayAttr(gpuAttrs));
+                tiledLoop.first->setAttr("parallelDim", rewriter.getArrayAttr(stringAttrs));
+            }
+        }
 
         return success();
     }
@@ -439,7 +474,7 @@ public:
         target.addLegalDialect<mlir::memref::MemRefDialect, mlir::arith::ArithDialect,  mlir::affine::AffineDialect, mlir::scf::SCFDialect>();
         target.addLegalOp<mlir::scf::ReduceOp>();
         target.addDynamicallyLegalOp<mlir::scf::ParallelOp>([](mlir::scf::ParallelOp op) -> bool {
-            return op->hasAttr("parallelDim");
+            return op->hasAttr("mapping") && op->hasAttr("parallelDim");
         });
 
         if (mlir::failed(mlir::applyPartialConversion(funcOp, target, std::move(patterns))))
