@@ -42,6 +42,11 @@ using namespace mlir;
 using namespace mlir::indexTree;
 using namespace mlir::tensorAlgebra;
 
+// *********** For debug purpose *********//
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+// *********** For debug purpose *********//
+
 namespace mlir {
   namespace comet{
     #define GEN_PASS_DEF_INDEXTREESYMBOLICCOMPUTEPASS
@@ -281,12 +286,25 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
     SmallVector<Value> yield_args;
     Value prev_dim = parent;
     bool is_unique = true;
+    /// TODO: For now, we only support the outer-most index node to be parallel
+    bool is_outer_most = true;
+//    bool is_outer_most = false;
+    bool is_parallel = true;
     for (Value domain : it_tensor_decl_op.getDomains())
     {
+      if (is_outer_most)
+      {
+        is_outer_most = false;
+      }
+      else
+      {
+        is_parallel = false;
+      }
+      comet_vdump(domain);
       Operation* domain_op = domain.getDefiningOp();
       Value prev_parent = parent;
       Value new_domain = copyDomain(domain, rewriter, loc, map, tensor_to_node, &parent);
-      indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, new_domain);
+      indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, new_domain, is_parallel);  /// !!!Note. Created a non-parallel index node.
       createMapping(index_node_op, domain, tensor_to_node);
       if(prev_parent != parent)
       {

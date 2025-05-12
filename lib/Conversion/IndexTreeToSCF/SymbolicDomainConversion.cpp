@@ -55,12 +55,12 @@ namespace mlir {
 }
 
 struct SymbolicDomain {
-  Value pos_size;
-  Value pos_alloc_size;
-  Value crd_size;
-  Value dim_size;
-  Value pos;
-  Value mark_array;
+  Value pos_size;        /// pos array's current size, the row that is working on
+  Value pos_alloc_size;  /// [constant for now, could be dynamic for future] pos array's capacity
+  Value crd_size;        /// [private to thread, and set to 0 for each row]
+  Value dim_size;        /// [constant] mark array's capcity
+  Value pos;             /// pos array.
+  Value mark_array;      /// [private to thread]
 };
 
 static bool unpack_symbolic_domain(Value symbolic_domain, SymbolicDomain& result)

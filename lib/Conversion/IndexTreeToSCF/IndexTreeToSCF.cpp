@@ -79,7 +79,7 @@ using llvm::SmallDenseMap;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 
@@ -168,6 +168,15 @@ namespace
     CSR_AVAL_SIZE = 17,
     CSR_DIM1_SIZE = 18,
     CSR_DIM2_SIZE = 19
+  };
+
+  struct SymbolicDomainInfo {
+    Value pos_size;        /// pos array's current size, the row that is working on
+    Value pos_alloc_size;  /// [constant for now, could be dynamic for future] pos array's capacity
+    Value crd_size;        /// [private to thread, and set to 0 for each row]
+    Value dim_size;        /// [constant] mark array's capcity
+    Value pos;             /// pos array.
+    Value mark_array;      /// [private to thread]
   };
 
   /// ----------------- ///
@@ -363,6 +372,11 @@ namespace
     int64_t dim;
     int64_t tiles;
     int64_t tile_size;
+
+    void dump() const
+    {
+      llvm::errs() << "{dim: " << dim << ", tiles: " << tiles << ", tile_size: " << tile_size << "}\n";
+    }
   };
 
 
@@ -527,6 +541,12 @@ namespace
 
       static LoopInfo* build(Operation* domain_op, IRRewriter& rewriter, ValueRange inputs, SmallDenseMap<Value, TensorSubsetInfo> output_sets)
       {
+        {/// test
+          for (auto input : inputs)
+          {
+            comet_vdump(input);
+          }
+        }
         auto loc = domain_op->getLoc();
         Value ub = domain_op->getOperand(0);
         scf::ForallOp for_loop = rewriter.create<scf::ForallOp>(
@@ -537,12 +557,39 @@ namespace
           nullptr);
         Value inductionVar = for_loop.getInductionVar(0);
         rewriter.setInsertionPointToStart(for_loop.getBody());
+        {
+          comet_vdump(domain_op->getParentOfType<ModuleOp>());
+          comet_pdump(domain_op);
+          comet_vdump(ub);
+          comet_vdump(for_loop);
+          for ([[maybe_unused]] auto &input : for_loop.getOutputsMutable())
+          {
+            comet_vdump(input.get());
+            comet_vdump(output_sets.at(input.get()));
+          }
+        }
 
-        SmallVector<Value> input_slices;        
+        SmallVector<Value> input_slices;
+        SmallVector<Value> input_for_loop_args;
         for(auto& input : for_loop.getOutputsMutable())
         {
           auto& os = output_sets.at(input.get());
-          RankedTensorType tt = llvm::cast<RankedTensorType>(input.get().getType());
+          comet_vdump(input.get());
+          comet_vdump(os);
+          RankedTensorType tt;
+          if (llvm::isa<RankedTensorType>(input.get().getType()))
+          {
+            tt = llvm::cast<RankedTensorType>(input.get().getType());
+          }
+          else if (llvm::isa<indexTree::SymbolicDomainType>(input.get().getType()))
+          { /// A dummy RankedTensorType. Later, the pos array is supposed to be the same type.
+            tt = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
+          }
+          else
+          {
+            assert(false && "Non supported type of input.");
+          }
+//          RankedTensorType tt = llvm::cast<RankedTensorType>(input.get().getType());
           int64_t nDims = tt.getRank();
           SmallVector<Value> sizes;
           for(int i = 0; i < nDims; i++)
@@ -557,6 +604,17 @@ namespace
           SmallVector<int64_t> static_sizes(tt.getShape());
           static_offsets[os.dim] = ShapedType::kDynamic;
           static_sizes[os.dim] = 1;
+          {
+            for ([[maybe_unused]] auto size : sizes) {
+              comet_debug() << "size: " << size << "\n";
+            }
+            for ([[maybe_unused]] auto size : static_offsets) {
+              comet_debug() << "static_offset: " << size << "\n";
+            }
+            for ([[maybe_unused]] auto size : static_sizes) {
+              comet_debug() << "static_size: " << size << "\n";
+            }
+          }
 
           auto slice = rewriter.create<tensor::ExtractSliceOp>(
             loc,
@@ -571,11 +629,19 @@ namespace
           );
           input_slices.push_back(slice->getResult(0));
           output_sets.insert(std::make_pair(slice->getResult(0), os));
+          input_for_loop_args.push_back(for_loop.getTiedBlockArgument(&input));
+          {
+            comet_vdump(slice->getResult(0));
+          }
         }
 
         SmallVector<Operation*> terminator_ops;
         auto par_op = for_loop.getTerminator();
         auto slice = input_slices.begin();
+        {
+          comet_vdump(par_op);
+          comet_pdump(slice);
+        }
         for(auto& input : for_loop.getOutputsMutable()) {
           rewriter.setInsertionPoint(par_op);
           auto& os = output_sets.at(input.get());
@@ -593,7 +659,19 @@ namespace
           rewriter.setInsertionPointToEnd(par_op.getBody());
           SmallVector<int64_t> static_offsets(nDims, 0);
           static_offsets[os.dim] = ShapedType::kDynamic;
-
+          {
+            comet_vdump(os);
+            comet_vdump(tt);
+            for ([[maybe_unused]] auto size : sizes) {
+              comet_debug() << "size: " << size << "\n";
+            }
+            for ([[maybe_unused]] auto size : static_offsets) {
+              comet_debug() << "static_offset: " << size << "\n";
+            }
+            for ([[maybe_unused]] auto size : tt.getShape()) {
+              comet_debug() << "static_size: " << size << "\n";
+            }
+          }
           Operation* insert = rewriter.create<tensor::ParallelInsertSliceOp>(
             loc, 
             *slice,
@@ -605,13 +683,28 @@ namespace
             rewriter.getDenseI64ArrayAttr(tt.getShape()),
             rewriter.getDenseI64ArrayAttr(SmallVector<int64_t>(nDims, 1))
           );
+          comet_pdump(insert);
           terminator_ops.push_back(insert);
           slice++;
         }
         rewriter.setInsertionPointAfter(for_loop);
-        
+
+        for ([[maybe_unused]] auto arg : input_for_loop_args)
+        {
+          comet_vdump(arg);
+        }
+
         IRMapping map;
-        return new DenseParallelLoopInfo(input_slices, for_loop.getResults(), par_op, map, inductionVar, terminator_ops, output_sets);
+        if (inputs.size() == 1 && llvm::isa<indexTree::SymbolicDomainType>(inputs.front().getType()))
+        { /// Use the symbolic_domain argument as the inputs.
+          return new DenseParallelLoopInfo(input_for_loop_args, for_loop.getResults(), par_op, map, inductionVar,
+                                           terminator_ops, output_sets);
+        }
+        else
+        {
+          return new DenseParallelLoopInfo(input_slices, for_loop.getResults(), par_op, map, inductionVar,
+                                           terminator_ops, output_sets);
+        }
       }
 
       Value getCrd(IRRewriter& rewriter) override {return inductionVar;}
@@ -1155,6 +1248,389 @@ namespace
       }
   };
 
+//  struct TransformSymbolicForallOp
+//      : public OpConversionPattern<scf::ForallOp> {
+//    using OpConversionPattern<scf::ForallOp>::OpConversionPattern;
+//    LogicalResult matchAndRewrite(scf::ForallOp op,
+//                                  OpAdaptor adaptor,
+//                                  ConversionPatternRewriter &rewriter) const override
+//    {
+//      comet_vdump(op);
+//      return success();
+//    }
+//  };
+//  struct TransformSymbolicForallOp
+//      : public OpRewritePattern<scf::ForallOp> {
+//    TransformSymbolicForallOp(mlir::MLIRContext *context)
+//      : OpRewritePattern<scf::ForallOp>(context) {}
+//
+//    LogicalResult matchAndRewrite(scf::ForallOp op,
+//                                  PatternRewriter &rewriter) const override
+//    {
+//      comet_vdump(op);
+//      return success();
+//    }
+//  };
+//  struct TransformSymbolicForallOp
+//      : public ConversionPattern {
+//    TransformSymbolicForallOp(mlir::MLIRContext *context)
+//      : ConversionPattern(scf::ForallOp::getOperationName(), 1, context) {}
+//
+//    LogicalResult matchAndRewrite(mlir::Operation *op,
+//                                  ArrayRef<Value> operands,
+//                                  mlir::ConversionPatternRewriter &rewriter) const override
+//    {
+//      comet_pdump(op);
+//      return success();
+//    }
+//  };
+
+  scf::ForallOp CreateNewForallOp(scf::ForallOp old_for_loop,
+                                  mlir::IRRewriter &rewriter,
+                                  mlir::Location &loc,
+                                  SymbolicDomainInfo &symbolic_domain_info /*out*/)
+  {
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(old_for_loop);
+
+    /// Create the `builtin.unrealized_conversion_cast`.
+    Value old_symbolic_domain = old_for_loop.getOutputsMutable()[0].get();
+    IndexType indexType = rewriter.getIndexType();
+    RankedTensorType rankedTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
+    llvm::SmallVector<Type> result_types = {
+        indexType,         /// pos_size
+        indexType,         /// pos_alloc_size
+        indexType,         /// crd_size
+        indexType,         /// dim_size
+        rankedTensorType,  /// pos
+        rankedTensorType   /// mark_array
+    };
+    /// Get the pos, which will be the new `scf.forall`'s operand.
+    mlir::UnrealizedConversionCastOp unrealized_op =
+        rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
+                                                          result_types,
+                                                /*input=*/old_symbolic_domain);
+    symbolic_domain_info.pos_alloc_size = unrealized_op.getResult(1);
+    symbolic_domain_info.dim_size = unrealized_op.getResult(3);
+    Value pos = unrealized_op->getResult(4);
+    symbolic_domain_info.mark_array = unrealized_op.getResult(5);
+    comet_vdump(pos);
+
+    /// This does not work, because it only changes the for-loop's operand, but doesn't change the uses of this operand in side the loop.
+//    rewriter.replaceAllUsesWith(old_for_loop.getOperand(1), pos);
+//    comet_vdump(old_for_loop);
+
+    /// Create the new `scf.forall`
+    scf::ForallOp new_for_loop = rewriter.create<scf::ForallOp>(
+        loc,
+        /*upperBound=*/old_for_loop.getMixedUpperBound(),
+        /*inputs=*/ValueRange{pos},
+        std::nullopt,
+        nullptr);
+
+//    comet_vdump(new_for_loop);
+//    comet_debug() << "\n";
+
+    /// Move the old_for_loop's body to the new_for_loop
+//    llvm::SmallVector<Type> argTypes = {indexType};
+//    argTypes.push_back(indexTree::SymbolicDomainType::get(rewriter.getContext(), 64));
+//    llvm::SmallVector<Location> locs;
+//    for (auto arg : new_for_loop.getOperands()) {
+//      locs.push_back(arg.getLoc());
+//      comet_vdump(arg);
+//    }
+//    Block *block = rewriter.createBlock(/*body=*/&new_for_loop.getRegion(),
+//                                                 {},
+//                                                 TypeRange(argTypes),
+//                                                 locs);
+//    for ([[maybe_unused]] auto arg : block->getArguments()) {
+//      comet_vdump(arg);
+//    }
+//    rewriter.inlineBlockBefore(&old_for_loop.getRegion().front(),
+//                               new_for_loop.getTerminator(),
+////                              new_for_loop->getOperands());
+//                               block->getArguments());
+    llvm::SmallVector<Value> argValues;
+    for (auto var : new_for_loop.getInductionVars()) {
+      argValues.push_back(var);
+    }
+    for (auto arg : new_for_loop.getRegionIterArgs()) {
+      argValues.push_back(arg);
+    }
+//    rewriter.inlineBlockBefore(old_for_loop.getBody(),
+//                               new_for_loop.getTerminator(),
+//                               argValues);
+    rewriter.inlineBlockBefore(old_for_loop.getBody(),
+                               new_for_loop.getBody(),
+                               new_for_loop.getBody()->begin(),
+                               argValues);
+    rewriter.eraseOp(new_for_loop.getBody()->getTerminator());  /// For some reason, there is an empty scf.forall.in_parallel op that can be deleted, otherwise we cannot get the real terminator (scf.forall.in_parallel op).
+    comet_vdump(old_for_loop);
+    comet_vdump(new_for_loop);
+
+//    rewriter.eraseOp(old_for_loop);
+    rewriter.replaceOp(old_for_loop, new_for_loop);
+    return new_for_loop;
+  }
+
+  mlir::UnrealizedConversionCastOp CreateInnerSymbolicDomain(scf::ForallOp forall_loop,
+                                 mlir::IRRewriter &rewriter,
+                                 mlir::Location &loc,
+                                 SymbolicDomainInfo symbolic_domain_info)
+  {
+    /// Generate the new symbolic_domain.
+    /// %pos_new_2 = scf.for_all ... %i, %arg1=%pos:
+    ///    %symbolic_domain_inner = mlir.unrealized_cast(/*pos_size=*/ %i,
+    ///                                                  /*constant for now*/ %pos_alloc_size,
+    ///                                                  /*crd_size=*/ %zero,
+    ///                                                  /*constant*/ %dim_size,
+    ///                                                  /*pos=*/ %arg_1,
+    ///                                                  /*private*/ %mark)
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPointToStart(forall_loop.getBody());
+    auto result_type = indexTree::SymbolicDomainType::get(rewriter.getContext(), 64);
+    llvm::SmallVector<Value> inputs;
+    for (auto var : forall_loop.getInductionVars()) {
+      inputs.push_back(var);
+    }  /// SymbolicDomain.pos_size
+    inputs.push_back(symbolic_domain_info.pos_alloc_size);  /// SymbolicDomain.pos_alloc_size
+    Value zero = rewriter.create<arith::ConstantIndexOp>(loc, 0);  /// SymbolicDomain.crd_size
+    inputs.push_back(zero);
+    inputs.push_back(symbolic_domain_info.dim_size);  /// SymbolicDomain.dim_size
+    for (auto arg : forall_loop.getRegionIterArgs()) {
+      inputs.push_back(arg);
+    }  /// SymbolicDomain.pos
+    inputs.push_back(symbolic_domain_info.mark_array);
+    mlir::UnrealizedConversionCastOp symbolic_domain_inner =
+        rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
+                                                          result_type,
+                                                          inputs);
+
+    return symbolic_domain_inner;
+  }
+
+
+  scf::ForOp GetInnerForOp(scf::ForallOp forall_loop)
+  {
+    scf::ForOp inner_for_loop = nullptr;
+    for (auto pos_i : forall_loop.getRegionIterArgs()) {
+      for (auto user : pos_i.getUsers()) {
+        if ((inner_for_loop = llvm::dyn_cast<scf::ForOp>(user))) {
+          break;
+        }
+      }
+      if (inner_for_loop) {
+        break;
+      }
+    }
+    if (!inner_for_loop) {
+      assert(false && "Expected at least one scf.for inside the scf.forall.");
+    }
+
+    return inner_for_loop;
+  }
+
+  scf::ForOp ReplaceInnerForOp(scf::ForOp old_inner_for_loop,
+                               Value inner_symbolic_domain,
+                               mlir::IRRewriter &rewriter,
+                               mlir::Location &loc)
+  {
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(old_inner_for_loop);
+
+    /// Create a new inner for-loop
+    auto lower_bound = old_inner_for_loop.getLowerBound();
+    auto upper_bound = old_inner_for_loop.getUpperBound();
+    auto step = old_inner_for_loop.getStep();
+    llvm::SmallVector<Value> inputs = {inner_symbolic_domain};
+    scf::ForOp new_inner_for_loop = rewriter.create<scf::ForOp>(loc,
+                                                                lower_bound,
+                                                                upper_bound,
+                                                                step,
+                                                                inputs);
+    /// Move the body from the old for-loop to the new one.
+    llvm::SmallVector<Value> argValues = {new_inner_for_loop.getInductionVar()};
+    for (auto arg : new_inner_for_loop.getRegionIterArgs()) {
+      argValues.push_back(arg);
+    }
+    comet_debug() << old_inner_for_loop.getBody()->getNumArguments() << "\n";
+    rewriter.inlineBlockBefore(old_inner_for_loop.getBody(),
+                               new_inner_for_loop.getBody(),
+                               new_inner_for_loop.getBody()->begin(),
+                               argValues);
+
+    comet_vdump(old_inner_for_loop);
+    comet_vdump(new_inner_for_loop);
+
+    rewriter.replaceOp(old_inner_for_loop, new_inner_for_loop);
+
+    return new_inner_for_loop;
+  }
+
+  void InsertExtractSliceForPos(scf::ForallOp forall_loop,
+                                mlir::UnrealizedConversionCastOp symbolic_domain_inner,
+                                mlir::IRRewriter &rewriter,
+                                mlir::Location &loc)
+  {
+    /// Get the SymbolicDomainEndRowOp
+    indexTree::SymbolicDomainEndRowOp symbolic_domain_end_row_op = nullptr;
+    forall_loop.walk([&](indexTree::SymbolicDomainEndRowOp op) {
+      symbolic_domain_end_row_op = op;
+    });
+    assert(symbolic_domain_end_row_op && "Expected at least one indexTree::SymbolicDomainEndRowOp");
+    comet_vdump(symbolic_domain_end_row_op);
+
+    /// Unpack the symbolic_domain
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPointAfter(symbolic_domain_end_row_op);
+    IndexType indexType = rewriter.getIndexType();
+    RankedTensorType rankedTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
+    llvm::SmallVector<Type> result_types = {
+        indexType,         /// pos_size
+        indexType,         /// pos_alloc_size
+        indexType,         /// crd_size
+        indexType,         /// dim_size
+        rankedTensorType,  /// pos
+        rankedTensorType   /// mark_array
+    };
+    mlir::UnrealizedConversionCastOp unpack_symbolic_domain =
+        rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
+                                                          result_types,
+                                                          /*input=*/symbolic_domain_inner->getResult(0));
+    SymbolicDomainInfo inner_symbolic_domain_info;
+    inner_symbolic_domain_info.pos_size = unpack_symbolic_domain.getResult(0);
+    inner_symbolic_domain_info.pos_alloc_size = unpack_symbolic_domain.getResult(1);
+    inner_symbolic_domain_info.crd_size = unpack_symbolic_domain.getResult(2);
+    inner_symbolic_domain_info.dim_size = unpack_symbolic_domain.getResult(3);
+    inner_symbolic_domain_info.pos = unpack_symbolic_domain.getResult(4);
+    inner_symbolic_domain_info.mark_array = unpack_symbolic_domain.getResult(5);
+
+    /// Insert the extract_slice
+    Value input = inner_symbolic_domain_info.pos;
+    int64_t os_dim = 0;
+    int64_t nDims = rankedTensorType.getRank();
+    llvm::SmallVector<Value> sizes;
+    for (int64_t i = 0; i < nDims; ++i) {
+      if (i != os_dim && rankedTensorType.getDimSize(i) == ShapedType::kDynamic) {
+        Value idx = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(i));
+        sizes.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), input, idx));
+      }
+    }
+    SmallVector<int64_t> static_offsets(nDims, 0);
+    static_offsets[os_dim] = ShapedType::kDynamic;
+//    SmallVector<int64_t> static_offsets;
+    llvm::SmallVector<int64_t> static_sizes(rankedTensorType.getShape());
+    static_sizes[os_dim] = 1;
+    auto slice = rewriter.create<tensor::ExtractSliceOp>(
+        loc,
+        /*result_type=*/RankedTensorType::get(static_sizes, rankedTensorType.getElementType()),
+        /*tensor_source=*/input,
+        /*dynamic_offsets=*/ValueRange(forall_loop.getInductionVars()),
+        /*dynamic_sizes=*/sizes,
+        /*dynamic_strides=*/ValueRange(),
+        /*static_offsets=*/rewriter.getDenseI64ArrayAttr(static_offsets),
+        /*static_sizes=*/rewriter.getDenseI64ArrayAttr(static_sizes),
+        /*static_strides=*/rewriter.getDenseI64ArrayAttr(llvm::SmallVector<int64_t>(nDims, 1))
+        );
+
+    /// Replace the element in the scf.forall.in_parallel
+    auto par_op = forall_loop.getTerminator();
+    tensor::ParallelInsertSliceOp old_insert_slice = nullptr;
+    par_op.walk([&](tensor::ParallelInsertSliceOp op) {
+      old_insert_slice = op;
+    });
+    assert(old_insert_slice && "Expected at least one tensor::ParallelInsertSliceOp op.");
+    comet_vdump(old_insert_slice);
+    Value arg_tensor = old_insert_slice.getDest();
+    rewriter.setInsertionPoint(old_insert_slice);
+    auto new_insert_slice = rewriter.create<tensor::ParallelInsertSliceOp>(
+        loc,
+        /*src_tensor=*/slice,
+        /*dst_tensor=*/arg_tensor,
+        /*dynamic_offsets=*/ValueRange(forall_loop.getInductionVars()),
+        /*dynamic_sizes=*/sizes,
+        /*dynamic_strides=*/ValueRange(),
+        /*static_offsets=*/rewriter.getDenseI64ArrayAttr(static_offsets),
+        /*static_sizes=*/rewriter.getDenseI64ArrayAttr(static_sizes),
+        /*static_strides=*/rewriter.getDenseI64ArrayAttr(llvm::SmallVector<int64_t>(nDims, 1))
+        );
+    rewriter.replaceOp(old_insert_slice, new_insert_slice);
+
+    comet_vdump(slice.getResult());
+    comet_vdump(new_insert_slice);
+    comet_vdump(forall_loop);
+    comet_debug() << "\n";
+  }
+
+  void LegalizeSymbolicForallOp(func::FuncOp func)
+  {
+    scf::ForallOp old_for_loop = nullptr;
+    func.walk([&](scf::ForallOp op) {
+      int count = 0;
+      for (auto &arg : op.getOutputsMutable()) {
+        ++count;
+        if (count > 1 || !llvm::isa<indexTree::SymbolicDomainType>(arg.get().getType())) {
+          return;
+        } else {
+          old_for_loop = op;
+        }
+      }
+    });
+
+    if (!old_for_loop) {
+      return;
+    }
+    comet_vdump(old_for_loop);
+    comet_debug() << "\n";
+    SymbolicDomainInfo symbolic_domain_info;
+    mlir::OpBuilder builder(old_for_loop);
+    mlir::IRRewriter rewriter(builder);
+    mlir::Location loc = old_for_loop->getLoc();
+
+    /// Create a new scf.forall taking the vector `pos` as its operand
+    scf::ForallOp new_forall_loop = CreateNewForallOp(old_for_loop,
+                                                      rewriter,
+                                                      loc,
+                                                      symbolic_domain_info/*out*/);
+
+    /// Generate the new symbolic_domain.
+    mlir::UnrealizedConversionCastOp symbolic_domain_inner =
+        CreateInnerSymbolicDomain(new_forall_loop,
+                                  rewriter,
+                                  loc,
+                                  symbolic_domain_info);
+    comet_vdump(symbolic_domain_inner);
+    comet_vdump(new_forall_loop);
+
+    /// Find the inner for-loop
+    scf::ForOp inner_for_loop = GetInnerForOp(new_forall_loop);
+    comet_vdump(inner_for_loop);
+
+    /// For the inner for-loop, replace its operand with the new symbolic_domain.
+    scf::ForOp new_inner_for_loop = ReplaceInnerForOp(inner_for_loop,
+                                                      symbolic_domain_inner.getResult(0),
+                                                      rewriter,
+                                                      loc);
+    /// Use unrealized_cast to unpack the finished symbolic_domain, so that we can get the vector `pos`,
+    /// create `extract_slice` from this new `pos`, then do `parallel_insert_slice` from the slice to
+    /// the input scf.forall's argumet `pos`
+    InsertExtractSliceForPos(new_forall_loop,
+                             symbolic_domain_inner,
+                             rewriter,
+                             loc);
+
+
+    comet_vdump(new_forall_loop->getParentOfType<ModuleOp>());
+    comet_pdump(new_forall_loop.getBody()->getTerminator());
+    comet_debug() << "\n";
+
+    /// TODO: insert the accumulating for-loop for vector `pos` after the new-forall-loop, and also get the final `crd_size`
+
+    /// TODO: Generate unrealized_cast from the `crd_size` and vector `final-pos` to a `final-symbolic-domain`.
+
+    /// TODO: The `itree` will yield this `final-symbolic-domain`, then delete the old outer-for-loop (which is the old yield so cannot be deleted before).
+  }
+
   struct LowerIndexTreeToSCFPass
       : public PassWrapper<LowerIndexTreeToSCFPass, OperationPass<func::FuncOp>>
   {
@@ -1295,6 +1771,9 @@ namespace
       LoopInfo* parent_info = nodeMap.find(op.getParent())->getSecond();
       rewriter.setInsertionPoint(parent_info->loopBody);
       Value symbolic_domain = mapInputIntoLoop(op.getDomain(), parent_info);
+      {
+        comet_vdump(symbolic_domain);
+      }
       Value new_domain = rewriter.create<SymbolicDomainInsertOp>(loc, 
                                                                  symbolic_domain.getType(),
                                                                  symbolic_domain,
@@ -1685,16 +2164,22 @@ namespace
       TypeConverter typeConverter;
       mlir::ConversionTarget target(getContext());
       target.addLegalDialect<scf::SCFDialect, tensor::TensorDialect>();
+      target.addIllegalOp<scf::ForallOp>();
 
       mlir::RewritePatternSet patterns(&getContext());
+//      patterns.add<TransformSymbolicForallOp>(&getContext());
       if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
         signalPassFailure();
-    
-      }
 
-    
+      LegalizeSymbolicForallOp(getOperation());
+
+      comet_vdump(funcOp->getParentOfType<ModuleOp>());
+      comet_debug() << "\n";
+    }
+
+
   };
-}
+}  /// anonymous namespace
 
 /// Lower sparse tensor algebra operation to loops
 std::unique_ptr<Pass> mlir::comet::createLowerIndexTreeToSCFPass()
