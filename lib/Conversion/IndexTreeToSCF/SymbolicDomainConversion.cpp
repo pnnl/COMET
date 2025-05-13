@@ -47,6 +47,13 @@
 using namespace mlir;
 using llvm::SmallVector;
 
+#define DEBUG_TYPE "symbolic-domain-conversion"
+
+// *********** For debug purpose *********//
+#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+// *********** For debug purpose *********//
+
 namespace mlir {
     namespace comet{
       #define GEN_PASS_DEF_CONVERTSYMBOLICDOMAINS
@@ -188,17 +195,38 @@ struct ConvertDomainDeclarationOp
     auto loc = op.getLoc();
     Type indices_type = rewriter.getIntegerType(*op.getIndicesBitwidth());
     Type index_type = rewriter.getIndexType();
-    Type memref_type = MemRefType::get({ShapedType::kDynamic,}, indices_type);
 
     Value zero = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
     Value inc = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1)); 
     Value pos_alloc_size = rewriter.create<index::AddOp>(loc, op.getNumRows(), inc);
-    TypedValue<MemRefType> pos = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{pos_alloc_size}, ValueRange(), nullptr);
     Value zero_cast = zero;
-    zero_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, pos.getType().getElementType(), zero);
+//    Type memref_type = MemRefType::get({ShapedType::kDynamic,}, indices_type);
+//    TypedValue<MemRefType> pos = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{pos_alloc_size}, ValueRange(), nullptr);
+//    zero_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, pos.getType().getElementType(), zero);
+//    rewriter.create<memref::StoreOp>(loc, zero_cast, pos, zero);
+//    Value mark_array = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{op.getDimSize()}, ValueRange(), nullptr);
+    llvm::SmallVector<int64_t> tensor_shape = {ShapedType::kDynamic};
+    Value pos = rewriter.create<tensor::EmptyOp>(
+        loc,
+        /*shape=*/tensor_shape,
+        /*element_type=*/indices_type,
+        /*dynamic_sizes=*/ValueRange{pos_alloc_size});
+    zero_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, indices_type, zero);
+    rewriter.create<tensor::InsertOp>(
+        loc,
+        /*return_type=*/pos.getType(),
+        /*element=*/zero_cast,
+        /*tensor=*/pos,
+        /*index=*/zero);
+    Value mark_array = rewriter.create<tensor::EmptyOp>(
+        loc,
+        /*shape=*/tensor_shape,
+        /*element_type=*/indices_type,
+        /*dynamic_sizes=*/ValueRange{op.getDimSize()});
+    comet_vdump(pos);
+    comet_vdump(zero_cast);
+    comet_vdump(mark_array);
 
-    rewriter.create<memref::StoreOp>(loc, zero_cast, pos, zero);
-    Value mark_array = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{op.getDimSize()}, ValueRange(), nullptr);
     auto new_op = rewriter.create<UnrealizedConversionCastOp>(
       loc, 
       op->getResultTypes(),
