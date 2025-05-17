@@ -50,7 +50,7 @@ using llvm::SmallVector;
 #define DEBUG_TYPE "symbolic-domain-conversion"
 
 // *********** For debug purpose *********//
-#define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 
@@ -112,8 +112,13 @@ struct ConvertDomainInsertOp
       {
         mark = rewriter.create<mlir::arith::IndexCastOp>(loc,  domMarkArrayT.getElementType() ,mark);
       }
-      Value mark_val = rewriter.create<memref::LoadOp>(loc, domain.mark_array, op.getCrd());
-      Value is_marked = rewriter.create<arith::CmpIOp>(loc, 
+//      Value mark_val = rewriter.create<memref::LoadOp>(loc, domain.mark_array, op.getCrd());
+      Value mark_val = rewriter.create<tensor::ExtractOp>(
+          loc,
+          rewriter.getI64Type(),  /// TODO: here assumed type i64 for the mark_array
+          domain.mark_array,
+          op.getCrd());
+      Value is_marked = rewriter.create<arith::CmpIOp>(loc,
                                     rewriter.getI1Type(),
                                     arith::CmpIPredicate::eq, 
                                     mark,
@@ -125,7 +130,8 @@ struct ConvertDomainInsertOp
 
       // We haven't seen this crd before
       rewriter.setInsertionPointToStart(if_op.elseBlock());
-      rewriter.create<memref::StoreOp>(loc, mark, domain.mark_array, op.getCrd());
+//      rewriter.create<memref::StoreOp>(loc, mark, domain.mark_array, op.getCrd());
+      rewriter.create<tensor::InsertOp>(loc, domain.mark_array.getType(), mark, domain.mark_array, op.getCrd());
       Value new_crd_size = rewriter.create<index::AddOp>(loc, index_type, domain.crd_size, one);
       rewriter.create<scf::YieldOp>(loc, new_crd_size);
       rewriter.setInsertionPointAfter(if_op);
@@ -167,7 +173,8 @@ struct ConvertDomainEndRowOp
     Value new_pos_size = rewriter.create<index::AddOp>(loc, index_type, domain.pos_size, inc);
     Value crd_size_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, rewriter.getIntegerType(op.getResult().getType().getIndicesBitwidth()), domain.crd_size);
     // TODO: Dynamically resize array?
-    rewriter.create<memref::StoreOp>(loc, crd_size_cast, domain.pos, new_pos_size);
+//    rewriter.create<memref::StoreOp>(loc, crd_size_cast, domain.pos, new_pos_size);
+    rewriter.create<tensor::InsertOp>(loc, domain.pos.getType(), crd_size_cast, domain.pos, new_pos_size);
     Value materialized = getTypeConverter()->materializeArgumentConversion(
             rewriter,
             op.getLoc(),
@@ -263,7 +270,7 @@ struct ConvertSparseTensorOp
 
     auto loc = op.getLoc();
     Type index_type = rewriter.getIndexType();
-    Type memref_type = MemRefType::get({ShapedType::kDynamic,}, spType.getIndicesType());
+//    Type memref_type = MemRefType::get({ShapedType::kDynamic,}, spType.getIndicesType());
     Value zero = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(0));
     Value one = rewriter.create<index::ConstantOp>(loc, index_type, rewriter.getIndexAttr(1));
     Value nnz = one;
@@ -287,16 +294,29 @@ struct ConvertSparseTensorOp
           dim_size_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, spType.getIndicesType(), dim_size);
 
 
-          Value pos = rewriter.create<memref::AllocOp>(loc,  MemRefType::get({ShapedType::kDynamic,}, spType.getIndicesType()), ValueRange({rewriter.create<index::ConstantOp>(loc, 1).getResult()}));
-          rewriter.create<memref::StoreOp>(loc, dim_size_cast, pos, zero);
-          Value crd = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
-          Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
-          Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+//          Value pos = rewriter.create<memref::AllocOp>(loc,  MemRefType::get({ShapedType::kDynamic,}, spType.getIndicesType()), ValueRange({rewriter.create<index::ConstantOp>(loc, 1).getResult()}));
+//          rewriter.create<memref::StoreOp>(loc, dim_size_cast, pos, zero);
+//          Value crd = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+//          Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+//          Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+//          pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+//          crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+//          tile_pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+//          tile_crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
 
-          pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-          crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-          tile_pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-          tile_crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+          llvm::SmallVector<int64_t> tensor_shape = {ShapedType::kDynamic};
+          mlir::Type element_type = spType.getIndicesType();
+          Value pos = rewriter.create<tensor::EmptyOp>(loc, /*shape=*/tensor_shape, /*element_type=*/element_type, /*dynamic_sizes=*/ValueRange({rewriter.create<index::ConstantOp>(loc, 1).getResult()}));
+          rewriter.create<tensor::InsertOp>(loc, /*return_type=*/pos.getType(), /*element=*/dim_size_cast, /*tensor=*/pos, /*index=*/zero);
+          tensor_shape = {0};
+          Value crd = rewriter.create<tensor::EmptyOp>(loc, tensor_shape, element_type);
+          Value pos_tile = rewriter.create<tensor::EmptyOp>(loc, tensor_shape, element_type);
+          Value crd_tile = rewriter.create<tensor::EmptyOp>(loc, tensor_shape, element_type);
+
+          pos_indices.push_back(pos);
+          crd_indices.push_back(crd);
+          tile_pos_indices.push_back(pos_tile);
+          tile_crd_indices.push_back(crd_tile);
 
           dim_sizes.push_back(dim_size);
           nnz = rewriter.create<index::MulOp>(loc, index_type, nnz, dim_size);
@@ -310,14 +330,20 @@ struct ConvertSparseTensorOp
 
           Value pos = sparse_domain_op.getPos();
           Value crd = sparse_domain_op.getCrd();
-          Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
-          Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
-
           pos_indices.push_back(pos);
           crd_indices.push_back(crd);
 
-          tile_pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-          tile_crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+//          Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+//          Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+//          tile_pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+//          tile_crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+
+          llvm::SmallVector<int64_t> tensor_shape = {0};
+          Type element_type = spType.getIndicesType();
+          Value pos_tile = rewriter.create<tensor::EmptyOp>(loc, /*shape=*/tensor_shape, /*element_type=*/element_type);
+          Value crd_tile = rewriter.create<tensor::EmptyOp>(loc, tensor_shape, element_type);
+          tile_pos_indices.push_back(pos_tile);
+          tile_crd_indices.push_back(crd_tile);
 
           dim_sizes.push_back(dim_size);
           nnz = crd_size;
@@ -329,14 +355,24 @@ struct ConvertSparseTensorOp
       {
         SymbolicDomain domain_struct;
         assert(unpack_symbolic_domain(domain, domain_struct));
-        Value crd = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{domain_struct.crd_size}, ValueRange(), nullptr);
-        Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
-        Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+//        Value crd = rewriter.create<memref::AllocOp>(loc, memref_type, ValueRange{domain_struct.crd_size}, ValueRange(), nullptr);
+//        Value pos_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+//        Value crd_tile = rewriter.create<memref::AllocOp>(loc, MemRefType::get({0,}, spType.getIndicesType()));
+//        pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, domain_struct.pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+//        crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+//        tile_pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+//        tile_crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
 
-        pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, domain_struct.pos, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-        crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-        tile_pos_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, pos_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
-        tile_crd_indices.push_back(rewriter.create<bufferization::ToTensorOp>(loc, crd_tile, rewriter.getUnitAttr(), rewriter.getUnitAttr()));
+        llvm::SmallVector<int64_t> tensor_shape = {ShapedType::kDynamic};
+        Type element_type = spType.getIndicesType();
+        Value crd = rewriter.create<tensor::EmptyOp>(loc, tensor_shape, element_type, ValueRange{domain_struct.crd_size});
+        tensor_shape = {0};
+        Value pos_tile = rewriter.create<tensor::EmptyOp>(loc, tensor_shape, element_type);
+        Value crd_tile = rewriter.create<tensor::EmptyOp>(loc, tensor_shape, element_type);
+        pos_indices.push_back(domain_struct.pos);
+        crd_indices.push_back(crd);
+        tile_pos_indices.push_back(pos_tile);
+        tile_crd_indices.push_back(crd_tile);
 
         dim_sizes.push_back(domain_struct.dim_size);
         nnz = domain_struct.crd_size;
@@ -347,14 +383,16 @@ struct ConvertSparseTensorOp
 
     //Allocate values array and initialize
     Type float_type = llvm::cast<tensorAlgebra::SparseTensorType>(op.getResult().getType()).getElementType();
-    Value val_array = rewriter.create<memref::AllocOp>(loc, MemRefType::get({ShapedType::kDynamic,}, float_type), ValueRange{nnz}, ValueRange(), nullptr);
+//    Value val_array = rewriter.create<memref::AllocOp>(loc, MemRefType::get({ShapedType::kDynamic,}, float_type), ValueRange{nnz}, ValueRange(), nullptr);
+    Value val_array = rewriter.create<tensor::EmptyOp>(loc, SmallVector<int64_t>{ShapedType::kDynamic}, float_type, ValueRange{nnz});
     Value float_zero = rewriter.create<arith::ConstantOp>(loc, float_type, rewriter.getFloatAttr(float_type, 0.0));
     auto for_loop = rewriter.create<scf::ForOp>(loc, zero, nnz, one);
     rewriter.setInsertionPointToStart(for_loop.getBody());
     auto induction_var = for_loop.getInductionVar();
-    rewriter.create<memref::StoreOp>(loc, float_zero, val_array, induction_var);
+//    rewriter.create<memref::StoreOp>(loc, float_zero, val_array, induction_var);
+    rewriter.create<tensor::InsertOp>(loc, /*return_type=*/val_array.getType(), /*element=*/float_zero, /*tensor=*/val_array, /*index=*/induction_var);
     rewriter.setInsertionPointAfter(for_loop);
-    val_array = rewriter.create<bufferization::ToTensorOp>(loc, val_array, rewriter.getUnitAttr(), rewriter.getUnitAttr());
+//    val_array = rewriter.create<bufferization::ToTensorOp>(loc, val_array, rewriter.getUnitAttr(), rewriter.getUnitAttr());
 
     std::vector<Value> args;
     args.push_back(val_array);
@@ -408,13 +446,16 @@ struct ConvertSymbolicDomainsPass
         auto context = domainType.getContext();
         IntegerType indicesType = IntegerType::get(context, domainType.getIndicesBitwidth());
         Type index_type = IndexType::get(context);
-        Type memref_type = MemRefType::get({ShapedType::kDynamic,}, indicesType);
+//        Type memref_type = MemRefType::get({ShapedType::kDynamic,}, indicesType);
+        Type tensor_type = RankedTensorType::get({ShapedType::kDynamic}, indicesType);
         types.push_back(index_type);
         types.push_back(index_type);
         types.push_back(index_type);
         types.push_back(index_type);
-        types.push_back(memref_type);
-        types.push_back(memref_type);
+//        types.push_back(memref_type);
+//        types.push_back(memref_type);
+        types.push_back(tensor_type);
+        types.push_back(tensor_type);
         return success();
       });
 
@@ -453,6 +494,9 @@ struct ConvertSymbolicDomainsPass
 
     if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
       signalPassFailure();
+
+    comet_vdump(getOperation()->getParentOfType<ModuleOp>());
+    comet_debug() << "\n";
   }
 };
 
