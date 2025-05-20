@@ -171,11 +171,11 @@ namespace
   };
 
   struct SymbolicDomainInfo {
-    Value pos_size;        /// pos array's current size, the row that is working on
+    Value pos_size;        /// pos array's current size, [the row that is working on], mark value base.
     Value pos_alloc_size;  /// [constant for now, could be dynamic for future] pos array's capacity
-    Value crd_size;        /// [private to thread, and set to 0 for each row]
+    Value crd_size;        /// [private to thread, and set to 0 for each row] crd size of each row
     Value dim_size;        /// [constant] mark array's capcity
-    Value pos;             /// pos array.
+    Value pos;             /// [shared by rows] pos array.
     Value mark_array;      /// [private to thread]
   };
 
@@ -1461,6 +1461,14 @@ namespace
     return new_inner_for_loop;
   }
 
+  /*
+    %68 = "it.SymbolicDomainEndRowOp"(%67) <{needs_mark = true}> : (!it.symbolic_domain<64>) -> !it.symbolic_domain<64>
+    %69:6 = builtin.unrealized_conversion_cast %68 : !it.symbolic_domain<64> to index, index, index, index, tensor<?xi64>, tensor<?xi64>
+    %extracted_slice_52 = tensor.extract_slice %69#4[%69#4] [1] [1] : tensor<?xi64> to tensor<1xi64>
+    scf.forall.in_parallel {
+      tensor.parallel_insert_slice %extracted_slice_52 into %arg2[%69#4] [1] [1] : tensor<1xi64> into tensor<?xi64>
+    }
+   */
   void InsertExtractSliceForPos(scf::ForallOp forall_loop,
                                 mlir::IRRewriter &rewriter,
                                 mlir::Location &loc)
@@ -1501,6 +1509,7 @@ namespace
 
     /// Insert the extract_slice
     Value input = inner_symbolic_domain_info.pos;
+    llvm::SmallVector<Value> dynamic_offsets = {inner_symbolic_domain_info.pos_size};
     int64_t os_dim = 0;
     int64_t nDims = rankedTensorType.getRank();
     llvm::SmallVector<Value> sizes;
@@ -1512,14 +1521,13 @@ namespace
     }
     SmallVector<int64_t> static_offsets(nDims, 0);
     static_offsets[os_dim] = ShapedType::kDynamic;
-//    SmallVector<int64_t> static_offsets;
     llvm::SmallVector<int64_t> static_sizes(rankedTensorType.getShape());
     static_sizes[os_dim] = 1;
     auto slice = rewriter.create<tensor::ExtractSliceOp>(
         loc,
         /*result_type=*/RankedTensorType::get(static_sizes, rankedTensorType.getElementType()),
         /*tensor_source=*/input,
-        /*dynamic_offsets=*/ValueRange(forall_loop.getInductionVars()),
+        /*dynamic_offsets=*/dynamic_offsets,
         /*dynamic_sizes=*/sizes,
         /*dynamic_strides=*/ValueRange(),
         /*static_offsets=*/rewriter.getDenseI64ArrayAttr(static_offsets),
@@ -1541,7 +1549,7 @@ namespace
         loc,
         /*src_tensor=*/slice,
         /*dst_tensor=*/arg_tensor,
-        /*dynamic_offsets=*/ValueRange(forall_loop.getInductionVars()),
+        /*dynamic_offsets=*/dynamic_offsets,
         /*dynamic_sizes=*/sizes,
         /*dynamic_strides=*/ValueRange(),
         /*static_offsets=*/rewriter.getDenseI64ArrayAttr(static_offsets),
@@ -1558,11 +1566,11 @@ namespace
 
   /*
     %accumulator = arith.constant 0 : i64
-    %68:2 = scf.for %i = %c0 to %N step %c1 iter_args(%arg6 = %accumulator, %arg7 = %pos) -> (i64, tensor<?xi64>) {
+    %68:2 = scf.for %i = %c1 to %N_plus_one step %c1 iter_args(%arg6 = %accumulator, %arg7 = %pos) -> (i64, tensor<?xi64>) {
         %curr = tensor.extract %arg7[%i] : tensor<?xi64>
-        %inserted = tensor.insert %arg6 into %arg7[%i] : tensor <?xi64>
-        %offset = arith.addi %arg6, %curr : i64
-        scf.yield %offset, %inserted : i64, tensor<?xi64>
+        %added = arith.addi %arg6, %curr : i64
+        %inserted = tensor.insert %added into %arg7[%i] : tensor<?xi64>
+        scf.yield %added, %inserted : i64, tensor<?xi64>
     }
    */
   ValueRange InsertAccumulatingLoopForPos(scf::ForallOp forall_loop,
@@ -1582,9 +1590,11 @@ namespace
     comet_vdump(pos_input);
     llvm::SmallVector<Value> inputs = {acc_0, pos_input};
 
-    Value lower_bound = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-    auto upper_bound = forall_loop.getUpperBound(rewriter).front();
-    Value step = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    Value cst_index_one = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    Value forall_loop_bound = forall_loop.getUpperBound(rewriter).front();
+    Value lower_bound = cst_index_one;
+    auto upper_bound = rewriter.create<arith::AddIOp>(loc, forall_loop_bound, cst_index_one);
+    Value step = cst_index_one;
     auto acc_for_loop = rewriter.create<scf::ForOp>(loc,
                                 lower_bound,
                                 upper_bound,
@@ -1600,33 +1610,35 @@ namespace
         loc,
         /*tensor=*/acc_pos,
         /*index=*/i_var);
-    /* %inserted = tensor.insert %arg6 into %arg7[%i] : tensor <?xi64> */
-    Value inserted = rewriter.create<tensor::InsertOp>(loc,
-                                                       /*return_type=*/pos_input.getType(),
-                                                       /*element=*/acc_size,
-                                                       /*tensor=*/acc_pos,
-                                                       /*index=*/i_var);
-    /* %offset = arith.addi %arg6, %curr : i64 */
-    Value offset = rewriter.create<arith::AddIOp>(loc,
-                                                  rewriter.getI64Type(),
-                                                  acc_size,
-                                                  curr);
-    /* scf.yield %offset, %inserted : i64, tensor<?xi64> */
+
+    /* %added = arith.addi %arg6, %curr : i64 */
+    Value added = rewriter.create<arith::AddIOp>(loc,
+                                                 rewriter.getI64Type(),
+                                                 curr,
+                                                 acc_size);
+
+    /* %inserted = tensor.insert %added into %arg7[%i] : tensor<?xi64> */
+    Value inserted = rewriter.create<tensor::InsertOp>(
+        loc,
+        /*return_type=*/pos_input.getType(),
+        /*element=*/added,
+        /*tensor=*/acc_pos,
+        /*index=*/i_var);
+    /* scf.yield %added, %inserted : i64, tensor<?xi64> */
     rewriter.create<scf::YieldOp>(loc,
-                                  ValueRange{offset, inserted});
+                                  ValueRange{added, inserted});
     comet_vdump(acc_for_loop);
 
     return acc_for_loop.getResults();
   }
 
   /*
-    %inserted = tensor.insert %68#0 into %68#1[%N] : tensor<?xi64>
-    %final_domain = unrealized_cast(%num_iters_of_loop + 1,  // pos_size
-                                %alloc_size,                 // pos_alloc_size
-                                %68#0, // %accumulator       // crd_size
-                                %dim_size,                   // dim_size
-                                %inserted, // %pos_final     // pos
-                                %mark_array);                // mark_array
+    %final_domain = unrealized_cast(%num_iters_of_loop,
+                                    %alloc_size,
+                                    %68#0, // %accumulator
+                                    %dim_size,
+                                    %68#1, // %pos_final
+                                    %mark_array);
     it.yield %final_domain;
    */
   void FinalizeSymbolicDomain(scf::ForallOp forall_loop,
@@ -1644,32 +1656,25 @@ namespace
     rewriter.setInsertionPoint(yield_op);
     Value acc_size = acc_for_loop_results[0];
     Value acc_pos = acc_for_loop_results[1];
-    Value index = forall_loop.getUpperBound(rewriter).front();
+    Value num_rows = forall_loop.getUpperBound(rewriter).front();
 
-    /* %inserted = tensor.insert %68#0 into %68#1[%N] : tensor<?xi64> */
-    Value inserted = rewriter.create<tensor::InsertOp>(loc,
-                                                       /*return_type=*/acc_pos.getType(),
-                                                       /*element=*/acc_size,
-                                                       /*tensor=*/acc_pos,
-                                                       /*index=*/index);
     /*
-      %final_domain = unrealized_cast(%num_iters_of_loop + 1,
-                                %alloc_size,
-                                %68#0, // %accumulator
-                                %dim_size,
-                                %inserted, // %pos_final
-                                %mark_array);
+      %final_domain = unrealized_cast(%num_iters_of_loop,
+                                      %alloc_size,
+                                      %68#0, // %accumulator
+                                      %dim_size,
+                                      %68#1, // %pos_final
+                                      %mark_array);
      */
     auto result_type = indexTree::SymbolicDomainType::get(rewriter.getContext(), 64);
     llvm::SmallVector<Value> inputs;
-    Value const_1 = rewriter.create<arith::ConstantIndexOp>(loc, 1);
-    inputs.push_back(rewriter.create<arith::AddIOp>(loc, index, const_1));  /// pos_size
+    inputs.push_back(num_rows);  /// pos_size
     inputs.push_back(old_symbolic_domain_info.pos_alloc_size);              /// pos_alloc_size
     inputs.push_back(rewriter.createOrFold<arith::IndexCastOp>(loc,
                                                                rewriter.getIndexType(),
                                                                acc_size));  /// crd_size
     inputs.push_back(old_symbolic_domain_info.dim_size);                    /// dim_size
-    inputs.push_back(inserted);                                             /// pos
+    inputs.push_back(acc_pos);                                              /// pos
     inputs.push_back(old_symbolic_domain_info.mark_array);                  /// mark_array
     mlir::UnrealizedConversionCastOp final_symbolic_domain =
         rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
@@ -1731,6 +1736,7 @@ namespace
                       symbolic_domain_inner.getResult(0),
                       rewriter,
                       loc);
+
     /// Use unrealized_cast to unpack the finished symbolic_domain, so that we can get the vector `pos`,
     /// create `extract_slice` from this new `pos`, then do `parallel_insert_slice` from the slice to
     /// the input scf.forall's argumet `pos`

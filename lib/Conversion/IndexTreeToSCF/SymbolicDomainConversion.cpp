@@ -62,11 +62,11 @@ namespace mlir {
 }
 
 struct SymbolicDomain {
-  Value pos_size;        /// pos array's current size, the row that is working on
+  Value pos_size;        /// pos array's current size, [the row that is working on], mark value base.
   Value pos_alloc_size;  /// [constant for now, could be dynamic for future] pos array's capacity
-  Value crd_size;        /// [private to thread, and set to 0 for each row]
+  Value crd_size;        /// [private to thread, and set to 0 for each row] crd size of each row
   Value dim_size;        /// [constant] mark array's capcity
-  Value pos;             /// pos array.
+  Value pos;             /// [shared by rows] pos array.
   Value mark_array;      /// [private to thread]
 };
 
@@ -151,6 +151,7 @@ struct ConvertDomainInsertOp
                 domain.mark_array
               }
     );
+    comet_vdump(materialized);
     rewriter.replaceOp(op, {materialized});
     return success();
   }
