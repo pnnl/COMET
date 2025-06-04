@@ -346,7 +346,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             auto extract = extracts.find(extractOp);
             if(extract == extracts.end())
             {
-                assert(false);
                 int64_t rank = extractOp.getTensor().getType().getRank();
                 builder.setInsertionPoint(extractOp);
                 bufferization::ToTensorOp toTensorOp = mlir::cast<bufferization::ToTensorOp>(extractOp.getTensor().getDefiningOp());
@@ -392,10 +391,26 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                         collapsed_indices.clear();
                     }
                 }
+                if(!collapsed_indices.empty())
+                {
+                    if(!all_collapsed_indices.empty())
+                    {
+                        all_collapsed_indices.back().insert(all_collapsed_indices.back().end(), collapsed_indices.begin(), collapsed_indices.end());
+                    }
+                    else 
+                    {
+                        all_collapsed_indices.push_back(collapsed_indices);
+                    }
+                    collapsed_indices.clear();
+                }
 
                 if(all_collapsed_indices.size() != resultShape.getRank())
                 {
                     castSliceShape = builder.create<mlir::tensor::CollapseShapeOp>(extractOp->getLoc(), castSliceShape, all_collapsed_indices);
+                    if(mlir::cast<RankedTensorType>(castSliceShape.getType()).getRank() == 1 && mlir::cast<RankedTensorType>(castSliceShape.getType()).getDimSize(0) == 1)
+                    {
+                        castSliceShape = builder.create<mlir::tensor::ExtractOp>(extractOp->getLoc(), castSliceShape, mlir::ValueRange{builder.create<arith::ConstantIndexOp>(extractOp->getLoc(), 0)});
+                    }
                 }
 
                 extractOp.replaceAllUsesWith(castSliceShape);
@@ -480,10 +495,26 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     collapsed_indices.clear();
                 }
             }
+            if(!collapsed_indices.empty())
+            {
+                if(!all_collapsed_indices.empty())
+                {
+                    all_collapsed_indices.back().insert(all_collapsed_indices.back().end(), collapsed_indices.begin(), collapsed_indices.end());
+                }
+                else 
+                {
+                    all_collapsed_indices.push_back(collapsed_indices);
+                }
+                collapsed_indices.clear();
+            }
 
             if(all_collapsed_indices.size() != resultShape.getRank())
             {
                 castSliceShape = builder.create<mlir::tensor::CollapseShapeOp>(extractOp->getLoc(), castSliceShape, all_collapsed_indices);
+                if(mlir::cast<RankedTensorType>(castSliceShape.getType()).getRank() == 1 && mlir::cast<RankedTensorType>(castSliceShape.getType()).getDimSize(0) == 1)
+                {
+                    castSliceShape = builder.create<mlir::tensor::ExtractOp>(extractOp->getLoc(), castSliceShape, mlir::ValueRange{builder.create<arith::ConstantIndexOp>(extractOp->getLoc(), 0)});
+                }
             }
             extract->first.replaceAllUsesWith(castSliceShape);
             extract->first->erase();
@@ -946,7 +977,51 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
 
                 auto type = mlir::RankedTensorType::get(blockSizesLiteral, insertOp.getResult().getType().getElementType());
                 builder.setInsertionPoint(insertOp);
-                auto castSliceShape = builder.create<mlir::tensor::CastOp>(insertOp->getLoc(), type, insertOp.getScalar());
+                Value insert_val = insertOp.getScalar();
+                auto insert_shape = dyn_cast<RankedTensorType>(insert_val.getType());
+                
+                if(insert_shape && insert_shape.getRank() != type.getRank())
+                {
+                    SmallVector<SmallVector<int64_t, 2>,2> all_expanded_indices;
+                    
+                    SmallVector<int64_t, 2> expanded_indices;
+                    SmallVector<int64_t, 2> shape;
+                    int64_t static_index = 0;
+                    for(auto [i, d] : llvm::enumerate(type.getShape()))
+                    {
+                        expanded_indices.push_back(i);
+                        if(d != 1)
+                        {
+                            shape.push_back(insert_shape.getDimSize(static_index++));
+                            all_expanded_indices.push_back(expanded_indices);
+                            expanded_indices.clear();
+                        }
+                        else
+                        {
+                            shape.push_back(1);
+                        }
+                    }
+                    if(!expanded_indices.empty())
+                    {
+                        if(!all_expanded_indices.empty())
+                        {
+                            all_expanded_indices.back().insert(all_expanded_indices.back().end(), expanded_indices.begin(), expanded_indices.end());
+                        }
+                        else 
+                        {
+                            all_expanded_indices.push_back(expanded_indices);
+                        }
+                        expanded_indices.clear();
+                    }
+
+                    insert_val = builder.create<mlir::tensor::ExpandShapeOp>(insertOp->getLoc(), mlir::RankedTensorType::get(shape, insert_shape.getElementType()), insert_val, all_expanded_indices);
+                }
+                else if(!insert_shape)
+                {
+                    insert_val = builder.create<mlir::tensor::SplatOp>(insertOp->getLoc(), type, insert_val);
+                }
+                
+                auto castSliceShape = builder.create<mlir::tensor::CastOp>(insertOp->getLoc(), type, insert_val);
     
                 auto insertSlice = builder.create<mlir::tensor::InsertSliceOp>(insertOp->getLoc(), castSliceShape, insertOp.getDest(), mlir::ValueRange(offsets), mlir::ValueRange(blockSizes), mlir::ValueRange(strides), static_offsets, mlir::ArrayRef(blockSizesLiteral), mlir::ArrayRef(stridesLiteral));
                 // llvm::errs() << "Erasing: " << insertOp << insertOp.getAsOpaquePointer();
@@ -1010,6 +1085,18 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                         shape.push_back(1);
                     }
                 }
+                if(!expanded_indices.empty())
+                {
+                    if(!all_expanded_indices.empty())
+                    {
+                        all_expanded_indices.back().insert(all_expanded_indices.back().end(), expanded_indices.begin(), expanded_indices.end());
+                    }
+                    else 
+                    {
+                        all_expanded_indices.push_back(expanded_indices);
+                    }
+                    expanded_indices.clear();
+                }
 
                 insert_val = builder.create<mlir::tensor::ExpandShapeOp>(insert->first->getLoc(), mlir::RankedTensorType::get(shape, insert_shape.getElementType()), insert_val, all_expanded_indices);
             }
@@ -1022,6 +1109,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
 
             /// TODO: It might make sense to replaceAll uses at some point later
             // insert->first.replaceAllUsesWith(insertSlice.getResult());
+            return WalkResult::advance(); // Continue walking
         });
 
 
