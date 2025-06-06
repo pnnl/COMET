@@ -79,7 +79,7 @@ using llvm::SmallDenseMap;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-//#define COMET_DEBUG_MODE
+#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 
@@ -177,6 +177,12 @@ namespace
     Value dim_size;        /// [constant] mark array's capcity
     Value pos;             /// [shared by rows] pos array.
     Value mark_array;      /// [private to thread]
+  };
+
+  struct NumericSparseTensorInfo {
+    Value pos;
+    Value crds;
+    Value vals;
   };
 
   /// ----------------- ///
@@ -575,12 +581,19 @@ namespace
           {
             tt = llvm::cast<RankedTensorType>(input.get().getType());
           }
-          else if (llvm::isa<indexTree::SymbolicDomainType>(input.get().getType()))
+          else if (llvm::isa<indexTree::SymbolicDomainType>(input.get().getType()) /* for symbolic phase's symbolic_domain */
+              || llvm::isa<tensorAlgebra::SparseTensorType>(input.get().getType()) /* for numeric phase's sparse_tensor */
+              || llvm::isa<tensorAlgebra::WorkspaceType>(input.get().getType()) /* for numeric phase's workspace */)
           { /// A dummy RankedTensorType. Later, the pos array is supposed to be the same type.
             tt = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
           }
+//          else if (llvm::isa<tensorAlgebra::WorkspaceType>(input.get().getType()))
+//          {
+//            continue;
+//          }
           else
           {
+            comet_vdump(input.get());
             assert(false && "Non supported type of input.");
           }
 //          RankedTensorType tt = llvm::cast<RankedTensorType>(input.get().getType());
@@ -637,6 +650,10 @@ namespace
           comet_pdump(slice);
         }
         for(auto& input : for_loop.getOutputsMutable()) {
+//          if (llvm::isa<tensorAlgebra::WorkspaceType>(input.get().getType()))
+//          {
+//            continue;
+//          }
           rewriter.setInsertionPoint(par_op);
           auto& os = output_sets.at(input.get());
           auto tt = cast<RankedTensorType>(slice->getType());
@@ -1351,6 +1368,12 @@ namespace
     for (auto arg : new_forall_loop.getRegionIterArgs()) {
       argValues.push_back(arg);
     }
+//    argValues.insert(argValues.end(),
+//                     new_forall_loop.getInductionVars().begin(),
+//                     new_forall_loop.getInductionVars().end());
+//    argValues.insert(argValues.end(),
+//                     new_forall_loop.getRegionIterArgs().begin(),
+//                     new_forall_loop.getRegionIterArgs().end());
 //    rewriter.inlineBlockBefore(old_forall_loop.getBody(),
 //                               new_forall_loop.getTerminator(),
 //                               argValues);
@@ -1760,6 +1783,204 @@ namespace
     comet_vdump(new_forall_loop->getParentOfType<ModuleOp>());
     comet_debug() << "\n";
   }
+
+
+  Value GetNumericWorkspace(scf::ForallOp old_forall_loop)
+  {
+    /*
+     * For example,
+     * %output:2 = scf.forall (%arg0) in (%bound) shared_outs(%arg1 = %sparse_tensor, %arg2 = %workspace)
+     * forall_loop.getRegionIterArgs(): %arg1, %arg2
+     * forall_loop.getOperands(): %bound, %sparse_tensor, %workspace
+     * forall_loop.getOutputs(): %output#0, %output#1.
+        * forall_loop.getTiedBlockArgument(%output#0) == %arg1.
+        * forall_loop.getTiedBlockArgument(%output#1) == %arg2.
+     * forall_loop.getOutputsMutable(): arg.get(): %output#0, %output#1
+     */
+//    for (auto arg : old_forall_loop.getRegionIterArgs()) {
+//      comet_vdump(arg);
+//    }
+//    for (auto arg : old_forall_loop.getOperands()) {
+//      comet_vdump(arg);
+//    }
+//    for (auto &arg : old_forall_loop.getOutputsMutable()) {
+//      comet_vdump(arg.get());
+//    }
+    uint32_t count = 0;
+    Value workspace = nullptr;
+    for (auto arg : old_forall_loop.getOutputs()) {
+      comet_vdump(arg);
+      if (llvm::isa<tensorAlgebra::WorkspaceType>(arg.getType())) {
+        workspace = arg;
+        ++count;
+      }
+    }
+    assert(count == 1 && "Error: expected only one workspace.");
+    return workspace;
+  }
+
+
+  scf::ForallOp CreateNumericNewForallOp(scf::ForallOp old_forall_loop,
+                                         Value workspace,
+                                         mlir::IRRewriter &rewriter,
+                                         mlir::Location &loc,
+                                         NumericSparseTensorInfo &sparseTensorInfo /*out*/)
+  {
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(old_forall_loop);
+
+    /// Create %pos, %crds, %vals = builtin.unrealized_conversion_cast(%old_sparse_tensor);
+    Value old_sparse_tensor = nullptr;
+    uint32_t count = 0;
+    for (auto arg : old_forall_loop.getOutputs()) {
+      if (llvm::isa<tensorAlgebra::SparseTensorType>(arg.getType())) {
+        old_sparse_tensor = arg;
+        ++count;
+      }
+    }
+    assert(count == 1 && "Error: expect one sparse_tensor");
+    RankedTensorType posTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
+    RankedTensorType crdsTensorType = posTensorType;
+    RankedTensorType valsTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getF64Type());
+    llvm::SmallVector<Type> result_types = {
+        posTensorType,
+        crdsTensorType,
+        valsTensorType
+    };
+    mlir::UnrealizedConversionCastOp unrealized_op =
+        rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
+                                                          result_types,
+                                                          /*input=*/old_sparse_tensor);
+    comet_pdump(unrealized_op->getParentOp());
+    Value pos = unrealized_op->getResult(0);
+    Value crds = unrealized_op->getResult(1);
+    Value vals = unrealized_op->getResult(2);
+    sparseTensorInfo = {pos, crds, vals};
+    SmallVector<Value> inputs = {crds, vals};
+    scf::ForallOp new_forall_loop = rewriter.create<scf::ForallOp>(
+        loc,
+        /*upperBound=*/old_forall_loop.getMixedUpperBound(),
+        /*inputs=*/inputs,
+        std::nullopt,
+        nullptr);
+
+    /// Move the old_forall_loop's body to the new_forall_loop
+    llvm::SmallVector<Value> argValues;
+    for (auto var : new_forall_loop.getInductionVars()) {
+      argValues.push_back(var);
+    }
+    for (auto arg : new_forall_loop.getRegionIterArgs()) {
+      argValues.push_back(arg);
+    }
+    rewriter.inlineBlockBefore(old_forall_loop.getBody(),
+                               new_forall_loop.getBody(),
+                               new_forall_loop.getBody()->begin(),
+                               argValues);
+    rewriter.eraseOp(new_forall_loop.getBody()->getTerminator());  /// For some reason, there is an empty scf.forall.in_parallel op that can be deleted, otherwise we cannot get the real terminator (scf.forall.in_parallel op).
+    comet_vdump(old_forall_loop);
+    comet_vdump(new_forall_loop);
+    rewriter.replaceOp(old_forall_loop, new_forall_loop);
+    return new_forall_loop;
+//    /// Replace the inner workspace with the shared workspace from outside.
+//    Value inner_worksapce = nullptr;
+//    count = 0;
+//    for (auto &arg : old_forall_loop.getOutputsMutable()) {
+//      if (llvm::isa<tensorAlgebra::WorkspaceType>(arg.get().getType())) {
+//        inner_worksapce = arg.get();
+//        ++count;
+//      }
+//    }
+//    assert(count == 1 && "Error: expect only one workspace.");
+//    rewriter.replaceAllUsesWith(inner_worksapce, workspace);
+  }
+
+  void ChangeExtractSliceOps(scf::ForallOp new_forall_loop,
+                             mlir::IRRewriter &rewriter,
+                             mlir::Location &loc,
+                             NumericSparseTensorInfo &sparseTensorInfo)
+  {
+    Value crds_arg = new_forall_loop.getRegionIterArgs()[0];
+    Value vals_arg = new_forall_loop.getRegionIterArgs()[1];
+
+    auto FindTensorExtractSliceOp = [&](Value op) {
+      Operation *result;
+      for (auto user : op.getUsers()) {
+        if (llvm::isa<tensor::ExtractSliceOp>(user)) {
+          result = user;
+          break;
+        }
+      }
+      return result;
+    };
+    Operation *crds_old_extract_slice = FindTensorExtractSliceOp(crds_arg);
+    Operation *vals_old_extract_slice = FindTensorExtractSliceOp(vals_arg);
+
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(crds_old_extract_slice);
+
+    /// Create new tensor.extract_slice, using pos to get length
+    Value index = new_forall_loop.getInductionVar(0);
+    Value pos = sparseTensorInfo.pos;
+    Type pos_element_type = mlir::getElementTypeOrSelf(pos);
+    Value offset = rewriter.create<tensor::ExtractOp>(loc,
+                                                      /*return_type=*/pos_element_type,
+                                                      /*tensor=*/pos,
+                                                      /*index=*/index);
+    auto oneAttr = rewriter.getIntegerAttr(pos_element_type, 1);
+    Value const_one = rewriter.create<arith::ConstantOp>(loc, oneAttr);
+    Value index_plus_one = rewriter.create<arith::AddIOp>(loc, index, const_one);
+    /// TODO: %length = %pos[%index + 1] - %pos[%index]
+    comet_vdump(crds_arg);
+    comet_vdump(vals_arg);
+    comet_pdump(crds_old_extract_slice);
+    comet_pdump(vals_old_extract_slice);
+    comet_vdump(const_one);
+    comet_vdump(index_plus_one);
+
+  }
+
+  void LegalizeNumericForallOp(func::FuncOp func)
+  {
+    /// Found the numeric forall
+    scf::ForallOp old_forall_loop = nullptr;
+    func.walk([&](scf::ForallOp op) {
+      int count = 0;
+      for (auto &arg : op.getOutputsMutable()) {
+        if (llvm::isa<tensorAlgebra::SparseTensorType>(arg.get().getType()) ||
+            llvm::isa<tensorAlgebra::WorkspaceType>(arg.get().getType())) {
+          ++count;
+        }
+      }
+      if (2 == count) {
+        old_forall_loop = op;
+      }
+    });
+
+    if (!old_forall_loop) {
+      return;
+    }
+    comet_vdump(old_forall_loop);
+    comet_debug() << "\n";
+    mlir::OpBuilder builder(old_forall_loop);
+    mlir::IRRewriter rewriter(builder);
+    mlir::Location loc = old_forall_loop->getLoc();
+
+    Value workspace = GetNumericWorkspace(old_forall_loop);
+    NumericSparseTensorInfo sparseTensorInfo;
+    scf::ForallOp new_forall_loop = CreateNumericNewForallOp(old_forall_loop,
+                                                             workspace,
+                                                             rewriter,
+                                                             loc,
+                                                             sparseTensorInfo/*out*/);
+
+    ChangeExtractSliceOps(new_forall_loop,
+                          rewriter,
+                          loc,
+                          sparseTensorInfo);
+
+//    ChangeWorkspaceClearOp
+  }
+
 
   struct LowerIndexTreeToSCFPass
       : public PassWrapper<LowerIndexTreeToSCFPass, OperationPass<func::FuncOp>>
@@ -2278,10 +2499,14 @@ namespace
     }
 
     void runOnOperation() override {
+
       std::vector<IndexTreeOp> iTrees;
       func::FuncOp funcOp = getOperation();
       funcOp.walk([&](IndexTreeOp op){ iTrees.push_back(op); });
-      
+
+      comet_vdump(funcOp->getParentOfType<ModuleOp>());
+      comet_debug() << "\n";
+
       for(auto op : iTrees)
       {
         OpBuilder builder(op);
@@ -2301,6 +2526,8 @@ namespace
         signalPassFailure();
 
       LegalizeSymbolicForallOp(getOperation());
+
+      LegalizeNumericForallOp(getOperation());
 
       comet_vdump(funcOp->getParentOfType<ModuleOp>());
       comet_debug() << "\n";

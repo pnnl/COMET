@@ -61,6 +61,11 @@ using namespace mlir::tensorAlgebra;
 
 #define DEBUG_TYPE "sparse_tensor"
 
+// *********** For debug purpose *********//
+#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+// *********** For debug purpose *********//
+
 namespace mlir {
   namespace comet{
     #define GEN_PASS_DEF_SPARSETENSORCONVERSIONPASS
@@ -1385,6 +1390,8 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
   SparseTensorConversionPass(const SparseTensorConversionPass &pass) = default;
 
   void runOnOperation() override {
+    comet_vdump(getOperation()->getParentOfType<ModuleOp>());
+    comet_debug() << "\n";
     auto *ctx = &getContext();
     RewritePatternSet patterns(ctx);
     TypeConverter typeConverter;
