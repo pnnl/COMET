@@ -183,6 +183,7 @@ namespace
     Value pos;
     Value crds;
     Value vals;
+    Value sparseTensor;
   };
 
   /// ----------------- ///
@@ -1855,7 +1856,7 @@ namespace
     Value pos = unrealized_op->getResult(0);
     Value crds = unrealized_op->getResult(1);
     Value vals = unrealized_op->getResult(2);
-    sparseTensorInfo = {pos, crds, vals};
+    sparseTensorInfo = {pos, crds, vals, old_sparse_tensor};
     SmallVector<Value> inputs = {crds, vals};
     scf::ForallOp new_forall_loop = rewriter.create<scf::ForallOp>(
         loc,
@@ -1894,10 +1895,11 @@ namespace
 //    rewriter.replaceAllUsesWith(inner_worksapce, workspace);
   }
 
-  void ChangeExtractSliceOps(scf::ForallOp new_forall_loop,
+  void UpdateExtractSliceOps(scf::ForallOp new_forall_loop,
+                             const NumericSparseTensorInfo &sparseTensorInfo,
                              mlir::IRRewriter &rewriter,
                              mlir::Location &loc,
-                             NumericSparseTensorInfo &sparseTensorInfo)
+                             NumericSparseTensorInfo &innerSparseTensorInfo/*out*/)
   {
     Value crds_arg = new_forall_loop.getRegionIterArgs()[0];
     Value vals_arg = new_forall_loop.getRegionIterArgs()[1];
@@ -1919,24 +1921,110 @@ namespace
     rewriter.setInsertionPoint(crds_old_extract_slice);
 
     /// Create new tensor.extract_slice, using pos to get length
+    /*
+     * %offset = %pos[%i]
+     * %size = %pos[%i + 1] - %pos[%i]
+     * %stride = 1
+     * %crds_extract_slice = tensor.extract_slice %crds[%offset] [%size] [%stride]
+     * %vals_extract_slice = tensor.extract_slice %vals[%offset] [%size] [%stride]
+     */
     Value index = new_forall_loop.getInductionVar(0);
     Value pos = sparseTensorInfo.pos;
     Type pos_element_type = mlir::getElementTypeOrSelf(pos);
+
     Value offset = rewriter.create<tensor::ExtractOp>(loc,
                                                       /*return_type=*/pos_element_type,
                                                       /*tensor=*/pos,
                                                       /*index=*/index);
-    auto oneAttr = rewriter.getIntegerAttr(pos_element_type, 1);
-    Value const_one = rewriter.create<arith::ConstantOp>(loc, oneAttr);
+    Value offset_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset);
+//    auto oneAttr = rewriter.getIntegerAttr(pos_element_type, 1);
+    Value const_one = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
     Value index_plus_one = rewriter.create<arith::AddIOp>(loc, index, const_one);
-    /// TODO: %length = %pos[%index + 1] - %pos[%index]
+    Value offset_next = rewriter.create<tensor::ExtractOp>(loc,
+                                                           pos_element_type,
+                                                           pos,
+                                                           index_plus_one);
+    Value offset_next_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset_next);
+    Value size = rewriter.create<arith::SubIOp>(loc, offset_next_index, offset_index);
+    Type crds_element_type = mlir::getElementTypeOrSelf(crds_arg);
+    Type vals_element_type = mlir::getElementTypeOrSelf(vals_arg);
+    RankedTensorType crds_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/crds_element_type);
+    RankedTensorType vals_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/vals_element_type);
+    llvm::SmallVector<Value> dynamic_offsets = {offset_index};
+    llvm::SmallVector<Value> dynamic_sizes = {size};
+    llvm::SmallVector<Value> dynamic_strides;
+    llvm::SmallVector<int64_t> static_offsets = {ShapedType::kDynamic};
+    llvm::SmallVector<int64_t> static_sizes = {ShapedType::kDynamic};
+    llvm::SmallVector<int64_t> static_strides = {1};
+    auto crds_new_extract_slice = rewriter.create<tensor::ExtractSliceOp>(
+        loc,
+        /*result_type=*/crds_tensor_type,
+        /*tensor_source=*/crds_arg,
+        /*dynamic_offsets=*/dynamic_offsets,
+        /*dynamic_sizes=*/dynamic_sizes,
+        /*dynamic_strides=*/dynamic_strides,
+        /*static_offsets=*/static_offsets,
+        /*static_sizes=*/static_sizes,
+        /*static_strides=*/static_strides);
+    auto vals_new_extract_slice = rewriter.create<tensor::ExtractSliceOp>(
+        loc,
+        /*result_type=*/vals_tensor_type,
+        /*tensor_source=*/vals_arg,
+        /*dynamic_offsets=*/dynamic_offsets,
+        /*dynamic_sizes=*/dynamic_sizes,
+        /*dynamic_strides=*/dynamic_strides,
+        /*static_offsets=*/static_offsets,
+        /*static_sizes=*/static_sizes,
+        /*static_strides=*/static_strides);
+
+    /// Pack the sparse_tensor using extracted slices
+    RankedTensorType pos_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
+    Type sparse_tensor_type = sparseTensorInfo.sparseTensor.getType();
+    comet_vdump(sparse_tensor_type);
+    llvm::SmallVector<Value> inputs = {pos, crds_new_extract_slice, vals_new_extract_slice};
+    mlir::UnrealizedConversionCastOp unrealized_op =
+        rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
+                                                          sparse_tensor_type,
+                                                          inputs);
+
+    rewriter.replaceOp(crds_old_extract_slice, crds_new_extract_slice);
+    rewriter.replaceOp(vals_old_extract_slice, vals_new_extract_slice);
+    /// Output
+    innerSparseTensorInfo.pos = pos;
+    innerSparseTensorInfo.crds = crds_new_extract_slice;
+    innerSparseTensorInfo.vals = vals_new_extract_slice;
+    innerSparseTensorInfo.sparseTensor = unrealized_op.getResult(0);
+
     comet_vdump(crds_arg);
     comet_vdump(vals_arg);
-    comet_pdump(crds_old_extract_slice);
-    comet_pdump(vals_old_extract_slice);
+//    comet_pdump(crds_old_extract_slice);
+//    comet_pdump(vals_old_extract_slice);
     comet_vdump(const_one);
     comet_vdump(index_plus_one);
+    comet_vdump(crds_new_extract_slice);
+    comet_vdump(vals_new_extract_slice);
+    comet_vdump(innerSparseTensorInfo.sparseTensor);
+    comet_vdump(new_forall_loop);
+  }
 
+  void UpdateWorkspaceClearOp(scf::ForallOp new_forall_loop,
+                             Value workspace,
+                             mlir::IRRewriter &rewriter,
+                             mlir::Location &loc)
+  {
+    Value old_workspace_clear_op;
+    uint32_t count = 0;
+    new_forall_loop.walk([&](tensorAlgebra::WorkspaceClearOp op) {
+      old_workspace_clear_op = op;
+      ++count;
+    });
+    assert(count == 1 && "Error: expect only one ta.WorkspaceClear op.");
+
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(old_workspace_clear_op.getDefiningOp());
+    Value new_workspace_clear_op = rewriter.create<tensorAlgebra::WorkspaceClearOp>(loc, workspace.getType(), workspace);
+    rewriter.replaceOp(old_workspace_clear_op.getDefiningOp(), new_workspace_clear_op.getDefiningOp());
+    comet_vdump(new_forall_loop);
   }
 
   void LegalizeNumericForallOp(func::FuncOp func)
@@ -1972,13 +2060,19 @@ namespace
                                                              rewriter,
                                                              loc,
                                                              sparseTensorInfo/*out*/);
-
-    ChangeExtractSliceOps(new_forall_loop,
+    NumericSparseTensorInfo innerSparseTensorInfo;
+    UpdateExtractSliceOps(new_forall_loop,
+                          sparseTensorInfo,
                           rewriter,
                           loc,
-                          sparseTensorInfo);
+                          innerSparseTensorInfo/*out*/);
 
-//    ChangeWorkspaceClearOp
+    UpdateWorkspaceClearOp(new_forall_loop,
+                           workspace,
+                           rewriter,
+                           loc);
+
+    /// TODO: update the inner for loop to take the new packed sparse tensor.
   }
 
 
