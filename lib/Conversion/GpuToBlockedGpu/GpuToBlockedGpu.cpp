@@ -273,7 +273,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                             if (inserts.find(insertOp) == inserts.end())
                             {
                                 llvm::SmallVector<BlockInfo, 2> vec;
-                                auto one = 1ull;
+                                uint64_t one = 1;
                                 for(size_t i = 0; i < insertOp.getIndices().size(); i++)
                                 {
 
@@ -300,7 +300,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                             if (extracts.find(extractOp) == extracts.end())
                             {
                                 llvm::SmallVector<BlockInfo, 2> vec;
-                                auto one = 1ull;
+                                uint64_t one = 1;
                                 for(size_t i = 0; i < extractOp.getIndices().size(); i++)
                                 {
 
@@ -407,10 +407,10 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                 if(all_collapsed_indices.size() != resultShape.getRank())
                 {
                     castSliceShape = builder.create<mlir::tensor::CollapseShapeOp>(extractOp->getLoc(), castSliceShape, all_collapsed_indices);
-                    if(mlir::cast<RankedTensorType>(castSliceShape.getType()).getRank() == 1 && mlir::cast<RankedTensorType>(castSliceShape.getType()).getDimSize(0) == 1)
-                    {
-                        castSliceShape = builder.create<mlir::tensor::ExtractOp>(extractOp->getLoc(), castSliceShape, mlir::ValueRange{builder.create<arith::ConstantIndexOp>(extractOp->getLoc(), 0)});
-                    }
+                }
+                if(mlir::cast<RankedTensorType>(castSliceShape.getType()).getRank() == 1 && mlir::cast<RankedTensorType>(castSliceShape.getType()).getDimSize(0) == 1)
+                {
+                    castSliceShape = builder.create<mlir::tensor::ExtractOp>(extractOp->getLoc(), castSliceShape, mlir::ValueRange{builder.create<arith::ConstantIndexOp>(extractOp->getLoc(), 0)});
                 }
 
                 extractOp.replaceAllUsesWith(castSliceShape);
@@ -511,10 +511,10 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             if(all_collapsed_indices.size() != resultShape.getRank())
             {
                 castSliceShape = builder.create<mlir::tensor::CollapseShapeOp>(extractOp->getLoc(), castSliceShape, all_collapsed_indices);
-                if(mlir::cast<RankedTensorType>(castSliceShape.getType()).getRank() == 1 && mlir::cast<RankedTensorType>(castSliceShape.getType()).getDimSize(0) == 1)
-                {
-                    castSliceShape = builder.create<mlir::tensor::ExtractOp>(extractOp->getLoc(), castSliceShape, mlir::ValueRange{builder.create<arith::ConstantIndexOp>(extractOp->getLoc(), 0)});
-                }
+            }
+            if(mlir::cast<RankedTensorType>(castSliceShape.getType()).getRank() == 1 && mlir::cast<RankedTensorType>(castSliceShape.getType()).getDimSize(0) == 1)
+            {
+                castSliceShape = builder.create<mlir::tensor::ExtractOp>(extractOp->getLoc(), castSliceShape, mlir::ValueRange{builder.create<arith::ConstantIndexOp>(extractOp->getLoc(), 0)});
             }
             extract->first.replaceAllUsesWith(castSliceShape);
             extract->first->erase();
@@ -854,14 +854,14 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                 {
                     user->replaceAllUsesWith(blockedOp);
                     newOpsToCheck.insert(newOpsToCheck.end(), blockedOp->getResults().begin(), blockedOp->getResults().end());
-                    if(useToIndices.find(user->getOperands()[1])!=useToIndices.end())
-                    {
-                        bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[1]])).second;
-                        assert(isDone);
-                    }
-                    else if(useToIndices.find(user->getOperands()[0])!=useToIndices.end())
+                    if(useToIndices.find(user->getOperands()[0])!=useToIndices.end())
                     {
                         bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[0]])).second;
+                        assert(isDone);
+                    }
+                    else if(user->getOperands().size() > 1 && useToIndices.find(user->getOperands()[1])!=useToIndices.end())
+                    {
+                        bool isDone = useToIndices.insert(std::make_pair(blockedOp->getResult(0), useToIndices[user->getOperands()[1]])).second;
                         assert(isDone);
                     }
                     // llvm::errs() << "Erasing: " << user <<"\n";

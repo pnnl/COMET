@@ -353,7 +353,15 @@ std::pair<Value, Value> generate_triton_blocked_bounds_and_offsets(ConversionPat
     if(collapsed_indices.empty())
     {
         collapsed_offsets = tritonOffsets;
-        collapsed_shape = resultShape;
+        for(auto d: resultShape)
+        {
+            if (d != 1)
+            {
+                collapsed_shape.push_back(d);        
+            }
+        }
+        // collapsed_shape = resultShape;
+        
     }
     collapsed_bounds = tritonBounds;
     for(auto collapsed: collapsed_indices)
@@ -386,8 +394,6 @@ std::pair<Value, Value> generate_triton_blocked_bounds_and_offsets(ConversionPat
         }
     }
 
-    llvm::errs() << "Collapsed indices_size: " << collapsed_indices.size() << "\n";
-    llvm::errs() << "Collapsed offsets_size: " << collapsed_offsets.size() << "\n";
     for(size_t i = 0; i < collapsed_offsets.size(); i++)
     {
         for(size_t j = 0; j <collapsed_offsets.size(); j++  )
@@ -406,7 +412,6 @@ std::pair<Value, Value> generate_triton_blocked_bounds_and_offsets(ConversionPat
         if(!collapsed_shape.empty())
         {
             collapsed_offsets[i] = rewriter.create<triton::BroadcastOp>(sliceOp->getLoc(), RankedTensorType::get(collapsed_shape, rewriter.getIntegerType(32)), collapsed_offsets[i]);
-
         }
     }
     
@@ -653,6 +658,11 @@ class ConvertExtractSlice : public OpConversionPattern<mlir::tensor::ExtractSlic
                     toReplace = extract_op;
                 }
             }
+            else if(auto extract_op = mlir::dyn_cast<mlir::tensor::ExtractOp>(*tensorCastOp->getUsers().begin()))
+            {
+                extractOp = extract_op;
+                toReplace = extract_op;
+            }
         }
         else
         {
@@ -668,6 +678,11 @@ class ConvertExtractSlice : public OpConversionPattern<mlir::tensor::ExtractSlic
                     extractOp = extract_op;
                     toReplace = extract_op;
                 }
+            }
+            else if(auto extract_op = mlir::dyn_cast<mlir::tensor::ExtractOp>(*extractSliceOp->getUsers().begin()))
+            {
+                extractOp = extract_op;
+                toReplace = extract_op;
             }
         }
 

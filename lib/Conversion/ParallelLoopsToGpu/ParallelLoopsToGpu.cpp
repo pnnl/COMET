@@ -547,17 +547,33 @@ public:
                     assert(false && "UNREACHABLE. Should vectore should only contain store or load operations");
                 }
             }
-            auto pairs = loadStorePairs.front().second;
-            pairs[0]->moveBefore(forOp);
-            pairs[1]->moveAfter(forOp);
+
+            SmallVector<Value, 2> iterArgs, yieldOps;
+            SmallVector<Operation*, 2> storeOps;
+            for(auto pair: loadStorePairs)
+            {
+                if(pair.second.size() == 2)
+                {
+                    pair.second[0]->moveBefore(forOp);
+                    pair.second[1]->moveAfter(forOp);
+                    iterArgs.push_back(pair.second[0]->getResult(0));
+                    yieldOps.push_back(pair.second[1]->getOperand(0));
+                    storeOps.push_back(pair.second[1]);
+                }
+            }
             builder.setInsertionPoint(forOp);
-            auto newForOp = builder.create<scf::ForOp>(forOp->getLoc(), forOp.getLowerBound(), forOp.getUpperBound(), forOp.getStep(), ValueRange(pairs[0]->getResult(0)));
+            auto newForOp = builder.create<scf::ForOp>(forOp->getLoc(), forOp.getLowerBound(), forOp.getUpperBound(), forOp.getStep(), ValueRange(iterArgs));
             // newForOp->dump();
             builder.setInsertionPointToEnd(newForOp.getBody());
-            builder.create<scf::YieldOp>(forOp->getLoc(), pairs[1]->getOperand(0));
-            pairs[0]->getResult(0).replaceAllUsesExcept(newForOp.getRegionIterArg(0), newForOp);
-            pairs[1]->setOperand(0, newForOp.getResult(0));
+            builder.create<scf::YieldOp>(forOp->getLoc(), yieldOps);
+            for(auto iterArg: iterArgs) {
+                iterArg.replaceAllUsesExcept(newForOp.getRegionIterArg(0), newForOp);
+            }
+            for(auto storeOp: storeOps) {
+                storeOp->setOperand(0, newForOp.getResult(0));
+            }
             forOp.getBody()->getTerminator()->erase();
+            
             for(auto& op: llvm::make_early_inc_range(forOp.getBody()->getOperations()))
             {
                 op.moveBefore(newForOp.getBody()->getTerminator());
