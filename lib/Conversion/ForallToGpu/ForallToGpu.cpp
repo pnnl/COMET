@@ -53,9 +53,10 @@
 #include "mlir/Dialect/SCF/Transforms/Transforms.h"
 
 
-#include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
+#include "comet/Conversion/ForallToGpu/ForallToGpu.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
@@ -63,7 +64,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #define GEN_PASS_CLASSES
-#include "comet/Conversion/ParallelLoopsToGpu/Passes.h.inc"
+#include "comet/Conversion/ForallToGpu/Passes.h.inc"
 
 // *********** For debug purpose *********//
 // #define COMET_DEBUG_MODE
@@ -337,23 +338,23 @@ std::pair<scf::ForOp, scf::ForOp> tileForLoop(OpBuilder& builder, scf::ForOp& op
     return std::make_pair(outerLoop, innerLoop);
 }
 
-class ParallelOpToGpu: public mlir::OpConversionPattern<mlir::scf::ParallelOp> {
+class ForallOpToGpu: public mlir::OpConversionPattern<mlir::scf::ForallOp> {
 private:
     int blockX, blockY, blockR;
 public:
-    using mlir::OpConversionPattern<mlir::scf::ParallelOp>::OpConversionPattern;
-    ParallelOpToGpu(mlir::MLIRContext* ctx, int blockX, int blockY, int blockR) : mlir::OpConversionPattern<mlir::scf::ParallelOp>(ctx), blockX(blockX), blockY(blockY), blockR(blockR) {}
+    using mlir::OpConversionPattern<mlir::scf::ForallOp>::OpConversionPattern;
+    ForallOpToGpu(mlir::MLIRContext* ctx, int blockX, int blockY, int blockR) : mlir::OpConversionPattern<mlir::scf::ForallOp>(ctx), blockX(blockX), blockY(blockY), blockR(blockR) {}
     mlir::LogicalResult
-    matchAndRewrite(mlir::scf::ParallelOp parOp, OpAdaptor adaptor,
+    matchAndRewrite(mlir::scf::ForallOp forAllOp, OpAdaptor adaptor,
                     mlir::ConversionPatternRewriter &rewriter) const override {
         
         SmallVector<Operation*, 8> worklist;
-        scf::ParallelOp otherParOp = NULL;
-        for(auto& op: parOp.getBody()->without_terminator())
+        scf::ForallOp otherforAllOp = NULL;
+        for(auto& op: forAllOp.getBody()->without_terminator())
         {
-            if(auto inner_parOp = mlir::dyn_cast<scf::ParallelOp>(op))
+            if(auto inner_forAllOp = mlir::dyn_cast<scf::ForallOp>(op))
             {
-                otherParOp = inner_parOp;
+                otherforAllOp = inner_forAllOp;
                 break;
             }
             else 
@@ -362,41 +363,81 @@ public:
             }
         }
         SmallVector<Operation*, 8> canMove;
-        if(otherParOp != NULL)
+        if(otherforAllOp != NULL)
         {
             for(auto op: worklist)
             {
-                if(isMemoryEffectFree(op) && op->getRegions().size() == 0)
+                if(op->getRegions().size() == 0)
                 {
                     canMove.push_back(op);
                 }
             }
         }
 
-        if(worklist.size() == canMove.size())
+        scf::ParallelOp parOp = nullptr;
+        if(worklist.size() == canMove.size() && otherforAllOp)
         {
-            if(!canMove.empty())
+            // if(!canMove.empty())
             {
+                llvm::errs() << "Combining\n";
+                rewriter.setInsertionPointToStart(otherforAllOp.getBody());
                 for(auto op: canMove)
                 {
-                    rewriter.setInsertionPointToStart(otherParOp.getBody());
                     auto clone = rewriter.clone(*op);
                     rewriter.replaceAllOpUsesWith(op, clone);
                     rewriter.eraseOp(op);
                 }
-                rewriter.setInsertionPoint(parOp);
-                auto combinedParOp = rewriter.create<scf::ParallelOp>(parOp->getLoc(), ValueRange({parOp.getLowerBound().front(), otherParOp.getLowerBound().front()}), ValueRange({parOp.getUpperBound().front(), otherParOp.getUpperBound().front()}), ValueRange({parOp.getStep().front(), otherParOp.getStep().front()}));
+                rewriter.setInsertionPoint(forAllOp);
+                SmallVector<Value> lbs = forAllOp.getLowerBound(rewriter);
+                SmallVector<Value> ubs = forAllOp.getUpperBound(rewriter);
+                SmallVector<Value> steps = forAllOp.getStep(rewriter);
+                SmallVector<Value> otherlbs = otherforAllOp.getLowerBound(rewriter);
+                SmallVector<Value> otherubs = otherforAllOp.getUpperBound(rewriter);
+                SmallVector<Value> othersteps = otherforAllOp.getStep(rewriter);
+
+                std::vector<Attribute> attrs;
+                if(forAllOp->hasAttr("parallelDim"))
+                {
+                    attrs.push_back(forAllOp->getAttrOfType<StringAttr>("parallelDim"));
+                }
+                if(otherforAllOp->hasAttrOfType<StringAttr>("parallelDim"))
+                {
+                    attrs.push_back(otherforAllOp->getAttrOfType<StringAttr>("parallelDim"));
+                }
+                // auto attrsAttr = ArrayRef<Attribute>(attrs);
+                auto arrayAttr = rewriter.getNamedAttr("parallelDim", rewriter.getArrayAttr(ArrayRef<Attribute>(attrs)));
+
+                auto combinedParOp = rewriter.create<scf::ParallelOp>(forAllOp->getLoc(), ValueRange({lbs.front(), otherlbs.front()}), ValueRange({ubs.front(), otherubs.front()}), ValueRange({steps.front(), othersteps.front()}));
+                combinedParOp->setAttrs(arrayAttr);
+                // for(auto attr: attrs)
+                // {
+                //     combinedParOp->setAttr("parallelDim", attr);
+                // }
                 Operation* terminator =  combinedParOp.getBody()->getTerminator();
                 rewriter.eraseOp(terminator);
-                terminator = parOp.getBody()->getTerminator();
-                rewriter.mergeBlocks(parOp.getBody(), combinedParOp.getBody(), combinedParOp.getInductionVars().front());
-                rewriter.eraseOp(parOp);
+                terminator = forAllOp.getBody()->getTerminator();
                 rewriter.eraseOp(terminator);
-                terminator = otherParOp.getBody()->getTerminator();
-                rewriter.mergeBlocks(otherParOp.getBody(), combinedParOp.getBody(), combinedParOp.getInductionVars().back());
-                rewriter.eraseOp(otherParOp);
+                rewriter.mergeBlocks(forAllOp.getBody(), combinedParOp.getBody(), combinedParOp.getInductionVars().front());
+                rewriter.eraseOp(forAllOp);
+                terminator = otherforAllOp.getBody()->getTerminator();
+                rewriter.mergeBlocks(otherforAllOp.getBody(), combinedParOp.getBody(), combinedParOp.getInductionVars().back());
+                rewriter.eraseOp(otherforAllOp);
+                // rewriter.eraseOp(terminator);
                 parOp = combinedParOp;
             }
+        }
+        else
+        {
+            SmallVector<Value> lbs = forAllOp.getLowerBound(rewriter);
+            SmallVector<Value> ubs = forAllOp.getUpperBound(rewriter);
+            SmallVector<Value> steps = forAllOp.getStep(rewriter);
+            parOp = rewriter.create<scf::ParallelOp>(forAllOp->getLoc(), lbs, ubs, steps);
+            Operation* terminator =  parOp.getBody()->getTerminator();
+            rewriter.eraseOp(terminator);
+            terminator = forAllOp.getBody()->getTerminator();
+            rewriter.eraseOp(terminator);
+            rewriter.mergeBlocks(forAllOp.getBody(), parOp.getBody(), parOp.getInductionVars());
+            rewriter.eraseOp(forAllOp);
         }
 
         llvm::SmallVector<int64_t, 3> allTileSizes = {blockY, blockX};
@@ -450,10 +491,10 @@ public:
         return success();
     }
 };
-class ConvertParallelLoopsToGpu: public CometParallelLoopsToGpuBase<ConvertParallelLoopsToGpu> {
+class ConvertForallToGpu: public CometForallToGpuBase<ConvertForallToGpu> {
 public:
-    ConvertParallelLoopsToGpu() = default;
-    ConvertParallelLoopsToGpu(int blockX, int blockY, int blockR) {
+    ConvertForallToGpu() = default;
+    ConvertForallToGpu(int blockX, int blockY, int blockR) {
         this->blockX = blockX;
         this->blockY = blockY;
         this->blockR = blockR;
@@ -468,11 +509,16 @@ public:
         }
 
         mlir::RewritePatternSet patterns(context);
-        patterns.insert<ParallelOpToGpu>(context, blockX, blockY, blockR);
+        patterns.insert<ForallOpToGpu>(context, blockX, blockY, blockR);
         
         mlir::ConversionTarget target(*context);
         target.addLegalDialect<mlir::memref::MemRefDialect, mlir::arith::ArithDialect,  mlir::affine::AffineDialect, mlir::scf::SCFDialect>();
         target.addLegalOp<mlir::scf::ReduceOp>();
+        target.addIllegalOp<mlir::scf::ForallOp>();
+        // target.addDynamicallyLegalOp<mlir::scf::ForallOp>([] (mlir::scf::ForallOp op) {
+        //     return !op->hasAttr("parallelDim");
+        // });
+
         target.addDynamicallyLegalOp<mlir::scf::ParallelOp>([](mlir::scf::ParallelOp op) -> bool {
             return op->hasAttr("mapping") && op->hasAttr("parallelDim");
         });
@@ -587,11 +633,11 @@ public:
 }
 
 
-std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> mlir::comet::createConvertParallelLoopsToGpuPass() {
-    return std::make_unique<ConvertParallelLoopsToGpu>();
+std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> mlir::comet::createConvertForallToGpuPass() {
+    return std::make_unique<ConvertForallToGpu>();
 }
 
 
-std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> mlir::comet::createConvertParallelLoopsToGpuPass(int blockX, int blockY, int blockR) {
-    return std::make_unique<ConvertParallelLoopsToGpu>(blockX, blockY, blockR);
+std::unique_ptr<mlir::OperationPass<mlir::func::FuncOp>> mlir::comet::createConvertForallToGpuPass(int blockX, int blockY, int blockR) {
+    return std::make_unique<ConvertForallToGpu>(blockX, blockY, blockR);
 }

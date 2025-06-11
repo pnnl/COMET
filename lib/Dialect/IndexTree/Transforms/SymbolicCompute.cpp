@@ -31,6 +31,7 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/IndexedMap.h"
+#include <cstddef>
 #include <cstdint>
 
 #include "comet/Dialect/IndexTree/IR/IndexTreeDialect.h"
@@ -92,7 +93,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
         if(subdomain_itr != nested_domain.getDomains().end())
         {
           auto index_node_type = indexTree::IndexNodeType::get(rewriter.getContext());
-          indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, *parent, new_domain);
+          indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, *parent, new_domain, false, nullptr);
           createMapping(index_node_op, subdomain, tensor_to_node);
           *parent = index_node_op.getOutput();
           predecessor = *parent;
@@ -286,7 +287,7 @@ struct CreateSymbolicTree :  public OpRewritePattern<IndexTreeSparseTensorOp> {
       Operation* domain_op = domain.getDefiningOp();
       Value prev_parent = parent;
       Value new_domain = copyDomain(domain, rewriter, loc, map, tensor_to_node, &parent);
-      indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, new_domain);
+      indexTree::IndexTreeIndicesOp index_node_op = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, new_domain, false, nullptr);
       createMapping(index_node_op, domain, tensor_to_node);
       if(prev_parent != parent)
       {

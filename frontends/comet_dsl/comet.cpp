@@ -106,7 +106,7 @@
 #include "comet/Conversion/PrepareGpuHost/PrepareGpuHostPass.h"
 #include "comet/Conversion/BlockedGpuToTriton/BlockedGpuToTriton.h"
 #include "comet/Conversion/GpuToBlockedGpu/GpuToBlockedGpu.h"
-#include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
+#include "comet/Conversion/ForallToGpu/ForallToGpu.h"
 #include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
@@ -596,9 +596,19 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// Blanket-convert any remaining affine ops if any remain.
   pm.addPass(mlir::createLowerAffinePass());
   /// Convert SCF to CF (always needed).
-  pm.addPass(mlir::createForallToParallelLoopPass());
-  pm.addPass(mlir::createLoopInvariantCodeMotionPass());
-  pm.addPass(mlir::createCanonicalizerPass());
+  #ifdef ENABLE_GPU_TARGET
+  if(CodegenTarget != TargetDevice::GPU)
+  {
+      pm.addPass(mlir::createForallToParallelLoopPass());
+      pm.addPass(mlir::createLoopInvariantCodeMotionPass());
+      pm.addPass(mlir::createCanonicalizerPass());    
+  }
+  #else
+    pm.addPass(mlir::createForallToParallelLoopPass());
+    pm.addPass(mlir::createLoopInvariantCodeMotionPass());
+    pm.addPass(mlir::createCanonicalizerPass());    
+  #endif
+
 
 #ifndef ENABLE_GPU_TARGET
   [[maybe_unused]] bool IsLoweringToTriton = false;
@@ -615,7 +625,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     #ifdef ENABLE_GPU_TARGET
     if (CodegenTarget == TargetDevice::GPU)
     {
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertForallToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
     }
     #endif
 

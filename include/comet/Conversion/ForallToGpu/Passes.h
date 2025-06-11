@@ -19,15 +19,15 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef COMET_PARALLEL_LOOPS_TO_GPU_CONVERSION_PASSES
-#define COMET_PARALLEL_LOOPS_TO_GPU_CONVERSION_PASSES
+#ifndef COMET_FORALL_TO_GPU_CONVERSION_PASSES
+#define COMET_FORALL_TO_GPU_CONVERSION_PASSES
 
-#include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
+#include "comet/Conversion/ForallToGpu/ForallToGpu.h"
 
 namespace mlir {
 namespace comet {
 #define GEN_PASS_REGISTRATION
-#include "comet/Conversion/ParallelLoopsToGpu/Passes.h.inc"
+#include "comet/Conversion/ForallToGpu/Passes.h.inc"
 }
 }
 

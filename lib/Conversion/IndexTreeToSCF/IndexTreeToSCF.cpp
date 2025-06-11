@@ -54,6 +54,7 @@
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Casting.h"
 
+#include <cstddef>
 #include <iostream>
 #include <algorithm>
 #include <ostream>
@@ -525,7 +526,7 @@ namespace
                             SmallDenseMap<Value, TensorSubsetInfo> output_sets): 
         LoopInfo(inputs, outputs, body, ir_map), inductionVar(i), terminator_ops(terminator_ops), output_sets(output_sets) {}
 
-      static LoopInfo* build(Operation* domain_op, IRRewriter& rewriter, ValueRange inputs, SmallDenseMap<Value, TensorSubsetInfo> output_sets)
+      static LoopInfo* build(Operation* domain_op, IRRewriter& rewriter, ValueRange inputs, SmallDenseMap<Value, TensorSubsetInfo> output_sets, StringAttr parallelDim = nullptr)
       {
         auto loc = domain_op->getLoc();
         Value ub = domain_op->getOperand(0);
@@ -535,6 +536,11 @@ namespace
           inputs,
           std::nullopt,
           nullptr);
+        if(parallelDim != nullptr) 
+        {
+          for_loop->setAttr("parallelDim", parallelDim);
+        }
+
         Value inductionVar = for_loop.getInductionVar(0);
         rewriter.setInsertionPointToStart(for_loop.getBody());
 
@@ -1516,7 +1522,7 @@ namespace
               output_sets.insert(std::make_pair(v, output_sets[tree.getBody()->getArgument(i)]));
               i++;
             }
-            return DenseParallelLoopInfo::build(op, rewriter, parent_info->getInputs(), output_sets);
+            return DenseParallelLoopInfo::build(op, rewriter, parent_info->getInputs(), output_sets, index_node_op.getParallelDimAttr());
           }
           return DenseLoopInfo::build(op, rewriter, parent_info->getInputs());
         })

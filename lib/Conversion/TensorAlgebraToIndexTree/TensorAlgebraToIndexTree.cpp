@@ -283,19 +283,30 @@ mlir::LogicalResult generalIndexOperationRewrite(
 
   std::map<int, Value> exprToIndex;
 
+
   if(device == TargetDevice::GPU || device == TargetDevice::FPGA)
   {
+    bool isSPMMCSR = getTensorFormatString(rhs1_tensor.getType()) == "CSR" and getTensorFormatString(rhs2_tensor.getType()) == "Dense" && isa<tensorAlgebra::TensorMultOp>(op);
+    
     for (unsigned i = 0; i < lhsMap.getNumResults() ; i++)
     {
-      parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel);
+      if(device == TargetDevice::GPU && isSPMMCSR && i == 0)
+      {
+        parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel, rewriter.getStringAttr("dimY_grid"));
+      }
+      else 
+      {
+        parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel, nullptr);
+      }
       exprToIndex[cast<AffineDimExpr>(lhsMap.getResult(i)).getPosition()] = parent;
     }
+    
 
     is_parallel = false;
     for (unsigned ii = 0; ii < lhsMap.getNumDims(); ii++)
     {
       if(!lhsMap.isFunctionOfDim(ii)){
-        parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel);
+        parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel, nullptr);
         exprToIndex[ii] = parent;
       }
     }
@@ -307,7 +318,7 @@ mlir::LogicalResult generalIndexOperationRewrite(
       if(!lhsMap.isFunctionOfDim(i)){
         is_parallel = false;
       }
-      parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel);
+      parent = rewriter.create<indexTree::IndexTreeIndicesOp>(loc, index_node_type, parent, nullptr, is_parallel, nullptr);
       exprToIndex[i] = parent;
     }
   }

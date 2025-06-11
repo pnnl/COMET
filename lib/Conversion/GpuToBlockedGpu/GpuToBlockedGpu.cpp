@@ -1,5 +1,5 @@
 #include "comet/Conversion/GpuToBlockedGpu/GpuToBlockedGpu.h"
-#include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
+#include "comet/Conversion/ForallToGpu/ForallToGpu.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"

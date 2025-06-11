@@ -53,7 +53,7 @@ if(ENABLE_GPU_TARGET)
   set(LIBS
     ${LIBS}
     COMETGPUUtils
-    COMETParallelLoopsToGpu
+    COMETForallToGpu
     COMETGpuToBlockedGpu
     COMETBlockedGpuToTriton
     #COMETGpuToTriton
