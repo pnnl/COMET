@@ -572,6 +572,18 @@ class ConvertInsertSlice : public OpConversionPattern<mlir::tensor::InsertSliceO
             }
             else
             {
+                if(auto ranked_source = dyn_cast<RankedTensorType>(castOp.getType()))
+                {
+                    if(!isa<RankedTensorType>(ptr.getType()))
+                    {
+                        if(llvm::all_of(ranked_source.getShape(), [](int64_t d){
+                            return d == 1;
+                        }))
+                        {
+                            ptr = rewriter.create<triton::SplatOp>(ptr.getLoc(), RankedTensorType::get(ranked_source.getShape(), ptr.getType()), ptr);
+                        }
+                    }
+                }
                 rewriter.create<triton::StoreOp>( toReplace->getLoc(), ptr, castOp, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
             }
             auto placeholder = rewriter.create<UnrealizedConversionCastOp>(toReplace->getLoc(), insertSliceOp.getResultType(), ValueRange(ptr));
@@ -585,6 +597,18 @@ class ConvertInsertSlice : public OpConversionPattern<mlir::tensor::InsertSliceO
             }
             else
             {
+                if(auto ranked_source = dyn_cast<RankedTensorType>(ttSource.getType()))
+                {
+                    if(!isa<RankedTensorType>(ptr.getType()))
+                    {
+                        if(llvm::all_of(ranked_source.getShape(), [](int64_t d){
+                            return d == 1;
+                        }))
+                        {
+                            ptr = rewriter.create<triton::SplatOp>(ptr.getLoc(), RankedTensorType::get(ranked_source.getShape(), ptr.getType()), ptr);
+                        }
+                    }
+                }
                 rewriter.create<triton::StoreOp>( insertSliceOp->getLoc(), ptr, ttSource, combinedBoundBlocked, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
             }
 
@@ -881,6 +905,15 @@ class ConvertLinalgReduceOp : public OpConversionPattern<mlir::linalg::ReduceOp>
         rewriter.replaceOpWithNewOp<triton::ReduceReturnOp>(yieldOp, yieldOp->getOperands());
         rewriter.replaceAllUsesWith(reduceOp.getResult(0), ttReduceOp.getResult());
         rewriter.eraseOp(reduceOp);
+        if(!isa<RankedTensorType>(ttReduceOp->getResultTypes()[0]))
+        {
+            
+            if(auto extractOp = dyn_cast<tensor::ExtractOp>(*ttReduceOp->getUsers().begin())) 
+            {
+                rewriter.replaceAllUsesWith(extractOp, ttReduceOp->getResult(0));
+                rewriter.eraseOp(extractOp);
+            }
+        }
         
         return success();
     }

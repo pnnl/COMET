@@ -423,9 +423,11 @@ public:
                 rewriter.eraseOp(forAllOp);
                 terminator = otherforAllOp.getBody()->getTerminator();
                 rewriter.mergeBlocks(otherforAllOp.getBody(), combinedParOp.getBody(), combinedParOp.getInductionVars().back());
+                rewriter.eraseOp(terminator);
                 rewriter.eraseOp(otherforAllOp);
-                // rewriter.eraseOp(terminator);
                 parOp = combinedParOp;
+                rewriter.setInsertionPointToEnd(parOp.getBody());
+                rewriter.create<scf::ReduceOp>(parOp->getLoc());
             }
         }
         else
@@ -433,13 +435,26 @@ public:
             SmallVector<Value> lbs = forAllOp.getLowerBound(rewriter);
             SmallVector<Value> ubs = forAllOp.getUpperBound(rewriter);
             SmallVector<Value> steps = forAllOp.getStep(rewriter);
+            std::vector<Attribute> attrs;
+            if(forAllOp->hasAttr("parallelDim"))
+            {
+                attrs.push_back(forAllOp->getAttrOfType<StringAttr>("parallelDim"));
+            }
+            auto arrayAttr = rewriter.getNamedAttr("parallelDim", rewriter.getArrayAttr(ArrayRef<Attribute>(attrs)));
+
             parOp = rewriter.create<scf::ParallelOp>(forAllOp->getLoc(), lbs, ubs, steps);
+            if(attrs.size() > 0)
+            {
+                parOp->setAttrs(arrayAttr);
+            }
             Operation* terminator =  parOp.getBody()->getTerminator();
             rewriter.eraseOp(terminator);
             terminator = forAllOp.getBody()->getTerminator();
-            // rewriter.eraseOp(terminator);
             rewriter.mergeBlocks(forAllOp.getBody(), parOp.getBody(), parOp.getInductionVars());
+            rewriter.eraseOp(terminator);
             rewriter.eraseOp(forAllOp);
+            rewriter.setInsertionPointToEnd(parOp.getBody());
+            rewriter.create<scf::ReduceOp>(parOp->getLoc());
         }
 
         llvm::SmallVector<int64_t, 3> allTileSizes = {blockY, blockX};

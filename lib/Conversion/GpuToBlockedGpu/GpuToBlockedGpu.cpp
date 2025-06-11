@@ -590,7 +590,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     {
                         if(auto redTarget = std::find(owner_for.getRegionIterArgs().begin(), owner_for.getRegionIterArgs().end(), block_arg); redTarget != owner_for.getRegionIterArgs().end())
                         {
-                            assert(useToIndices.find(val) != useToIndices.end());
+                            // assert(useToIndices.find(val) != useToIndices.end());
                             auto indices = useToIndices[val];
                             useToIndices[user->getResult(0)] = indices;
                             return true;
@@ -1167,6 +1167,12 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     Value init, toReduced;
                     int64_t reduce_operand, other_operand;
                     linalg::ReduceOp reduceOp;
+                    v0.dump();
+                    v1.dump();
+                    llvm::errs() << "Indices0 size: " << indices0.size() << "\n";
+                    llvm::errs() << "Indices1 size: " << indices1.size() << "\n";
+                    llvm::errs() << "is0notPartOfReduction: " << is0notPartOfReduction << "\n";
+                    llvm::errs() << "is1notPartOfReduction: " << is1notPartOfReduction << "\n";
                     if((is0notPartOfReduction && is1notPartOfReduction) || ((indices0.size() == 0 || indices1.size() == 0) && (indices0.size() != 0 || indices1.size() != 0)))
                     {
                         if((reduceOp = dyn_cast_if_present<linalg::ReduceOp>(op->getOperand(0).getDefiningOp())))
@@ -1179,34 +1185,38 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                             reduce_operand = 1;
                             other_operand = 0;
                         }
-                        else 
-                        {
-                            assert(false && "Unexpected cast where none of the operands are part of a reduce operation");
-                        }
+                        // else 
+                        // {
+                        //     assert(false && "Unexpected case where none of the operands are part of a reduce operation");
+                        // }
 
-                        if(!dyn_cast<ShapedType>(op->getOperand(other_operand).getType()))
+                        if(reduceOp)
                         {
-                            builder.setInsertionPoint(reduceOp.getBody()->getTerminator());
-                            Operation* newRes = builder.create(op->getLoc(), op->getName().getIdentifier(), {op->getOperand(other_operand), reduceOp.getBody()->getTerminator()->getOperands().back()},  op->getResultTypes());
-                            reduceOp.getBody()->getTerminator()->getOpOperands().back().set(newRes->getResult(0));
-                            op->replaceAllUsesWith(reduceOp);
-                            // llvm::errs() << "Erasing: " << op <<"\n";
 
-                            op->erase();
-
-                            continue;
-                        }
-                        else
-                        {
-                            assert(false && "Reductions in the for of C = a op C op B ... are not supported. If your reduction can be expressed as C = C op (a op B) please rewrite it as such.");
+                            if(!dyn_cast<ShapedType>(op->getOperand(other_operand).getType()))
+                            {
+                                builder.setInsertionPoint(reduceOp.getBody()->getTerminator());
+                                Operation* newRes = builder.create(op->getLoc(), op->getName().getIdentifier(), {op->getOperand(other_operand), reduceOp.getBody()->getTerminator()->getOperands().back()},  op->getResultTypes());
+                                reduceOp.getBody()->getTerminator()->getOpOperands().back().set(newRes->getResult(0));
+                                op->replaceAllUsesWith(reduceOp);
+                                // llvm::errs() << "Erasing: " << op <<"\n";
+                                
+                                op->erase();
+                                
+                                continue;
+                            }
+                            else
+                            {
+                                assert(false && "Reductions in the for of C = a op C op B ... are not supported. If your reduction can be expressed as C = C op (a op B) please rewrite it as such.");
+                            }
                         }
                     }
-                    else if(is0notPartOfReduction)
+                    if(!reduceOp && is0notPartOfReduction)
                     {
                         init = op->getOperands()[0];
                         toReduced = op->getOperands()[1];
                     }
-                    else if(is1notPartOfReduction) 
+                    else if(!reduceOp && is1notPartOfReduction) 
                     {
                         init = op->getOperands()[1];
                         toReduced = op->getOperands()[0];
@@ -1245,15 +1255,28 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                                 dimensions.push_back(i);
                             }
                         }
+                        bool needsExtract = false;
                         /// TODO: Handle cases where the init and reduced tensors are of the same rank (e.g., matrix multiplication, reducing a row vector against a column vector etc)
-    
-                        auto reduceOp = builder.create<mlir::linalg::ReduceOp>(op->getLoc(), toReduced, init, dimensions, [&](OpBuilder builder, Location loc, ValueRange values){
+                        if(!isa<RankedTensorType>(init.getType() ))
+                        {
+                            needsExtract = true;
+                            auto prev_indices = useToIndices[init];
+                            init = builder.create<tensor::SplatOp>(init.getLoc(), RankedTensorType::get({}, init.getType()), init);
+                            useToIndices[init] = prev_indices;
+                        }
+                        Operation* reduceOp = builder.create<mlir::linalg::ReduceOp>(op->getLoc(), toReduced, init, dimensions, [&](OpBuilder builder, Location loc, ValueRange values){
                             auto res = builder.create(loc, op->getName().getIdentifier(), values, op->getResultTypes());
                             builder.create<mlir::linalg::YieldOp>(loc, res->getResults());
                         });
                         reduceOp->setAttr("notPartOfReduction", builder.getUnitAttr());
                         assert(useToIndices.find(init) != useToIndices.end());
-                        useToIndices[reduceOp.getResult(0)] = useToIndices[init]; 
+                        useToIndices[reduceOp->getResult(0)] = useToIndices[init]; 
+                        if(needsExtract) 
+                        {
+                            reduceOp = builder.create<tensor::ExtractOp>(reduceOp->getLoc(), reduceOp->getResult(0), ValueRange());
+                            reduceOp->setAttr("notPartOfReduction", builder.getUnitAttr());
+                            useToIndices[reduceOp->getResult(0)] = useToIndices[init]; 
+                        }
                         
                         op->replaceAllUsesWith(reduceOp);
                         // llvm::errs() << "Erasing: " << op <<"\n";
