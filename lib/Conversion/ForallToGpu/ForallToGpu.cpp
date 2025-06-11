@@ -379,7 +379,6 @@ public:
         {
             // if(!canMove.empty())
             {
-                llvm::errs() << "Combining\n";
                 rewriter.setInsertionPointToStart(otherforAllOp.getBody());
                 for(auto op: canMove)
                 {

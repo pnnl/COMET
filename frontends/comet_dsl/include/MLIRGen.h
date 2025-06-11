@@ -48,7 +48,7 @@ namespace tensorAlgebra
     /// Emit IR for the given Tensor Algebra moduleAST, returns a newly created MLIR module
     /// or nullptr on failure.
     mlir::OwningOpRef<mlir::ModuleOp> mlirGen(mlir::MLIRContext &context,
-                                              ModuleAST &moduleAST);
+                                              ModuleAST &moduleAST, bool useI64);
 
     extern std::unordered_set<std::string> debugOptions;
 } /// namespace tensorAlgebra

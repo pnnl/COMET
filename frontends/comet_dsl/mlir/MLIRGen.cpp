@@ -2515,8 +2515,12 @@ namespace tensorAlgebra
 
   /// The public API for codegen.
   mlir::OwningOpRef<mlir::ModuleOp> mlirGen(mlir::MLIRContext &context,
-                                            ModuleAST &moduleAST)
+                                            ModuleAST &moduleAST, bool useI64)
   {
+    if(!useI64)
+    {
+      defaultSpTensorIndiceBitWidth = 32;
+    }
     return MLIRGenImpl(context).mlirGen(moduleAST);
   }
 

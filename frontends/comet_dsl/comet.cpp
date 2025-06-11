@@ -340,7 +340,7 @@ std::unique_ptr<tensorAlgebra::ModuleAST> parseInputFile(llvm::StringRef filenam
 }
 
 int loadMLIR(mlir::MLIRContext &context,
-             mlir::OwningOpRef<mlir::ModuleOp> &module)
+             mlir::OwningOpRef<mlir::ModuleOp> &module, bool useI64)
 {
   /// Handle '.ta' input to the compiler.
   if (inputType != InputType::MLIR &&
@@ -349,7 +349,7 @@ int loadMLIR(mlir::MLIRContext &context,
     auto moduleAST = parseInputFile(inputFilename);
     if (!moduleAST)
       return 6;
-    module = mlirGen(context, *moduleAST);
+    module = mlirGen(context, *moduleAST, useI64);
     return !module ? 1 : 0;
   }
 
@@ -375,7 +375,7 @@ int loadMLIR(mlir::MLIRContext &context,
 }
 
 int loadAndProcessMLIR(mlir::MLIRContext &context,
-                       mlir::OwningOpRef<mlir::ModuleOp> &module)
+                       mlir::OwningOpRef<mlir::ModuleOp> &module, bool useI64)
 {
 #ifdef ENABLE_GPU_TARGET
   bool emitTriton_ = emitTriton && CodegenTarget == TargetDevice::GPU;
@@ -389,7 +389,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     tensorAlgebra::debugOptions.insert("debug-ta-labels-alphabet-order");
   }
   /// end Load debug options
-  if (int error = loadMLIR(context, module))
+  if (int error = loadMLIR(context, module, useI64))
     return error;
 
   mlir::PassManager pm(module.get()->getName());
@@ -814,8 +814,16 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::index::IndexDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
+  bool useI64 = true;
+  #ifdef ENABLE_GPU_TARGET
+  if(CodegenTarget == TargetDevice::GPU)
+  {
+    useI64 = false;
+  }
+  #endif
 
-  if (int error = loadAndProcessMLIR(context, module))
+
+  if (int error = loadAndProcessMLIR(context, module, useI64))
     return error;
 
   /// If we aren't exporting to non-mlir, then we are done.
