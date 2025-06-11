@@ -408,7 +408,10 @@ public:
                 auto arrayAttr = rewriter.getNamedAttr("parallelDim", rewriter.getArrayAttr(ArrayRef<Attribute>(attrs)));
 
                 auto combinedParOp = rewriter.create<scf::ParallelOp>(forAllOp->getLoc(), ValueRange({lbs.front(), otherlbs.front()}), ValueRange({ubs.front(), otherubs.front()}), ValueRange({steps.front(), othersteps.front()}));
-                combinedParOp->setAttrs(arrayAttr);
+                if(attrs.size() > 0)
+                {
+                    combinedParOp->setAttrs(arrayAttr);
+                }
                 // for(auto attr: attrs)
                 // {
                 //     combinedParOp->setAttr("parallelDim", attr);
@@ -435,7 +438,7 @@ public:
             Operation* terminator =  parOp.getBody()->getTerminator();
             rewriter.eraseOp(terminator);
             terminator = forAllOp.getBody()->getTerminator();
-            rewriter.eraseOp(terminator);
+            // rewriter.eraseOp(terminator);
             rewriter.mergeBlocks(forAllOp.getBody(), parOp.getBody(), parOp.getInductionVars());
             rewriter.eraseOp(forAllOp);
         }
