@@ -522,10 +522,13 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             // if(inserted)
             // {
                 SmallVector<Value, 2> indices;
-                for(auto offset: offsets)
+                for(auto [index, offset]: enumerate(offsets))
                 {
+                    if(resultShape.getDimSize(index) != 1)
+                    {
+                        indices.insert(indices.end(),useToIndices[offset].begin(), useToIndices[offset].end());
+                    }
                     // assert(useToIndices.find(offset) != useToIndices.end());
-                    indices.insert(indices.end(),useToIndices[offset].begin(), useToIndices[offset].end());
                     // if(auto index = dyn_cast_if_present<UnrealizedConversionCastOp>(offset.getDefiningOp()))
                     // {
                     //     indices.push_back(index->getOperand(0));
@@ -1071,18 +1074,24 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                 SmallVector<int64_t, 2> expanded_indices;
                 SmallVector<int64_t, 2> shape;
                 int64_t static_index = 0;
-                for(auto [i, d] : llvm::enumerate(type.getShape()))
+                for(auto [i, offset] : llvm::enumerate(offsets))
                 {
+                    offset.dump();
                     expanded_indices.push_back(i);
-                    if(d != 1)
+                    RankedTensorType shaped_offset = nullptr;
+                    if(auto unrealizedCast = dyn_cast_if_present<UnrealizedConversionCastOp>(offset.getDefiningOp()))
+                    {
+                        shaped_offset = dyn_cast<RankedTensorType>(unrealizedCast.getInputs().front().getType());
+                    }
+                    if(!shaped_offset || (shaped_offset && shaped_offset.getRank() == 1 && shaped_offset.getDimSize(0) == 1))
+                    {
+                        shape.push_back(1);
+                    }
+                    else
                     {
                         shape.push_back(insert_shape.getDimSize(static_index++));
                         all_expanded_indices.push_back(expanded_indices);
                         expanded_indices.clear();
-                    }
-                    else
-                    {
-                        shape.push_back(1);
                     }
                 }
                 if(!expanded_indices.empty())
