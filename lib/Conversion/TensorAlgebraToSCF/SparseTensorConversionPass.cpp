@@ -62,7 +62,7 @@ using namespace mlir::tensorAlgebra;
 #define DEBUG_TYPE "sparse_tensor"
 
 // *********** For debug purpose *********//
-#define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 

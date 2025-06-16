@@ -275,11 +275,11 @@ mlir::LogicalResult generalIndexOperationRewrite(
   std::vector<Value> index_nodes;
   bool is_parallel = true; // Outer-most, non-reduction dimensions are parallel
 
-//  // TODO: For now, we do not support outputting sparse tensors from a parallel loop.
-//  if(llvm::isa<SparseTensorType>(tensor_type))
-//  {
-//    is_parallel = false;
-//  }
+  // TODO: For now, we do not support outputting sparse tensors from a parallel loop.
+  if(llvm::isa<SparseTensorType>(tensor_type))
+  {
+    is_parallel = false;
+  }
 
   std::map<int, Value> exprToIndex;
 

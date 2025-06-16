@@ -175,7 +175,7 @@ struct ConvertDomainEndRowOp
     Value crd_size_cast = rewriter.createOrFold<mlir::arith::IndexCastOp>(loc, rewriter.getIntegerType(op.getResult().getType().getIndicesBitwidth()), domain.crd_size);
     // TODO: Dynamically resize array?
 //    rewriter.create<memref::StoreOp>(loc, crd_size_cast, domain.pos, new_pos_size);
-    rewriter.create<tensor::InsertOp>(loc, domain.pos.getType(), crd_size_cast, domain.pos, new_pos_size);
+    Value inserted_pos = rewriter.create<tensor::InsertOp>(loc, domain.pos.getType(), crd_size_cast, domain.pos, new_pos_size);
     Value materialized = getTypeConverter()->materializeArgumentConversion(
             rewriter,
             op.getLoc(),
@@ -185,10 +185,12 @@ struct ConvertDomainEndRowOp
               domain.pos_alloc_size,
               domain.crd_size, 
               domain.dim_size,
-              domain.pos, 
+//              domain.pos,
+              inserted_pos,
               domain.mark_array
             }
     );
+    comet_vdump(materialized);
     rewriter.replaceOp(op, {materialized});        
     return success();
   }
@@ -439,6 +441,7 @@ struct ConvertSymbolicDomainsPass
 
   void runOnOperation() override
   {
+    comet_vdump(getOperation()->getParentOfType<ModuleOp>());
     // Convert the rest of the index tree dialect to SCF
     TypeConverter typeConverter;
     typeConverter.addConversion([](Type type) { return type; });

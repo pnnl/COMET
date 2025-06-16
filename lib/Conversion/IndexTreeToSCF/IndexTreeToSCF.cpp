@@ -79,7 +79,7 @@ using llvm::SmallDenseMap;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-#define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 
@@ -2621,7 +2621,7 @@ namespace
 
       LegalizeSymbolicForallOp(getOperation());
 
-      LegalizeNumericForallOp(getOperation());
+//      LegalizeNumericForallOp(getOperation());
 
       comet_vdump(funcOp->getParentOfType<ModuleOp>());
       comet_debug() << "\n";
