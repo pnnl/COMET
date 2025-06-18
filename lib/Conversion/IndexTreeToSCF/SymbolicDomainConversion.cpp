@@ -312,7 +312,7 @@ struct ConvertSparseTensorOp
           llvm::SmallVector<int64_t> tensor_shape = {ShapedType::kDynamic};
           mlir::Type element_type = spType.getIndicesType();
           Value pos = rewriter.create<tensor::EmptyOp>(loc, /*shape=*/tensor_shape, /*element_type=*/element_type, /*dynamic_sizes=*/ValueRange({rewriter.create<index::ConstantOp>(loc, 1).getResult()}));
-          rewriter.create<tensor::InsertOp>(loc, /*return_type=*/pos.getType(), /*element=*/dim_size_cast, /*tensor=*/pos, /*index=*/zero);
+          pos = rewriter.create<tensor::InsertOp>(loc, /*return_type=*/pos.getType(), /*element=*/dim_size_cast, /*tensor=*/pos, /*index=*/zero);
           tensor_shape = {0};
           Value crd = rewriter.create<tensor::EmptyOp>(loc, tensor_shape, element_type);
           Value pos_tile = rewriter.create<tensor::EmptyOp>(loc, tensor_shape, element_type);
