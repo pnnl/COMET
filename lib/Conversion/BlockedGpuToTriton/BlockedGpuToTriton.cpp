@@ -441,7 +441,6 @@ std::pair<Value, Value> generate_triton_blocked_bounds_and_offsets(ConversionPat
             if(tritonBounds[collapsed[i]].getType() != collapsed_bounds.back().getType())
             {
                 offset = rewriter.create<triton::SplatOp>(sliceOp->getLoc(), collapsed_bounds.back().getType(), tritonBounds[collapsed[i]]);
-                offset.dump();
             }
             auto res = rewriter.create<arith::AndIOp>(sliceOp->getLoc(), collapsed_bounds.back(), offset);
             collapsed_bounds.back() = res;
@@ -653,7 +652,7 @@ class ConvertInsertSlice : public OpConversionPattern<mlir::tensor::InsertSliceO
                         }
                     }
                 }
-                rewriter.create<triton::StoreOp>( toReplace->getLoc(), ptr, castOp, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
+                rewriter.create<triton::StoreOp>( toReplace->getLoc(), ptr, castOp, combinedBoundBlocked, mlir::triton::CacheModifier::NONE, mlir::triton::EvictionPolicy::NORMAL);
             }
             auto placeholder = rewriter.create<UnrealizedConversionCastOp>(toReplace->getLoc(), insertSliceOp.getResultType(), ValueRange(ptr));
             rewriter.replaceOp(insertSliceOp, placeholder->getResult(0));

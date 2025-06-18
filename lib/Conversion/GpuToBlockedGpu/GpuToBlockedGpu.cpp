@@ -538,7 +538,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     //     indices.push_back(offset);
                     // }
                 }
-                assert(!indices.empty());
+                // assert(!indices.empty());
                 bool isDone = useToIndices.insert(std::make_pair(castSliceShape,indices)).second;
                 assert(isDone);
                 isDone = useToIndices.insert(std::make_pair(extractSlice,indices)).second;
@@ -1067,7 +1067,7 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
             builder.setInsertionPoint(insert->first);
             Value insert_val = insert->first.getScalar();
             auto insert_shape = dyn_cast<RankedTensorType>(insert_val.getType());
-            if(type.getRank() != insert_shape.getRank())
+            if(insert_shape && type.getRank() != insert_shape.getRank())
             {
                 SmallVector<SmallVector<int64_t, 2>,2> all_expanded_indices;
                 
@@ -1076,7 +1076,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                 int64_t static_index = 0;
                 for(auto [i, offset] : llvm::enumerate(offsets))
                 {
-                    offset.dump();
                     expanded_indices.push_back(i);
                     RankedTensorType shaped_offset = nullptr;
                     if(auto unrealizedCast = dyn_cast_if_present<UnrealizedConversionCastOp>(offset.getDefiningOp()))
@@ -1108,6 +1107,16 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                 }
 
                 insert_val = builder.create<mlir::tensor::ExpandShapeOp>(insert->first->getLoc(), mlir::RankedTensorType::get(shape, insert_shape.getElementType()), insert_val, all_expanded_indices);
+            }
+            else if(!insert_shape)
+            {
+                auto splatShape = type.getShape().vec();
+                for(size_t i = 0; i < splatShape.size(); i++)
+                {
+                    splatShape[i] = 1;
+                }
+
+                insert_val = builder.create<mlir::tensor::SplatOp>(insertOp->getLoc(), mlir::RankedTensorType::get(splatShape, insert_val.getType()) , insert_val);
             }
 
             auto castSliceShape = builder.create<mlir::tensor::CastOp>(insert->first->getLoc(), type, insert_val);
@@ -1176,12 +1185,6 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
                     Value init, toReduced;
                     int64_t reduce_operand, other_operand;
                     linalg::ReduceOp reduceOp;
-                    v0.dump();
-                    v1.dump();
-                    llvm::errs() << "Indices0 size: " << indices0.size() << "\n";
-                    llvm::errs() << "Indices1 size: " << indices1.size() << "\n";
-                    llvm::errs() << "is0notPartOfReduction: " << is0notPartOfReduction << "\n";
-                    llvm::errs() << "is1notPartOfReduction: " << is1notPartOfReduction << "\n";
                     if((is0notPartOfReduction && is1notPartOfReduction) || ((indices0.size() == 0 || indices1.size() == 0) && (indices0.size() != 0 || indices1.size() != 0)))
                     {
                         if((reduceOp = dyn_cast_if_present<linalg::ReduceOp>(op->getOperand(0).getDefiningOp())))
