@@ -906,7 +906,7 @@ def PrintOp : TA_Op<"print"> {
                                   F64,
                                   F32MemRef, 
                                   F64MemRef, 
-                                  TA_AnyTensor]>:$input);
+                                  TA_AnyTensor, I32, I64, Index]>:$input);
 }
 
 def GetTimeOp : TA_Op<"getTime"> {

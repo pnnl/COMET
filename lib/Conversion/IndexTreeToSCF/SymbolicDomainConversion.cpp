@@ -36,6 +36,7 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/TypeRange.h"
 #include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -123,19 +124,20 @@ struct ConvertDomainInsertOp
                                     arith::CmpIPredicate::eq, 
                                     mark,
                                     mark_val);
-      scf::IfOp if_op = rewriter.create<scf::IfOp>(loc, index_type, is_marked, true);
+      scf::IfOp if_op = rewriter.create<scf::IfOp>(loc, TypeRange{index_type, domain.mark_array.getType()}, is_marked, true);
       // We have seen this crd before
       rewriter.setInsertionPointToStart(if_op.thenBlock());
-      rewriter.create<scf::YieldOp>(loc, domain.crd_size);
+      rewriter.create<scf::YieldOp>(loc, ValueRange{domain.crd_size, domain.mark_array});
 
       // We haven't seen this crd before
       rewriter.setInsertionPointToStart(if_op.elseBlock());
 //      rewriter.create<memref::StoreOp>(loc, mark, domain.mark_array, op.getCrd());
-      rewriter.create<tensor::InsertOp>(loc, domain.mark_array.getType(), mark, domain.mark_array, op.getCrd());
+      Value updated_mark_array = rewriter.create<tensor::InsertOp>(loc, domain.mark_array.getType(), mark, domain.mark_array, op.getCrd());
       Value new_crd_size = rewriter.create<index::AddOp>(loc, index_type, domain.crd_size, one);
-      rewriter.create<scf::YieldOp>(loc, new_crd_size);
+      rewriter.create<scf::YieldOp>(loc, ValueRange{new_crd_size, updated_mark_array});
       rewriter.setInsertionPointAfter(if_op);
       domain.crd_size = if_op.getResult(0);
+      domain.mark_array = if_op->getResult(1);
     }
 
     Value materialized = getTypeConverter()->materializeArgumentConversion(

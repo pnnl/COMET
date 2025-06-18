@@ -141,7 +141,7 @@ namespace
         }
       }
       /// If the Input type is scalar (F64)
-      else if (isa<FloatType,IndexType>(inputType))
+      else if (isa<FloatType,IndexType, IntegerType>(inputType))
       {
         std::string print_scalar; 
         if(inputType.isF64())
@@ -152,7 +152,7 @@ namespace
         {
           print_scalar = "printF32";
         }
-        else if (inputType.isIndex())
+        else if (inputType.isIndex() || inputType.isInteger(64))
         {
           print_scalar = "printI64";
         }
