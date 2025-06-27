@@ -468,6 +468,24 @@ class ReduceOp(Operation):
         undefined=jinja2.StrictUndefined,
     )
     
+    
+class ForallInParallel(Operation):
+
+    def __init__(self, values):
+        super().__init__(values, [v.type for v in values], endsBody=True)
+        self. values = values
+
+    def dump(self):
+        return self.text.render(
+            values = ",".join([f'%{v}' for v in self.values]),
+        )
+
+
+    text = jinja2.Template( 
+        'scf.forall.in_parallel {}',
+        undefined=jinja2.StrictUndefined,
+    )
+    
 
 class ReturnOp(Operation):
 
@@ -603,6 +621,6 @@ class ForAllOp(OperationWithBody):
 
 
     text = jinja2.Template(
-        'scf.parallel (%{{iv}}) = (%{{lb}}) to (%{{ub}}) step (%{{step}}) ',
+        'scf.forall (%{{iv}}) = (%{{lb}}) to (%{{ub}}) step (%{{step}}) ',
         undefined=jinja2.StrictUndefined,
     )

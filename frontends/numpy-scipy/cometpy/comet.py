@@ -413,7 +413,7 @@ class NewAstParser(ast.NodeVisitor):
         for stmt in node.body:
             self.visit(stmt)
         if pragma == "#pragma parallel":
-            self.build(ops.ReduceOp([]))
+            self.build(ops.ForallInParallel([]))
         else:
             self.build(ops.YieldOp([]))
         
