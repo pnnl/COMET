@@ -291,7 +291,7 @@ class NewAstParser(ast.NodeVisitor):
     def visit_FunctionDef(self, node):
         args = []
         for arg, val in zip(node.args.args, self.inputs):
-            if isinstance(val, np.ndarray) or sp.sparse.issparse(val):
+            if hasattr(val, 'shape'):
                 new_arg = ops.Symbol(mlir_type_from_ndarray(val))
             else:
                 new_arg = ops.Symbol(mlir_type_from_python_type(val))
@@ -1332,7 +1332,7 @@ def compile(flags, target:str = "cpu", with_jit=True):
             arg_vals = [*pos_args]
             input_types = [None] * len(arg_vals) 
             for i, arg in enumerate(arg_vals):
-                if isinstance(arg, np.ndarray) or sp.sparse.issparse(arg):
+                if hasattr(arg, 'shape'):
                     type = mlir_type_from_ndarray(arg)
                     input_types[i] = f'{type}'
                 else:
