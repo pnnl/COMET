@@ -197,6 +197,40 @@ class ConvertGpuToBlockedGpu: public CometGpuToBlockedGpuBase<ConvertGpuToBlocke
         mlir::gpu::GPUFuncOp funcOp = getOperation();
         mlir::OpBuilder builder(funcOp);
 
+        for(auto memrefArg : funcOp.getArguments())
+        {
+            if(mlir::isa<mlir::MemRefType>(memrefArg.getType()))
+            {
+                std::vector<Operation*> toExamine;
+                toExamine.insert(toExamine.end(), memrefArg.getUsers().begin(), memrefArg.getUsers().end());
+                for(size_t i = 0; i < toExamine.size(); i++)
+                {
+                    auto user = toExamine[i];
+                    if(mlir::isa<mlir::memref::LoadOp>(user))
+                    {
+                        funcOp.setArgAttr(memrefArg.getArgNumber(), "gpu.read", builder.getUnitAttr());
+                    }
+                    else if(mlir::isa<mlir::memref::StoreOp>(user))
+                    {
+                        funcOp.setArgAttr(memrefArg.getArgNumber(), "gpu.write", builder.getUnitAttr());
+                    }
+
+                    if(user->getNumResults() > 0)
+                    {
+                        for(auto res: user->getResults())
+                        {
+                            if(isa<MemRefType>(res.getType()))
+                            {
+                                // If the result is a memref, we need to check its users as well
+                                // to see if it is used in a store or load operation
+                                toExamine.insert(toExamine.end(), res.getUsers().begin(), res.getUsers().end());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         for(auto arg: funcOp.getArguments())
         {
             if(mlir::isa<mlir::MemRefType>(arg.getType()))
