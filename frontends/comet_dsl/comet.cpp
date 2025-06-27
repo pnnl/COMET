@@ -106,7 +106,7 @@
 #include "comet/Conversion/PrepareGpuHost/PrepareGpuHostPass.h"
 #include "comet/Conversion/BlockedGpuToTriton/BlockedGpuToTriton.h"
 #include "comet/Conversion/GpuToBlockedGpu/GpuToBlockedGpu.h"
-#include "comet/Conversion/ParallelLoopsToGpu/ParallelLoopsToGpu.h"
+#include "comet/Conversion/ForallToGpu/ForallToGpu.h"
 #include "comet/Conversion/TritonToHIP/TritonToHIPPass.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "mlir/Conversion/SCFToGPU/SCFToGPUPass.h"
@@ -340,7 +340,7 @@ std::unique_ptr<tensorAlgebra::ModuleAST> parseInputFile(llvm::StringRef filenam
 }
 
 int loadMLIR(mlir::MLIRContext &context,
-             mlir::OwningOpRef<mlir::ModuleOp> &module)
+             mlir::OwningOpRef<mlir::ModuleOp> &module, bool useI64)
 {
   /// Handle '.ta' input to the compiler.
   if (inputType != InputType::MLIR &&
@@ -349,7 +349,7 @@ int loadMLIR(mlir::MLIRContext &context,
     auto moduleAST = parseInputFile(inputFilename);
     if (!moduleAST)
       return 6;
-    module = mlirGen(context, *moduleAST);
+    module = mlirGen(context, *moduleAST, useI64);
     return !module ? 1 : 0;
   }
 
@@ -375,7 +375,7 @@ int loadMLIR(mlir::MLIRContext &context,
 }
 
 int loadAndProcessMLIR(mlir::MLIRContext &context,
-                       mlir::OwningOpRef<mlir::ModuleOp> &module)
+                       mlir::OwningOpRef<mlir::ModuleOp> &module, bool useI64)
 {
 #ifdef ENABLE_GPU_TARGET
   bool emitTriton_ = emitTriton && CodegenTarget == TargetDevice::GPU;
@@ -389,7 +389,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     tensorAlgebra::debugOptions.insert("debug-ta-labels-alphabet-order");
   }
   /// end Load debug options
-  if (int error = loadMLIR(context, module))
+  if (int error = loadMLIR(context, module, useI64))
     return error;
 
   mlir::PassManager pm(module.get()->getName());
@@ -596,9 +596,19 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// Blanket-convert any remaining affine ops if any remain.
   pm.addPass(mlir::createLowerAffinePass());
   /// Convert SCF to CF (always needed).
-  pm.addPass(mlir::createForallToParallelLoopPass());
-  pm.addPass(mlir::createLoopInvariantCodeMotionPass());
-  pm.addPass(mlir::createCanonicalizerPass());
+  #ifdef ENABLE_GPU_TARGET
+  if(CodegenTarget != TargetDevice::GPU)
+  {
+      pm.addPass(mlir::createForallToParallelLoopPass());
+      pm.addPass(mlir::createLoopInvariantCodeMotionPass());
+      pm.addPass(mlir::createCanonicalizerPass());    
+  }
+  #else
+    pm.addPass(mlir::createForallToParallelLoopPass());
+    pm.addPass(mlir::createLoopInvariantCodeMotionPass());
+    pm.addPass(mlir::createCanonicalizerPass());    
+  #endif
+
 
 #ifndef ENABLE_GPU_TARGET
   [[maybe_unused]] bool IsLoweringToTriton = false;
@@ -615,7 +625,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     #ifdef ENABLE_GPU_TARGET
     if (CodegenTarget == TargetDevice::GPU)
     {
-      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertParallelLoopsToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
+      pm.addNestedPass<mlir::func::FuncOp>(mlir::comet::createConvertForallToGpuPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR));
     }
     #endif
 
@@ -804,8 +814,16 @@ int main(int argc, char **argv)
   context.loadDialect<mlir::index::IndexDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
+  bool useI64 = true;
+  #ifdef ENABLE_GPU_TARGET
+  if(CodegenTarget == TargetDevice::GPU)
+  {
+    useI64 = false;
+  }
+  #endif
 
-  if (int error = loadAndProcessMLIR(context, module))
+
+  if (int error = loadAndProcessMLIR(context, module, useI64))
     return error;
 
   /// If we aren't exporting to non-mlir, then we are done.

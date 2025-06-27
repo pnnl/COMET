@@ -1,5 +1,5 @@
 if(ENABLE_GPU_TARGET OR ENABLE_FPGA_TARGET)
-add_subdirectory(ParallelLoopsToGpu)
+add_subdirectory(ForallToGpu)
 add_subdirectory(ParallelLoopsToGpuFPGA)
 endif()
 if(ENABLE_FPGA_TARGET)

@@ -513,7 +513,9 @@ llvm::SmallVector<Value> createExtraIndicesOpsForReset(Value prev_old_compute_op
     Value new_index = rewriter.create<indexTree::IndexTreeIndicesOp>(loc,
                                                                      indexTree::IndexNodeType::get(rewriter.getContext()),
                                                                      parent,
-                                                                     domain);
+                                                                     domain,
+                                                                     false,
+                                                                    nullptr);
     new_indices_ops.push_back(new_index);
     parent = new_index;
     comet_vdump(new_index);

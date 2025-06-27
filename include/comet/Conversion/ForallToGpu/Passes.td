@@ -19,15 +19,15 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef COMET_PARALLEL_LOOPS_TO_GPU_CONVERSION_PASSES
-#define COMET_PARALLEL_LOOPS_TO_GPU_CONVERSION_PASSES
+#ifndef COMET_Forall_TO_GPU_CONVERSION_PASSES
+#define COMET_Forall_TO_GPU_CONVERSION_PASSES
 
 include "mlir/Pass/PassBase.td"
 
-def CometParallelLoopsToGpu : Pass<"comet-parallel-loops-to-gpu", "mlir::func::FuncOp"> {
+def CometForallToGpu : Pass<"comet-forall-to-gpu", "mlir::func::FuncOp"> {
   let summary = "Map loops to gpu";
 
-  let constructor = "mlir::comet::createConvertParallelLoopsToGpuPass()";
+  let constructor = "mlir::comet::createConvertForallToGpuPass()";
 
   let dependentDialects = ["mlir::scf::SCFDialect", "mlir::gpu::GPUDialect", "mlir::affine::AffineDialect", "mlir::DLTIDialect"];
 
