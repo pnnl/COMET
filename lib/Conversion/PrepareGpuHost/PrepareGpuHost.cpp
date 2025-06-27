@@ -1,7 +1,9 @@
 #include "comet/Conversion/PrepareGpuHost/PrepareGpuHostPass.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Attributes.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -208,17 +210,19 @@ public:
                     int operNum = use.getOperandNumber() - offset;
                     if(gpu_name_to_funcOp[launchOp.getKernelName().str()].getArgAttr(operNum, "gpu.read"))
                     {
-                        builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
+                        auto gpuMemCpy = builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
                                                             ValueRange(),
                                                             gpuAlloc.getMemref(), alloc);
+                        gpuMemCpy->setAttr("gpu.read", builder.getUnitAttr());
                     }
                     use.set(gpuAlloc.getMemref());
                     builder.setInsertionPointAfter(launchOp);
                     if(gpu_name_to_funcOp[launchOp.getKernelName().str()].getArgAttr(operNum, "gpu.write"))
                     {
-                                            builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
-                                                                                ValueRange(), alloc,
-                                                                                gpuAlloc.getMemref());
+                        auto gpuMemCpy = builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
+                                                            ValueRange(), alloc,
+                                                            gpuAlloc.getMemref());
+                        gpuMemCpy->setAttr("gpu.write", builder.getUnitAttr());
                     }
                 }
             }
@@ -241,10 +245,84 @@ public:
         gpuAllocs.push_back(gpuAllocOp);
     });
 
-    std::vector<mlir::gpu::MemcpyOp> gpuCopies;
-    modOp->walk([&gpuCopies](mlir::gpu::MemcpyOp gpuCopy) {
-        gpuCopies.push_back(gpuCopy);
+
+    std::map<void*, std::vector<Operation*>> memEffects;
+    modOp->walk([&uniqueGpuAllocs, &memEffects](Operation* memEffect) {
+        for(auto op: memEffect->getOperands())
+        {
+            if(uniqueGpuAllocs.find(op) != uniqueGpuAllocs.end())
+            {
+                memEffects[op.getAsOpaquePointer()].push_back(memEffect);
+            }
+        }
     });
+
+    for(auto& [memref, effects]: memEffects)
+    {
+        bool copyIn = true;
+        std::vector<Operation*> copyDelete;
+        for(size_t i = 0; i < effects.size(); i++)
+        {
+            if(mlir::gpu::MemcpyOp gpuCopy = mlir::dyn_cast<mlir::gpu::MemcpyOp>(effects[i]))
+            {
+                if(!copyIn & gpuCopy->hasAttr("gpu.read"))
+                {
+                    // gpuCopy.dump();
+                    gpuCopy->erase();
+                }
+                else if(gpuCopy->hasAttr("gpu.read"))
+                {
+                    copyIn = false;
+                }
+                else if(gpuCopy->hasAttr("gpu.write"))
+                {
+                    copyIn = false;
+                    copyDelete.push_back(gpuCopy);
+                }
+            }
+            else if(mlir::memref::StoreOp store = mlir::dyn_cast<mlir::memref::StoreOp>(effects[i]))
+            {
+                copyIn = true;
+                if(!copyDelete.empty())
+                {
+                    copyDelete.pop_back();
+                }
+            }
+            else if(mlir::memref::CopyOp copy = mlir::dyn_cast<mlir::memref::CopyOp>(effects[i]))
+            {
+                if(copy.getTarget().getAsOpaquePointer() == memref)
+                {
+                    copyIn = true;
+                }
+            }
+            else if(mlir::memref::LoadOp load = mlir::dyn_cast<mlir::memref::LoadOp>(effects[i]))
+            {
+                if(!copyDelete.empty())
+                {
+                    copyDelete.pop_back();
+                }
+            }
+            else if(isa<memref::ExtractStridedMetadataOp, memref::DimOp, memref::RankOp>(effects[i]))
+            {
+                continue;
+            }
+            else // Unknown operation, be conservative
+            {
+                effects[i]->dump();
+                copyIn = true;
+                if(!copyDelete.empty())
+                {
+                    copyDelete.pop_back();
+                }  
+            }
+        }
+
+        for(auto toDelete: copyDelete)
+        {
+            // toDelete->dump();
+            toDelete->erase();
+        }
+    }
 
   }
 };
