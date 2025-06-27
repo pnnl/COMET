@@ -282,7 +282,7 @@ def generate_llvm_args_from_ndarrays(inputs, output_types):
 
         if not scp.sparse.issparse(ndarray):
             # ndarray = np.array(out_type.shape, dtype=ops.mlir_type_to_dtype(out_type.element_type)) ## [TODO] No need to allocate
-            if isinstance(ndarray, np.ndarray):
+            if hasattr(ndarray, 'shape'):
                 memref = memref_from_np_array(ndarray)
                 llvm_args[offset + i] = memref
             else: 
