@@ -347,7 +347,7 @@ std::pair<Value, Value> generate_triton_blocked_bounds_and_offsets(ConversionPat
         Value strideVal = rewriter.create<arith::IndexCastOp>(sliceOp->getLoc(), rewriter.getIntegerType(32), sliceOp.getStrides()[i]);
         Value stridesBlocked = strideVal;
         auto shapedOffset = mlir::dyn_cast<ShapedType>(blockedOffset.getType());
-        if(shapedOffset && shapedOffset.getDimSize(0) != 1)
+        if(shapedOffset)
         {
             stridesBlocked = rewriter.create<triton::SplatOp>(sliceOp->getLoc(), blockedOffset.getType(), strideVal);
         }
