@@ -103,7 +103,8 @@ class ConvertGpuFuncToTritonFunc : public OpConversionPattern<mlir::gpu::GPUFunc
         rewriter.create<func::ReturnOp>(gpuFunc.getLoc());
         newFunc->setAttr(gpu::GPUDialect::getKernelFuncAttrName(),
                            rewriter.getUnitAttr());
-        
+        newFunc.setArgAttrsAttr(gpuFunc.getArgAttrsAttr());
+                
         return success();
     }
 

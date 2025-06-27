@@ -1,4 +1,7 @@
 #include "comet/Conversion/PrepareGpuHost/PrepareGpuHostPass.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/Attributes.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -26,6 +29,7 @@ public:
 
     std::map<std::string, Value> funcs;
     std::map<std::string, std::string> gpu_to_triton_kernel;
+    std::map<std::string, func::FuncOp> gpu_name_to_funcOp;
     std::map<std::string, triton::FuncOp> triton_name_to_triton_func_op;
     auto gpuModules = modOp.getOps<gpu::GPUModuleOp>();
     for(auto gpuModuleOp: gpuModules)
@@ -33,17 +37,20 @@ public:
         auto funcOps = gpuModuleOp.getOps<mlir::func::FuncOp>();
         for(func::FuncOp funcOp: llvm::make_early_inc_range(funcOps))
         {
+            std::map<size_t, std::vector<Attribute>> argsToSet;
             if(!funcOp->hasAttr(gpu::GPUDialect::getKernelFuncAttrName()))
             {
                 continue;
             }
             builder.setInsertionPoint(funcOp);
             SmallVector<Type, 4> newTypes;
-            for(auto argType: funcOp.getArgumentTypes())
+            for(auto arg: funcOp.getArguments())
             {
+                auto argType = arg.getType();
                 newTypes.push_back(argType);
                 if(MemRefType rankedType = dyn_cast<mlir::MemRefType>(argType))
                 {
+                    argsToSet[newTypes.size() - 1] = {funcOp.getArgAttr(arg.getArgNumber(), "gpu.read"), funcOp.getArgAttr(arg.getArgNumber(), "gpu.write")};
                     if(rankedType.hasRank())
                     {
                         newTypes.push_back(builder.getIndexType());
@@ -71,6 +78,18 @@ public:
             builder.create<func::ReturnOp>(funcOp.getLoc());
             newFunc->setAttr(gpu::GPUDialect::getKernelFuncAttrName(),
                                 builder.getUnitAttr());
+            for(auto [argNumber, attrs]: argsToSet)
+            {
+                if(attrs[0])
+                {
+                    newFunc.setArgAttr(argNumber, "gpu.read", attrs[0]);
+                }
+                if(attrs[1])
+                {
+                    newFunc.setArgAttr(argNumber, "gpu.write", attrs[1]);
+                }
+            }
+            gpu_name_to_funcOp[funcOp.getName().str()] = newFunc;
             funcOp->erase();
         }
     }
@@ -185,14 +204,22 @@ public:
                 if (mlir::gpu::LaunchFuncOp launchOp =
                         dyn_cast<mlir::gpu::LaunchFuncOp>(use.getOwner())) {
                     builder.setInsertionPoint(launchOp);
-                    builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
-                                                        ValueRange(),
-                                                        gpuAlloc.getMemref(), alloc);
+                    int offset = launchOp->getNumOperands() - launchOp.getNumKernelOperands();
+                    int operNum = use.getOperandNumber() - offset;
+                    if(gpu_name_to_funcOp[launchOp.getKernelName().str()].getArgAttr(operNum, "gpu.read"))
+                    {
+                        builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
+                                                            ValueRange(),
+                                                            gpuAlloc.getMemref(), alloc);
+                    }
                     use.set(gpuAlloc.getMemref());
                     builder.setInsertionPointAfter(launchOp);
-                    builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
-                                                        ValueRange(), alloc,
-                                                        gpuAlloc.getMemref());
+                    if(gpu_name_to_funcOp[launchOp.getKernelName().str()].getArgAttr(operNum, "gpu.write"))
+                    {
+                                            builder.create<mlir::gpu::MemcpyOp>(launchOp->getLoc(), TypeRange(),
+                                                                                ValueRange(), alloc,
+                                                                                gpuAlloc.getMemref());
+                    }
                 }
             }
         }
