@@ -267,7 +267,6 @@ public:
             {
                 if(!copyIn & gpuCopy->hasAttr("gpu.read"))
                 {
-                    // gpuCopy.dump();
                     gpuCopy->erase();
                 }
                 else if(gpuCopy->hasAttr("gpu.read"))
@@ -308,7 +307,6 @@ public:
             }
             else // Unknown operation, be conservative
             {
-                effects[i]->dump();
                 copyIn = true;
                 if(!copyDelete.empty())
                 {
@@ -319,7 +317,6 @@ public:
 
         for(auto toDelete: copyDelete)
         {
-            // toDelete->dump();
             toDelete->erase();
         }
     }
