@@ -3,7 +3,7 @@
 % This is a test sparse matrix in Matrix Market Exchange Format.
 % see https://math.nist.gov/MatrixMarket
 %
-5 5 5
+5 5 12
 1 1 1.0
 1 4 1.4
 2 2 2.0
@@ -16,4 +16,3 @@
 5 5 5.0
 5 2 5.2
 5 3 5.3
-

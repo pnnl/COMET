@@ -21,6 +21,7 @@
 
 #ifndef TA_BASE
 #define TA_BASE
+include "mlir/IR/OpBase.td"
 
 /// Provide a definition of the 'TA' dialect in the ODS framework so that we
 /// can define our operations.
