@@ -1,8 +1,39 @@
 cmake_minimum_required(VERSION 3.25)
 project(comet_super_build LANGUAGES CXX C)
-
 include(ExternalProject)
 
+# Adopted from https://gist.github.com/scivision/bb1d47a9529e153617414e91ff5390af
+find_package(Git REQUIRED)
+
+function(init_git_submodule dir)
+# Init a Git submodule 
+# 
+# include(AddGitSubmodule.cmake)
+# add_git_submodule(mysubmod_dir)
+
+if(NOT EXISTS ${dir}/README.md)
+  execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive --depth 1 -- ${dir}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    COMMAND_ERROR_IS_FATAL ANY)
+endif()
+
+endfunction(init_git_submodule)
+#-------------------------------------------------------------------------------
+
+message(STATUS "Running on ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Architectures to build for on macOS")
+endif()
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm|aarch64")
+  set(DETECTED_CPU_ARCH "AArch64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
+  set(DETECTED_CPU_ARCH "X86")
+else()
+  message(FATAL_ERROR "Unsupported CPU architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
+init_git_submodule(${CMAKE_SOURCE_DIR}/blis)
 ExternalProject_Add(
     blis
     PREFIX ${CMAKE_BINARY_DIR}/blis
@@ -16,19 +47,20 @@ ExternalProject_Add(
 
 set(LLVM_CUSTOM_BUILD_PATH "" CACHE PATH "Path to existing LLVM build directory")
 set(LLVM_PROJECTS "mlir,openmp,clang" CACHE STRING "LLVM projects to build")
-set(LLVM_TARGETS "X86" CACHE STRING "LLVM targets to build")
+set(LLVM_TARGETS "${DETECTED_CPU_ARCH}" CACHE STRING "LLVM targets to build")
 option(ENABLE_AMD_GPU_BACKEND OFF) 
 option(ENABLE_NVIDIA_GPU_BACKEND OFF) 
 option(ENABLE_FPGA_TARGET OFF)
 if(ENABLE_AMD_GPU_BACKEND)
-    set(LLVM_TARGETS ${LLVM_TARGETS}, "AMDGPU")
+    set(LLVM_TARGETS "${LLVM_TARGETS},AMDGPU")
 endif()
 
 if(ENABLE_NVIDIA_GPU_BACKEND)
-    set(LLVM_TARGETS ${LLVM_TARGETS}, "NVPTX")
+    set(LLVM_TARGETS "${LLVM_TARGETS},NVPTX")
 endif()
 
 if(NOT LLVM_CUSTOM_BUILD_PATH)
+    init_git_submodule(${CMAKE_SOURCE_DIR}/llvm)
     message(STATUS "Building LLVM from source with projects: ${LLVM_PROJECTS} and targets: ${LLVM_TARGETS}")
     ExternalProject_Add(
         llvm
@@ -55,14 +87,19 @@ else()
 endif()
 
 if(ENABLE_AMD_GPU_BACKEND OR ENABLE_NVIDIA_GPU_BACKEND)
-ExternalProject_Add(
-    triton
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/triton
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    UPDATE_COMMAND git submodule update --init ${CMAKE_SOURCE_DIR}/triton 
-    PATCH_COMMAND git apply ${CMAKE_SOURCE_DIR}/triton.patch
-)
+    init_git_submodule(${CMAKE_SOURCE_DIR}/triton)
+    set(DEVICE_COMPUTE_CAPABILITY "" CACHE STRING "Device compute capability for Triton codegen")
+    ExternalProject_Add(
+        triton
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/triton
+        BINARY_DIR ${CMAKE_BINARY_DIR}/triton
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND ""
+        INSTALL_COMMAND ""
+        PATCH_COMMAND git apply ${CMAKE_SOURCE_DIR}/triton.patch
+    )
+    set(TRITON_PATH ${CMAKE_SOURCE_DIR}/triton)
+    set(TRITON_BUILD_PATH ${CMAKE_BINARY_DIR}/triton)
 endif()
 
 ExternalProject_Add(
@@ -71,7 +108,7 @@ ExternalProject_Add(
     LIST_SEPARATOR ","
     PREFIX ${CMAKE_BINARY_DIR}
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
-    CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_CURRENT_SOURCE_DIR}/cmake -DMLIR_DIR=${LLVM_BUILD_PATH}/lib/cmake/mlir -DLLVM_DIR=${LLVM_BUILD_PATH}/lib/cmake/llvm -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/blis/ -DBLAS_INCLUDE_DIRS=${CMAKE_BINARY_DIR}/blis/include/blis/ -DENABLE_AMD_GPU_BACKEND=${ENABLE_AMD_GPU_BACKEND} -DENABLE_NVIDIA_GPU_BACKEND=${ENABLE_NVIDIA_GPU_BACKEND} -DENABLE_FPGA_TARGET=${ENABLE_FPGA_TARGET} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_CURRENT_SOURCE_DIR}/cmake -DMLIR_DIR=${LLVM_BUILD_PATH}/lib/cmake/mlir -DLLVM_DIR=${LLVM_BUILD_PATH}/lib/cmake/llvm -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/blis/ -DBLAS_INCLUDE_DIRS=${CMAKE_BINARY_DIR}/blis/include/blis/ -DENABLE_AMD_GPU_BACKEND=${ENABLE_AMD_GPU_BACKEND} -DENABLE_NVIDIA_GPU_BACKEND=${ENABLE_NVIDIA_GPU_BACKEND} -DENABLE_FPGA_TARGET=${ENABLE_FPGA_TARGET} -DDEVICE_COMPUTE_CAPABILITY=${DEVICE_COMPUTE_CAPABILITY} -DTRITON_PATH=${TRITON_PATH} -DTRITON_BUILD_PATH=${TRITON_BUILD_PATH} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     BUILD_COMMAND cmake --build . -- -j 8
     BUILD_ALWAYS TRUE
     INSTALL_COMMAND ""

@@ -130,12 +130,11 @@ endif()
 # Triton Setup
 #-------------------------------------------------------------------------------
 if(${ENABLE_GPU_TARGET})
-  set(TRITON_PATH "" CACHE PATH "Path to Triton")
-  set(TRITON_BUILD_PATH "${CMAKE_BINARY_DIR}/triton" CACHE INTERNAL "Path to Triton Build")
+  set(TRITON_PATH "" CACHE PATH "Path to Triton source")
   set(TRITON_BUILD_UT OFF CACHE BOOL "Disable triton unittests" FORCE)
   set(TRITON_CODEGEN_BACKENDS "${CODEGEN_BACKENDS}" CACHE STRING "Enable different codegen backends" FORCE)
   if(NOT DEFINED DEVICE_COMPUTE_CAPABILITY)
-    message(FATAL_ERROR "Please specify cuda compute capability requested")
+    message(FATAL_ERROR "Please specify the default compute capability for your GPU device")
   endif()
   add_compile_definitions(DEVICE_COMPUTE_CAPABILITY="${DEVICE_COMPUTE_CAPABILITY}")
 
