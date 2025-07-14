@@ -79,7 +79,7 @@ using llvm::SmallDenseMap;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-#define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 
@@ -180,9 +180,16 @@ namespace
   };
 
   struct NumericSparseTensorInfo {
-    Value pos;
-    Value crds;
-    Value vals;
+//    Value pos;
+//    Value crds;
+//    Value vals;
+    Value dim_sizes;  /// 0: tensor<2xindex>
+    Value A1_insert_pos;  /// 1: index
+    Value A1_pos;  /// 2: tensor<?xi64>
+    Value A2_insert_pos;  /// 3: index
+    Value A2_pos;  /// 4: tensor<?xi64>
+    Value A2_crd;  /// 5: tensor<?xi64>
+    Value vals;  /// 6: tensor<?xf64>
     Value sparseTensor;
   };
 
@@ -1854,9 +1861,67 @@ namespace
     return workspace;
   }
 
+  /// Get the types from a SparseTensorType, which will be needed when create a UnrealizedConversionCastOp
+  /// Ref: SparseTensorConversionPass.cpp, void mlir::comet::populateSparseTensorConversionPatterns()
+  llvm::SmallVector<Type> GetUnpackedTypesFromSparseTensorType(tensorAlgebra::SparseTensorType type)
+  {
+    llvm::SmallVector<Type> types;
+    ArrayRef<int64_t> dim_sizes = type.getDims();
+    ArrayRef<TensorFormatEnum> format = type.getFormat();
+
+    auto context = type.getContext();
+    Type index_type = IndexType::get(context);
+    [[maybe_unused]]  bool is_known_size = true;
+    [[maybe_unused]]  int known_size = 1;
+    types.push_back(RankedTensorType::get({static_cast<long long>(dim_sizes.size())}, IndexType::get(context))); //Dimension sizes
+    for(unsigned i = 0; i < dim_sizes.size(); i++) {
+      types.push_back(index_type); //Insert pos
+      switch(format[2 * i])
+      {
+        case TensorFormatEnum::D:
+        {
+          if(dim_sizes[i] != ShapedType::kDynamic) {
+            known_size *= dim_sizes[i];
+          } else {
+            is_known_size = false;
+          }
+          auto pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, type.getIndicesType());
+          types.push_back(pos_type); //Pos tensor
+          break;
+        }
+        case TensorFormatEnum::CU:
+        case TensorFormatEnum::CN:
+        {
+          Type pos_type = mlir::RankedTensorType::get({ShapedType::kDynamic,},
+                                                      type.getIndicesType());
+          Type crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,},
+                                                      type.getIndicesType());
+          is_known_size = false;
+
+          types.push_back(pos_type); //Pos tensor
+          types.push_back(crd_type); //Crd tensor
+          break;
+        }
+        case TensorFormatEnum::S:
+        {
+          Type crd_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, type.getIndicesType());
+          types.push_back(crd_type); //Crd tensor
+          break;
+        }
+        default: {
+          assert(false && "Could not unpack unknown format to sparse tensor.");
+        }
+      }
+    }
+    Type value_type = mlir::RankedTensorType::get({ShapedType::kDynamic,}, type.getElementType());
+    types.push_back(value_type); //Value tensor
+
+    return types;
+  }
 
   scf::ForallOp CreateNumericNewForallOp(scf::ForallOp old_forall_loop,
                                          Value workspace,
+                                         Type sparseTensorType,
                                          mlir::IRRewriter &rewriter,
                                          mlir::Location &loc,
                                          NumericSparseTensorInfo &sparseTensorInfo /*out*/)
@@ -1865,6 +1930,7 @@ namespace
     rewriter.setInsertionPoint(old_forall_loop);
 
     /// Create %pos, %crds, %vals = builtin.unrealized_conversion_cast(%old_sparse_tensor);
+    /// Create %dim_sizes, %A1_insert_pos, %A1_pos, %A2_insert_pos, %A2_pos, %A2_crd, %vals = builtin.unrealized_conversion_cast(%old_sparse_tensor);
     Value old_sparse_tensor = nullptr;
     uint32_t count = 0;
     for (auto arg : old_forall_loop.getOutputs()) {
@@ -1874,24 +1940,35 @@ namespace
       }
     }
     assert(count == 1 && "Error: expect one sparse_tensor");
-    RankedTensorType posTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
-    RankedTensorType crdsTensorType = posTensorType;
-    RankedTensorType valsTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getF64Type());
-    llvm::SmallVector<Type> result_types = {
-        posTensorType,
-        crdsTensorType,
-        valsTensorType
-    };
+//    RankedTensorType posTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
+//    RankedTensorType crdsTensorType = posTensorType;
+//    RankedTensorType valsTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getF64Type());
+//    llvm::SmallVector<Type> result_types = {
+//        posTensorType,
+//        crdsTensorType,
+//        valsTensorType
+//    };
+    llvm::SmallVector<Type> result_types = GetUnpackedTypesFromSparseTensorType(llvm::cast<tensorAlgebra::SparseTensorType>(sparseTensorType));
     mlir::UnrealizedConversionCastOp unrealized_op =
         rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
                                                           result_types,
                                                           /*input=*/old_sparse_tensor);
+
     comet_pdump(unrealized_op->getParentOp());
-    Value pos = unrealized_op->getResult(0);
-    Value crds = unrealized_op->getResult(1);
-    Value vals = unrealized_op->getResult(2);
-    sparseTensorInfo = {pos, crds, vals, old_sparse_tensor};
-    SmallVector<Value> inputs = {crds, vals};
+//    Value pos = unrealized_op->getResult(0);
+//    Value crds = unrealized_op->getResult(1);
+//    Value vals = unrealized_op->getResult(2);
+//    sparseTensorInfo = {pos, crds, vals, old_sparse_tensor};
+//    SmallVector<Value> inputs = {crds, vals};
+    Value dim_sizes = unrealized_op.getResult(0);
+    Value A1_insert_pos = unrealized_op.getResult(1);
+    Value A1_pos = unrealized_op.getResult(2);
+    Value A2_insert_pos = unrealized_op.getResult(3);
+    Value A2_pos = unrealized_op.getResult(4);
+    Value A2_crd = unrealized_op.getResult(5);
+    Value vals = unrealized_op.getResult(6);
+    sparseTensorInfo = {dim_sizes, A1_insert_pos, A1_pos, A2_insert_pos, A2_pos, A2_crd, vals, old_sparse_tensor};
+    SmallVector<Value> inputs = {A2_crd, vals};
     scf::ForallOp new_forall_loop = rewriter.create<scf::ForallOp>(
         loc,
         /*upperBound=*/old_forall_loop.getMixedUpperBound(),
@@ -1965,7 +2042,8 @@ namespace
      * %vals_extract_slice = tensor.extract_slice %vals[%offset] [%size] [%stride]
      */
     Value index = new_forall_loop.getInductionVar(0);
-    Value pos = sparseTensorInfo.pos;
+//    Value pos = sparseTensorInfo.pos;
+    Value pos = sparseTensorInfo.A2_pos;
     Type pos_element_type = mlir::getElementTypeOrSelf(pos);
 
     Value offset = rewriter.create<tensor::ExtractOp>(loc,
@@ -2016,7 +2094,17 @@ namespace
     /// Pack the sparse_tensor using extracted slices
     Type sparse_tensor_type = sparseTensorInfo.sparseTensor.getType();
     comet_vdump(sparse_tensor_type);
-    llvm::SmallVector<Value> inputs = {pos, crds_new_extract_slice, vals_new_extract_slice};
+//    llvm::SmallVector<Value> inputs = {pos, crds_new_extract_slice, vals_new_extract_slice};
+    Value cst_index_0 = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
+    llvm::SmallVector<Value> inputs = {
+        /*dim_sizes=*/sparseTensorInfo.dim_sizes,
+        /*A1_insert_pos=*/sparseTensorInfo.A1_insert_pos,  /// TODO: is this (and below) correct?
+        /*A1_pos=*/sparseTensorInfo.A1_pos,
+        /*A2_insert_pos=*/cst_index_0,
+        /*A2_pos=*/pos,
+        /*A2_crd=*/crds_new_extract_slice,
+        /*vals=*/vals_new_extract_slice
+    };
     mlir::UnrealizedConversionCastOp unrealized_op =
         rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
                                                           sparse_tensor_type,
@@ -2025,8 +2113,14 @@ namespace
     rewriter.replaceOp(crds_old_extract_slice, crds_new_extract_slice);
     rewriter.replaceOp(vals_old_extract_slice, vals_new_extract_slice);
     /// Output
-    innerSparseTensorInfo.pos = pos;
-    innerSparseTensorInfo.crds = crds_new_extract_slice;
+//    innerSparseTensorInfo.pos = pos;
+//    innerSparseTensorInfo.crds = crds_new_extract_slice;
+    innerSparseTensorInfo.dim_sizes = sparseTensorInfo.dim_sizes;
+    innerSparseTensorInfo.A1_insert_pos = sparseTensorInfo.A1_insert_pos;
+    innerSparseTensorInfo.A1_pos = sparseTensorInfo.A1_pos;
+    innerSparseTensorInfo.A2_insert_pos = cst_index_0;
+    innerSparseTensorInfo.A2_pos = pos;
+    innerSparseTensorInfo.A2_crd = crds_new_extract_slice;
     innerSparseTensorInfo.vals = vals_new_extract_slice;
     innerSparseTensorInfo.sparseTensor = unrealized_op.getResult(0);
 
@@ -2111,7 +2205,8 @@ namespace
                             Value &updated_sparse_tensor/*out*/)
   {
     /*
-    %pos, %crds_slice, %vals_slice = mlir.unrealized_cast(%for_sparse_tensor)
+//    %pos, %crds_slice, %vals_slice = mlir.unrealized_cast(%for_sparse_tensor)
+    %dim_sizes, %A1_insert_pos, %A1_pos, %A2_insert_pos, %A2_pos, %A2_crd, %vals = mlir.unrealized_conversion_cast(%for_sparse_tensor)
     %crds_updated, %vals_updated, %result_workspace = scf.for %j_loc = %c0 to %j_size step %c1 iter_args(%arg1 = %crds_slice, %arg2 = %vals_slice, %ws = %for_workspace) -> (tensor<?xi64>, tensor<?xi64>, !ta.workspace<f64, i64, ?>) {
         %crd = "ta.SpTensorGetCrd"(%ws, %j_loc)
         %crd_index = arith.index_cast %crd : i64 to index
@@ -2120,27 +2215,38 @@ namespace
         %inserted_vals = tensor.insert %val into %arg2[%j_loc]
         scf.yield %inserted_crds, %inserted_vals, %ws
     }
-    %pack_sparse_tensor = mlir.unrealized_cast(%pos, %crds_updated, %vals_updated)
+//    %pack_sparse_tensor = mlir.unrealized_conversion_cast(%pos, %crds_updated, %vals_updated)
+    %pack_sparse_tensor = mlir.unrealized_conversion_cast(%dim_sizes, %A1_insert_pos, %A1_pos, %A2_insert_pos, %A2_pos, %crds_updated, %vals_updated)
      */
 
 
     scf::ForOp workspace_for_loop = GetConsumerForOp(new_inner_for_loop);
+    comet_vdump(workspace_for_loop);
     mlir::OpBuilder::InsertionGuard guard(rewriter);
     rewriter.setInsertionPoint(workspace_for_loop);
 
     Value for_loop_sparse_tensor = new_inner_for_loop.getResult(0);
-    Value for_loop_workspace = new_inner_for_loop.getResult(1);
-    RankedTensorType posTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
-    RankedTensorType crdsTensorType = posTensorType;
-    RankedTensorType valsTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getF64Type());
+//    Value for_loop_workspace = new_inner_for_loop.getResult(1);
+    Value sorted_workspace = workspace_for_loop.getInitArgs()[1];
+    comet_vdump(sorted_workspace);
+//    RankedTensorType posTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
+//    RankedTensorType crdsTensorType = posTensorType;
+//    RankedTensorType valsTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getF64Type());
+//    mlir::UnrealizedConversionCastOp unpack_sparse_tensor =
+//        rewriter.create<mlir::UnrealizedConversionCastOp>(
+//            loc,
+//            /*result_types=*/llvm::SmallVector<Type>{posTensorType, crdsTensorType, valsTensorType},
+//            /*input=*/for_loop_sparse_tensor);
+    llvm::SmallVector<Type> result_types = GetUnpackedTypesFromSparseTensorType(
+        llvm::cast<tensorAlgebra::SparseTensorType>(for_loop_sparse_tensor.getType()));
     mlir::UnrealizedConversionCastOp unpack_sparse_tensor =
         rewriter.create<mlir::UnrealizedConversionCastOp>(
             loc,
-            /*result_types=*/llvm::SmallVector<Type>{posTensorType, crdsTensorType, valsTensorType},
+            /*result_types=*/result_types,
             /*input=*/for_loop_sparse_tensor);
-    Value pos = unpack_sparse_tensor.getResult(0);
-    Value crds_slice = unpack_sparse_tensor.getResult(1);
-    Value vals_slice = unpack_sparse_tensor.getResult(2);
+//    Value pos = unpack_sparse_tensor.getResult(4);
+    Value crds_slice = unpack_sparse_tensor.getResult(5);
+    Value vals_slice = unpack_sparse_tensor.getResult(6);
 
     /// Create the new workspace for-loop
     Value lower_bound = workspace_for_loop.getLowerBound();
@@ -2151,7 +2257,7 @@ namespace
         lower_bound,
         upper_bound,
         step,
-        /*inputs=*/llvm::SmallVector<Value>{crds_slice, vals_slice, for_loop_workspace});
+        /*inputs=*/llvm::SmallVector<Value>{crds_slice, vals_slice, sorted_workspace});
     rewriter.setInsertionPointToStart(new_workspace_for_loop.getBody());
     Value arg_crds = new_workspace_for_loop.getRegionIterArg(0);
     Value arg_vals = new_workspace_for_loop.getRegionIterArg(1);
@@ -2163,6 +2269,8 @@ namespace
         induction_var,
         /*dim=*/rewriter.getI32IntegerAttr(0));
     Value crd_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), crd_i64);
+    RankedTensorType crdsTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getI64Type());
+    RankedTensorType valsTensorType = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/rewriter.getF64Type());
     Value val = rewriter.create<tensorAlgebra::TensorExtractOp>(
         loc,
         /*element_type=*/llvm::cast<tensorAlgebra::WorkspaceType>(arg_workspace.getType()).getElementType(),
@@ -2195,7 +2303,14 @@ namespace
         rewriter.create<mlir::UnrealizedConversionCastOp>(
             loc,
             /*result_types=*/sparseTensorType,
-            /*input=*/llvm::SmallVector<Value>{pos, updated_crds, updated_vals});
+            /*input=*/llvm::SmallVector<Value>{
+              /*dim_sizes=*/unpack_sparse_tensor.getResult(0),
+              /*A1_insert_pos=*/unpack_sparse_tensor.getResult(1),
+              /*A1_pos=*/unpack_sparse_tensor.getResult(2),
+              /*A2_insert_pos=*/unpack_sparse_tensor.getResult(3),
+              /*A2_pos=*/unpack_sparse_tensor.getResult(4),
+              updated_crds,
+              updated_vals});
     rewriter.replaceAllUsesWith(workspace_for_loop.getResult(0), pack_sparse_tensor.getResult(0));
     rewriter.replaceAllUsesWith(workspace_for_loop.getResult(1), result_workspace);
     rewriter.eraseOp(workspace_for_loop);
@@ -2254,7 +2369,8 @@ namespace
   }
 
   void ReplaceITreeOutputs(scf::ForallOp new_forall_loop,
-                           Value pos,
+//                           Value pos,
+                           NumericSparseTensorInfo sparseTensorInfo,
                            Value workspace,
                            Type sparseTensorType,
                            mlir::IRRewriter &rewriter,
@@ -2269,7 +2385,14 @@ namespace
         rewriter.create<mlir::UnrealizedConversionCastOp>(
             loc,
             /*result_types=*/sparseTensorType,
-            /*input=*/llvm::SmallVector<Value>{pos, updated_crds, updated_vals});
+            /*input=*/llvm::SmallVector<Value>{
+              /*dim_sizes=*/sparseTensorInfo.dim_sizes,
+              /*A1_insert_pos=*/sparseTensorInfo.A1_insert_pos,
+              /*A1_pos=*/sparseTensorInfo.A1_pos,
+              /*A2_insert_pos=*/sparseTensorInfo.A2_insert_pos,
+              /*A2_pos=*/sparseTensorInfo.A2_pos,
+              /*A2_crd=*/updated_crds,
+              /*vals=*/updated_vals});
     indexTree::YieldOp new_yield = rewriter.create<indexTree::YieldOp>(
         loc,
         llvm::SmallVector<Value>{output_sparse_tensor.getResult(0), workspace});
@@ -2316,6 +2439,7 @@ namespace
     NumericSparseTensorInfo sparseTensorInfo;
     scf::ForallOp new_forall_loop = CreateNumericNewForallOp(old_forall_loop,
                                                              workspace,
+                                                             sparseTensorType,
                                                              rewriter,
                                                              loc,
                                                              sparseTensorInfo/*out*/);
@@ -2370,7 +2494,8 @@ namespace
 
     /// Pack the result as the output  of itree
     ReplaceITreeOutputs(new_forall_loop,
-                        /*pos=*/sparseTensorInfo.pos,
+//                        /*pos=*/sparseTensorInfo.pos,
+                        sparseTensorInfo,
                         workspace,
                         sparseTensorType,
                         rewriter,

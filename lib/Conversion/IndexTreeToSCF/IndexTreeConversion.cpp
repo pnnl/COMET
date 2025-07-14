@@ -41,6 +41,11 @@
 using namespace mlir;
 using llvm::SmallVector;
 
+// *********** For debug purpose *********//
+//#define COMET_DEBUG_MODE
+#include "comet/Utils/debug.h"
+// *********** For debug purpose *********//
+
 namespace mlir {
     namespace comet{
       #define GEN_PASS_DEF_INDEXTREE_INLINING
@@ -81,6 +86,8 @@ class ConvertIndexTreeTypes : public OpConversionPattern<indexTree::IndexTreeOp>
   mlir::LogicalResult
   matchAndRewrite(indexTree::IndexTreeOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    comet_vdump(op);
+    comet_debug() << "\n";
     // Convert the operands
     SmallVector<Value> unpacked;
     for (Value v : adaptor.getOperands()) {

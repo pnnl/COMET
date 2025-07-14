@@ -112,6 +112,11 @@ static bool unpack_sparse_tensor(Value sparse_tensor, SparseTensor& result)
     if(!type)
       return false;
 
+    /// test
+    comet_vdump(cast);
+    comet_debug();
+    /// end test
+
     auto format = type.getFormat();
     auto dim_sizes = type.getDims();
     auto cur_arg = cast.getInputs().begin();
@@ -224,7 +229,8 @@ class ConvertSpTensorConstructOp
   LogicalResult
   matchAndRewrite(SparseTensorConstructOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-
+    comet_vdump(op);
+    comet_debug() << "\n";
     SparseTensor sp_tensor;
     SparseTensorType sp_tensor_type = llvm::cast<SparseTensorType>(op->getResult(0).getType());
     auto dims = op.getDims();
@@ -836,6 +842,8 @@ class ConvertWorkspaceGetDimSize
   LogicalResult
   matchAndRewrite(SpTensorGetDimSize op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    comet_vdump(op);
+    comet_debug() << "\n";
     auto opAdaptor = llvm::cast<SpTensorGetDimSizeAdaptor>(adaptor);
     if(!llvm::isa<WorkspaceType>(opAdaptor.getTensor().getType())){
       return failure();
@@ -1354,6 +1362,10 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
     [](OpBuilder &builder, SparseTensorType resultType, ValueRange inputs,
         Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
+
+      comet_vdump(op.getResult(0));
+      comet_vdump(op->getParentOfType<ModuleOp>());
+
       return op.getResult(0);
     });
 
@@ -1361,6 +1373,10 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
     [](OpBuilder &builder, SparseTensorType resultType, ValueRange inputs,
         Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
+
+      comet_vdump(op.getResult(0));
+      comet_vdump(op->getParentOfType<ModuleOp>());
+
       return op.getResult(0);
     });
   
@@ -1368,6 +1384,10 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
     [](OpBuilder &builder, WorkspaceType resultType, ValueRange inputs,
         Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
+
+      comet_vdump(op.getResult(0));
+      comet_vdump(op->getParentOfType<ModuleOp>());
+
       return op.getResult(0);
     });
 
@@ -1375,6 +1395,10 @@ void mlir::comet::populateSparseTensorConversionPatterns(MLIRContext *context, R
     [](OpBuilder &builder, WorkspaceType resultType, ValueRange inputs,
         Location loc) -> std::optional<Value> {
       auto op = builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs);
+
+      comet_vdump(op.getResult(0));
+      comet_vdump(op->getParentOfType<ModuleOp>());
+
       return op.getResult(0);
     });
 
@@ -1457,6 +1481,8 @@ struct SparseTensorConversionPass : comet::impl::SparseTensorConversionPassBase<
     {
       return signalPassFailure(); 
     }
+    comet_vdump(getOperation()->getParentOfType<ModuleOp>());
+    comet_debug() << "\n";
   }
 };
 
