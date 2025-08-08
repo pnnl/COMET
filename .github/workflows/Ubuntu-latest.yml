@@ -43,7 +43,7 @@ jobs:
 
     - name: Build from cached
       if: steps.cache-submodule.outputs.cache-hit == 'true'
-      run: cd ${{github.workspace}}/build && cmake ../ -DCMAKE_BUILD_TYPE=Release -DLLVM_CUSTOM_BUILD_PATH=${{github.workspace}}/build/llvm -DCMAKE_BUILD_TYPE=Release && make
+      run: cd ${{github.workspace}}/build && cmake ../ -DCMAKE_BUILD_TYPE=Release -DLLVM_CUSTOM_BUILD_PATH=${{github.workspace}}/build/llvm/src/llvm-build -DCMAKE_BUILD_TYPE=Release && make
 
 
   test-comet-backend:
