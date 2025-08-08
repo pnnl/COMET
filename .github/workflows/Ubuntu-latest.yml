@@ -48,7 +48,7 @@ jobs:
 
   test-comet-backend:
 
-    needs: build-comet-dependencies
+    needs: build-comet-and-dependencies
     runs-on: ubuntu-latest
     
     steps:
@@ -123,7 +123,7 @@ jobs:
   #       cargo test
   
   test-cometpy:
-    needs: build-comet-dependencies
+    needs: build-comet-and-dependencies
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
