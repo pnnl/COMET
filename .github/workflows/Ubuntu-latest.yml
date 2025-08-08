@@ -12,10 +12,10 @@ env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
   COMET_SRC: ${{github.workspace}}
-  COMETPY_COMET_PATH: ${{github.workspace}}/build/
-  COMETPY_LLVM_PATH: ${{github.workspace}}/llvm/build/
+  COMETPY_COMET_PATH: ${{github.workspace}}/build/comet/
+  COMETPY_LLVM_PATH: ${{github.workspace}}/build/llvm/
 jobs:
-  build-comet-dependencies:
+  build-comet-and-dependencies:
     # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
     # You can convert this to a matrix build if you need cross-platform coverage.
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
@@ -33,25 +33,17 @@ jobs:
       # if: always()
       with:
         path: |
-          ${{github.workspace}}/llvm
-          ${{github.workspace}}/blis/
-          ${{github.workspace}}/install/
+          ${{github.workspace}}/build/llvm
+          ${{github.workspace}}/build/blis
         key: ${{ runner.os }}-submodules
 
-    - name: Checkout repository
+    - name: Build clean
       if: steps.cache-submodule.outputs.cache-hit != 'true'
-      uses: actions/checkout@v4
-    - name: Checkout submodules
-      if: steps.cache-submodule.outputs.cache-hit != 'true'
-      run: git submodule update --init --depth=1 llvm && git submodule update --init --depth=1 blis
+      run: mkdir ${{github.workspace}}/build && cd ${{github.workspace}}/build && cmake ../ -DCMAKE_BUILD_TYPE=Release && make
 
-    - name: Build llvm
-      if: steps.cache-submodule.outputs.cache-hit != 'true'
-      run: mkdir ${{github.workspace}}/llvm/build && cd llvm/build/ && cmake -G Ninja ../llvm -DLLVM_ENABLE_PROJECTS="mlir;openmp;clang" -DLLVM_TARGETS_TO_BUILD="X86" -DOPENMP_ENABLE_LIBOMPTARGET=OFF -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release && ninja
-
-    - name: Build blis
-      if: steps.cache-submodule.outputs.cache-hit != 'true'
-      run: cd ${{github.workspace}} && patch -s -p0 < comet-blis.patch && cd blis && ./configure --prefix=$COMET_SRC/install --disable-shared auto && make && make install
+    - name: Build from cached
+      if: steps.cache-submodule.outputs.cache-hit == 'true'
+      run: cd ${{github.workspace}}/build && cmake ../ -DCMAKE_BUILD_TYPE=Release -DLLVM_CUSTOM_BUILD_PATH=${{github.workspace}}/build/llvm -DCMAKE_BUILD_TYPE=Release && make
 
 
   test-comet-backend:
@@ -72,14 +64,14 @@ jobs:
       # if: always()
       with:
         path: |
-          ${{github.workspace}}/llvm
-          ${{github.workspace}}/blis/
-          ${{github.workspace}}/install/
+          ${{github.workspace}}/build/llvm
+          ${{github.workspace}}/build/blis
         key: ${{ runner.os }}-submodules
 
     - name: Build COMET
+      working-directory: ${{github.workspace}}/build/
       # Build your program with the given configuration
-      run: rm -rf ${{github.workspace}}/build && mkdir ${{github.workspace}}/build && cd ${{github.workspace}}/build && cmake -G Ninja .. -DMLIR_DIR=${{github.workspace}}/llvm/build/lib/cmake/mlir -DLLVM_DIR=${{github.workspace}}/llvm/build/lib/cmake/llvm -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release && ninja 
+      run: cmake .. -DLLVM_CUSTOM_BUILD_PATH=${{github.workspace}}/build/llvm -DCMAKE_BUILD_TYPE=Release && make
     
     - name: Initialize Python 3.11
       uses: actions/setup-python@v4
@@ -93,7 +85,7 @@ jobs:
           sudo apt-get install -y python3-pip
            
     - name: Test
-      working-directory: ${{github.workspace}}/build
+      working-directory: ${{github.workspace}}/build/comet/
       shell: bash
        
       run: ninja check-comet-integration
@@ -142,9 +134,8 @@ jobs:
       # if: always()
       with:
         path: |
-          ${{github.workspace}}/llvm
-          ${{github.workspace}}/blis/
-          ${{github.workspace}}/install/
+          ${{github.workspace}}/build/llvm
+          ${{github.workspace}}/build/blis
         key: ${{ runner.os }}-submodules
         
     - name: Initialize Python 3.11
@@ -158,9 +149,11 @@ jobs:
           sudo apt-get install -y python3-pip
           
     - name: Build COMET
+      working-directory: ${{github.workspace}}/build/
       # Build your program with the given configuration
-      run: rm -rf ${{github.workspace}}/build && mkdir ${{github.workspace}}/build && cd ${{github.workspace}}/build && cmake -G Ninja .. -DMLIR_DIR=${{github.workspace}}/llvm/build/lib/cmake/mlir -DLLVM_DIR=${{github.workspace}}/llvm/build/lib/cmake/llvm -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release && ninja 
-    
+      run: cmake .. -DLLVM_CUSTOM_BUILD_PATH=${{github.workspace}}/build/llvm -DCMAKE_BUILD_TYPE=Release && make
+
+      
     - name: Setup cometPy
       run: cd ${{github.workspace}}/frontends/numpy-scipy/ && pip3 install -e .
 

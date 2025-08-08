@@ -21,9 +21,6 @@ endfunction(init_git_submodule)
 #-------------------------------------------------------------------------------
 
 message(STATUS "Running on ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Architectures to build for on macOS")
-endif()
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm|aarch64")
   set(DETECTED_CPU_ARCH "AArch64")
@@ -67,7 +64,7 @@ if(NOT LLVM_CUSTOM_BUILD_PATH)
         LIST_SEPARATOR ","
         PREFIX ${CMAKE_BINARY_DIR}/llvm
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llvm/
-        CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_CURRENT_SOURCE_DIR}/llvm/llvm -DLLVM_ENABLE_PROJECTS=${LLVM_PROJECTS} -DLLVM_TARGETS_TO_BUILD=${LLVM_TARGETS} -DCMAKE_OSX_ARCHITECTURES=arm64 -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release
+        CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_CURRENT_SOURCE_DIR}/llvm/llvm -DLLVM_ENABLE_PROJECTS=${LLVM_PROJECTS} -DLLVM_TARGETS_TO_BUILD=${LLVM_TARGETS} -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release
         BUILD_COMMAND cmake --build . -- -j 8
         INSTALL_COMMAND ""
     )
@@ -100,7 +97,7 @@ if(ENABLE_AMD_GPU_BACKEND OR ENABLE_NVIDIA_GPU_BACKEND)
     )
     set(TRITON_PATH ${CMAKE_SOURCE_DIR}/triton)
     set(TRITON_BUILD_PATH ${CMAKE_BINARY_DIR}/triton)
-    list(APPEND DEPENDENCIES llvm-spirv mcl triton)
+    list(APPEND DEPENDENCIES triton)
 endif()
 
 if(ENABLE_FPGA_TARGET)
