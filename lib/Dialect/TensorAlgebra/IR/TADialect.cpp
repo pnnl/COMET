@@ -35,6 +35,7 @@
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "mlir/IR/Types.h"
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Support/LogicalResult.h"
@@ -299,33 +300,7 @@ struct SortOpInterface
     if (failed(destMemref))
       return failure();
 
-    auto inputType = op->getOperand(0).getType();
-    ShapedType shaped_type = mlir::cast<ShapedType>(inputType);
-
-    /// Declare comet_sort_index()
-    Type elemType = shaped_type.getElementType();
-    Type indexType = rewriter.getIndexType();
-    auto sort_func = FunctionType::get(ctx, {UnrankedMemRefType::get(elemType, 0), indexType, indexType}, {});
-    std::string func_name = "comet_sort";
-    if(auto integer = dyn_cast<IntegerType>(elemType))
-    {
-      func_name +=  std::to_string(integer.getIntOrFloatBitWidth());
-    }
-
-    if (!hasFuncDeclaration(module, func_name))
-    {
-      func::FuncOp func_declare = func::FuncOp::create(loc,
-                                                      func_name,
-                                                      sort_func,
-                                                      ArrayRef<NamedAttribute>{});
-      func_declare.setPrivate();
-      module.push_back(func_declare);
-    }
-    
-    
-    auto unrankedMemrefType = mlir::UnrankedMemRefType::get(shaped_type.getElementType(), 0);
-    auto unrankedMemref = rewriter.create<memref::CastOp>(loc, unrankedMemrefType, *destMemref);
-    rewriter.create<func::CallOp>(loc, func_name, SmallVector<Type, 2>{}, ValueRange{unrankedMemref, sortOp.getStart(), sortOp.getEnd()});
+    rewriter.create<TensorSortOp>(loc, Type(), *destMemref, sortOp.getStart(), sortOp.getEnd());
     bufferization::replaceOpWithBufferizedValues(rewriter, op, *destMemref);
 
     return success();

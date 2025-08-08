@@ -1209,12 +1209,12 @@ def SortCrdOp : TA_Op<"SortCrdOp", [Pure]> {
   let results = (outs TA_AnyTensor:$result);
 }
 
-def TensorSortOp : TA_Op<"TensorSortOp", [Pure, DestinationStyleOpInterface]> {
+def TensorSortOp : TA_Op<"TensorSortOp", [DestinationStyleOpInterface, MemoryEffects<[MemRead, MemWrite]>]> {
   let summary = "Sort a tensor";
   let description = [{}];
 
-  let arguments = (ins TensorRankOf<[AnyInteger], [1]>:$tensor, Index:$start, Index:$end);
-  let results = (outs TensorRankOf<[AnyInteger], [1]>:$result);
+  let arguments = (ins AnyShaped:$tensor, Index:$start, Index:$end);
+  let results = (outs Optional<TensorRankOf<[AnyInteger], [1]>>:$result);
 
   let extraClassDeclaration = [{
     MutableOperandRange getDpsInitsMutable() { return getTensorMutable(); }

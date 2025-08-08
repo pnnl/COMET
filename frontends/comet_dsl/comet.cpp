@@ -708,6 +708,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     pm.addPass(mlir::createConvertSCFToOpenMPPass());
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());
+    pm.addPass(mlir::comet::createLowerOpsToFuncCallsPass());
     pm.addPass(mlir::createConvertSCFToCFPass());
     /// Sprinkle some cleanups.
     /// Convert vector to LLVM (always needed).

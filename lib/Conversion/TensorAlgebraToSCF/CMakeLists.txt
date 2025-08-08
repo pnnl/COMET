@@ -4,6 +4,7 @@ add_mlir_conversion_library(COMETTensorAlgebraToSCF
   EarlyLowering.cpp
   LateLowering.cpp
   SparseTensorConversionPass.cpp
+  LowerOpsToFuncCalls.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${COMET_MAIN_INCLUDE_DIR}/comet/Conversion/TensorAlgebraToIndexTree

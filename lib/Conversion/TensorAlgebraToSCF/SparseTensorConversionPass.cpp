@@ -1161,7 +1161,7 @@ class ConvertWorkspaceSrtCrd
     Value crd = workspace.crds;
     Type crdType = crd.getType();
     Value zero = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(0));
-    workspace.crds = rewriter.create<TensorSortOp>(loc, crdType, crd, zero, workspace.num_crds);
+    workspace.crds = rewriter.create<TensorSortOp>(loc, crdType, crd, zero, workspace.num_crds).getResult();
     
     SmallVector<Value, 6> cast_args;
     WorkspaceType workspace_type = llvm::cast<WorkspaceType>(adaptor.getTensor().getType());
