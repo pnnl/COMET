@@ -58,7 +58,7 @@ endif()
 if(ENABLE_NVIDIA_GPU_BACKEND)
     set(LLVM_TARGETS "${LLVM_TARGETS},NVPTX")
 endif()
-
+set(DEPENDENCIES llvm blis)
 if(NOT LLVM_CUSTOM_BUILD_PATH)
     init_git_submodule(${CMAKE_SOURCE_DIR}/llvm)
     message(STATUS "Building LLVM from source with projects: ${LLVM_PROJECTS} and targets: ${LLVM_TARGETS}")
@@ -100,7 +100,37 @@ if(ENABLE_AMD_GPU_BACKEND OR ENABLE_NVIDIA_GPU_BACKEND)
     )
     set(TRITON_PATH ${CMAKE_SOURCE_DIR}/triton)
     set(TRITON_BUILD_PATH ${CMAKE_BINARY_DIR}/triton)
+    list(APPEND DEPENDENCIES llvm-spirv mcl triton)
 endif()
+
+if(ENABLE_FPGA_TARGET)
+    init_git_submodule(${CMAKE_SOURCE_DIR}/tools/llvm-spirv)
+    init_git_submodule(${CMAKE_SOURCE_DIR}/tools/spirv-llvm-translate)
+    file(CREATE_LINK ${CMAKE_SOURCE_DIR}/tools/spirv-llvm-translate ${CMAKE_SOURCE_DIR}/tools/llvm-spirv/llvm/projects/spirv-llvm-translate SYMBOLIC)
+    # ADD_CUSTOM_TARGET(link_spirv_translate ALL
+    #               COMMAND ${CMAKE_COMMAND} -E create_symlink ${target} ${link})
+    ExternalProject_Add(
+        llvm-spirv
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/tools/llvm-spirv
+        BINARY_DIR ${CMAKE_BINARY_DIR}/tools/llvm-spirv
+        CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_SOURCE_DIR}/tools/llvm-spirv/llvm/ -DLLVM_ENABLE_PROJECTS=clang -DLLVM_TARGETS_TO_BUILD=host
+        BUILD_COMMAND ninja llvm-spirv && ninja llvm-dis
+        INSTALL_COMMAND ""
+    )
+
+    init_git_submodule(${CMAKE_SOURCE_DIR}/runtimes/mcl)
+    ExternalProject_Add(
+        mcl
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/runtimes/mcl
+        BINARY_DIR ${CMAKE_BINARY_DIR}/runtimes/mcl
+        CONFIGURE_COMMAND cd ${CMAKE_SOURCE_DIR}/runtimes/mcl && autoreconf --install && ./configure --prefix=${CMAKE_BINARY_DIR}/runtimes/mcl 
+        BUILD_COMMAND cd ${CMAKE_SOURCE_DIR}/runtimes/mcl && make -j && make install
+        INSTALL_COMMAND ""
+    )
+    set(MCL_BUILD_PATH ${CMAKE_BINARY_DIR}/runtimes/mcl)
+    list(APPEND DEPENDENCIES llvm-spirv mcl)
+endif()
+
 
 ExternalProject_Add(
     comet
@@ -108,9 +138,9 @@ ExternalProject_Add(
     LIST_SEPARATOR ","
     PREFIX ${CMAKE_BINARY_DIR}
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
-    CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_CURRENT_SOURCE_DIR}/cmake -DMLIR_DIR=${LLVM_BUILD_PATH}/lib/cmake/mlir -DLLVM_DIR=${LLVM_BUILD_PATH}/lib/cmake/llvm -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/blis/ -DBLAS_INCLUDE_DIRS=${CMAKE_BINARY_DIR}/blis/include/blis/ -DENABLE_AMD_GPU_BACKEND=${ENABLE_AMD_GPU_BACKEND} -DENABLE_NVIDIA_GPU_BACKEND=${ENABLE_NVIDIA_GPU_BACKEND} -DENABLE_FPGA_TARGET=${ENABLE_FPGA_TARGET} -DDEVICE_COMPUTE_CAPABILITY=${DEVICE_COMPUTE_CAPABILITY} -DTRITON_PATH=${TRITON_PATH} -DTRITON_BUILD_PATH=${TRITON_BUILD_PATH} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_CURRENT_SOURCE_DIR}/cmake -DMLIR_DIR=${LLVM_BUILD_PATH}/lib/cmake/mlir -DLLVM_DIR=${LLVM_BUILD_PATH}/lib/cmake/llvm -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/blis/ -DBLAS_INCLUDE_DIRS=${CMAKE_BINARY_DIR}/blis/include/blis/ -DENABLE_AMD_GPU_BACKEND=${ENABLE_AMD_GPU_BACKEND} -DENABLE_NVIDIA_GPU_BACKEND=${ENABLE_NVIDIA_GPU_BACKEND} -DENABLE_FPGA_TARGET=${ENABLE_FPGA_TARGET} -DDEVICE_COMPUTE_CAPABILITY=${DEVICE_COMPUTE_CAPABILITY} -DTRITON_PATH=${TRITON_PATH} -DTRITON_BUILD_PATH=${TRITON_BUILD_PATH} -DMCL_BUILD_PATH=${MCL_BUILD_PATH} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     BUILD_COMMAND cmake --build . -- -j 8
     BUILD_ALWAYS TRUE
     INSTALL_COMMAND ""
-    DEPENDS llvm blis
+    DEPENDS ${DEPENDENCIES}
 )

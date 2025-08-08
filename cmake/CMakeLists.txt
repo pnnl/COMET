@@ -123,7 +123,7 @@ set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
 # MCL include paths
 #-------------------------------------------------------------------------------
 if(${ENABLE_FPGA_TARGET})
-  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/runtimes/mcl/build/include/")
+  include_directories("${MCL_BUILD_PATH}/include/")
 endif()
 
 #-------------------------------------------------------------------------------
