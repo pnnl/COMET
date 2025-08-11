@@ -1011,7 +1011,21 @@ class ConvertWorkspaceClearOp
     }
     auto loc = op.getLoc();
     Value inc = rewriter.create<arith::ConstantOp>(loc, rewriter.getI32Type(), rewriter.getI32IntegerAttr(1));
-    workspace.mark_value = rewriter.create<arith::AddIOp>(loc, rewriter.getI32Type(), workspace.mark_value, inc);
+
+//    workspace.mark_value = rewriter.create<arith::AddIOp>(loc, rewriter.getI32Type(), workspace.mark_value, inc);
+    /// Initialize mark_value based on the outer-most loop's induction variable (i), i.e., mark_value = i + 1.
+    /// In this way, 1) each iteration can have a different mark_value. 2) When i == 0, mark_value will be 1, meaning
+    /// that no column index has been seen yet (in other words, when i == 0, mark_value should not be set as 0. So,
+    /// mark_value can be initialized as i + x, where x != 0 and no integer overflow.).
+    scf::ForallOp forall_op = op->getParentOfType<scf::ForallOp>();
+    if (forall_op) {
+      Value induction_var = forall_op.getInductionVar(0);
+      induction_var = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getI32Type(), induction_var);
+      workspace.mark_value = rewriter.create<arith::AddIOp>(loc, rewriter.getI32Type(), induction_var, inc);
+    } else {
+      workspace.mark_value = rewriter.create<arith::AddIOp>(loc, rewriter.getI32Type(), workspace.mark_value, inc);
+    }
+
     workspace.num_crds = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(0));
 
     SmallVector<Value, 6> cast_args;
