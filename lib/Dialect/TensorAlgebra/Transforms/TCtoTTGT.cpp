@@ -34,12 +34,14 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
+#include <cstddef>
 #include <limits>
 #include <map>
 #include <set>
 #include <unordered_map>
 
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/IR/BuiltinTypes.h"
 
 using namespace mlir;
 using namespace mlir::linalg;
@@ -149,7 +151,7 @@ namespace
       auto alphaAttr = multop.getOperation()->getAttr("__alpha__");
       auto betaAttr = multop.getOperation()->getAttr("__beta__");
 
-      Operation *startTime;
+      Operation *startTime = nullptr;
       std::string getTimeStr = "getTime";
       auto f64Type = rewriter.getF64Type();
       if (printFlops)
@@ -164,7 +166,7 @@ namespace
       /// Find summation indices
       for (const auto &map : indexMaps)
       {
-        auto affineMap = map.cast<AffineMapAttr>().getValue();
+        auto affineMap = cast<AffineMapAttr>(map).getValue();
         std::vector<unsigned> perm;
         for (size_t i = 0; i < affineMap.getNumResults(); i++)
         {
@@ -177,8 +179,8 @@ namespace
 
       comet_pdump(op);
       comet_debug() << "\n";
-      auto rhs1Tensor = cast<ToTensorOp>(operands[0].getDefiningOp());
-      auto rhs2Tensor = cast<ToTensorOp>(operands[1].getDefiningOp());
+      // auto rhs1Tensor = cast<ToTensorOp>(operands[0].getDefiningOp());
+      // auto rhs2Tensor = cast<ToTensorOp>(operands[1].getDefiningOp());
       comet_debug() << "\n";
       Value lhsDef;
       tensorAlgebra::TensorSetOp setnewop;
@@ -194,18 +196,54 @@ namespace
           comet_vdump(lhsDef);
         }
       }
-      auto lhsTensor = cast<ToTensorOp>(lhsDef.getDefiningOp());
+      // auto lhsTensor = cast<ToTensorOp>(lhsDef.getDefiningOp());
 
       comet_vdump(setnewop);
       comet_debug() << "\n";
 
-      Value rhs1Memref = rhs1Tensor.getMemref();
-      Value rhs2Memref = rhs2Tensor.getMemref();
-      Value lhsMemref = lhsTensor.getMemref();
+      Value rhs1Memref, rhs2Memref, lhsMemref;
+      if(auto tensor_rhs1 = dyn_cast<TensorType>(operands[0].getType()))
+      {
+        rhs1Memref = rewriter.createOrFold<bufferization::ToMemrefOp>(loc, MemRefType::get(tensor_rhs1.getShape(), tensor_rhs1.getElementType()), operands[0]);
+      }
+      else if(mlir::isa<MemRefType>(operands[0].getType()))
+      {
+        rhs1Memref = operands[0];
+      }
+      else 
+      {
+        assert(false && "Unexpected type");
+      }
 
-      auto rhs1MemrefType = rhs1Memref.getType().cast<MemRefType>();
-      auto rhs2MemrefType = rhs2Memref.getType().cast<MemRefType>();
-      auto lhsMemrefType = lhsMemref.getType().cast<MemRefType>();
+      if(auto tensor_rhs2 = dyn_cast<TensorType>(operands[1].getType()))
+      {
+        rhs2Memref = rewriter.createOrFold<bufferization::ToMemrefOp>(loc, MemRefType::get(tensor_rhs2.getShape(), tensor_rhs2.getElementType()), operands[1]);
+      }
+      else if(mlir::isa<MemRefType>(operands[1].getType()))
+      {
+        rhs2Memref = operands[1];
+      }
+      else 
+      {
+        assert(false && "Unexpected type");
+      }
+
+      if(auto tensor_lhs = dyn_cast<TensorType>(lhsDef.getType()))
+      {
+        lhsMemref = rewriter.createOrFold<bufferization::ToMemrefOp>(loc, MemRefType::get(tensor_lhs.getShape(), tensor_lhs.getElementType()), lhsDef);
+      }
+      else if(mlir::isa<MemRefType>(lhsDef.getType()))
+      {
+        lhsMemref = lhsDef;
+      }
+      else 
+      {
+        assert(false && "Unexpected type");
+      }
+
+      auto rhs1MemrefType = cast<MemRefType>(rhs1Memref.getType());
+      auto rhs2MemrefType = cast<MemRefType>(rhs2Memref.getType());
+      auto lhsMemrefType = cast<MemRefType>(lhsMemref.getType());
 
       std::vector<TensorShape> allShapes{rhs1MemrefType.getShape(),
                                          rhs2MemrefType.getShape(),
@@ -260,15 +298,15 @@ namespace
       /// Do transpose if needed
       if (!rhs1OutMapAttr.getValue().isIdentity())
       {
+        auto shape = rhs1MemrefType.getShape();
         std::vector<Value> operands;
         std::vector<int64_t> rhs1Dims;
         for (auto idx : rhs1OutPerm)
         {
-          auto shape = rhs1MemrefType.getShape();
           rhs1Dims.push_back(shape[idx]);
           if (rhs1MemrefType.isDynamicDim(idx))
           {
-            operands.push_back(rhs1Memref.getDefiningOp()->getOperand(rhs1MemrefType.getDynamicDimIndex(idx)));
+            operands.push_back(rewriter.create<memref::DimOp>(loc, rhs1Memref, idx));
           }
         }
 
@@ -289,13 +327,13 @@ namespace
       {
         std::vector<Value> operands;
         std::vector<int64_t> rhs2Dims;
+        auto shape = rhs2MemrefType.getShape();
         for (auto idx : rhs2OutPerm)
         {
-          auto shape = rhs2MemrefType.getShape();
           rhs2Dims.push_back(shape[idx]);
           if (rhs2MemrefType.isDynamicDim(idx))
           {
-            operands.push_back(rhs2Memref.getDefiningOp()->getOperand(rhs2MemrefType.getDynamicDimIndex(idx)));
+            operands.push_back(rewriter.create<memref::DimOp>(loc, rhs2Memref, idx));
           }
         }
 
@@ -317,13 +355,13 @@ namespace
       {
         std::vector<Value> operands;
         std::vector<int64_t> lhsDims;
+        auto shape = lhsMemrefType.getShape();
         for (auto idx : lhsOutPerm)
         {
-          auto shape = lhsMemrefType.getShape();
           lhsDims.push_back(shape[idx]);
           if (lhsMemrefType.isDynamicDim(idx))
           {
-            operands.push_back(lhsMemref.getDefiningOp()->getOperand(lhsMemrefType.getDynamicDimIndex(idx)));
+            operands.push_back(rewriter.create<memref::DimOp>(loc, lhsMemref, idx));
           }
         }
 
@@ -331,7 +369,7 @@ namespace
             MemRefType::get(lhsDims, lhsMemrefType.getElementType()), operands, loc,
             rewriter);
         useLHSTranspose = true;
-        double beta_val = betaAttr.cast<FloatAttr>().getValueAsDouble();
+        double beta_val = cast<FloatAttr>(betaAttr).getValueAsDouble();
 
         if (beta_val == 0)
         {
@@ -617,7 +655,7 @@ namespace
       Value lhsExpand = lhsReshape;
       if (expandLHS) /// LHS tensor was collapsed and now needs to be re-expanded using the same reassociation indices
       {
-        auto expandedTensorType = MemRefType::get(lhsAlloc.getType().cast<MemRefType>().getShape(), lhsAlloc.getType().cast<MemRefType>().getElementType());
+        auto expandedTensorType = MemRefType::get(cast<MemRefType>(lhsAlloc.getType()).getShape(), cast<MemRefType>(lhsAlloc.getType()).getElementType());
 
         comet_debug() << "\nExpanded:\n";
         lhsExpand = rewriter.create<memref::ExpandShapeOp>(
@@ -708,7 +746,7 @@ void TALoweringTTGTPass::runOnOperation()
   auto printFlopFunc = FunctionType::get(ctx, {FloatType::getF64(ctx)}, {});
 
   /// func @getTime() -> f64
-  if (!hasFuncDeclaration(module, "getTime"))
+  if (this->printFlops && !hasFuncDeclaration(module, "getTime"))
   {
     mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "getTime", getTimeFunc,
                                                           ArrayRef<NamedAttribute>{});
@@ -717,7 +755,7 @@ void TALoweringTTGTPass::runOnOperation()
   }
 
   /// func @print_flops(%flops) : (f64) -> ()
-  if (!hasFuncDeclaration(module, "print_flops"))
+  if (this->printFlops && !hasFuncDeclaration(module, "print_flops"))
   {
     mlir::func::FuncOp func1 = mlir::func::FuncOp::create(function.getLoc(), "print_flops",
                                                           printFlopFunc, ArrayRef<NamedAttribute>{});
@@ -729,7 +767,7 @@ void TALoweringTTGTPass::runOnOperation()
   patterns.insert<TensorContractionOpLoweringTTGT>(&getContext(), isSelectBestPerm, whatPerm, printFlops);
 
   ConversionTarget target(getContext());
-  target.addLegalDialect<LinalgDialect, ArithDialect, memref::MemRefDialect>();
+  target.addLegalDialect<LinalgDialect, ArithDialect, memref::MemRefDialect, bufferization::BufferizationDialect>();
 
   if (failed(applyPartialConversion(function, target, std::move(patterns))))
   {

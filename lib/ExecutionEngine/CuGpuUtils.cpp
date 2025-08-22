@@ -1,0 +1,168 @@
+//
+// Copyright 2022 Battelle Memorial Institute
+//
+// Redistribution and use in source and binary forms, with or without modification,
+// are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this list of conditions
+// and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions
+// and the following disclaimer in the documentation and/or other materials provided with the distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+// INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+// GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+
+#include <cstddef>
+#include <cstdint>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <algorithm>
+
+#define CU_CHECK(call) \
+do { \
+    CUresult res = call; \
+    if (res != CUDA_SUCCESS) { \
+        fprintf(stderr, "CU Error: %s:%d, ", __FILE__, __LINE__); \
+        fprintf(stderr, "code: %d\n", res); \
+        exit(1); \
+    } \
+} while (0)
+#define CUDA_CHECK(call) \
+do { \
+    cudaError_t res = call; \
+    if (res != cudaSuccess) { \
+        fprintf(stderr, "CUDA Error: %s:%d, ", __FILE__, __LINE__); \
+        fprintf(stderr, "code: %d\n", res); \
+        exit(1); \
+    } \
+} while (0)
+
+CUmodule cuModule = NULL;
+// char* moduleImg = NULL;
+
+void initCudaCtx(char* moduleImg)
+{
+    
+    if(moduleImg)
+    {
+        cudaFree(0); // To initialize the context when needed
+        CU_CHECK(cuModuleLoadData(&cuModule, moduleImg));       
+    }
+}
+
+
+template<typename T>
+int64_t cudaMalloc(int64_t size) {
+    void* device_ptr;
+    cudaMalloc(&device_ptr,   size * sizeof(T));
+
+    // return (int64_t)malloc(size * sizeof(T));
+    return (int64_t)(device_ptr);
+}
+
+extern "C" __attribute__((visibility("default"))) void cudaSetModuleImage(char* ptx)
+{
+    // if (moduleImg == NULL) 
+    {
+        // printf("Setting PTX");
+        initCudaCtx(ptx);
+    }
+}
+
+extern "C" __attribute__((visibility("default"))) int64_t cudaMallocF64(int64_t size)  {
+    // printf("Allocating memory of size: %ld\n", size);
+    return cudaMalloc<double>(size);
+}
+
+extern "C" __attribute__((visibility("default"))) int64_t cudaMallocF32(int64_t size)  {
+    // printf("Allocating memory of size: %ld\n", size);
+    return cudaMalloc<float>(size);
+}
+
+extern "C" __attribute__((visibility("default"))) int64_t cudaMallocI64(int64_t size)  {
+    // printf("Allocating memory of size: %ld\n", size);
+    return cudaMalloc<int64_t>(size);
+}
+
+extern "C" __attribute__((visibility("default"))) int64_t cudaMallocI32(int64_t size)  {
+    // printf("Allocating memory of size: %ld\n", size);
+    return cudaMalloc<int32_t>(size);
+}
+
+template<typename T>
+void cudaMemcpy(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
+
+    if(direction == 0) // Host to Device
+    {
+        CUDA_CHECK(cudaMemcpy((void*)device, aligned_ptr, size * sizeof(T), cudaMemcpyHostToDevice));
+        // memcpy((void*)device, aligned_ptr, size * sizeof(T));
+    }
+    else  // Device to Host
+    {
+        CUDA_CHECK(cudaMemcpy(aligned_ptr, (void*)device, size * sizeof(T), cudaMemcpyDeviceToHost));
+        // memcpy(aligned_ptr, (void*)device, size * sizeof(T));
+    }
+}
+
+
+extern "C" __attribute__((visibility("default"))) void cudaMemcpyIndex(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
+    cudaMemcpy<int64_t>(device, ptr, aligned_ptr, offset, size, stride, direction);
+}
+
+extern "C" __attribute__((visibility("default"))) void cudaMemcpyI64(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
+    cudaMemcpy<int64_t>(device, ptr, aligned_ptr, offset, size, stride, direction);
+}
+
+extern "C" __attribute__((visibility("default"))) void cudaMemcpyF64(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
+    cudaMemcpy<double>(device, ptr, aligned_ptr, offset, size, stride, direction);
+}
+
+extern "C" __attribute__((visibility("default"))) void cudaMemcpyI32(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
+    cudaMemcpy<int32_t>(device, ptr, aligned_ptr, offset, size, stride, direction);
+}
+
+extern "C" __attribute__((visibility("default"))) void cudaMemcpyF32(int64_t device, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, int64_t direction) {
+    cudaMemcpy<float>(device, ptr, aligned_ptr, offset, size, stride, direction);
+}
+
+struct UnrankedMemRef {
+    
+    void* ptr;
+    void* aligned_ptr;
+    int64_t offset;
+    int64_t sizes[2];
+    int64_t strides[2];
+};
+
+const int64_t MAX_NUM_BLOCKS_X = 2147483647;
+const int64_t MAX_NUM_BLOCKS_Y = 65535;
+const int64_t MAX_NUM_BLOCKS_Z = 65535;
+
+extern "C" __attribute__((visibility("default"))) void cudaLaunchKernelMLIR(int64_t realblocksX, int64_t realblocksY, int64_t realblocksZ, int64_t tritonBlockX, int64_t tritonBlockY, int64_t tritonBlockZ, void* ptr, void* aligned_ptr, int64_t offset, int64_t size, int64_t stride, char* kernel, int64_t kernel_name_size, int64_t sharedMem) 
+{
+    CUfunction cuFunction = NULL;
+    unsigned blocksPerGridX = std::min(realblocksX, MAX_NUM_BLOCKS_X);
+    unsigned blocksPerGridY = std::min(realblocksY, MAX_NUM_BLOCKS_Y);
+    unsigned blocksPerGridZ = std::min(realblocksZ, MAX_NUM_BLOCKS_Z);
+    CU_CHECK(cuModuleGetFunction(&cuFunction, cuModule, kernel));
+    void** cast_args = (void**)aligned_ptr;
+
+    CU_CHECK(cuLaunchKernel(cuFunction, blocksPerGridX, blocksPerGridY, blocksPerGridZ, tritonBlockX, tritonBlockY, tritonBlockZ, sharedMem, 0, cast_args, 0));
+}
+
+extern "C" __attribute__((visibility("default"))) void cudaFinit() 
+{
+    cuModuleUnload(cuModule);
+    cuModule = NULL;
+}

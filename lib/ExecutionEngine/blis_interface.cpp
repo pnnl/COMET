@@ -32,66 +32,30 @@
 #include <iostream>
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
-void bli_dgemm_x86_ukr(
-    dim_t m,
-    dim_t n,
-    dim_t k,
-    double *restrict alpha,
-    double *restrict a,
-    double *restrict b,
-    double *restrict beta,
-    double *restrict c, inc_t rs_c0, inc_t cs_c0,
-    auxinfo_t *restrict data,
-    cntx_t *restrict cntx)
-{
-  /// get the micro - arch
-  const char *arch = bli_arch_string(bli_cpuid_query_id());
-  // printf("arch: %s\n", arch);
-
-  if ((strcmp("haswell", arch) == 0) ||
-      (strcmp("zen", arch) == 0) ||
-      (strcmp("zen2", arch) == 0) ||
-      (strcmp("zen3", arch) == 0) ||
-      (strcmp("skx", arch) == 0) ||
-      (strcmp("knl", arch) == 0))
-  {
-    printf("Calling bli_dgemm_haswell_asm_6x8\n");
-    bli_dgemm_haswell_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
-  }
-  else
-  {
-    llvm::errs() << __FILE__ << " " << __LINE__ << "ERROR: Undefined microkernel"
-                 << "\n";
-  }
-}
+#define bli_dgemm_x86_ukr(\
+    m,\
+    n,\
+    k,\
+    alpha,\
+    a,\
+    b,\
+    beta,\
+    c, rs_c0, cs_c0,\
+    data,\
+    cntx) bli_dgemm_haswell_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
 
 #elif defined(__aarch64__) || defined(__arm__) || defined(_M_ARM) || defined(_ARCH_PPC)
-void bli_dgemm_arm_ukr(
-    dim_t m,
-    dim_t n,
-    dim_t k,
-    double *restrict alpha,
-    double *restrict a,
-    double *restrict b,
-    double *restrict beta,
-    double *restrict c, inc_t rs_c0, inc_t cs_c0,
-    auxinfo_t *restrict data,
-    cntx_t *restrict cntx)
-{
-  // get the micro - arch
-  const char *arch = bli_arch_string(bli_cpuid_query_id());
-  // printf("arch: %s\n", arch);
-
-  if ((strcmp("firestorm", arch) == 0))
-  {
-    bli_dgemm_armv8a_asm_8x6r(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
-  }
-  else
-  {
-    llvm::errs() << __FILE__ << " " << __LINE__ << "Undefined microkernel"
-                 << "\n";
-  }
-}
+#define bli_dgemm_arm_ukr(\
+    m,\
+    n,\
+    k,\
+    alpha,\
+    a,\
+    b,\
+    beta,\
+    c, rs_c0, cs_c0,\
+    data,\
+    cntx) bli_dgemm_armv8a_asm_6x8(m, n, k, alpha, a, b, beta, c, rs_c0, cs_c0, data, cntx);
 #endif
 
 /// generic arch-independent gemm microkernel reference implementation:
@@ -116,10 +80,10 @@ void dgemm_generic_noopt_mxn(
     int64_t m,
     int64_t n,
     int64_t k,
-    double *alpha,
-    double *a, double *b,
-    double *beta,
-    double *c,
+    double *restrict alpha,
+    double *restrict a, double *restrict b,
+    double *restrict beta,
+    double *restrict c,
     int64_t rs_c, int64_t cs_c,
     auxinfo_t *restrict data,
     cntx_t *restrict cntx)
@@ -177,49 +141,9 @@ void dgemm_generic_noopt_mxn(
 };
 
 extern "C" void _mlir_ciface_linalg_matmul_viewsxs_viewsxs_viewsxs(
-    StridedMemRefType<double, 2> *A, StridedMemRefType<double, 2> *B,
-    StridedMemRefType<double, 2> *C, int mr, int nr)
+    StridedMemRefType<double, 2> *restrict A, StridedMemRefType<double, 2> *restrict B,
+    StridedMemRefType<double, 2> *restrict C, int mr, int nr, double alpha, double beta)
 {
-  if (A->strides[1] != B->strides[1] || A->strides[1] != C->strides[1] ||
-      A->strides[1] != 1 || A->sizes[0] < A->strides[1] ||
-      B->sizes[0] < B->strides[1] || C->sizes[0] < C->strides[1] ||
-      C->sizes[0] != A->sizes[0] || C->sizes[1] != B->sizes[1] ||
-      A->sizes[1] != B->sizes[0])
-  {
-    printMemRefMetaData(std::cerr, *A);
-    printMemRefMetaData(std::cerr, *B);
-    printMemRefMetaData(std::cerr, *C);
-
-    return;
-  }
-
-  // printMemRefMetaData(std::cerr, *A);
-  // printMemRefMetaData(std::cerr, *B);
-  // printMemRefMetaData(std::cerr, *C);
-
-  // printf("\n");
-  // printf("A->sizes[0]-m: %d\n", A->sizes[0]);
-  // printf("A->sizes[1]-k: %d\n", A->sizes[1]);
-  // printf("A->strides[0]: %d\n", A->strides[0]);
-  // printf("A->strides[1]: %d\n", A->strides[1]);
-
-  // printf("B->sizes[0]: %d\n", B->sizes[0]);
-  // printf("B->sizes[1]-n: %d\n", B->sizes[1]);
-  // printf("B->strides[0]: %d\n", B->strides[0]);
-  // printf("B->strides[1]: %d\n", B->strides[1]);
-  // printf("\n");
-
-  // printf("mr: %d", mr);
-  // printf("nr: %d", nr);
-
-  double alpha = 1.0f;
-  double beta = 1.0f;
-  if (beta == -1.0)
-  {
-    alpha *= -1.0;
-    beta = 1.0;
-  }
-
   auxinfo_t data;
   bli_auxinfo_set_next_a(A->data + A->offset, &data);
   bli_auxinfo_set_next_b(B->data + B->offset, &data);
@@ -227,10 +151,6 @@ extern "C" void _mlir_ciface_linalg_matmul_viewsxs_viewsxs_viewsxs(
   /// Partial tile
   if (A->sizes[0] < mr || B->sizes[1] < nr)
   {
-    // printf("A->sizes[0]: %d\n", A->sizes[0]);
-    // printf("B->sizes[1]: %d\n", B->sizes[1]);
-    // printf("mr: %d\n", mr);
-    // printf("nr: %d\n", nr);
     dgemm_generic_noopt_mxn(A->sizes[0], // m
                             B->sizes[1], // n
                             A->sizes[1], // k

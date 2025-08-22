@@ -1,0 +1,26 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> Dense_mult_dTranspose.llvm
+# RUN: mlir-cpu-runner Dense_mult_dTranspose.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [5];
+	IndexLabel [j] = [5];      
+    IndexLabel [k] = [5];     
+
+	#Tensor Declarations
+	Tensor<double> B([i, j], Dense);
+    Tensor<double> A([k, j], Dense);	  
+    Tensor<double> C([k, i], Dense);
+
+    #Tensor Readfile Operation      
+    B[i, j] = 3.2;
+    A[k, j] = 2.3;
+    C[k, i] = 0.0;
+
+	#Tensor Transpose
+	C[k, i] =  A[k, j] * transpose(B[i, j],{j,i});
+	print(C);
+}
+# Print the result for verification.
+# CHECK: data =
+# CHECK-NEXT: 36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,36.8,

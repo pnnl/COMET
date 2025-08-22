@@ -1,0 +1,31 @@
+# RUN: export SPARSE_FILE_NAME0=%comet_integration_test_data_dir/test_rank2.mtx
+# RUN: export SORT_TYPE=SEQ_QSORT
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> dTranspose_mult_CSR.llvm
+# RUN: mlir-cpu-runner dTranspose_mult_CSR.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
+
+#TODO(gkestor): read dense input from file
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [?];
+	IndexLabel [j] = [4];                     
+    IndexLabel [k] = [?];
+
+	#Tensor Declarations
+	Tensor<double> B([i, k], CSR);
+	Tensor<double> A([i, j], Dense);
+	Tensor<double> C([j, k], Dense);
+
+    #Tensor Readfile Operation      
+    A[i, j] = 1.7;
+	B[i, k] = comet_read(0);
+	C[j, k] = 0.0;
+
+	#Tensor Transpose
+	C[j, k] = transpose(A[i, j],{j,i}) * B[i, k];
+	print(C);
+}
+
+# Print the result for verification.
+# CHECK: data =
+# CHECK-NEXT: 8.67,12.24,5.1,9.18,12.75,8.67,12.24,5.1,9.18,12.75,8.67,12.24,5.1,9.18,12.75,8.67,12.24,5.1,9.18,12.75,

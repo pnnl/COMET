@@ -1,0 +1,28 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops  --convert-to-llvm %s &> dTranspose_eltwise_Dense.llvm
+# RUN: mlir-cpu-runner dTranspose_eltwise_Dense.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
+
+#TODO(gkestor): read dense input from file
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i] = [4];
+	IndexLabel [j] = [4];                     
+
+	#Tensor Declarations
+	Tensor<double> A([i, j], Dense);	  
+	Tensor<double> B([j, i], Dense);
+	Tensor<double> C([j, i], Dense);
+
+    #Tensor Readfile Operation      
+    A[i, j] = 3.2;
+	B[j, i] = 2.0;
+	C[j, i] = 0.0;
+
+	#Tensor Transpose
+	C[j, i] = transpose(A[i, j],{j,i}) .* B[j, i];
+	print(C);
+}
+
+# Print the result for verification.
+# CHECK: data =
+# CHECK-NEXT: 6.4,6.4,6.4,6.4,6.4,6.4,6.4,6.4,6.4,6.4,6.4,6.4,6.4,6.4,6.4,6.4,

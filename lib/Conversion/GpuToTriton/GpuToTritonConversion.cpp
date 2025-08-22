@@ -1,3 +1,24 @@
+//
+// Copyright 2022 Battelle Memorial Institute
+//
+// Redistribution and use in source and binary forms, with or without modification,
+// are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this list of conditions
+// and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions
+// and the following disclaimer in the documentation and/or other materials provided with the distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+// INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+// GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
@@ -158,13 +179,15 @@ mlir::comet::GpuConversionTarget2::GpuConversionTarget2(
       }
       if(prev != op.getType())
       {
-        if(!prev.isa<RankedTensorType>() && !op.getType().isa<RankedTensorType>())
+        auto prevRankedT =  dyn_cast<RankedTensorType>(prev);
+        auto opRankedT =  dyn_cast<RankedTensorType>(op.getType());
+        if(!prevRankedT && !opRankedT)
         {
           return true;
         }
-        else if(prev.isa<RankedTensorType>() && op.getType().isa<RankedTensorType>())
+        else if(prevRankedT && opRankedT)
         {
-          if(prev.cast<RankedTensorType>().getShape() == op.getType().cast<RankedTensorType>().getShape())
+          if(prevRankedT.getShape() == opRankedT.getShape())
           {
             return true;
           }
@@ -196,13 +219,15 @@ mlir::comet::GpuConversionTarget2::GpuConversionTarget2(
       }
       if(prev != op.getType())
       {
-        if(!prev.isa<RankedTensorType>() && !op.getType().isa<RankedTensorType>())
+        auto prevRankedT =  dyn_cast<RankedTensorType>(prev);
+        auto opRankedT =  dyn_cast<RankedTensorType>(op.getType());
+        if(!prevRankedT && !opRankedT)
         {
           return true;
         }
-        else if(prev.isa<RankedTensorType>() && op.getType().isa<RankedTensorType>())
+        else if(prevRankedT && opRankedT)
         {
-          if(prev.cast<RankedTensorType>().getShape() == op.getType().cast<RankedTensorType>().getShape())
+          if(prevRankedT.getShape() == opRankedT.getShape())
           {
             return true;
           }
@@ -222,17 +247,19 @@ mlir::comet::GpuConversionTarget2::GpuConversionTarget2(
     {
       if(op.getTrueValue().getType() == op.getResult().getType() && op.getFalseValue().getType() == op.getTrueValue().getType())
       {
-        if(op.getCondition().getType().isa<RankedTensorType>() && !op.getFalseValue().getType().isa<RankedTensorType>())
+        auto falseT =  dyn_cast<RankedTensorType>(op.getFalseValue().getType());
+        auto condT  =  dyn_cast<RankedTensorType>(op.getCondition().getType());
+        if(condT && !falseT)
         {
           return false;
         }
-        else if(!op.getCondition().getType().isa<RankedTensorType>() && op.getFalseValue().getType().isa<RankedTensorType>())
+        else if(!condT && falseT)
         {
           return false;
         }
-        else if(op.getCondition().getType().isa<RankedTensorType>() && op.getFalseValue().getType().isa<RankedTensorType>())
+        else if(condT && falseT)
         {
-          if(op.getCondition().getType().cast<RankedTensorType>().getShape() == op.getFalseValue().getType().cast<RankedTensorType>().getShape())
+          if(condT.getShape() == falseT.getShape())
           {
             return true;
           }
@@ -318,7 +345,7 @@ mlir::comet::GpuConversionTarget2::GpuConversionTarget2(
     {
       for(auto opr: op.getArgumentTypes())
       {
-        if(opr.isa<IndexType>())
+        if(isa<IndexType>(opr))
         {
           return false;
         }
@@ -342,7 +369,7 @@ mlir::comet::GpuTypeConverter::GpuTypeConverter(MLIRContext *context)
 
   addConversion([this](MemRefType memrefType, SmallVectorImpl<Type> &results) -> LogicalResult {
     
-    if(memrefType.getElementType().isa<IndexType>())
+    if(isa<IndexType>(memrefType.getElementType()))
     {
       results.push_back(mlir::triton::PointerType::get( mlir::IntegerType::get(this->context, 32), 1));
     }

@@ -61,9 +61,17 @@ namespace mlir
         std::unique_ptr<Pass> createLoweringTTGTPass(bool enableBestPerm,
                                                      int whatPermID = 1,
                                                      bool printFlops = false);
+        
+                                                     /// Create a pass for lowering TA operations to TTGT
+        /// This pass selects either the best permutation among all
+        /// or pass can specify the iteration order of the permutation, ith permutation
+        std::unique_ptr<Pass> createLoweringTTGTDynPass(int whatPermID = -1,
+                                                     bool printFlops = false);
 
         std::unique_ptr<Pass> createLinAlgMatmulTilingPass();
         std::unique_ptr<Pass> createLinAlgMatmulMicroKernelPass();
+        std::unique_ptr<Pass> createMatvecToParallelLoopsPass();
+
 
         // Optimize dense transpose (linalg.copy) based on the following paper:
         // HPTT: A High-Performance Tensor Transposition C++ Library
@@ -75,6 +83,9 @@ namespace mlir
 
         /// Create a pass for lowering tensor fill operation to linalg.fill
         std::unique_ptr<Pass> createTensorFillLoweringPass();
+
+        // Create a pass for merging and optimizing operations on workspaces.
+        std::unique_ptr<Pass> createWorkspaceOptimizationsPass();
 
         /// Create a pass for lowering to the rest of the operations in `Std` dialects,
         /// such as printOp, constantOp, ReturnOp..
@@ -95,6 +106,7 @@ namespace mlir
         std::unique_ptr<Pass> createFuncOpLoweringPass(); // Conversion
 
         std::unique_ptr<Pass> createDimOpLoweringPass();
+        std::unique_ptr<Pass> createTABufferizeFunc();
     }
 
 }

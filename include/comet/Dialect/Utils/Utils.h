@@ -24,22 +24,30 @@
 #ifndef TENSORALGEBRA_UTILS_H_
 #define TENSORALGEBRA_UTILS_H_
 
+#include "comet/Dialect/TensorAlgebra/IR/TADialect.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Location.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/SetVector.h"
 
+#include "mlir/IR/Value.h"
 #include "mlir/Transforms/DialectConversion.h"
 
 #include <set>
 #include <unordered_map>
 #include <typeinfo>
+#include <vector>
 
 /// TODO(gkestor): supports only f64 -  need generalization
-extern std::string VALUETYPE;
 
 using namespace mlir::linalg;
 
@@ -47,7 +55,8 @@ namespace mlir
 {
   namespace tensorAlgebra
   {
-    enum TargetDevice { CPU, GPU};
+    enum TargetDevice { CPU, GPU, FPGA};
+    enum GPUCompilationFormat { Binary, Assembly, Fatbin};
 
     using IndexSizeMap = std::unordered_map<unsigned, int64_t>;
     using IndexVector = std::vector<unsigned>;
@@ -109,7 +118,7 @@ namespace mlir
     void print_vector_value(std::vector<Value> vec);
 
     std::string dump2str(Value t);
-    std::vector<std::string> stringSplit(std::string s, std::string delimiter);
+    std::vector<llvm::StringRef> stringSplit(llvm::StringRef s, llvm::StringRef delimiter);
     std::vector<unsigned> getReverseIdentityPermutation(size_t size);
     std::vector<unsigned> getIdentityPermutation(size_t size);
 
@@ -125,7 +134,7 @@ namespace mlir
     std::vector<unsigned> getFreeIndices(std::vector<unsigned> rhs_perm, std::vector<unsigned> lhs_perm);
     std::vector<unsigned> getSumIndices(std::vector<unsigned> rhs_perm, std::vector<unsigned> rhs_perm_free);
     std::vector<unsigned> getIndexIterateOrder(std::vector<unsigned> rhs1_perm, std::vector<unsigned> rhs2_perm);
-    std::vector<std::vector<std::string>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms);
+    std::vector<std::vector<llvm::StringRef>> getAllFormats(ArrayAttr opFormatsArrayAttr, std::vector<std::vector<int64_t>> allPerms);
     bool checkIsElementwise(std::vector<std::vector<int>> allPerms);
     bool checkIsMixedMode(std::vector<std::vector<std::string>> formats);
     bool checkIsDense(std::vector<std::string> format);
@@ -133,10 +142,13 @@ namespace mlir
     bool isDense(std::string s, std::string delim);
     bool isMergedIndex(std::vector<std::string> format_vec, int cur_idx, int sumIndex);
 
-    std::vector<Value> getFormatsValue(std::string formats_str, int rank_size,
+    std::vector<Value> getFormatsValue(llvm::StringRef formats_str, int rank_size,
                                        PatternRewriter &rewriter, Location loc, IndexType indexType);
-    std::vector<Value> getFormatsValueInt(std::string formats_str, int rank_size,
+    std::string getTensorFormatString(Type tensorT);
+
+    std::vector<Value> getFormatsValueInt(llvm::StringRef formats_str, int rank_size,
                                           PatternRewriter &rewriter, Location loc, IntegerType intType);
+    std::vector<TensorFormatEnum> getFormats(llvm::StringRef formats_str, int rank_size, MLIRContext* ctx);
 
     double loopCostHeuristic(const std::vector<unsigned> &loopOrder, size_t dim_,
                              std::vector<unsigned> &sourceOrder, std::vector<unsigned> &destOrder);
@@ -221,6 +233,8 @@ namespace mlir
                         std::vector<std::string> &formats);
 
     void replaceOperands(Operation *itComputeOp, std::vector<Value> newComputeOps);
+    TypedValue<MemRefType> collapseMemref(TypedValue<MemRefType> val, mlir::OpBuilder& builder);
+    mlir::Value get_memref_num_elements(mlir::MLIRContext* ctx, mlir::OpBuilder& builder, mlir::Location loc, mlir::Value memref);
 
     // For TTGT transformations
     struct ContractionPlan
@@ -568,6 +582,368 @@ namespace mlir
 
       std::string bestPermStr_;
     }; /// struct ContractionPlan
+
+    struct ContractionPlanDyn
+    {
+      ContractionPlanDyn(OpBuilder& builder, Location loc, IndexVector a_perm, Value a_shape, IndexVector b_perm,
+                      Value b_shape, IndexVector c_perm, Value c_shape)
+          : a_perm_{a_perm}, b_perm_{b_perm}, c_perm_{c_perm}
+      {
+
+        /// get M-N-K indices for gemm
+        std::tie(m_indices_, n_indices_, k_indices_) =
+            getIndices(a_perm_, b_perm_, c_perm_);
+
+        /// compute size map for each index
+        for (size_t i = 0; i < a_perm_.size(); i++)
+        {
+          auto dim = builder.create<tensor::DimOp>(loc, a_shape, i);
+          size_map_.insert({a_perm_[i], dim});
+        }
+        for (size_t i = 0; i < b_perm_.size(); i++)
+        {
+          auto dim = builder.create<tensor::DimOp>(loc, b_shape, i);
+          size_map_.insert({b_perm_[i], dim});
+        }
+        for (size_t i = 0; i < c_perm_.size(); i++)
+        {
+          auto dim = builder.create<tensor::DimOp>(loc, c_shape, i);
+          size_map_.insert({c_perm_[i],dim});
+        }
+
+        /// compute sizes for M-N-K sizes
+        m_size_ = builder.create<arith::ConstantIndexOp>(loc, 1);
+        for (const auto &idx : m_indices_)
+        {
+          auto cur_size = size_map_[idx];
+          m_size_ = builder.create<arith::MulIOp>(loc, m_size_, cur_size);
+        }
+        n_size_ = builder.create<arith::ConstantIndexOp>(loc, 1);
+        for (const auto &idx : n_indices_)
+        {
+          auto cur_size = size_map_[idx];
+          n_size_ = builder.create<arith::MulIOp>(loc, n_size_, cur_size);
+        }
+        k_size_ = builder.create<arith::ConstantIndexOp>(loc, 1);
+        for (const auto &idx : k_indices_)
+        {
+          auto cur_size = size_map_[idx];
+          k_size_ = builder.create<arith::MulIOp>(loc, k_size_, cur_size);
+        }
+      }
+
+      std::tuple<IndexVector, IndexVector, IndexVector>
+      getIndices(IndexVector A_perm, IndexVector B_perm, IndexVector C_perm) const
+      {
+        IndexVector mIndices, nIndices, kIndices;
+
+        std::set<unsigned> A_perm_set(A_perm.begin(), A_perm.end()),
+            B_perm_set(B_perm.begin(), B_perm.end()),
+            C_perm_set(C_perm.begin(), C_perm.end());
+
+        std::set<unsigned> *A_perm_ptr{&A_perm_set}, *B_perm_ptr{&B_perm_set};
+
+        std::set<unsigned> A_int_C, B_int_C, A_un_B;
+
+        std::set_intersection(A_perm_ptr->begin(), A_perm_ptr->end(),
+                              C_perm_set.begin(), C_perm_set.end(),
+                              std::inserter(A_int_C, A_int_C.begin()));
+        std::set_difference(A_int_C.begin(), A_int_C.end(), B_perm_ptr->begin(),
+                            B_perm_ptr->end(), std::back_inserter(mIndices));
+
+        std::set_intersection(B_perm_ptr->begin(), B_perm_ptr->end(),
+                              C_perm_set.begin(), C_perm_set.end(),
+                              std::inserter(B_int_C, B_int_C.begin()));
+        std::set_difference(B_int_C.begin(), B_int_C.end(), A_perm_ptr->begin(),
+                            A_perm_ptr->end(), std::back_inserter(nIndices));
+
+        std::set_union(A_perm_ptr->begin(), A_perm_ptr->end(), B_perm_ptr->begin(),
+                       B_perm_ptr->end(), std::inserter(A_un_B, A_un_B.begin()));
+        std::set_difference(A_un_B.begin(), A_un_B.end(), C_perm_set.begin(),
+                            C_perm_set.end(), std::back_inserter(kIndices));
+
+        return std::make_tuple(mIndices, nIndices, kIndices);
+      }
+
+      Value getTransposeTime(OpBuilder& builder, Location loc, Value mem_size, const IndexVector &perm) const
+      {
+        Value memSizeI = builder.create<arith::IndexCastOp>(loc, IntegerType::get(builder.getContext(), 64), mem_size); // ensure we have an integer for division
+        Value memSizeF = builder.create<arith::SIToFPOp>(loc, Float64Type::get(builder.getContext()), memSizeI); // convert to float for division
+        Value result;
+        if (perm[0] != 0)
+        {
+          // TODO(gkestor): needs to be adjusted according to our transpose method
+          result = builder.create<arith::DivFOp>(loc,
+                                                 memSizeF,
+                                                 builder.create<arith::ConstantFloatOp>(loc, llvm::APFloat(0.71), Float64Type::get(builder.getContext())));
+          // result = mem_size / 0.71;
+        }
+        else
+        {
+          result = memSizeF;
+        }
+        return result;
+      }
+
+      // double flopCount() const
+      // {
+      //   double overall_size = m_size_ * n_size_ * k_size_;
+      //   int op_factor = n_indices_.size() == 0 ? 1 : 2;
+
+      //   return overall_size * op_factor;
+      // }
+
+      std::string contractionString(const IndexVector &a_idx,
+                                    const IndexVector &b_idx,
+                                    const IndexVector &c_idx) const
+      {
+        std::string result = "contr_C";
+
+        for (const auto &idx : c_idx)
+        {
+          result += "_" + std::to_string(idx);
+        }
+        result += "_A";
+
+        for (const auto &idx : a_idx)
+        {
+          result += "_" + std::to_string(idx);
+        }
+        result += "_B";
+
+        for (const auto &idx : b_idx)
+        {
+          result += "_" + std::to_string(idx);
+        }
+
+        return result;
+      }
+
+      IndexVector getPermutation(const IndexVector &in_idx,
+                                 const IndexVector &out_idx) const
+      {
+        IndexVector result;
+        for (const auto &idx : out_idx)
+        {
+          auto it = std::find(in_idx.begin(), in_idx.end(), idx);
+          assert(it != in_idx.end() && "Wrong permutation");
+          result.push_back(std::distance(in_idx.begin(), it));
+        }
+        return result;
+      }
+
+      // double getTotalTime()
+      // {
+      //   IndexVector a_perm, b_perm, c_perm;
+      //   double minTime;
+      //   std::tie(a_perm, b_perm, c_perm, minTime) = computeBestPermutations();
+      //   double result = flopCount() + minTime;
+
+      //   return result;
+      // }
+
+      void computePermutations(OpBuilder& builder, Location loc)
+      {
+        IndexVector a_perm, b_perm, c_perm;
+        computeAllPermutations(builder, loc);
+      }
+
+      std::tuple<IndexVector, IndexVector, IndexVector> findPermutationsAtN(int whichperm)
+      {
+        int curper = 1;
+        IndexVector m_idx{m_indices_}, n_idx{n_indices_}, k_idx{k_indices_};
+        std::sort(m_idx.begin(), m_idx.end());
+        std::sort(n_idx.begin(), n_idx.end());
+        std::sort(k_idx.begin(), k_idx.end());
+
+        IndexVector a_candidate, b_candidate, c_candidate;
+        for (size_t i = 0; i < 2; i++)
+        {
+          bool doSwap = (i != 0);
+          do
+          {
+            do
+            {
+              do
+              {
+                if (curper == whichperm)
+                {
+                  IndexVector a_idx, b_idx, c_idx;
+
+                  if (i == 1)
+                  {
+                    a_idx.insert(a_idx.end(), k_idx.begin(), k_idx.end());
+                    a_idx.insert(a_idx.end(), m_idx.begin(), m_idx.end());
+                    b_idx.insert(b_idx.end(), n_idx.begin(), n_idx.end());
+                    b_idx.insert(b_idx.end(), k_idx.begin(), k_idx.end());
+                    c_idx.insert(c_idx.end(), n_idx.begin(), n_idx.end());
+                    c_idx.insert(c_idx.end(), m_idx.begin(), m_idx.end());
+                  }
+                  else
+                  {
+                    a_idx.insert(a_idx.end(), m_idx.begin(), m_idx.end());
+                    a_idx.insert(a_idx.end(), k_idx.begin(), k_idx.end());
+                    b_idx.insert(b_idx.end(), k_idx.begin(), k_idx.end());
+                    b_idx.insert(b_idx.end(), n_idx.begin(), n_idx.end());
+                    c_idx.insert(c_idx.end(), m_idx.begin(), m_idx.end());
+                    c_idx.insert(c_idx.end(), n_idx.begin(), n_idx.end());
+                  }
+
+                  a_candidate = a_idx;
+                  b_candidate = b_idx;
+                  c_candidate = c_idx;
+                  swapAB_ = doSwap;
+                }
+                curper++;
+
+              } while (std::next_permutation(k_idx.begin(), k_idx.end()));
+            } while (std::next_permutation(n_idx.begin(), n_idx.end()));
+          } while (std::next_permutation(m_idx.begin(), m_idx.end()));
+        }
+
+        assert(whichperm <= curper && "Cannot find the selected permutation");
+        IndexVector best_a_perm, best_b_perm, best_c_perm;
+        bestPermStr_ = contractionString(a_candidate, b_candidate, c_candidate);
+        best_a_perm = getPermutation(a_perm_, a_candidate);
+        best_b_perm = getPermutation(b_perm_, b_candidate);
+        best_c_perm = getPermutation(c_perm_, c_candidate);
+
+        return std::make_tuple(best_a_perm, best_b_perm, best_c_perm);
+      }
+
+      void computeAllPermutations(OpBuilder &builder, Location loc)
+      {
+        IndexVector m_idx{m_indices_}, n_idx{n_indices_}, k_idx{k_indices_};
+        std::sort(m_idx.begin(), m_idx.end());
+        std::sort(n_idx.begin(), n_idx.end());
+        std::sort(k_idx.begin(), k_idx.end());
+
+        IndexVector a_candidate, b_candidate, c_candidate;
+
+        do
+        {
+          do
+          {
+            do
+            {
+              for (size_t i = 0; i < 2; i++)
+              {
+                IndexVector a_idx, b_idx, c_idx;
+                Value a_size, b_size, c_size;
+                Value transposeTime = builder.create<arith::ConstantFloatOp>(loc, llvm::APFloat(0.0), Float64Type::get(builder.getContext())); // initialize to 0.0
+
+                if (i == 1)
+                {
+                  a_idx.insert(a_idx.end(), k_idx.begin(), k_idx.end());
+                  a_idx.insert(a_idx.end(), m_idx.begin(), m_idx.end());
+                  b_idx.insert(b_idx.end(), n_idx.begin(), n_idx.end());
+                  b_idx.insert(b_idx.end(), k_idx.begin(), k_idx.end());
+                  c_idx.insert(c_idx.end(), n_idx.begin(), n_idx.end());
+                  c_idx.insert(c_idx.end(), m_idx.begin(), m_idx.end());
+                }
+                else
+                {
+                  a_idx.insert(a_idx.end(), m_idx.begin(), m_idx.end());
+                  a_idx.insert(a_idx.end(), k_idx.begin(), k_idx.end());
+                  b_idx.insert(b_idx.end(), k_idx.begin(), k_idx.end());
+                  b_idx.insert(b_idx.end(), n_idx.begin(), n_idx.end());
+                  c_idx.insert(c_idx.end(), m_idx.begin(), m_idx.end());
+                  c_idx.insert(c_idx.end(), n_idx.begin(), n_idx.end());
+                }
+
+                // Compute the sizes dynamically
+                a_size = builder.create<arith::MulIOp>(loc, k_size_, m_size_); //k_size_ * m_size_;
+                b_size = builder.create<arith::MulIOp>(loc, n_size_, k_size_); //n_size_ * k_size_;
+                c_size = builder.create<arith::MulIOp>(loc, m_size_, n_size_); //m_size_ * n_size_;
+
+                if (a_perm_ != a_idx)
+                {
+                  m_transposeA.push_back(true); // mark that A needs transpose for this permutation
+                  transposeTime = builder.create<arith::AddFOp>(
+                    loc,
+                    transposeTime,
+                    getTransposeTime(builder, loc, a_size,
+                      getPermutation(a_perm_, a_idx)));
+                    }
+                else {
+                  m_transposeA.push_back(false); // mark that A needs transpose for this permutation
+                
+                }
+
+                if (b_perm_ != b_idx)
+                {
+                  m_transposeB.push_back(true); // mark that A needs transpose for this permutation
+
+                  transposeTime = builder.create<arith::AddFOp>(
+                      loc,
+                      transposeTime,
+                      getTransposeTime(builder, loc, b_size,
+                                      getPermutation(b_perm_, b_idx)));
+                }
+                else {
+                  m_transposeB.push_back(false); // mark that B does not need transpose for this permutation
+                }
+
+                if (c_perm_ != c_idx)
+                {
+                  m_transposeC.push_back(true); // mark that C needs transpose for this permutation
+                  transposeTime = builder.create<arith::AddFOp>(
+                      loc,
+                      transposeTime,
+                      getTransposeTime(builder, loc, c_size,
+                                      getPermutation(c_perm_, c_idx)));
+                  // transposeTime +=
+                  //     getTransposeTime(c_size, getPermutation(c_perm_, c_idx));
+                }
+                else {
+                  m_transposeC.push_back(false); // mark that C does not need transpose for this permutation
+                }
+
+                m_contraction_time.push_back(transposeTime);
+                m_contraction_permutations.push_back({getPermutation(a_perm_, a_idx), getPermutation(b_perm_, b_idx), getPermutation(c_perm_, c_idx)}); // store the permutations for this contraction
+                // Store the swapAB flag for this contraction ?
+                m_swapAB.push_back(i == 1);
+              }
+
+            } while (std::next_permutation(k_idx.begin(), k_idx.end()));
+
+          } while (std::next_permutation(n_idx.begin(), n_idx.end()));
+
+        } while (std::next_permutation(m_idx.begin(), m_idx.end()));
+
+        IndexVector best_a_perm, best_b_perm, best_c_perm;
+
+        // bestPermStr_ = contractionString(a_candidate, b_candidate, c_candidate);
+
+      }
+
+      IndexVector a_perm_;
+      IndexVector b_perm_;
+      IndexVector c_perm_;
+
+      IndexVector m_indices_;
+      IndexVector n_indices_;
+      IndexVector k_indices_;
+
+      Value m_size_;
+      Value n_size_;
+      Value k_size_;
+
+      std::unordered_map<unsigned, Value> size_map_;
+      std::vector<bool> m_transposeA;
+      std::vector<bool> m_transposeB;
+      std::vector<bool> m_transposeC;
+      std::vector<bool> m_swapAB;
+      std::vector<Value> m_contraction_time;
+      std::vector<std::vector<IndexVector>> m_contraction_permutations; // to store the permutations for each contraction
+
+
+
+      bool swapAB_;
+      bool inA_;
+
+      std::string bestPermStr_;
+    }; /// struct ContractionPlanDyn
 
   } /// namespace tensorAlgebra
 } /// namespace mlir

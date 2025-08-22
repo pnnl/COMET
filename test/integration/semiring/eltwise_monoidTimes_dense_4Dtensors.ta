@@ -1,0 +1,29 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> eltwise_monoidTimes_dense_4Dtensors.llvm
+# RUN: mlir-cpu-runner eltwise_monoidTimes_dense_4Dtensors.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
+
+def main() {
+	# IndexLabel Declarations
+	IndexLabel [a] = [2];
+	IndexLabel [b] = [2];
+	IndexLabel [c] = [2];
+	IndexLabel [d] = [2];
+
+	# Tensor Declarations
+	Tensor<double> A([a, b, c, d], {Dense});
+	Tensor<double> B([a, b, c, d], {Dense});
+	Tensor<double> C([a, b, c, d], {Dense});
+
+	# Tensor Fill Operation
+	A[a, b, c, d] = 2.2;
+	B[a, b, c, d] = 3.6;
+	C[a, b, c, d] = 0.0;
+
+	# Tensor Contraction
+	C[a, b, c, d] = A[a, b, c, d] @(*) B[a, b, c, d];
+	
+	print(C);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 7.92,7.92,7.92,7.92,7.92,7.92,7.92,7.92,7.92,7.92,7.92,7.92,7.92,7.92,7.92,7.92,

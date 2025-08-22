@@ -29,31 +29,484 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 
-from _ast import  Attribute, BinOp, Call, Constant
-import ast
+# from _ast import  Attribute, BinOp, Call, Constant
+import os
+import time
+import ast_comments as ast
 import inspect
 # import comet
+import jinja2
 import numpy as np
 import scipy as sp
 from cometpy.MLIRGen import lowering
-from cometpy.MLIRGen import builders
+from cometpy.MLIRGen import ops
+from cometpy.MLIRGen.utils import *
+from cometpy.MLIRGen import types
 from cometpy.MLIRGen.types import *
 #import time
 
-def get_format(A):
-    if not sp.sparse.issparse(A):
-        return DENSE
-    elif A.format == 'csr':
-        return CSR
-    elif A.format == 'coo':
-        return COO
-    elif A.format == 'csc':
-        return CSC
-    else:
-        raise RuntimeError('Unsupported sparse format')
+def lower_einsum_expresion(args, kwargs, visitor):
+    char_index_to_symbol_index = {}
+    all_input_indices, res_indices = args[0].value.split('->')
+    inputs_indices = all_input_indices.split(',')
+    inputs_symbol_indices = []
+    for input_indices in inputs_indices:
+        input_symbol_indices = []
+        for c in input_indices:
+            if c not in char_index_to_symbol_index:
+                char_index_to_symbol_index[c] = visitor.build(ops.TensorIndexLabelOp()).results[0]
+            input_symbol_indices.append(char_index_to_symbol_index[c])
+        inputs_symbol_indices.append(input_symbol_indices)
+    
+    operands = [visitor.visit(arg) for arg in args[1:len(inputs_indices)+1]]
+    semiring = None
+    masktype = "none"
+    mask = None
+    if len(inputs_indices) < len(args[1:]):
+        semiring = args[-1].value
+
+    for kwarg in kwargs:
+        if kwarg.arg == 'semiring':
+            semiring = kwarg.value.value
+        elif kwarg.arg == 'mask_type':
+            masktype = kwarg.value.value
+        elif kwarg.arg == 'mask':
+            mask = visitor.visit(kwarg.value)
+
+    all_same = True
+    for indices in inputs_indices[1:]:
+        if indices != inputs_indices[0]:
+            all_same = False
+    if len(inputs_indices) == 1 : # Tranpose
+        res_symbol_indices = []
+        
+        for res_indice in res_indices:
+            res_symbol_indices.append(char_index_to_symbol_index[res_indice])
+        input = operands[0]
+        input_indices = inputs_symbol_indices[0]
+        res_format = visitor.sp_mattr_conversions[input.type.format]
+        res = visitor.build(ops.TensorTransposeOp(input, input_indices, res_symbol_indices, res_format)).results[0]
+        lhs = res
+
+    elif all_same and inputs_indices[0] == res_indices: # Elementwise multiplication
+        if semiring:
+            if semiring == "min":
+                semiring = "noop_minxy"
+            elif semiring == "-":
+                semiring = "noop_minus"
+            elif semiring == "+":
+                semiring = "noop_plusxy"
+            elif semiring == "*":
+                semiring = "noop_times"
+        
+        lhs, lhs_indices = operands[0], inputs_symbol_indices[0]
+        for rhs in operands[1:]:
+            res_format = visitor.sp_elw_mult_conversions[lhs.type.format][rhs.type.format]
+            if semiring:
+                res = visitor.build(ops.TensorMulOp(lhs, rhs, lhs_indices, res_format, semiring=semiring)).results[0]
+            else:
+                res = visitor.build(ops.TensorMulOp(lhs, rhs, lhs_indices, res_format)).results[0]
+            lhs = res
+
+    else: # Tensor contraction
+        if semiring:
+            s1, s2 = semiring.split(",")
+            if s1 == "+":
+                semiring = "plusxy_"
+            elif s1 == "any":
+                semiring = "any_"
+            elif s1 == "min":
+                semiring = "minxy_"
+            if s2 == "*":
+                semiring += "times"
+            elif s2 == "pair":
+                semiring += "pairxy"
+            elif s2 == "first":
+                semiring += "first"
+            elif s2 == "+":
+                semiring += "plusxy"
+            elif s2 == "second":
+                semiring += "second"
+
+        lhs, lhs_indices = operands[0], inputs_symbol_indices[0]
+        for (i, (rhs, rhs_indices)) in enumerate(zip(operands[1:], inputs_symbol_indices[1:])):
+            if i == len(operands) - 2:
+                res_symbol_indices = []
+                for symbol in res_indices:
+                    res_symbol_indices.append(char_index_to_symbol_index[symbol])
+            else:
+                res_symbol_indices = [] 
+                for indice in lhs_indices:
+                    if indice not in rhs_indices:
+                        res_symbol_indices.append(indice)
+                for indice in rhs_indices:
+                    if indice not in lhs_indices:
+                        res_symbol_indices.append(indice)
+
+            res_format = visitor.sp_matmult_conversions[lhs.type.format][rhs.type.format]
+            if semiring:
+                res = visitor.build(ops.TensorMatMultOp(lhs, rhs, lhs_indices, rhs_indices, res_symbol_indices, res_format, 1.0, 0.0, mask, masktype, semiring=semiring)).results[0]
+            else:
+                res = visitor.build(ops.TensorMatMultOp(lhs, rhs, lhs_indices, rhs_indices, res_symbol_indices, res_format, 1.0, 0.0, mask, masktype)).results[0]
+            lhs, lhs_indices = res, res_symbol_indices
+
+    if lhs.type.format != DENSE:
+        visitor.need_opt_comp_workspace = True
+    return lhs
+    # for c in res_indices:
+    #     res_symbol_indices.append(visitor.build(TensorIndexLabelOp()))
 
 
 
+class NewAstParser(ast.NodeVisitor):
+
+    identation_default = 2
+    def __init__(self,inputs):
+        self.symbol_table = ops.SymbolTable()
+        self.inputs = inputs
+        self.insertion_point = [self]
+        self.identation = 0
+        self.return_type = []
+        self.pragma = ''
+        self.body = []
+        self.need_opt_comp_workspace = False
+        self.build(ops.ModuleOp())
+
+
+        # Output formats when multiply matrices of different formats
+        self.sp_matmult_conversions = {
+            CSR: {
+                CSR : CSR,
+                COO : CSR,
+                DENSE : DENSE,
+            },
+            COO: {
+                CSR : CSR,
+                COO : CSR,
+                DENSE : DENSE
+            },
+            DENSE: {
+                CSR : DENSE,
+                COO : DENSE,
+                DENSE : DENSE,
+            }
+        }
+
+        self.sp_indices_results = {
+            'i64': {
+                'i64': 'i64',
+                'i32': 'i64',
+                None: 'i64',
+            },
+
+            'i32': {
+                'i64': 'i64',
+                'i32': 'i32',
+                None: 'i32',
+            }
+            ,
+            None: {
+                'i64': 'i64',
+                'i32': 'i32',
+                None: None,
+            }
+        }
+
+        # Output formats when transposing matrices of different formats
+        # self.sp_mattr_conversions = {
+        #     CSR : CSC,
+        #     COO : COO,
+        #     DENSE : DENSE
+        # }
+
+        self.sp_mattr_conversions = {
+            CSR : CSR,
+            COO : COO,
+            DENSE : DENSE
+        }
+
+        # Output formats when elwise mult matrices of different formats
+        # self.sp_elw_mult_conversions = {
+        #     CSR: {
+        #         CSR : CSR,
+        #         COO : CSR,
+        #         DENSE : COO,
+        #     },
+        #     COO: {
+        #         CSR : CSR,
+        #         COO : CSR,
+        #         DENSE : COO
+        #     },
+        #     DENSE: {
+        #         CSR : DENSE,
+        #         COO : DENSE,
+        #         DENSE : DENSE,
+        #     }
+        # }
+        self.sp_elw_mult_conversions = {
+            CSR: {
+                CSR : CSR,
+                COO : CSR,
+                DENSE : DENSE,
+            },
+            COO: {
+                CSR : CSR,
+                COO : CSR,
+                DENSE : COO
+            },
+            DENSE: {
+                CSR : DENSE,
+                COO : DENSE,
+                DENSE : DENSE,
+            }
+        }
+        # Output formats when elwise add or subtract matrices of different formats
+        # Add and subtract is almost the same as elwise mult with two differences
+        self.sp_elw_add_sub_conversions = self.sp_elw_mult_conversions
+
+
+        # self.sp_elw_add_sub_conversions[CSR][DENSE] = DENSE
+        # self.sp_elw_add_sub_conversions[COO][DENSE] = DENSE
+
+        self.sp_elw_add_sub_conversions[CSR][DENSE] = CSR
+        self.sp_elw_add_sub_conversions[COO][DENSE] = COO
+
+
+    def dump(self):
+        return "\n".join([stmt.dump() for stmt in self.body])
+
+    def build(self, op):
+        # self.mlir_code.append(" " * self.identation + op.dump())
+        self.insertion_point[-1].body.append(op)
+        if op.startsBody:
+            self.identation += NewAstParser.identation_default
+            op.identation = self.identation
+            self.insertion_point.append(op)
+        elif op.endsBody:
+            self.identation -= NewAstParser.identation_default
+            # self.mlir_code.append(" " * self.identation  + "}")
+            self.insertion_point.pop()
+        return op
+
+    def visit_FunctionDef(self, node):
+        args = []
+        for arg, val in zip(node.args.args, self.inputs):
+            if hasattr(val, 'shape'):
+                new_arg = ops.Symbol(mlir_type_from_ndarray(val))
+            else:
+                new_arg = ops.Symbol(mlir_type_from_python_type(val))
+
+            self.symbol_table.insert(arg.arg, new_arg)
+            args.append(new_arg)
+        funcOp = self.build(ops.FuncOp(node.name, args, [], False))
+        # for arg in args:
+        #     self.build(ops.TensorPrintOp(arg))
+        for stmt in node.body:
+            self.visit(stmt)
+
+
+        if self.return_type:
+            funcOp.return_types = self.return_type
+        else:
+            self.build(ops.ReturnOp([]))
+        # self.mlir_code.append("" *self.identation + "}")
+
+    def visit_Comment(self, node):
+        if node.value.startswith('#pragma'):
+            self.pragma = node.value
+
+    def visit_Assign(self, node):
+        self.pragma = ''
+        rhs = self.visit(node.value)
+        if  isinstance(node.targets[0], ast.Name):
+            self.symbol_table.insert(node.targets[0].id, rhs)
+        elif isinstance(node.targets[0], ast.Subscript):
+            print(node.targets[0].slice)
+            mem = self.visit(node.targets[0].value)
+            indices = self.visit(node.targets[0].slice)
+            if indices: # 
+                if not isinstance(indices, list):
+                    indices = [indices]
+                if isinstance(mem.type, TensorType):
+                    mem = self.build(ops.ToMemrefOp(mem))
+                    self.build(ops.StoreOp(rhs, mem.results[0], indices))
+            else:
+                self.build(ops.TensorSetOp(rhs, mem, 0.0))
+                self.build(ops.TensorPrintOp(mem))
+            # self.mlir_code.append(store.dump())
+        # lhs =  self.visit(node.targets[0].)
+        # if indices:
+        #     store = StoreOp(load.results[0], lhs)
+        
+
+    def visit_BinOp(self, node):
+        self.pragma = ''
+
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        val = None
+        res_format = DENSE
+        if isinstance(node.op, ast.Add):
+            if isinstance(left.type, ShapedType):
+                indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in left.type.shape] 
+                res_format = self.sp_elw_add_sub_conversions[left.type.format][right.type.format]
+                val = self.build(ops.TensorAddOp(left, right, indices, res_format))
+            else:
+                val = self.build(ops.AddOp(left, right))
+        elif isinstance(node.op, ast.Sub):
+            if isinstance(left.type, ShapedType):
+                indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in left.type.shape] 
+                res_format = self.sp_elw_add_sub_conversions[left.type.format][right.type.format]
+                val = self.build(ops.TensorSubOp(left, right, indices, res_format))
+            else:
+                val = self.build(ops.SubOp(left, right))
+        elif isinstance(node.op, ast.Mult):
+            if isinstance(left.type, ShapedType):
+                indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in left.type.shape] 
+                res_format = self.sp_elw_mult_conversions[left.type.format][right.type.format]
+                val = self.build(ops.TensorMulOp(left, right, indices, res_format))
+            else:
+                val = self.build(ops.MulOp(left, right))
+        elif isinstance(node.op, ast.MatMult):
+            assert(isinstance(left.type, ShapedType) and isinstance(right.type, ShapedType))
+            lhs_indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in left.type.shape] 
+            rhs_indices = [lhs_indices[-1]] + [self.build(ops.TensorIndexLabelOp()).results[0] for d in right.type.shape[1:]]
+            if len(lhs_indices) ==2 and len(rhs_indices)  == 2:
+                res_indices = [lhs_indices[0], rhs_indices[1]]
+            elif len(lhs_indices) == 2 and len(rhs_indices)  == 1:
+                res_indices = [lhs_indices[0]]
+            elif len(lhs_indices) == 1 and len(rhs_indices)  == 2:
+                res_indices = [rhs_indices[1]]
+            res_format = self.sp_matmult_conversions[left.type.format][right.type.format]
+            val  = self.build(ops.TensorMatMultOp(left, right, lhs_indices, rhs_indices, res_indices, res_format))
+        if res_format != DENSE:
+            self.need_opt_comp_workspace = True
+        if val:
+            return val.results[0]
+
+
+
+    def visit_For(self, node):
+        pragma = self.pragma
+        assert(isinstance(node.iter, ast.Call) and node.iter.func.id == 'range')
+        if len(node.iter.args) == 1:
+            lb = self.build(ops.ConstantOp(0))
+
+            lb = lb.results[0]
+            ub = self.visit(node.iter.args[0])
+            step = self.build(ops.ConstantOp(1))
+            step = step.results[0]
+        elif len(node.iter.args) == 2:
+            lb = self.visit(node.iter.args[0])
+            ub = self.visit(node.iter.args[1])
+            step = self.build(ops.ConstantOp(1))
+            step = step.results[0]
+        else:
+            lb = self.visit(node.iter.args[0])
+            ub = self.visit(node.iter.args[1])
+            step = self.visit(node.iter.args[2])
+        if pragma == "#pragma parallel":
+            forOp = self.build(ops.ForAllOp(lb, ub, step))
+        else:
+            forOp = self.build(ops.ForOp(lb, ub, step))
+        self.symbol_table.insert(node.target.id, forOp.iv)
+        for stmt in node.body:
+            self.visit(stmt)
+        if pragma == "#pragma parallel":
+            self.build(ops.ForallInParallel([]))
+        else:
+            self.build(ops.YieldOp([]))
+        
+
+
+    def visit_Subscript(self, node):
+        self.pragma = ''
+        
+        mem = self.visit(node.value)
+        assert(mem != None)
+        indices = self.visit(node.slice)
+        if not isinstance(indices, list):
+            indices = [indices]
+        if isinstance(node.value.ctx, ast.Load):
+            if isinstance(mem.type, TensorType):
+                mem = self.build(ops.ToMemrefOp(mem)).results[0]
+            load = self.build(ops.LoadOp(mem, indices))
+            return load.results[0]
+        # elif isinstance(node.value.ctx, ast.Store):
+        #     store = StoreOp(mem, indices)
+        #     self.mlir_code.append(store.dump())
+
+    def visit_Tuple(self, node):
+        elts = [self.visit(elt) for elt in node.elts]
+        return elts
+
+
+
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Attribute):
+            value = self.visit(node.func.value)
+            if isinstance(value, ops.Symbol):
+                values = [value]
+            else :
+                assert(value == 'comet')
+            attr = node.func.attr
+        elif isinstance(node.func, ast.Name):
+            values = []
+            attr = self.visit(node.func.id)
+
+        if attr == 'sum':
+            res = self.build(ops.TensorSumOp(*values)).results[0]
+            return res
+        elif attr == 'transpose':
+            indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in values[0].type.shape]
+            transpose_indices = [indices[1], indices[0]]
+            format = None
+            if isinstance(values[0].type, TensorType) or isinstance(values[0].type, MemrefType):
+                format = DENSE
+            elif isinstance(values[0].type, types.TASparseTensorType):
+                format = values[0].type.format
+            res = self.build(ops.TensorTransposeOp(values[0], indices, transpose_indices,  format)).results[0]
+            return res
+        elif attr == 'einsum':
+            res = lower_einsum_expresion(node.args, node.keywords, self)
+            return res
+        elif attr == 'multiply':
+            indices = [self.build(ops.TensorIndexLabelOp()).results[0] for d in values[0].type.shape]
+            for arg in node.args:
+                values.append(self.visit(arg))    
+            res_format = self.sp_elw_mult_conversions[values[0].type.format][values[1].type.format]
+            res = self.build(ops.TensorMulOp(values[0], values[1], indices, res_format)).results[0]
+            return res
+            
+
+
+    def visit_Name(self, node):
+        self.pragma = ''
+
+        symbol = self.symbol_table.find(node.id)
+        if symbol:
+            return symbol
+        else:
+            return node.id
+
+    def visit_Constant(self, node):
+        self.pragma = ''
+
+        val = None
+        if isinstance(node.value, int):
+            val = self.build(ops.ConstantOp(node.value))
+        elif isinstance(node.value, float):
+            val = self.build(ops.ConstantOp(node.value))
+        if val:
+            return val.results[0]
+
+    def visit_Return(self, node):
+        ret = self.visit(node.value)
+        # self.build(ops.TensorPrintOp(ret))
+        if not isinstance(ret, list):
+            ret = [ret]
+        retOp = self.build(ops.ReturnOp(ret))
+        self.return_type = [ret.type for ret in retOp.results]
 
 
 class NewVisitor(ast.NodeVisitor):
@@ -93,6 +546,26 @@ class NewVisitor(ast.NodeVisitor):
                 CSR : DENSE,
                 COO : DENSE,
                 DENSE : DENSE,
+            }
+        }
+
+        self.sp_indices_results = {
+            'i64': {
+                'i64': 'i64',
+                'i32': 'i64',
+                None: 'i64',
+            },
+
+            'i32': {
+                'i64': 'i64',
+                'i32': 'i32',
+                None: 'i32',
+            }
+            ,
+            None: {
+                'i64': 'i64',
+                'i32': 'i32',
+                None: None,
             }
         }
 
@@ -189,28 +662,30 @@ class NewVisitor(ast.NodeVisitor):
     def visit_FunctionDef(self, node):
         for i, arg in enumerate(node.args.args):
             self.tsymbols[arg.arg] = self.tcurr
-            format = get_format(self.inputs[i])
+            format = ops.get_format(self.inputs[i])
             for s in self.inputs[i].shape :
+                indices_type = None
+                if format == DENSE :
+                    indices_type = None
+                elif format == COO:
+                    indices_type = ops.dtype_to_mlir_type(self.inputs[i].coords[0].dtype)
+                elif format == CSR:
+                    indices_type = ops.dtype_to_mlir_type(self.inputs[i].indices.dtype)
+                else:
+                    raise Exception("Unexpected sparse matrix type")
 
                 self.get_next_indexlabel_with_val(s)
                 self.reset_indexlabel_with_val(s)
 
             self.tsemantics[self.tcurr] = {
+                'indices_type': indices_type,
+                'value_type' : ops.dtype_to_mlir_type(self.inputs[i].dtype),
                 'shape': list(self.inputs[i].shape),
+                'in_device': hasattr(self.inputs[i], '__cuda_array_interface__'),
                 'format': format,
                 'dimsSSA': [self.get_index_constant(d) for d in self.inputs[i].shape],
                 'scalar': False,
                 }
-            self.declarations.append(
-                {
-                    "type": "T",
-                    "is_input": True,
-                    "arg_num": i,
-                    "format": format,
-                    "shape": self.inputs[i].shape,
-                    "dimsSSA": [self.get_index_constant(d) for d in self.inputs[i].shape],
-                    "id": self.tcurr,
-                })
             self.in_args.append(self.tcurr)
             self.tcurr += 1
         for stmt in node.body:
@@ -219,23 +694,74 @@ class NewVisitor(ast.NodeVisitor):
     
     def visit_Assign(self, node): # We do not support multiple targets currently
 
-        if isinstance(node.targets[0], ast.Subscript): 
+        if isinstance(node.targets[0], ast.Subscript):
             id = node.targets[0].value.id
-            mask = node.targets[0].slice
-            self.mask = mask
-            v = NewVisitor.visit(self, node.value)
-            self.tsymbols[id] = v
         else:
-            # vals = [NewVisitor.visit(self, node.value)]
-            # for l,v in zip(node.targets, vals):
-            #     self.tsymbols[l.id] = v
-
             id = node.targets[0].id
-            # if id in self.tsymbols:
-            #     self.no_assign = True
+
+
+        if  isinstance(node.targets[0], ast.Subscript) and isinstance(node.targets[0].ctx, ast.Store) and not isinstance(node.targets[0].slice, ast.Tuple): 
+            
+            v = NewVisitor.visit(self, node.value)
+            # self.tsymbols[id] = v
+            if not isinstance(node.targets[0].slice, ast.Tuple):
+                self.ops.append(
+                {
+                    "indices_type": [self.tsemantics[v]['indices_type']]*2,
+                    "value_type": self.tsemantics[v]['value_type'],
+                    "op_type": "=",
+                    "shapes": [self.tsemantics[v]['shape']]*2,
+                    "lhs": self.tsymbols[id],
+                    "rhs": v,
+                    "beta": True,
+                })
+                if self.tsemantics[self.tsymbols[id]]['format'] == DENSE and self.tsemantics[self.tsymbols[id]]['shape'] != 1:
+                    self.ops.append(
+                        {
+                            "indices_type": [None],
+                            "value_type": self.tsemantics[self.tsymbols[id]]['value_type'],
+                            "op_type": "p",
+                            "shapes": [self.tsemantics[self.tsymbols[id]]["shape"]],
+                            "value_type": self.tsemantics[self.tsymbols[id]]["value_type"],
+                            "operands": [self.tsymbols[id]]
+                        })
+
+        else:
+            
+            if isinstance(node.targets[0], ast.Subscript) and isinstance(node.targets[0].ctx, ast.Store) and (isinstance(node.targets[0].slice, ast.Tuple)) :
+                mask = node.targets[0].slice
+                self.mask = mask
+                print(slice)
 
             v = NewVisitor.visit(self, node.value)
-            self.tsymbols[id] = v
+            if self.tsemantics[v]['shape'] != 1:
+                self.declarations.append({
+                    'indices_type': self.tsemantics[v]['indices_type'], 
+                    "value_type": self.tsemantics[v]['value_type'],
+                    "type": "T",
+                    "is_input": False,
+                    "todo": "l",
+                    "format": self.tsemantics[v]['format'],
+                    "shape": self.tsemantics[v]['shape'],
+                    "dimsSSA": [self.get_index_constant(d) for d in self.tsemantics[v]['shape']],
+                    "id": self.tcurr,
+                    })
+                self.tsemantics[self.tcurr] = self.tsemantics[v]
+                self.ops.append(
+                {
+                    "indices_type": [self.tsemantics[v]['indices_type']]*2,
+                    "value_type": self.tsemantics[v]['value_type'],
+                    "op_type": "=",
+                    "shapes": [self.tsemantics[v]['shape']]*2,
+                    "lhs": self.tcurr,
+                    "rhs": v,
+                    "beta": True,
+                })
+                self.tsymbols[id] = self.tcurr
+                self.tcurr += 1
+            else:
+                self.tsymbols[id] = v
+
 
         
 
@@ -262,6 +788,8 @@ class NewVisitor(ast.NodeVisitor):
             if no_assign:
                 self.ops.append(
                     {
+                        "indices_type": [self.tsemantics[v]['indices_type'], self.tsemantics[self.tsymbols[id]]['indices_type']],
+                        "value_type": self.tsemantics[v]['value_type'],
                         "op_type": "=",
                         "beta": beta,
                         "lhs": self.tsymbols[id],
@@ -276,6 +804,8 @@ class NewVisitor(ast.NodeVisitor):
             if no_assign:
                 self.ops.append(
                     {
+                        "indices_type": [self.tsemantics[v]['indices_type'], self.tsemantics[self.tsymbols[id]]['indices_type']],
+                        "value_type": self.tsemantics[v]['value_type'],
                         "op_type": "=",
                         "beta": beta,
                         "lhs": self.tsymbols[id],
@@ -289,6 +819,8 @@ class NewVisitor(ast.NodeVisitor):
             if no_assign:
                 self.ops.append(
                     {
+                        "indices_type": [self.tsemantics[v]['indices_type'], self.tsemantics[self.tsymbols[id]]['indices_type']],
+                        "value_type": self.tsemantics[v]['value_type'],
                         "op_type": "=",
                         "beta": beta,
                         "lhs": self.tsymbols[id],
@@ -303,8 +835,7 @@ class NewVisitor(ast.NodeVisitor):
             res = self.create_binOp(node, [self.tsymbols[id], v], no_assign)
             self.tsymbols[id] = res
 
-
-    def visit_Call(self, node: Call) :
+    def visit_Call(self, node: ast.Call) :
         obj = None
         obj = NewVisitor.visit(self,node.func)
         if obj is not None:
@@ -314,13 +845,13 @@ class NewVisitor(ast.NodeVisitor):
                 return self.visit_Einsum_Call(node)
 
 
-    def visit_Attribute(self, node: Attribute) :
+    def visit_Attribute(self, node: ast.Attribute) :
         return NewVisitor.visit(self, node.value)
 
     def visit_Name(self, node: ast.Name):
         return self.tsymbols[node.id]
 
-    def visit_Constant(self, node: Constant) :
+    def visit_Constant(self, node: ast.Constant) :
         out_id = self.tcurr
         self.tsemantics[self.tcurr] = {'shape': [1,], 'format': DENSE, 'scalar': True}
         self.declarations.append(
@@ -350,6 +881,8 @@ class NewVisitor(ast.NodeVisitor):
                 raise "Unexpected operator {}".format(node.op)
             self.ops.append(
                 {
+                    "indices_type": [op1_sems['indices_type'], op0_sems['indices_type'], None],
+                    "value_type": op0_sems['value_type'],
                     "op_type": "scalar",
                     "op": op,
                     "operands": operands[::-1],
@@ -357,10 +890,12 @@ class NewVisitor(ast.NodeVisitor):
                     "out_id": self.tcurr,
                 }
             )
-            self.tsemantics[self.tcurr] = {'shape': [1,], 'format': DENSE, 'scalar': True}
+            self.tsemantics[self.tcurr] = {"value_type": op_semantics['value_type'], 'indices_type': None, 'shape': [1,], 'format': DENSE, 'scalar': True}
 
             self.tcurr += 1
             self.declarations.append({
+                'indices_type': None, 
+                "value_type": op_semantics['value_type'],
                 "type": "V",
                 "value": f"{0:e}",
                 "is_input": False,
@@ -372,6 +907,8 @@ class NewVisitor(ast.NodeVisitor):
                 })
             self.ops.append(
                 {
+                    'indices_type': [None, None], 
+                    "value_type": op_semantics['value_type'],
                     "op_type": "=",
                     "shapes": [[1,]]*2,
                     "lhs": self.tcurr,
@@ -384,6 +921,7 @@ class NewVisitor(ast.NodeVisitor):
             return self.tcurr-1
 
         format = self.sp_elw_add_sub_conversions[op0_sems['format']][op1_sems['format']]
+        indices_type = self.sp_indices_results[op0_sems['indices_type']][op1_sems['indices_type']]
         if self.tsemantics[operands[0]]['format'] != DENSE:
             op_semantics = self.tsemantics[operands[0]]
         else:
@@ -393,6 +931,8 @@ class NewVisitor(ast.NodeVisitor):
         if isinstance(node.op, ast.Add):
             self.ops.append(
             {
+                'indices_type': [op0_sems['indices_type'], op1_sems['indices_type'], indices_type],
+                "value_type": op_semantics['value_type'],
                 "op_type": "+",
                 "shapes": [op_semantics['shape']] * 3,
                 "operands": operands,
@@ -404,30 +944,12 @@ class NewVisitor(ast.NodeVisitor):
             for d in op_semantics['shape']:
                 self.reset_indexlabel_with_val(d)
 
-            self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False}
-            # if not no_assign:
-            self.tcurr += 1
-            self.declarations.append({
-                "type": "T",
-                "is_input": False,
-                "todo": "l",
-                "format": format,
-                "shape": op_semantics['shape'],
-                "dimsSSA": [self.get_index_constant(d) for d in op_semantics['shape']],
-                "id": self.tcurr,
-                })
-            self.ops.append(
-                {
-                    "op_type": "=",
-                    "shapes": [op_semantics['shape']]*2,
-                    "lhs": self.tcurr,
-                    "rhs": self.tcurr-1,
-                    "beta": no_assign,
-                })
-            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
+            self.tsemantics[self.tcurr] = {'value_type': op_semantics['value_type'], 'indices_type': indices_type, 'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False}
         elif isinstance(node.op, ast.Sub):
             self.ops.append(
                 {
+                    'indices_type': [op0_sems['indices_type'], op1_sems['indices_type'], indices_type],
+                    "value_type": op_semantics['value_type'],
                     "op_type": "-",
                     "shapes": [op_semantics['shape']]* 3,
                     "operands": operands,
@@ -438,27 +960,8 @@ class NewVisitor(ast.NodeVisitor):
             
             for d in op_semantics['shape']:
                 self.reset_indexlabel_with_val(d)
-            self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False}
-            # if not no_assign:
-            self.tcurr += 1
-            self.declarations.append({
-                "type": "T",
-                "is_input": False,
-                "todo": "l",
-                "format": format,
-                "shape": op_semantics['shape'],
-                "dimsSSA": [self.get_index_constant(d) for d in op_semantics['shape']],
-                "id": self.tcurr,
-                })
-            self.ops.append(
-                {
-                    "op_type": "=",
-                    "shapes": [op_semantics['shape']]*2,
-                    "lhs": self.tcurr,
-                    "rhs": self.tcurr-1,
-                    "beta": no_assign,
-                })
-            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
+            self.tsemantics[self.tcurr] = {"value_type": op_semantics['value_type'], 'indices_type': indices_type, 'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False}
+
         elif isinstance(node.op, ast.Mult):
             in_ilabels = [self.get_next_indexlabel_with_val(d) for d in op_semantics['shape']]
             for d in op_semantics['shape']:
@@ -466,6 +969,8 @@ class NewVisitor(ast.NodeVisitor):
             
             self.ops.append(
                 {
+                    'indices_type': [op0_sems['indices_type'], op1_sems['indices_type'], indices_type],
+                    "value_type": op_semantics['value_type'],
                     "op_type": "*",
                     "shapes": [op_semantics['shape']] * 3,
                     "op_ilabels": [in_ilabels] * 3,
@@ -477,28 +982,8 @@ class NewVisitor(ast.NodeVisitor):
             format = self.sp_elw_mult_conversions[op0_sems['format']][op1_sems['format']]
             for d in op_semantics['shape']:
                 self.reset_indexlabel_with_val(d)
-            self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False}
-            # if not no_assign:
-            self.tcurr += 1
-            
-            self.declarations.append({
-                "type": "T",
-                "is_input": False,
-                "todo": "l",
-                "format": format,
-                "shape": op_semantics['shape'],
-                "dimsSSA": [self.get_index_constant(d) for d in op_semantics['shape']],
-                "id": self.tcurr,
-                })
-            self.ops.append(
-                {
-                    "op_type": "=",
-                    "shapes": [op_semantics['shape']]*2,
-                    "lhs": self.tcurr,
-                    "rhs": self.tcurr-1,
-                    "beta": no_assign,
-                })
-            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
+            self.tsemantics[self.tcurr] = {'value_type': op_semantics['value_type'], 'indices_type': indices_type,'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False}
+
         elif isinstance(node.op, ast.MatMult):
     # def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, no_assing):
 
@@ -515,18 +1000,18 @@ class NewVisitor(ast.NodeVisitor):
             elif len(op1['shape']) == 1 and len(op2['shape']) == 2:
                 indices = 'j,jk->k'
             
-            return self.visit_Bin_Einsum_Call(operands, indices, mask, None, 0, False)
+            return self.visit_Bin_Einsum_Call(operands, indices, mask, None, 0, False, {})
 
         self.tcurr +=1
         return self.tcurr-1
 
-    def visit_BinOp(self, node: BinOp) :
+    def visit_BinOp(self, node: ast.BinOp) :
         no_assign = self.no_assign
         self.no_assign = False
         operands = [NewVisitor.visit(self, node.left), NewVisitor.visit(self, node.right)]
         return self.create_binOp(node, operands, no_assign)
 
-    def visit_Method_Call(self, node: Call, obj):
+    def visit_Method_Call(self, node: ast.Call, obj):
         no_assign = self.no_assign
         self.no_assign = False
         # operands = []
@@ -536,7 +1021,7 @@ class NewVisitor(ast.NodeVisitor):
 
         if node.func.attr == "transpose":
             out_format = self.sp_mattr_conversions[op_semantics['format']]
-            self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'][::-1], 'format': out_format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape'][::-1]], 'scalar': False}
+            self.tsemantics[self.tcurr] = {"value_type": op_semantics['value_type'], 'indices_type': op_semantics['indices_type'],  'shape': op_semantics['shape'][::-1], 'format': out_format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape'][::-1]], 'scalar': False}
             
             in_ilabels = [self.get_next_indexlabel_with_val(d) for d in op_semantics['shape']]
             for d in op_semantics['shape']:
@@ -548,6 +1033,8 @@ class NewVisitor(ast.NodeVisitor):
 
             self.ops.append(
                 {
+                    "indices_type": [op_semantics['indices_type']] * 2,
+                    "value_type": op_semantics['value_type'],
                     "op_type": "t",
                     "shapes": [op_semantics['shape'], op_semantics['shape'][::-1]],
                     "operands": [obj],
@@ -555,45 +1042,19 @@ class NewVisitor(ast.NodeVisitor):
                     "out_id": self.tcurr,
                     "beta": 0,
                 })
-            self.tcurr += 1
-            # if not no_assign:
-            self.declarations.append(
-                {
-                    "type": "T",
-                    "is_input": False,
-                    "todo": "l",
-                    "format": out_format,
-                    "shape": op_semantics['shape'][::-1],
-                    "dimsSSA": [self.get_index_constant(d) for d in op_semantics['shape'][::-1]],
-                    "id": self.tcurr,
-                })
-            self.ops.append(                
-                {
-                    "op_type": "=",
-                    "shapes": [op_semantics['shape'][::-1]]*2,
-                    "lhs": self.tcurr,
-                    "rhs": self.tcurr-1,
-                    "beta": no_assign,
-                })
-            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
             
         elif node.func.attr == "sum":
-            self.tsemantics[self.tcurr] = {'shape': 1, 'format': DENSE, 'scalar': True}
+            self.tsemantics[self.tcurr] = {"value_type": op_semantics['value_type'], 'indices_type': None, 'shape': 1, 'format': DENSE, 'scalar': True}
             self.ops.append(
                 {
+                    "value_type": op_semantics['value_type'],
+                    'indices_type': [op_semantics["indices_type"], None],
                     "op_type": "s",
                     "shapes": [op_semantics["shape"], [1,]],
                     "operands": [obj],
                     "out_id": self.tcurr,
                 })
-            # if not no_assign:
-            # self.declarations.append(
-            #     {
-            #         "type": "V",
-            #         "todo": "l",
-            #         "format": DENSE,
-            #         "id": self.tcurr,
-            #     })
+            
         elif node.func.attr == "multiply":
             op1 = NewVisitor.visit(self, node.args[0])
             op1_sems = self.tsemantics[op1]
@@ -603,8 +1064,11 @@ class NewVisitor(ast.NodeVisitor):
             for d in op_semantics['shape']:
                 self.reset_indexlabel_with_val(d)
             
+            indices_type = self.sp_indices_results[op_semantics['indices_type']][op1_sems['indices_type']]
             self.ops.append(
                 {
+                    "value_type": op_semantics['value_type'],
+                    "indices_type": [op_semantics['indices_type'], op1_sems['indices_type'], indices_type],
                     "op_type": "*",
                     "shapes": [op_semantics['shape']] * 3,
                     "operands": [obj, op1],
@@ -615,28 +1079,7 @@ class NewVisitor(ast.NodeVisitor):
                 })
 
             format = self.sp_elw_mult_conversions[op_semantics['format']][op1_sems['format']]
-            self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape'][::-1]], 'scalar': False}
-            # if not no_assign:
-            self.tcurr += 1
-            self.declarations.append(
-                {
-                    "type": "T",
-                    "is_input": False,
-                    "todo": "l",
-                    "format": format,
-                    "shape": op_semantics['shape'][::-1],
-                    "dimsSSA": [self.get_index_constant(d) for d in op_semantics['shape'][::-1]],
-                    "id": self.tcurr,
-                })
-            self.ops.append(
-                {
-                    "op_type": "=",
-                    "shapes": [op_semantics['shape'][::-1]] * 2,
-                    "rhs": self.tcurr-1,
-                    "lhs": self.tcurr,
-                    "beta": no_assign,
-                })
-            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
+            self.tsemantics[self.tcurr] = {"value_type": op_semantics['value_type'], "indices_type": indices_type, 'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape'][::-1]], 'scalar': False}
 
         self.tcurr +=1
 
@@ -645,17 +1088,30 @@ class NewVisitor(ast.NodeVisitor):
     def visit_Return(self, node):
         obj = NewVisitor.visit(self, node.value)
         self.returns.append(obj)
-        if self.tsemantics[obj]['format'] == DENSE:
+        if self.tsemantics[obj]['format'] == DENSE and self.tsemantics[obj]['shape'] != 1:
             self.in_args.append(obj)
-        self.ops.append(
-            {
-                "op_type": "p",
-                "shapes": [self.tsemantics[obj]["shape"]],
-                "value_type": "f64",
-                "operands": [obj]
-            })
+            self.ops.append(
+                {
+                    "indices_type": [None],
+                    "value_type": self.tsemantics[obj]['value_type'],
+                    "op_type": "p",
+                    "shapes": [self.tsemantics[obj]["shape"]],
+                    "value_type": self.tsemantics[obj]["value_type"],
+                    "operands": [obj]
+                })
+        if self.tsemantics[obj]['format'] != DENSE or self.tsemantics[obj]['shape'] == 1:
+            self.ops.append(
+            
+                {
+                    "indices_type": [self.tsemantics[obj]['indices_type']],
+                    "value_type": self.tsemantics[obj]['value_type'],
+                    "op_type": "r",
+                    "shapes": [self.tsemantics[obj]["shape"]],
+                    "value_type": self.tsemantics[obj]["value_type"],
+                    "operands": [obj]
+                })
 
-    def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, beta, no_assign):
+    def visit_Bin_Einsum_Call(self, operands, llabels, mask,semiring, beta, no_assign, lbls_to_ilbls):
 
         ops = llabels.split('->')[0].split(',')
         res = list(llabels.split('->')[1])
@@ -670,12 +1126,12 @@ class NewVisitor(ast.NodeVisitor):
                     all_dims.append(self.tsemantics[operands[1]]['shape'][i])
         
         lbls_to_dims = {}
-        lbls_to_ilbls = {}
         ilbls_seen = set()
 
         for d,l in zip(all_dims, all_lbls):
             lbls_to_dims[l] = d
-            lbls_to_ilbls[l] = self.get_next_indexlabel_with_val(d)
+            if l not in lbls_to_ilbls:
+                lbls_to_ilbls[l] = self.get_next_indexlabel_with_val(d)
         
         for d,l in zip(all_dims, all_lbls):
             self.reset_indexlabel_with_val(d)
@@ -688,6 +1144,7 @@ class NewVisitor(ast.NodeVisitor):
             in1_ilabels = [lbls_to_ilbls[l] for l in list(ops[1])]
         
         format = self.tsemantics[operands[0]]['format']
+        indices_type = self.tsemantics[operands[0]]['indices_type']
         if format != DENSE:
                 self.need_opt_comp_workspace = True
 
@@ -705,11 +1162,15 @@ class NewVisitor(ast.NodeVisitor):
         if len(ops) > 1:
             for op in operands[1:]:
                 format = self.sp_matmult_conversions[format][self.tsemantics[op]['format']]
+                indices_type = self.sp_indices_results[indices_type][self.tsemantics[op]['indices_type']]
+
                 if format != DENSE:
                     self.need_opt_comp_workspace = True
 
             self.ops.append(
                 {
+                    "indices_type": [self.tsemantics[operands[0]]['indices_type'], self.tsemantics[operands[1]]['indices_type'],indices_type], 
+                    "value_type": self.tsemantics[operands[0]]['value_type'],
                     "op_type": "c",
                     "operands": operands,
                     "op_ilabels": [in0_ilabels, in1_ilabels, labels],
@@ -731,7 +1192,9 @@ class NewVisitor(ast.NodeVisitor):
             
             self.ops.append(
                 {
+                    "value_type": self.tsemantics[operands[0]]['value_type'], 
                     "op_type": "t",
+                    "indices_type": [self.tsemantics[operands[0]]['indices_type'], indices_type],
                     "shapes": [self.tsemantics[operands[0]]['shape'], shape],
                     "operands": operands,
                     "out_id": self.tcurr,
@@ -739,34 +1202,12 @@ class NewVisitor(ast.NodeVisitor):
                     "op_ilabels": [in_ilabels, out_ilabels]
                 })
                 
-        self.tsemantics[self.tcurr] = {'shape': shape, 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in shape], 'scalar': False}
-        if not no_assign:
-            self.tcurr += 1
-            self.declarations.append(
-                {
-                    "type": "T",
-                    "is_input": False,
-                    "todo": "l",
-                    "format": format,
-                    "shape": shape,
-                    "dimsSSA": [self.get_index_constant(d) for d in shape],
-                    "id": self.tcurr,
-                })
-            self.ops.append(                
-                {
-                    "op_type": "=",
-                    "shapes": [shape] * 2,
-                    "lhs": self.tcurr,
-                    "rhs": self.tcurr-1,
-                    "beta": beta,
-                })
-            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
-        
+        self.tsemantics[self.tcurr] = {'value_type': self.tsemantics[operands[0]]['value_type'],"indices_type": indices_type, 'shape': shape, 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in shape], 'scalar': False}
         self.tcurr += 1
 
         return  self.tcurr - 1
 
-    def visit_Einsum_Call(self, node: Call):
+    def visit_Einsum_Call(self, node: ast.Call):
         no_assign =  self.no_assign
         self.no_assign = False
         out_id = self.tcurr
@@ -802,6 +1243,7 @@ class NewVisitor(ast.NodeVisitor):
             
 
             format = self.sp_elw_add_sub_conversions[op0_sems['format']][op1_sems['format']]
+            indices_type = self.sp_indices_results[op0_sems['indices_type']][op1_sems['indices_type']]
             if self.tsemantics[operands[0]]['format'] != DENSE:
                 op_semantics = self.tsemantics[operands[0]]
             else:
@@ -813,6 +1255,8 @@ class NewVisitor(ast.NodeVisitor):
             
             self.ops.append(
                 {
+                    "indices_type": [op0_sems['indices_type'], op1_sems['indices_type'], indices_type],
+                    "value_type": op_semantics['value_type'],
                     "op_type": "*",
                     "shapes": [op_semantics['shape']] * 3,
                     "operands": operands,
@@ -824,27 +1268,8 @@ class NewVisitor(ast.NodeVisitor):
                 
                 # ("*", operands, indices+','+indices+'->'+indices, self.tcurr, semiring))
             format = self.sp_elw_mult_conversions[op0_sems['format']][op1_sems['format']]
-            self.tsemantics[self.tcurr] = {'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False }
-            self.tcurr += 1
-            self.declarations.append(
-                {
-                    "type": "T",
-                    "is_input": False,
-                    "todo": "l",
-                    "format": format,
-                    "shape": op_semantics['shape'],
-                    "dimsSSA": [self.get_index_constant(d) for d in op_semantics['shape']],
-                    "id": self.tcurr,
-                })
-            self.ops.append(
-                {
-                    "op_type": "=",
-                    "shapes": [op_semantics['shape']] * 2,
-                    "rhs": self.tcurr-1,
-                    "lhs": self.tcurr,
-                    "beta": no_assign,
-                })
-            self.tsemantics[self.tcurr] = self.tsemantics[self.tcurr-1]
+            indices_type = self.sp_indices_results[op0_sems['indices_type']][op1_sems['indices_type']]
+            self.tsemantics[self.tcurr] = {'value_type' : op_semantics['value_type'], 'indices_type': indices_type, 'shape': op_semantics['shape'], 'format': format, 'dimsSSA': [self.get_index_constant(d) for d in op_semantics['shape']], 'scalar': False }
             self.tcurr += 1
 
             return self.tcurr-1
@@ -853,6 +1278,7 @@ class NewVisitor(ast.NodeVisitor):
             lops = ops[0]
             saved_no_assign = no_assign
             no_assign = True
+            lbls_to_ilbls = {}
             for i in range(1, len(operands)):
                 all_lbls = list(lops)
                 for l in list(ops[i]):
@@ -879,7 +1305,7 @@ class NewVisitor(ast.NodeVisitor):
                 if i == len(operands) -1 :
                     ret = res
                     no_assign = saved_no_assign
-                tid = self.visit_Bin_Einsum_Call([loperand,operands[i]], lops+","+ops[i]+"->"+"".join(ret), mask, semiring, saved_no_assign, no_assign)
+                tid = self.visit_Bin_Einsum_Call([loperand,operands[i]], lops+","+ops[i]+"->"+"".join(ret), mask, semiring, saved_no_assign, no_assign, lbls_to_ilbls)
                 loperand = tid
                 lops = "".join(ret)
             return tid
@@ -888,7 +1314,7 @@ class NewVisitor(ast.NodeVisitor):
             loperand = operands[0]
             lops = ops[0]
             ret = res
-            tid = self.visit_Bin_Einsum_Call([loperand], lops+"->"+"".join(ret), mask, semiring, no_assign, no_assign)
+            tid = self.visit_Bin_Einsum_Call([loperand], lops+"->"+"".join(ret), mask, semiring, no_assign, no_assign, {})
             lops = "".join(ret)
             return tid
 
@@ -898,98 +1324,52 @@ def compile(flags, target:str = "cpu", with_jit=True):
     def innerfunc(func):
 
         def wrapper(*pos_args, **kwargs):
+            # start = time.time()
             func_str = ast.parse(inspect.getsource(func))
             parsed_func = ast.parse(func_str)
             func_def = parsed_func.body[0]
-            v = NewVisitor([*pos_args])
-            v.visit(parsed_func)
-            in_types = []
-            for arg in v.in_args:
-                if isinstance(v.tsemantics[arg]['shape'], int):
-                    in_types.append(("%t"+str(arg), "tensor<1xf64>"))
+            func_name = ':'.join((os.path.abspath(inspect.getfile(func)), func_def.name))
+            arg_vals = [*pos_args]
+            input_types = [None] * len(arg_vals) 
+            for i, arg in enumerate(arg_vals):
+                if hasattr(arg, 'shape'):
+                    type = mlir_type_from_ndarray(arg)
+                    input_types[i] = f'{type}'
                 else:
-                    in_types.append(("%t"+str(arg), "tensor<{}xf64>".format("x".join(str(d) for d in v.tsemantics[arg]['shape']))))
-            irb = builders.MLIRFunctionBuilder(
-                func_def.name,
-                input_types=in_types,
-                return_types=[],
-            ) 
-
-            for i in range(v.currIndexLabel):
-                irb.add_statement('%i{} = "ta.index_label"() : () -> !ta.indexlabel'.format(i))
-
-
-            dense_tensors = []
-            scalars = []
-            for dec in v.declarations:
+                    type = mlir_type_from_python_type(arg)
+                    input_types[i] = f'{type}'
                 
-                if dec["type"] == "T":
-                    dec["value_type"] = "f64"
-                    t = builders.Tensor_Decl_Builder(dec)
-                    if dec["format"] == DENSE:
-                        dense_tensors.append(t)
+            cached_kernel = lowering.cache.find(func_name, input_types)
+            code = None
+            new_flags = None
+            kernel_name = None
+            return_type = None
+
+            if not cached_kernel:
+                new_v = NewAstParser([*pos_args])
+                new_v.visit(parsed_func)
+
+                new_flags = flags
+                if new_v.need_opt_comp_workspace:
+                    if new_flags:
+                        new_flags = new_flags + ' --opt-comp-workspace'
                     else:
-                        irb.add_statement(t.build_tensor())
-                elif dec["type"] == "C":
-                    irb.add_statement('%d{} = arith.constant {} : index '.format(dec["id"], dec["value"]))
-                elif dec["type"] == "V":
-                    scalars.append('%t{} = ta.constant dense<{}> : tensor<1xf64> '.format(dec["id"], dec["value"]))
-                    # irb.add_statement('%t{} = ta.constant dense<{}> : tensor<1xf64> '.format(dec["id"], dec["value"]))
-
-
-            for t in dense_tensors:
-                irb.add_statement(t.build_tensor())
-
-            for t in scalars:
-                irb.add_statement(t)
-
-            for op in v.ops:
-                if op["op_type"] == 'c':
-                    op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
-                    if op["mask"][0] is not None :
-                        op["mask"] = (op["mask"][0], op["mask"][1], v.tsemantics[op["mask"][0]]['shape'])
-                        irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-                    else:
-                        op["mask"] = (op["mask"][0], op["mask"][1], None)
-                        irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-                elif op["op_type"] == 'scalar':
-                    irb.add_statement(builders.ScalarOp_Builder(op).build_op())
-                elif op["op_type"] == 's':
-                    irb.add_statement(builders.TensorSumBuilder(op).build_op())
-                elif op["op_type"] == 'p':
-                    irb.add_statement(builders.PrintBuilder(op).build_op())
-                elif op["op_type"] == '*':
-                    op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
-                    irb.add_statement(builders.ArithOp_Builder(op).build_op())
-                elif op["op_type"] == '=':
-                    irb.add_statement(builders.SetOp_Builder(op).build_op())
-                else:
-                    op["formats"] = [v.tsemantics[t]['format'] for t in op["operands"]] +  [v.tsemantics[op["out_id"]]['format']]
-                    irb.add_statement(builders.ArithOp_Builder(op).build_op()) 
-            irb.add_statement("return")
-
-            outputs = []
-            ret = v.tsemantics[v.returns[0]]
-            format = ret['format']
-            if format == DENSE:
-                outputs.append(np.empty(ret['shape']))
-            elif format == CSR:
-                outputs.append(sp.sparse.csr_array(np.empty(ret['shape'])))
-            elif format == COO:
-                outputs.append(sp.sparse.coo_array(np.empty(ret['shape'])))
-            elif format == CSC:
-                outputs.append(sp.sparse.csc_array(np.empty(ret['shape'])))
-
-            arg_vals = v.inputs
-            new_flags = flags
-            if v.need_opt_comp_workspace:
+                        new_flags = ' --opt-comp-workspace'
                 if new_flags:
-                    new_flags = new_flags + ' --opt-comp-workspace'
+                    kernel_name = func_def.name + new_flags.replace('-','_').replace(' ','').replace('=','_')
                 else:
-                    new_flags = ' --opt-comp-workspace'
-            code = irb.compile()
+                    kernel_name = func_def.name
+                # code = irb.compile()
+                moduleOp = new_v.body[0]
+                for op in moduleOp.body:
+                    if isinstance(op, ops.FuncOp):
+                        op.func_name = kernel_name
+                code = new_v.dump()
+                return_type = new_v.return_type
+            # end = time.time()
+            # print(f"Parsing time: {end-start}")
             # start = time.time()
-            lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags,func_def.name, arg_vals, outputs)
+            lowering_result = lowering.lower_dialect_with_jit(code, target, None, new_flags, kernel_name, arg_vals, return_type, func_name, input_types, cached_kernel)
             # end = time.time()
             # print("Time for JIT", end-start)
             return lowering_result

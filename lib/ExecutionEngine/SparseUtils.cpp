@@ -26,6 +26,7 @@
 
 #include "llvm/Support/raw_ostream.h"
 #include <assert.h>
+#include <cstdint>
 #include <iostream>
 #include <sys/time.h>
 #include <math.h>
@@ -1442,7 +1443,7 @@ struct FileReaderWrapper
 
   bool readFileNameStr(int32_t fileID)
   {
-    char *pSparseInput;
+    char *pSparseInput = NULL;
     std::string envString;
     if (fileID >= 0 && fileID < 9999)
     {
@@ -1809,7 +1810,7 @@ void read_input_sizes_2D(int32_t fileID,
   }
 }
 
-template <typename T>
+template <typename T, typename IndicesType>
 void read_input_2D(int32_t fileID,
                    int32_t A1format, int32_t A1_tile_format,
                    int32_t A2format, int32_t A2_tile_format,
@@ -1825,14 +1826,14 @@ void read_input_2D(int32_t fileID,
                    int32_t readMode)
 {
 
-  auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
-  auto *desc_A1crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1crd_ptr);
-  auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
-  auto *desc_A2crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2crd_ptr);
-  auto *desc_A1tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1tile_pos_ptr);
-  auto *desc_A1tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1tile_crd_ptr);
-  auto *desc_A2tile_pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_pos_ptr);
-  auto *desc_A2tile_crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2tile_crd_ptr);
+  auto *desc_A1pos = static_cast<StridedMemRefType<IndicesType, 1> *>(A1pos_ptr);
+  auto *desc_A1crd = static_cast<StridedMemRefType<IndicesType, 1> *>(A1crd_ptr);
+  auto *desc_A2pos = static_cast<StridedMemRefType<IndicesType, 1> *>(A2pos_ptr);
+  auto *desc_A2crd = static_cast<StridedMemRefType<IndicesType, 1> *>(A2crd_ptr);
+  auto *desc_A1tile_pos = static_cast<StridedMemRefType<IndicesType, 1> *>(A1tile_pos_ptr);
+  auto *desc_A1tile_crd = static_cast<StridedMemRefType<IndicesType, 1> *>(A1tile_crd_ptr);
+  auto *desc_A2tile_pos = static_cast<StridedMemRefType<IndicesType, 1> *>(A2tile_pos_ptr);
+  auto *desc_A2tile_crd = static_cast<StridedMemRefType<IndicesType, 1> *>(A2tile_crd_ptr);
   auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
 
   /// For example, A2pos is not used for COO, but initialized with -1 to speficify that it is not used
@@ -2117,22 +2118,22 @@ void read_input_sizes_3D(int32_t fileID,
     /// std::cout << "CSF format\n";
     Csf3DTensor<T> csf_3dtensor(FileReader.coo_3dtensor);
 
-    desc_sizes->data[0] = csf_3dtensor.A1pos_size;
-    desc_sizes->data[1] = csf_3dtensor.A1crd_size;
-    desc_sizes->data[2] = 0;
-    desc_sizes->data[3] = 0;
-    desc_sizes->data[4] = csf_3dtensor.A2pos_size;
-    desc_sizes->data[5] = csf_3dtensor.A2crd_size;
-    desc_sizes->data[6] = 0;
-    desc_sizes->data[7] = 0;
-    desc_sizes->data[8] = csf_3dtensor.A3pos_size;
-    desc_sizes->data[9] = csf_3dtensor.A3crd_size;
-    desc_sizes->data[10] = 0;
-    desc_sizes->data[11] = 0;
-    desc_sizes->data[12] = csf_3dtensor.Aval_size;
-    desc_sizes->data[13] = csf_3dtensor.num_index_i;
-    desc_sizes->data[14] = csf_3dtensor.num_index_j;
-    desc_sizes->data[15] = csf_3dtensor.num_index_k;
+    desc_sizes->data[0] = csf_3dtensor.A1pos_size;    /// A1pos
+    desc_sizes->data[1] = csf_3dtensor.A1crd_size;    /// A1crd
+    desc_sizes->data[2] = 0;                          /// A1_tile_pos
+    desc_sizes->data[3] = 0;                          /// A1_tile_crd
+    desc_sizes->data[4] = csf_3dtensor.A2pos_size;    /// A2pos
+    desc_sizes->data[5] = csf_3dtensor.A2crd_size;    /// A2crd
+    desc_sizes->data[6] = 0;                          /// A2_tile_pos
+    desc_sizes->data[7] = 0;                          /// A2_tile_crd
+    desc_sizes->data[8] = csf_3dtensor.A3pos_size;    /// A3pos
+    desc_sizes->data[9] = csf_3dtensor.A3crd_size;    /// A3crd
+    desc_sizes->data[10] = 0;                         /// A3_tile_pos
+    desc_sizes->data[11] = 0;                         /// A3_tile_crd
+    desc_sizes->data[12] = csf_3dtensor.Aval_size;    /// Aval
+    desc_sizes->data[13] = csf_3dtensor.num_index_i;  /// I
+    desc_sizes->data[14] = csf_3dtensor.num_index_j;  /// J
+    desc_sizes->data[15] = csf_3dtensor.num_index_k;  /// K
   }
   /// Mode-Generic
   else if (A1format == Compressed_nonunique && A2format == singleton && A3format == Dense)
@@ -2140,22 +2141,22 @@ void read_input_sizes_3D(int32_t fileID,
     /// std::cout << "Mode-Generic format\n";
     Mg3DTensor<T> mg_3dtensor(FileReader.coo_3dtensor);
 
-    desc_sizes->data[0] = mg_3dtensor.A1pos_size;
-    desc_sizes->data[1] = mg_3dtensor.A1crd_size;
-    desc_sizes->data[2] = 0;
-    desc_sizes->data[3] = 0;
-    desc_sizes->data[4] = mg_3dtensor.A2pos_size;
-    desc_sizes->data[5] = mg_3dtensor.A2crd_size;
-    desc_sizes->data[6] = 0;
-    desc_sizes->data[7] = 0;
-    desc_sizes->data[8] = mg_3dtensor.A3pos_size;
-    desc_sizes->data[9] = mg_3dtensor.A3crd_size;
-    desc_sizes->data[10] = 0;
-    desc_sizes->data[11] = 0;
-    desc_sizes->data[12] = mg_3dtensor.Aval_size;
-    desc_sizes->data[13] = mg_3dtensor.num_index_i;
-    desc_sizes->data[14] = mg_3dtensor.num_index_j;
-    desc_sizes->data[15] = mg_3dtensor.num_index_k;
+    desc_sizes->data[0] = mg_3dtensor.A1pos_size;    /// A1pos
+    desc_sizes->data[1] = mg_3dtensor.A1crd_size;    /// A1crd
+    desc_sizes->data[2] = 0;                         /// A1_tile_pos
+    desc_sizes->data[3] = 0;                         /// A1_tile_crd
+    desc_sizes->data[4] = mg_3dtensor.A2pos_size;    /// A2pos
+    desc_sizes->data[5] = mg_3dtensor.A2crd_size;    /// A2crd
+    desc_sizes->data[6] = 0;                         /// A2_tile_pos
+    desc_sizes->data[7] = 0;                         /// A2_tile_crd
+    desc_sizes->data[8] = mg_3dtensor.A3pos_size;    /// A3pos
+    desc_sizes->data[9] = mg_3dtensor.A3crd_size;    /// A3crd
+    desc_sizes->data[10] = 0;                        /// A3_tile_pos
+    desc_sizes->data[11] = 0;                        /// A3_tile_crd
+    desc_sizes->data[12] = mg_3dtensor.Aval_size;    /// Aval
+    desc_sizes->data[13] = mg_3dtensor.num_index_i;  /// I
+    desc_sizes->data[14] = mg_3dtensor.num_index_j;  /// J
+    desc_sizes->data[15] = mg_3dtensor.num_index_k;  /// K
   }
   else
   {
@@ -2163,7 +2164,7 @@ void read_input_sizes_3D(int32_t fileID,
   }
 }
 
-template <typename T>
+template <typename T, typename IndicesType>
 void read_input_3D(int32_t fileID,
                    int32_t A1format, int32_t A1_tile_format,
                    int32_t A2format, int32_t A2_tile_format,
@@ -2178,12 +2179,12 @@ void read_input_3D(int32_t fileID,
 {
   /// TODO(gkestor): readMode is for future use.
 
-  auto *desc_A1pos = static_cast<StridedMemRefType<int64_t, 1> *>(A1pos_ptr);
-  auto *desc_A1crd = static_cast<StridedMemRefType<int64_t, 1> *>(A1crd_ptr);
-  auto *desc_A2pos = static_cast<StridedMemRefType<int64_t, 1> *>(A2pos_ptr);
-  auto *desc_A2crd = static_cast<StridedMemRefType<int64_t, 1> *>(A2crd_ptr);
-  auto *desc_A3pos = static_cast<StridedMemRefType<int64_t, 1> *>(A3pos_ptr);
-  auto *desc_A3crd = static_cast<StridedMemRefType<int64_t, 1> *>(A3crd_ptr);
+  auto *desc_A1pos = static_cast<StridedMemRefType<IndicesType, 1> *>(A1pos_ptr);
+  auto *desc_A1crd = static_cast<StridedMemRefType<IndicesType, 1> *>(A1crd_ptr);
+  auto *desc_A2pos = static_cast<StridedMemRefType<IndicesType, 1> *>(A2pos_ptr);
+  auto *desc_A2crd = static_cast<StridedMemRefType<IndicesType, 1> *>(A2crd_ptr);
+  auto *desc_A3pos = static_cast<StridedMemRefType<IndicesType, 1> *>(A3pos_ptr);
+  auto *desc_A3crd = static_cast<StridedMemRefType<IndicesType, 1> *>(A3crd_ptr);
   auto *desc_Aval = static_cast<StridedMemRefType<T, 1> *>(Aval_ptr);
 
   FileReaderWrapper<T> FileReader(fileID, true); /// init of COO_3d_tensor
@@ -2350,7 +2351,7 @@ void read_input_3D(int32_t fileID,
 }
 
 /// Utility functions to read sparse matrices and fill in the pos and crd arrays per dimension
-extern "C" void read_input_2D_f32(int32_t fileID,
+extern "C" void read_input_2D_f32_i32(int32_t fileID,
                                   int32_t A1format, int32_t A1_tile_format,
                                   int32_t A2format, int32_t A2_tile_format,
                                   int A1pos_rank, void *A1pos_ptr,
@@ -2364,7 +2365,7 @@ extern "C" void read_input_2D_f32(int32_t fileID,
                                   int Aval_rank, void *Aval_ptr,
                                   int32_t readMode)
 {
-  read_input_2D<float>(fileID,
+  read_input_2D<float, int32_t>(fileID,
                        A1format, A1_tile_format,
                        A2format, A2_tile_format,
                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
@@ -2374,7 +2375,8 @@ extern "C" void read_input_2D_f32(int32_t fileID,
                        Aval_rank, Aval_ptr, readMode);
 }
 
-extern "C" void read_input_2D_f64(int32_t fileID,
+/// Utility functions to read sparse matrices and fill in the pos and crd arrays per dimension
+extern "C" void read_input_2D_f32_i64(int32_t fileID,
                                   int32_t A1format, int32_t A1_tile_format,
                                   int32_t A2format, int32_t A2_tile_format,
                                   int A1pos_rank, void *A1pos_ptr,
@@ -2388,7 +2390,31 @@ extern "C" void read_input_2D_f64(int32_t fileID,
                                   int Aval_rank, void *Aval_ptr,
                                   int32_t readMode)
 {
-  read_input_2D<double>(fileID,
+  read_input_2D<float, int64_t>(fileID,
+                       A1format, A1_tile_format,
+                       A2format, A2_tile_format,
+                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                       A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                       A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
+                       Aval_rank, Aval_ptr, readMode);
+}
+
+extern "C" void read_input_2D_f64_i32(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int A1pos_rank, void *A1pos_ptr,
+                                  int A1crd_rank, void *A1crd_ptr,
+                                  int A1tile_pos_rank, void *A1tile_pos_ptr,
+                                  int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr,
+                                  int A2crd_rank, void *A2crd_ptr,
+                                  int A2tile_pos_rank, void *A2tile_pos_ptr,
+                                  int A2tile_crd_rank, void *A2tile_crd_ptr,
+                                  int Aval_rank, void *Aval_ptr,
+                                  int32_t readMode)
+{
+  read_input_2D<double, int32_t>(fileID,
                         A1format, A1_tile_format,
                         A2format, A2_tile_format,
                         A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
@@ -2398,7 +2424,31 @@ extern "C" void read_input_2D_f64(int32_t fileID,
                         Aval_rank, Aval_ptr, readMode);
 }
 
-extern "C" void read_input_3D_f32(int32_t fileID,
+extern "C" void read_input_2D_f64_i64(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int A1pos_rank, void *A1pos_ptr,
+                                  int A1crd_rank, void *A1crd_ptr,
+                                  int A1tile_pos_rank, void *A1tile_pos_ptr,
+                                  int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr,
+                                  int A2crd_rank, void *A2crd_ptr,
+                                  int A2tile_pos_rank, void *A2tile_pos_ptr,
+                                  int A2tile_crd_rank, void *A2tile_crd_ptr,
+                                  int Aval_rank, void *Aval_ptr,
+                                  int32_t readMode)
+{
+  read_input_2D<double, int64_t>(fileID,
+                        A1format, A1_tile_format,
+                        A2format, A2_tile_format,
+                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                        A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                        A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
+                        Aval_rank, Aval_ptr, readMode);
+}
+
+extern "C" void read_input_3D_f32_i32(int32_t fileID,
                                   int32_t A1format, int32_t A1_tile_format,
                                   int32_t A2format, int32_t A2_tile_format,
                                   int32_t A3format, int32_t A3_tile_format,
@@ -2411,7 +2461,7 @@ extern "C" void read_input_3D_f32(int32_t fileID,
                                   int Aval_rank, void *Aval_ptr, int32_t readMode)
 {
 
-  read_input_3D<float>(fileID,
+  read_input_3D<float, int32_t>(fileID,
                        A1format, A1_tile_format,
                        A2format, A2_tile_format,
                        A3format, A3_tile_format,
@@ -2424,7 +2474,7 @@ extern "C" void read_input_3D_f32(int32_t fileID,
                        Aval_rank, Aval_ptr, readMode);
 }
 
-extern "C" void read_input_3D_f64(int32_t fileID,
+extern "C" void read_input_3D_f32_i64(int32_t fileID,
                                   int32_t A1format, int32_t A1_tile_format,
                                   int32_t A2format, int32_t A2_tile_format,
                                   int32_t A3format, int32_t A3_tile_format,
@@ -2436,7 +2486,58 @@ extern "C" void read_input_3D_f64(int32_t fileID,
                                   int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
                                   int Aval_rank, void *Aval_ptr, int32_t readMode)
 {
-  read_input_3D<double>(fileID,
+
+  read_input_3D<float, int64_t>(fileID,
+                       A1format, A1_tile_format,
+                       A2format, A2_tile_format,
+                       A3format, A3_tile_format,
+                       A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                       A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                       A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                       A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
+                       A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
+                       A3tile_pos_rank, A3tile_pos_ptr, A3tile_crd_rank, A3tile_crd_ptr,
+                       Aval_rank, Aval_ptr, readMode);
+}
+
+extern "C" void read_input_3D_f64_i32(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int32_t A3format, int32_t A3_tile_format,
+                                  int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                  int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                  int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
+                                  int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                                  int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
+                                  int Aval_rank, void *Aval_ptr, int32_t readMode)
+{
+  read_input_3D<double, int32_t>(fileID,
+                        A1format, A1_tile_format,
+                        A2format, A2_tile_format,
+                        A3format, A3_tile_format,
+                        A1pos_rank, A1pos_ptr, A1crd_rank, A1crd_ptr,
+                        A1tile_pos_rank, A1tile_pos_ptr, A1tile_crd_rank, A1tile_crd_ptr,
+                        A2pos_rank, A2pos_ptr, A2crd_rank, A2crd_ptr,
+                        A2tile_pos_rank, A2tile_pos_ptr, A2tile_crd_rank, A2tile_crd_ptr,
+                        A3pos_rank, A3pos_ptr, A3crd_rank, A3crd_ptr,
+                        A3tile_pos_rank, A3tile_pos_ptr, A3tile_crd_rank, A3tile_crd_ptr,
+                        Aval_rank, Aval_ptr, readMode);
+}
+
+extern "C" void read_input_3D_f64_i64(int32_t fileID,
+                                  int32_t A1format, int32_t A1_tile_format,
+                                  int32_t A2format, int32_t A2_tile_format,
+                                  int32_t A3format, int32_t A3_tile_format,
+                                  int A1pos_rank, void *A1pos_ptr, int A1crd_rank, void *A1crd_ptr,
+                                  int A1tile_pos_rank, void *A1tile_pos_ptr, int A1tile_crd_rank, void *A1tile_crd_ptr,
+                                  int A2pos_rank, void *A2pos_ptr, int A2crd_rank, void *A2crd_ptr,
+                                  int A2tile_pos_rank, void *A2tile_pos_ptr, int A2tile_crd_rank, void *A2tile_crd_ptr,
+                                  int A3pos_rank, void *A3pos_ptr, int A3crd_rank, void *A3crd_ptr,
+                                  int A3tile_pos_rank, void *A3tile_pos_ptr, int A3tile_crd_rank, void *A3tile_crd_ptr,
+                                  int Aval_rank, void *Aval_ptr, int32_t readMode)
+{
+  read_input_3D<double, int64_t>(fileID,
                         A1format, A1_tile_format,
                         A2format, A2_tile_format,
                         A3format, A3_tile_format,
@@ -2496,7 +2597,12 @@ extern "C" void read_input_sizes_3D_f64(int32_t fileID,
 //===----------------------------------------------------------------------===//
 ///  Sort a vector within a range [first, last).
 //===----------------------------------------------------------------------===//
-extern "C" void _milr_ciface_comet_sort(UnrankedMemRefType<int64_t> *M, int64_t index_first, int64_t index_last)
+extern "C" void _milr_ciface_comet_sort32(UnrankedMemRefType<int32_t> *M, int64_t index_first, int64_t index_last)
+{
+  cometSortIndex(*M, index_first, index_last);
+}
+
+extern "C" void _milr_ciface_comet_sort64(UnrankedMemRefType<int64_t> *M, int64_t index_first, int64_t index_last)
 {
   cometSortIndex(*M, index_first, index_last);
 }
@@ -2504,5 +2610,17 @@ extern "C" void _milr_ciface_comet_sort(UnrankedMemRefType<int64_t> *M, int64_t 
 extern "C" void comet_sort_index(int64_t rank, void *ptr, int64_t index_first, int64_t index_last)
 {
   UnrankedMemRefType<int64_t> descriptor = {rank, ptr};
-  _milr_ciface_comet_sort(&descriptor, index_first, index_last);
+  _milr_ciface_comet_sort64(&descriptor, index_first, index_last);
+}
+
+extern "C" void comet_sort32(int64_t rank, void *ptr, int64_t index_first, int64_t index_last)
+{
+  UnrankedMemRefType<int32_t> descriptor = {rank, ptr};
+  _milr_ciface_comet_sort32(&descriptor, index_first, index_last);
+}
+
+extern "C" void comet_sort64(int64_t rank, void *ptr, int64_t index_first, int64_t index_last)
+{
+  UnrankedMemRefType<int64_t> descriptor = {rank, ptr};
+  _milr_ciface_comet_sort64(&descriptor, index_first, index_last);
 }

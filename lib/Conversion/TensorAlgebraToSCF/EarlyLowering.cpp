@@ -37,11 +37,13 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Support/LLVM.h"
 
 #include <limits>
 #include <map>
 #include <set>
 #include <unordered_map>
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 
 using namespace mlir;
@@ -82,7 +84,7 @@ namespace
 
       auto tensorOperand = operands[0];
       ToTensorOp tensorLoadOp;
-      if (!isa<ToTensorOp>(tensorOperand.getDefiningOp()))
+      if (!mlir::isa_and_present<ToTensorOp>(tensorOperand.getDefiningOp()))
       {
         /// TODO: may need to re-visit when doing reduction support.
         /// the user declared output to have zeros.
@@ -92,8 +94,9 @@ namespace
       tensorLoadOp = cast<ToTensorOp>(tensorOperand.getDefiningOp());
       auto memref = tensorLoadOp.getMemref();
       auto valueAttr = tensorFillOp.getValue();
+      
+      rewriter.setInsertionPoint(tensorLoadOp);
       Value constantOp = rewriter.create<ConstantOp>(loc, llvm::cast<TypedAttr>(valueAttr));
-
       rewriter.create<linalg::FillOp>(loc, constantOp, memref);
       rewriter.eraseOp(op);
 
@@ -196,17 +199,14 @@ namespace
       assert(isa<tensorAlgebra::TensorDimOp>(op));
       comet_debug() << "TensorDimOpLowering in format begin\n";
       comet_vdump(op);
-
       auto tensor = op.getTensor();
-      if (tensor.getType().isa<SparseTensorType>())
+      if (isa<SparseTensorType>(tensor.getType()))
       {
-        SparseTensorConstructOp spconstruct = cast<SparseTensorConstructOp>(tensor.getDefiningOp());
         ::mlir::TypedValue<::mlir::IndexType> idx = op.getIndex();
         auto realIndex = getConstantIntValue(idx);
-        op.replaceAllUsesWith(spconstruct.getIndices()[18 + *realIndex]);
-        rewriter.eraseOp(op);
+        rewriter.replaceOpWithNewOp<SpTensorGetDimSize>(op, rewriter.getIndexType(), tensor, *realIndex);
       }
-      else if (tensor.getType().isa<TensorType>())
+      else if (isa<TensorType>(tensor.getType()))
       {
         ::mlir::TypedValue<::mlir::IndexType> idx = op.getIndex();
         auto dim = rewriter.create<tensor::DimOp>(op.getLoc(), tensor, idx);
@@ -254,8 +254,16 @@ namespace
                         tensorAlgebra::TensorSetOp,
                         tensorAlgebra::IndexLabelOp,
                         tensorAlgebra::DenseConstantOp,
+                        tensorAlgebra::TensorMultOp,
                         tensorAlgebra::ScalarOp,
-                        tensorAlgebra::SparseTensorConstructOp>();
+                        tensorAlgebra::SpTensorAliasOp,
+                        tensorAlgebra::SpTensorGetDimSize,
+                        tensorAlgebra::SpTensorGetDimPos,
+                        tensorAlgebra::SpTensorGetDimCrd,
+                        tensorAlgebra::SpTensorGetVals,
+                        tensorAlgebra::SparseTensorConstructOp,
+                        tensorAlgebra::TensorSortOp,
+                        tensorAlgebra::AllocWorkspaceOp>();
 
       if (failed(applyPartialConversion(function, target, std::move(patterns))))
       {

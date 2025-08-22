@@ -85,5 +85,24 @@ def TensorAlgebraSparseOutputTensorDeclLowering : Pass<"lower-sparse-output-tens
     "comet::TensorAlgebraDialect"
   ];
 }
+def TensorAlgebraBufferizeFunc : Pass<"ta-bufferize-func"> {
+  let summary = "";
+  let description = [{
+
+      }];
+  let constructor = "comet::createTABufferizeFunc()";
+  let dependentDialects = [
+    "comet::TensorAlgebraDialect", "func::FuncDialect"
+  ];
+}
+
+def TensorAlgebraWorkspaceOptimizations : Pass<"ta-workspace-optimizations", "func::FuncOp"> {
+    let summary = "Substitute merged workspace operations where possible";
+    let description = [{}];
+
+    let constructor = "comet::createWorkspaceOptimizationPass()";
+    let dependentDialects = ["tensorAlgebra::TADialect"];
+}
+
 
 #endif /// COMET_DIALECT_TENSORALGEBRA_PASSES

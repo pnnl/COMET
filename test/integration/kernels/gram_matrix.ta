@@ -1,0 +1,25 @@
+# RUN: comet-opt --convert-ta-to-it --convert-to-loops --convert-to-llvm %s &> gram_matrix.llvm
+# RUN: mlir-cpu-runner gram_matrix.llvm -O3 -e main -entry-point-result=void -shared-libs=%comet_utility_library_dir/libcomet_runner_utils%shlibext,%mlir_utility_library_dir/libomp%shlibext | FileCheck %s
+
+
+def main() {
+	#IndexLabel Declarations
+	IndexLabel [i, k] = [3];
+	IndexLabel [j] = [4];        
+
+	#Tensor Declarations
+	Tensor<double> A([i, j], {Dense});	  
+	Tensor<double> B([i, i], {Dense});
+
+	#Tensor Fill Operation
+	A[i, j] = 2.3;
+	B[i, k] = 0.0;
+
+	B[i, k] = A[i, j] * transpose(A[k, j],{j, k});
+
+	print(B);
+}
+
+# Print the result for verification.
+# CHECK: data = 
+# CHECK-NEXT: 21.16,21.16,21.16,21.16,21.16,21.16,21.16,21.16,21.16,

@@ -30,16 +30,30 @@
 #include "comet/Dialect/Utils/Utils.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/LoopUtils.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Linalg/TransformOps/LinalgTransformOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "llvm/ADT/SmallVector.h"
+#include <memory>
+#include <optional>
 
 // suppress all warnings coming from inclusion of blis.h in source tree
 #ifdef __clang__
@@ -218,7 +232,7 @@ namespace
         return failure();
 
       FailureOr<scf::SCFTilingResult> tilingResult =
-          scf::tileUsingSCFForOp(rewriter, op, options);
+          scf::tileUsingSCF(rewriter, op, options);
       if (failed(tilingResult))
         return rewriter.notifyMatchFailure(op, "failed to tile operation");
 
@@ -263,12 +277,15 @@ static void addPatternForTiling(MLIRContext *context,
                                 StringRef filterName,
                                 StringRef updatedFilterName,
                                 ArrayRef<int64_t> tileSizes,
+                                bool parallel = false, 
                                 ArrayRef<int64_t> interchange = {})
 {
   scf::SCFTilingOptions tilingOptions;
   SmallVector<OpFoldResult> tileSizesOfr =
       getAsIndexOpFoldResult(context, tileSizes);
   tilingOptions.setTileSizes(tileSizesOfr).setInterchange(interchange);
+  tilingOptions.setLoopType(
+    parallel ? scf::SCFTilingOptions::LoopType::ForallOp: scf::SCFTilingOptions::LoopType::ForOp);
   LinalgTransformationFilter filter(StringAttr::get(context, filterName),
                                     StringAttr::get(context, updatedFilterName));
   patterns.add<LinalgTilingLoops>(context, tilingOptions, filter);
@@ -289,8 +306,8 @@ namespace
       int mc, kc, nc, mr, nr = 0;
       get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
 
-      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, {1, 2, 0});
-      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr, kc}, {1, 0, 2});
+      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc}, false, {1, 0});
+      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr}, true, {1, 0});
 
       if (failed(applyPatternsAndFoldGreedily(getOperation(),
                                               std::move(tilingPatterns))))
@@ -333,8 +350,13 @@ static SmallVector<Type, 4> extractOperandTypes(Operation *op)
     /// The underlying descriptor type (e.g. LLVM) does not have layout
     /// information. Canonicalizing the type at the level of std when going into
     /// a library call avoids needing to introduce DialectCastOp.
-    if (auto memrefType = type.dyn_cast<MemRefType>())
-      result.push_back(makeStridedLayoutDynamic(memrefType));
+    if (auto memrefType = dyn_cast<MemRefType>(type))
+    {
+      auto newShape = llvm::to_vector<4>(llvm::map_range(memrefType.getShape(), [](int64_t dimSize) {
+        return ShapedType::kDynamic;
+      }));
+      result.push_back(makeStridedLayoutDynamic(MemRefType::get(newShape, memrefType.getElementType(), memrefType.getLayout(), memrefType.getMemorySpace())));
+    }
     else
       result.push_back(type);
   }
@@ -350,14 +372,17 @@ createTypeCanonicalizedMemRefOperands(OpBuilder &b, Location loc,
   res.reserve(operands.size());
   for (auto op : operands)
   {
-    auto memrefType = op.getType().dyn_cast<MemRefType>();
+    auto memrefType = dyn_cast<MemRefType>(op.getType());
     if (!memrefType)
     {
       res.push_back(op);
       continue;
     }
+    auto newShape = llvm::to_vector<4>(llvm::map_range(memrefType.getShape(), [](int64_t dimSize) {
+      return ShapedType::kDynamic;
+    }));
     Value cast =
-        b.create<memref::CastOp>(loc, makeStridedLayoutDynamic(memrefType), op);
+        b.create<memref::CastOp>(loc, makeStridedLayoutDynamic(MemRefType::get(newShape, memrefType.getElementType(), memrefType.getLayout(), memrefType.getMemorySpace())), op);
     res.push_back(cast);
   }
   return res;
@@ -383,6 +408,9 @@ static FailureOr<FlatSymbolRefAttr> getLibraryCallSymbolRef(Operation *op, Patte
   /// Add inputTypes for mr and nr
   inputTypes.push_back(IntegerType::get(rewriter.getContext(), 32));
   inputTypes.push_back(IntegerType::get(rewriter.getContext(), 32));
+  /// Add inputTypes for alpha and beta
+  inputTypes.push_back(rewriter.getF64Type());
+  inputTypes.push_back(rewriter.getF64Type());
 
   if (op->getNumResults() != 0)
   {
@@ -418,12 +446,32 @@ LogicalResult LinalgMatMulOpToLibraryCallPattern::matchAndRewrite(
   if (failed(libraryCallName))
     return failure();
 
+  const char *arch = bli_arch_string(bli_cpuid_query_id());
+
+  if (!((strcmp("haswell", arch) == 0) ||
+      (strcmp("zen", arch) == 0) ||
+      (strcmp("zen2", arch) == 0) ||
+      (strcmp("zen3", arch) == 0) ||
+      (strcmp("skx", arch) == 0) ||
+      (strcmp("knl", arch) == 0) ||
+      (strcmp("generic", arch) == 0) ||
+      (strcmp("firestorm", arch) == 0)))
+  {
+    assert(false && "Unsupported microkernel architecture for BLIS matmul" 
+                    " operation. Supported architectures are: haswell, zen, "
+                    "zen2, zen3, skx, knl, firestorm, generic.");
+    return failure();
+  }
+
   int mc, kc, nc, mr, nr = 0;
   get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
 
   IntegerType i32Type = IntegerType::get(rewriter.getContext(), 32);
   Value mrValue = rewriter.create<ConstantOp>(op->getLoc(), i32Type, rewriter.getIntegerAttr(i32Type, mr));
   Value nrValue = rewriter.create<ConstantOp>(op->getLoc(), i32Type, rewriter.getIntegerAttr(i32Type, nr));
+  Value alpha = rewriter.create<ConstantOp>(op->getLoc(), rewriter.getF64Type(), op->getAttrOfType<FloatAttr>("__alpha__"));
+  Value beta = rewriter.create<ConstantOp>(op->getLoc(), rewriter.getF64Type(), op->getAttrOfType<FloatAttr>("__beta__"));
+
 
   comet_vdump(mrValue);
   comet_vdump(nrValue);
@@ -432,6 +480,8 @@ LogicalResult LinalgMatMulOpToLibraryCallPattern::matchAndRewrite(
   operands.insert(operands.end(), op->getOperands().begin(), op->getOperands().end());
   operands.push_back(mrValue);
   operands.push_back(nrValue);
+  operands.push_back(alpha);
+  operands.push_back(beta);
 
   rewriter.replaceOpWithNewOp<func::CallOp>(
       op, libraryCallName->getValue(), TypeRange(),
@@ -469,6 +519,187 @@ struct OptDenseTranspose : public ConversionPattern
       : ConversionPattern(linalg::TransposeOp::getOperationName(), 1, ctx),
         tile_size(tile_size), seperate_tiles(seperate_tiles) {}
 
+  // Old pass, utilizing memrefs but also supports tile_size and separate_tiles arguments
+#if 0
+    LogicalResult
+    matchAndRewrite(Operation *input_op, ArrayRef<Value> operands,
+                    ConversionPatternRewriter &rewriter) const final
+    {
+      comet_debug() << " OptDenseTranspose : public ConversionPattern\n";
+      auto op = dyn_cast<linalg::TransposeOp>(input_op);
+      comet_debug() << " Lowering dense transpose\n";
+      assert(isa<linalg::TransposeOp>(op) &&
+              "this operation is not a linalg.transpose");
+  
+      auto ctx = rewriter.getContext();
+      Builder builder(ctx);
+      Location loc = op.getLoc();
+  
+      //auto module = op->getParentOfType<ModuleOp>();
+      comet_vdump(op);
+  
+      auto tensorize_input = op->getOperand(0).getDefiningOp();
+      auto inputMemref = tensorize_input->getOperand(0);
+      auto inputType = inputMemref.getType();
+  
+      auto tensorize_output = op->getOperand(1).getDefiningOp();
+      auto outputMemref = tensorize_output->getOperand(0);
+  
+      comet_debug() << " Input Type:\n";
+      comet_vdump(inputType);
+      auto inputRank = inputType.cast<mlir::MemRefType>().getRank();
+  
+      std::vector<AffineForOp> loops;
+      std::vector<int64_t> indexIterateOrder;
+      for (int64_t rank = 0; rank < inputRank; rank++)
+      {
+        indexIterateOrder.push_back(rank);
+        int64_t upperBound = inputType.cast<mlir::MemRefType>().getDimSize(rank);
+        if (upperBound == ShapedType::kDynamic)
+        {
+          assert(false && "TODO: This dimension is a dynamic size");
+        }
+        /// create for loops
+        auto loop = rewriter.create<AffineForOp>(loc, 0, upperBound, 1);
+        loops.push_back(loop);
+        comet_vdump(loop);
+        rewriter.setInsertionPointToStart(loop.getBody());
+      }
+  
+      AffineMap inputIndexingMap = builder.getMultiDimIdentityMap(inputRank);
+      auto inputIndices = getReassociationIndices(inputIndexingMap);
+      auto inputIVs = createInductionVarAffine(loops, indexIterateOrder, inputIndices);
+  
+      AffineMap outputIndexingMap = AffineMap::getPermutationMap(llvm::to_vector_of<unsigned>(op.getPermutation()), ctx);
+      SmallVector<ReassociationIndices> outputIndices =
+          getReassociationIndices(outputIndexingMap);
+      auto outputIVs = createInductionVarAffine(loops, indexIterateOrder, outputIndices);
+  
+      /// Build loop body
+      auto load_rhs = rewriter.create<memref::LoadOp>(loc, inputMemref, inputIVs);
+      comet_vdump(load_rhs);
+  #ifdef COMET_DEBUG_MODE
+      comet_vdump(load_rhs);
+      auto store_lhs = rewriter.create<memref::StoreOp>(loc, load_rhs, outputMemref, outputIVs);
+      comet_vdump(store_lhs);
+  #else
+      rewriter.create<memref::StoreOp>(loc, load_rhs, outputMemref, outputIVs);
+  #endif
+  
+      /// TransposeOp index permutation
+      ArrayRef<AffineExpr> invresults = inputIndexingMap.getResults();
+      std::vector<unsigned> sourceOrder;
+      for (auto a : invresults)
+      {
+        if (a.getKind() == AffineExprKind::DimId)
+        {
+          AffineDimExpr *b = (AffineDimExpr *)&a; /// down_casting
+          sourceOrder.push_back(b->getPosition());
+          comet_debug() << "Source order: " << b->getPosition() << "\n";
+        }
+      }
+  
+      /// AffineMap outvmap = op.getPermutation().getValue();
+      ArrayRef<AffineExpr> outvresults = outputIndexingMap.getResults();
+      /// From outer to inner, the destOrder[size -1] is the most important,
+      std::vector<unsigned> destOrder;
+      for (auto a : outvresults)
+      {
+        if (a.getKind() == AffineExprKind::DimId)
+        {
+          AffineDimExpr *b = (AffineDimExpr *)&a; /// down_casting
+          destOrder.push_back(b->getPosition());
+          comet_debug() << "destination order: " << b->getPosition() << "\n";
+        }
+      }
+  
+      if (loops.size() > 0)
+      {
+        /* Suppose Given best order: a0, a3, a1, a2
+        ** Then first step: a0, a1, a3, a2 (exchange loop index 1 and 2)
+        ** Then second step: a0, a1, a2, a3 (exchange loop order index 2 and 3)
+        */
+        std::vector<unsigned> optimalOrder = destOrder;
+        /// Call an getLoopOrder algorithm to get the best order
+        std::vector<std::vector<unsigned>> loopOrders;
+        getLoopOrders(loopOrders, destOrder.size(), sourceOrder, destOrder);
+        optimalOrder = loopOrders[0];
+  
+        std::vector<unsigned> currentOrder;
+        for (unsigned i = 0; i < destOrder.size(); i++)
+        {
+          currentOrder.push_back(i);
+        }
+  
+        for (unsigned i = 0; i < optimalOrder.size(); i++)
+        {
+          comet_debug() << "currentOrder[i]: " << currentOrder[i] << " optimalOrder[i]: " << optimalOrder[i] << "\n";
+          /// This loop index is the correct loop index, no loop interchange
+          if (optimalOrder[i] == currentOrder[i])
+          {
+            continue;
+          }
+          else
+          { /// Get the location of the right loop index
+            for (unsigned j = i + 1; j < currentOrder.size(); j++)
+            {
+              if (optimalOrder[i] == currentOrder[j])
+              { /// loop j and i exchange
+                unsigned k = j;
+                /// k = (i,j]. k is unsigned, should be >= 0. use k-1, so k>=1
+                while (k > 0 && k > i)
+                {
+                  mlir::affine::interchangeLoops(loops[currentOrder[k - 1]], loops[currentOrder[k]]);
+                  std::swap(currentOrder[k - 1], currentOrder[k]);
+                  k--;
+                }
+                break;
+              }
+            }
+          }
+        }
+  
+        std::vector<AffineForOp> newLoops;
+        for (unsigned i = 0; i < currentOrder.size(); i++)
+        {
+          newLoops.push_back(loops[currentOrder[i]]);
+        }
+        loops.clear();
+  
+        /// Possible to assign different tile size based on the dimension
+        if (tile_size > 1)
+        {
+          std::vector<unsigned> tileSizes;
+          for (unsigned i = 0; i < currentOrder.size(); i++)
+          {
+            tileSizes.push_back(tile_size);
+          }
+          SmallVector<AffineForOp, 6> tiledNest;
+          if (failed(mlir::affine::tilePerfectlyNested(newLoops, tileSizes, &tiledNest)))
+            return failure();
+  
+          comet_vdump(tiledNest[0]);
+  
+          /// Separate full and partial tiles.
+          if (seperate_tiles)
+          {
+            auto intraTileLoops =
+                MutableArrayRef<AffineForOp>(tiledNest).drop_front(newLoops.size());
+            if (failed(separateFullTiles(intraTileLoops)))
+              return failure();
+          }
+        } /// end if (tilesize > 1)
+  
+      } /// end loops.size() < 0
+  
+      rewriter.replaceAllUsesWith(op->getResult(0), outputMemref);
+      rewriter.eraseOp(op);
+  
+      //module.dump();
+      return success();
+    }
+#endif
+
   LogicalResult
   matchAndRewrite(Operation *input_op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const final
@@ -485,51 +716,21 @@ struct OptDenseTranspose : public ConversionPattern
 
     comet_vdump(op);
 
-    auto inputType = op->getOperand(0).getType();
+    auto input = op.getInput();
+    auto inputType = input.getType();
+
+    auto output = op.getInit();
+
     comet_debug() << " Input Type:\n";
     comet_vdump(inputType);
-    auto inputMemref = op->getOperand(0);
-    auto inputRank = inputType.cast<mlir::MemRefType>().getRank();
-    auto outputMemref = op->getOperand(1);
-
-    std::vector<AffineForOp> loops;
-    std::vector<int64_t> indexIterateOrder;
-    for (int64_t rank = 0; rank < inputRank; rank++)
-    {
-      indexIterateOrder.push_back(rank);
-      int64_t upperBound = inputType.cast<mlir::MemRefType>().getDimSize(rank);
-      if (upperBound == ShapedType::kDynamic)
-      {
-        assert(false && "TODO: This dimension is a dynamic size");
-      }
-      /// create for loops
-      auto loop = rewriter.create<AffineForOp>(loc, 0, upperBound, 1);
-      loops.push_back(loop);
-      comet_vdump(loop);
-      rewriter.setInsertionPointToStart(loop.getBody());
-    }
+    auto inputRank = inputType.getRank();
 
     AffineMap inputIndexingMap = builder.getMultiDimIdentityMap(inputRank);
-    auto inputIndices = getReassociationIndices(inputIndexingMap);
-    auto inputIVs = createInductionVarAffine(loops, indexIterateOrder, inputIndices);
-
     AffineMap outputIndexingMap = AffineMap::getPermutationMap(llvm::to_vector_of<unsigned>(op.getPermutation()), ctx);
     SmallVector<ReassociationIndices> outputIndices =
         getReassociationIndices(outputIndexingMap);
-    auto outputIVs = createInductionVarAffine(loops, indexIterateOrder, outputIndices);
 
-    /// Build loop body
-    auto load_rhs = rewriter.create<memref::LoadOp>(loc, inputMemref, inputIVs);
-    comet_vdump(load_rhs);
-#ifdef DEBUG_MODE_LINALGTRANSFORMS
-    comet_vdump(load_rhs);
-    auto store_lhs = rewriter.create<memref::StoreOp>(loc, load_rhs, outputMemref, outputIVs);
-    comet_vdump(store_lhs);
-#else
-    rewriter.create<memref::StoreOp>(loc, load_rhs, outputMemref, outputIVs);
-#endif
-
-    /// TransposeOp index permutation
+        /// TransposeOp index permutation
     ArrayRef<AffineExpr> invresults = inputIndexingMap.getResults();
     std::vector<unsigned> sourceOrder;
     for (auto a : invresults)
@@ -542,7 +743,6 @@ struct OptDenseTranspose : public ConversionPattern
       }
     }
 
-    /// AffineMap outvmap = op.getPermutation().getValue();
     ArrayRef<AffineExpr> outvresults = outputIndexingMap.getResults();
     /// From outer to inner, the destOrder[size -1] is the most important,
     std::vector<unsigned> destOrder;
@@ -556,94 +756,62 @@ struct OptDenseTranspose : public ConversionPattern
       }
     }
 
-    if (loops.size() > 0)
+    /* Suppose Given best order: a0, a3, a1, a2
+    ** Then first step: a0, a1, a3, a2 (exchange loop index 1 and 2)
+    ** Then second step: a0, a1, a2, a3 (exchange loop order index 2 and 3)
+    */
+    std::vector<unsigned> optimalOrder = destOrder;
+    /// Call an getLoopOrder algorithm to get the best order
+    std::vector<std::vector<unsigned>> loopOrders;
+    getLoopOrders(loopOrders, destOrder.size(), sourceOrder, destOrder);
+    optimalOrder = loopOrders[0];
+
+    std::vector<unsigned> currentOrder;
+    for (unsigned i = 0; i < destOrder.size(); i++)
     {
-      /* Suppose Given best order: a0, a3, a1, a2
-      ** Then first step: a0, a1, a3, a2 (exchange loop index 1 and 2)
-      ** Then second step: a0, a1, a2, a3 (exchange loop order index 2 and 3)
-      */
-      std::vector<unsigned> optimalOrder = destOrder;
-      /// Call an getLoopOrder algorithm to get the best order
-      std::vector<std::vector<unsigned>> loopOrders;
-      getLoopOrders(loopOrders, destOrder.size(), sourceOrder, destOrder);
-      optimalOrder = loopOrders[0];
+      currentOrder.push_back(i);
+    }
 
-      std::vector<unsigned> currentOrder;
-      for (unsigned i = 0; i < destOrder.size(); i++)
-      {
-        currentOrder.push_back(i);
-      }
+    SmallVector<OpFoldResult, 6> in_ivs;
+    SmallVector<OpFoldResult, 6> out_ivs;
+    in_ivs.resize(optimalOrder.size());
+    out_ivs.resize(outputIndices[0].size());
+    OpFoldResult one = rewriter.createOrFold<ConstantIndexOp>(loc, 1);
+    SmallVector<OpFoldResult, 4> ubs;
+    for (unsigned i = 0; i < optimalOrder.size(); i++)
+    {
+      Value upperBound = rewriter.create<tensor::DimOp>(loc, input, optimalOrder[i]);
+      ubs.push_back(upperBound);
+    }
 
-      for (unsigned i = 0; i < optimalOrder.size(); i++)
-      {
-        comet_debug() << "currentOrder[i]: " << currentOrder[i] << " optimalOrder[i]: " << optimalOrder[i] << "\n";
-        /// This loop index is the correct loop index, no loop interchange
-        if (optimalOrder[i] == currentOrder[i])
-        {
-          continue;
-        }
-        else
-        { /// Get the location of the right loop index
-          for (unsigned j = i + 1; j < currentOrder.size(); j++)
-          {
-            if (optimalOrder[i] == currentOrder[j])
-            { /// loop j and i exchange
-              unsigned k = j;
-              /// k = (i,j]. k is unsigned, should be >= 0. use k-1, so k>=1
-              while (k > 0 && k > i)
-              {
-                mlir::affine::interchangeLoops(loops[currentOrder[k - 1]], loops[currentOrder[k]]);
-                std::swap(currentOrder[k - 1], currentOrder[k]);
-                k--;
-              }
-              break;
-            }
-          }
-        }
-      }
+    SmallVector<OpFoldResult, 4> ones(optimalOrder.size(), one);
+    auto forAll = rewriter.create<scf::ForallOp>(loc, ubs, output, std::nullopt);
+    rewriter.setInsertionPointToStart(forAll.getBody());
+    auto ivs = forAll.getLoopInductionVars();
+    for(size_t i = 0; i< forAll.getLoopInductionVars()->size(); i++)
+    {
+      in_ivs[optimalOrder[i]]  = forAll.getLoopInductionVars()->data()[i];
+      out_ivs[optimalOrder[outputIndices[0][i]]] = forAll.getLoopInductionVars()->data()[i];
+    }
+    auto read_slice = rewriter.create<tensor::ExtractSliceOp>(loc, input, in_ivs, ones, ones);
+    auto write_slice = rewriter.create<tensor::ExtractSliceOp>(loc, forAll.getRegionIterArgs().front(), out_ivs, ones, ones);
+    SmallVector<Value, 4> zeros_indices(in_ivs.size(), rewriter.create<ConstantIndexOp>(loc, 0));
 
-      std::vector<AffineForOp> newLoops;
-      for (unsigned i = 0; i < currentOrder.size(); i++)
-      {
-        newLoops.push_back(loops[currentOrder[i]]);
-      }
-      loops.clear();
+    auto extracted = rewriter.create<tensor::ExtractOp>(loc, read_slice, zeros_indices); 
+    auto inserted = rewriter.create<tensor::InsertOp>(loc, extracted, write_slice, zeros_indices);
+    rewriter.setInsertionPointToEnd(forAll.getTerminator().getBody());
+    rewriter.create<tensor::ParallelInsertSliceOp>(loc, inserted, forAll.getRegionIterArgs().front(), out_ivs, ones, ones);
 
-      /// Possible to assign different tile size based on the dimension
-      if (tile_size > 1)
-      {
-        std::vector<unsigned> tileSizes;
-        for (unsigned i = 0; i < currentOrder.size(); i++)
-        {
-          tileSizes.push_back(tile_size);
-        }
-        SmallVector<AffineForOp, 6> tiledNest;
-        if (failed(mlir::affine::tilePerfectlyNested(newLoops, tileSizes, &tiledNest)))
-          return failure();
-
-        comet_vdump(tiledNest[0]);
-
-        /// Separate full and partial tiles.
-        if (seperate_tiles)
-        {
-          auto intraTileLoops =
-              MutableArrayRef<AffineForOp>(tiledNest).drop_front(newLoops.size());
-          if (failed(separateFullTiles(intraTileLoops)))
-            return failure();
-        }
-      } /// end if (tilesize > 1)
-
-    } /// end loops.size() < 0
-
+    rewriter.replaceAllUsesWith(op->getResult(0), forAll->getResult(0));
     rewriter.eraseOp(op);
 
-    /// module.dump();
+    //module.dump();
     return success();
   }
 
 private:
-  uint64_t tile_size;
-  bool seperate_tiles;
+  [[maybe_unused]] uint64_t tile_size;
+  [[maybe_unused]] bool seperate_tiles;
 }; /// Lower Dense Transpose to loops after optimizations
 
 namespace
@@ -658,7 +826,7 @@ namespace
       comet_debug() << "OptDenseTransposePass : public PassWrapper<OptDenseTransposePass, FunctionPass>\n";
       func::FuncOp func = getOperation();
       ConversionTarget target(getContext());
-      target.addLegalDialect<ArithDialect, AffineDialect, memref::MemRefDialect>();
+      target.addLegalDialect<TADialect, ArithDialect, scf::SCFDialect, AffineDialect, tensor::TensorDialect>();
       RewritePatternSet patterns(&getContext());
       patterns.insert<OptDenseTranspose>(&getContext(), tile_size, seperate_tiles);
 
@@ -673,6 +841,57 @@ namespace
   private:
     uint64_t tile_size;
     bool seperate_tiles;
+  };
+} /// end anonym
+// ous namespace
+namespace
+{
+  struct MatvecToParallelLoops : public ConversionPattern
+  {
+    MatvecToParallelLoops(MLIRContext *ctx)
+        : ConversionPattern(linalg::MatvecOp::getOperationName(), 1, ctx)
+           {}
+    
+    LogicalResult
+    matchAndRewrite(Operation *input_op, ArrayRef<Value> operands,
+                    ConversionPatternRewriter &rewriter) const final
+    {
+
+      auto op = dyn_cast<linalg::MatvecOp>(input_op);
+
+      if(failed(mlir::linalg::linalgOpToParallelLoops(rewriter, op)))
+      {
+        return mlir::failure();
+      }
+      else{
+        rewriter.eraseOp(input_op);
+        return success();
+      }
+    }
+  };
+  
+  class MatvecToParallelLoopsPass : public PassWrapper<MatvecToParallelLoopsPass, OperationPass<func::FuncOp>>
+  {
+  public:
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(MatvecToParallelLoopsPass)
+    MatvecToParallelLoopsPass(){};
+    void runOnOperation() override
+    {
+      comet_debug() << "MatvecToParallelLoopsPass : public PassWrapper<MatvecToParallelLoopsPass, FunctionPass>\n";
+      func::FuncOp func = getOperation();
+      ConversionTarget target(getContext());
+      target.addLegalDialect<TADialect, ArithDialect, scf::SCFDialect, AffineDialect, memref::MemRefDialect>();
+      RewritePatternSet patterns(&getContext());
+      patterns.insert<MatvecToParallelLoops>(&getContext()  );
+
+      if (failed(applyPartialConversion(func, target, std::move(patterns))))
+      {
+        llvm::errs() << "Failed to Lower dense transpose operation\n";
+        signalPassFailure();
+      }
+      comet_debug() << "MatvecToParallelLoopsPass done\n";
+    }
+
   };
 } /// end anonymous namespace
 
@@ -696,4 +915,11 @@ std::unique_ptr<mlir::Pass> mlir::comet::createOptDenseTransposePass(uint64_t ti
 {
   comet_debug() << "LinAlgTransforms createOptDenseTransposePass\n";
   return std::make_unique<OptDenseTransposePass>(tile_size, seperate_tiles);
+}
+
+
+std::unique_ptr<mlir::Pass> mlir::comet::createMatvecToParallelLoopsPass()
+{
+  comet_debug() << "LinAlgTransforms createMatvecToParallelLoopsPass\n";
+  return std::make_unique<MatvecToParallelLoopsPass>();
 }

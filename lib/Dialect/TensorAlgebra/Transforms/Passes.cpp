@@ -23,6 +23,7 @@
 #include "comet/Dialect/TensorAlgebra/Passes.h"
 #include "comet/Dialect/Utils/Utils.h"
 
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -30,6 +31,8 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Casting.h"
 
 #include <algorithm>
 #include <map>
@@ -136,9 +139,9 @@ std::vector<Operation *> findOutput(const std::vector<Operation *> &rhs1Labels,
 }
 
 std::tuple<IndexVector, std::vector<std::vector<Operation *>>, std::vector<std::vector<int64_t>>>
-optimalOrder(ArrayRef<Operation *> inLTOps, Operation *outLTOp,
+optimalOrder(ArrayRef<void *> inLTOps, Operation *outLTOp,
              const std::map<Operation *, int64_t> &lblSizes,
-             const std::map<Operation *, std::vector<Operation *>> &lblMaps)
+             const std::map<void *, std::vector<Operation *>> &lblMaps)
 {
   IndexVector result;
   for (size_t i = 0; i < inLTOps.size(); i++)
@@ -228,13 +231,13 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
   std::vector<Operation *> MultOpsToRemove;
   std::vector<Operation *> LTOpsToRemove;
 
-  std::vector<Operation *> inLTOps;
-  std::map<Operation *, Value> inLTValues;
+  std::vector<void *> inLTOps;
+  std::map<void *, Value> inLTValues;
 
   comet_debug() << "Chain Multiplication Factorization begin...\n";
   std::map<Operation *, int64_t> lblSizes;
   std::map<Operation *, Value> labelValues;
-  std::map<Operation *, std::vector<Operation *>> lblMaps;
+  std::map<void*, std::vector<Operation *>> lblMaps;
 
   ///  collect all operands from series of ta.tc ops
   if (isa<tensorAlgebra::TensorMultOp>(lhsOp))
@@ -244,9 +247,9 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
     Value currValue = operands[0];
     comet_vdump(currValue);
     Operation *curr = currValue.getDefiningOp();
-    while (isa<tensorAlgebra::TensorMultOp>(curr) || !stack.empty())
+    while ((curr && isa<tensorAlgebra::TensorMultOp>(curr)) || !stack.empty())
     {
-      while (isa<tensorAlgebra::TensorMultOp>(curr))
+      while (curr && isa<tensorAlgebra::TensorMultOp>(curr))
       {
         auto multop = cast<tensorAlgebra::TensorMultOp>(curr);
         stack.push(curr);
@@ -259,25 +262,36 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
           auto lblOp = labels[i].getDefiningOp();
           if (lblSizes.count(lblOp) == 0)
           {
+            auto rhs2T = cast<TensorType>(multop.getRhs2().getType());
+
             /// If dynamic dimension, we need to retrieve the value of the constantIndexOp that was used to create it
             /// If static, just get it from the tensor type
-            if (isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs2().getDefiningOp()))
-            {
-              if (multop.getRhs2().getType().cast<TensorType>().isDynamicDim(i))
+              if (rhs2T.isDynamicDim(i))
               {
-                ConstantIndexOp val = cast<ConstantIndexOp>(multop.getRhs2().getDefiningOp()->getOperand(multop.getRhs2().getType().cast<TensorType>().getDynamicDimIndex(i)).getDefiningOp());
-                lblSizes[lblOp] = val.value();
+                if (DenseTensorDeclOp dense_decl_op = llvm::dyn_cast_if_present<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs2().getDefiningOp()))
+                {
+                  ConstantIndexOp val = cast<ConstantIndexOp>(dense_decl_op->getOperand(rhs2T.getDynamicDimIndex(i)).getDefiningOp());
+                  lblSizes[lblOp] = val.value();
+                }
+                else 
+                {
+                  assert(false && "Factorization optimization can only be applied when tensor size can be inferred statically");
+                }
+
               }
               else
               {
-                lblSizes[lblOp] = multop.getRhs2().getType().cast<TensorType>().getDimSize(i);
+                lblSizes[lblOp] = rhs2T.getDimSize(i);
               }
-            }
             labelValues[lblOp] = labels[i];
           }
           labelVec.push_back(lblOp);
         }
-        if (isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs2().getDefiningOp()))
+        if(!multop.getRhs2().getDefiningOp())
+        {
+          lblMaps[multop.getRhs2().getAsOpaquePointer()] = labelVec;
+        }
+        else if (isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs2().getDefiningOp()))
         {
           lblMaps[multop.getRhs2().getDefiningOp()] = labelVec;
         }
@@ -289,27 +303,37 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
           auto lblOp = labels[i].getDefiningOp();
           if (lblSizes.count(lblOp) == 0)
           {
+            auto rhs1T = cast<TensorType>(multop.getRhs1().getType());
+
             /// If dynamic dimension, we need to retrieve the value of the constantIndexOp that was used to create it
             /// If static, just get it from the tensor type
-            if (isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs1().getDefiningOp()))
-            {
-              if (multop.getRhs1().getType().cast<TensorType>().isDynamicDim(i))
+              if (rhs1T.isDynamicDim(i))
               {
-                ConstantIndexOp val = cast<ConstantIndexOp>(multop.getRhs1().getDefiningOp()->getOperand(multop.getRhs1().getType().cast<TensorType>().getDynamicDimIndex(i)).getDefiningOp());
-                lblSizes[lblOp] = val.value();
+                if (isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs1().getDefiningOp()))
+                {
+                  ConstantIndexOp val = cast<ConstantIndexOp>(multop.getRhs1().getDefiningOp()->getOperand(rhs1T.getDynamicDimIndex(i)).getDefiningOp());
+                  lblSizes[lblOp] = val.value();
+                }
+                else 
+                {
+                  assert(false && "Factorization optimization can only be applied when tensor size can be inferred statically");
+                }
               }
               else
               {
-                lblSizes[lblOp] = multop.getRhs1().getType().cast<TensorType>().getDimSize(i);
+                lblSizes[lblOp] = rhs1T.getDimSize(i);
               }
-            }
 
             labelValues[lblOp] = labels[i];
           }
           labelVec.push_back(lblOp);
         }
 
-        if (isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs1().getDefiningOp()))
+        if(!multop.getRhs1().getDefiningOp())
+        {
+          lblMaps[multop.getRhs1().getAsOpaquePointer()] = labelVec;
+        }
+        else if (isa<tensorAlgebra::DenseTensorDeclOp>(multop.getRhs1().getDefiningOp()))
         {
           lblMaps[multop.getRhs1().getDefiningOp()] = labelVec;
         }
@@ -317,17 +341,32 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
         currValue = cast<tensorAlgebra::TensorMultOp>(curr).getOperation()->getOperand(1);
         curr = currValue.getDefiningOp();
       }
-
-      inLTOps.push_back(curr);
-      inLTValues[curr] = currValue;
+      if(curr)
+      {
+        inLTOps.push_back(curr);
+        inLTValues[curr] = currValue;
+      }
+      else 
+      {
+        inLTOps.push_back(currValue.getAsOpaquePointer());
+        inLTValues[currValue.getAsOpaquePointer()] = currValue;
+      }
 
       curr = stack.top();
       stack.pop();
       currValue = cast<tensorAlgebra::TensorMultOp>(curr).getOperation()->getOperand(0);
       curr = currValue.getDefiningOp();
     }
-    inLTOps.push_back(curr);
-    inLTValues[curr] = currValue;
+      if(curr)
+      {
+        inLTOps.push_back(curr);
+        inLTValues[curr] = currValue;
+      }
+      else 
+      {
+        inLTOps.push_back(currValue.getAsOpaquePointer());
+        inLTValues[currValue.getAsOpaquePointer()] = currValue;
+      }
   }
 
   auto outLabels = cast<tensorAlgebra::TensorMultOp>(lhsOp).getResultIndexLabels();
@@ -358,7 +397,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
     for (size_t i = 1; i < order.size(); i++)
     {
       newRhs2 = inLTValues[inLTOps[order[i]]];
-      auto elType = newRhs1.getType().dyn_cast<RankedTensorType>().getElementType();
+      auto elType = dyn_cast<RankedTensorType>(newRhs1.getType()).getElementType();
       auto newType = RankedTensorType::get(lhsTensorShapes[i - 1], elType);
       std::vector<Value> newSumLabels;
 
@@ -379,7 +418,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       {
         newSumLabels.push_back(labelValues[lbl]);
       }
-      if (!isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
+      if (!isa_and_present<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
       { ///  store the output label values for subsequent ta.tc ops
         ___newSumLabels = newSumLabels;
       }
@@ -388,7 +427,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       std::vector<Value> new_lhs_lbls_value;
       std::vector<Value> new_rhs_lbls_value;
 
-      if (isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
+      if (isa_and_present<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
       { ///  retrieve the labels from prev iteration.
         new_rhs_lbls_value = ___newSumLabels;
         for (auto lbl : new_rhs_lbls_value)
@@ -439,30 +478,30 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       }
 
       ///  formats
-      SmallVector<mlir::StringRef, 8> formats;
-      if (isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()))
-      {
-        auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).getFormat();
-        formats.push_back(lhs_format);
-      }
-      if (isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()))
-      {
-        auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).getFormat();
-        formats.push_back(rhs_format);
-      }
-      if (isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()) &&
-          isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()))
-      {
-        auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).getFormat();
-        formats.push_back(rhs_format);
-      }
-      if (isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
-      { ///  for series of ta.mul case
-        auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).getFormat();
-        formats.push_back(lhs_format);
-        formats.push_back(lhs_format);
-      }
-      auto strAttr = builder.getStrArrayAttr(formats);
+      SmallVector<mlir::StringRef, 8> formats = {"Dense", "Dense", "Dense"};
+      // StringRef format = "Dense";
+      // if (isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()))
+      // {
+      //   auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).getFormat();
+      //   formats.push_back(lhs_format);
+      // }
+      // if (isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()))
+      // {
+      //   auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).getFormat();
+      //   formats.push_back(rhs_format);
+      // }
+      // if (isa<DenseTensorDeclOp>(newRhs1.getDefiningOp()) &&
+      //     isa<DenseTensorDeclOp>(newRhs2.getDefiningOp()))
+      // {
+      //   auto rhs_format = dyn_cast<DenseTensorDeclOp>(newRhs1.getDefiningOp()).getFormat();
+      //   formats.push_back(rhs_format);
+      // }
+      // if (isa<tensorAlgebra::TensorMultOp>(newRhs1.getDefiningOp()))
+      // { ///  for series of ta.mul case
+      //   auto lhs_format = dyn_cast<DenseTensorDeclOp>(newRhs2.getDefiningOp()).getFormat();
+      //   formats.push_back(lhs_format);
+      //   formats.push_back(lhs_format);
+      // }
 
       std::vector<int> lhs_lbls;
       std::vector<int> rhs_lbls;
@@ -539,7 +578,7 @@ void FindOptimalTCFactorizationPass::FindOptimalTCFactorization(tensorAlgebra::T
       auto SemiringAttr = builder.getStringAttr("plusxy_times");
       auto MaskingAttr = builder.getStringAttr("none");
       Value tcop = builder.create<tensorAlgebra::TensorMultOp>(loc, newType, newRhs1, newRhs2,
-                                                               all_labels, affineMapArrayAttr, strAttr, SemiringAttr,
+                                                               all_labels, affineMapArrayAttr, SemiringAttr,
                                                                MaskingAttr, nullptr);
       tcop.getDefiningOp()->setAttr("__alpha__", builder.getF64FloatAttr(1.0));
       tcop.getDefiningOp()->setAttr("__beta__", builder.getF64FloatAttr(0.0));

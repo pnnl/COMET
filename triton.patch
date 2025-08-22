@@ -1,39 +1,81 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 309855e..4bc4db7 100644
+index a892a666d..5d2099b58 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -20,7 +20,7 @@ if(NOT WIN32)
- endif()
+@@ -55,6 +55,7 @@ endif()
+ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_FORMAT_MACROS  -fPIC -std=gnu++17")
  
++add_compile_options(-w)
  
--
-+set_directory_properties(PROPERTIES COMPILE_OPTIONS "-w")
- # Options
- option(TRITON_BUILD_TUTORIALS "Build C++ Triton tutorials" ON)
- option(TRITON_BUILD_PYTHON_MODULE "Build Python Triton bindings" OFF)
-@@ -103,7 +103,7 @@ endfunction()
+ # #########
+ # LLVM
+@@ -107,7 +108,7 @@ endfunction()
  
  
  # Disable warnings that show up in external code (gtest;pybind11)
 -set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-covered-switch-default -fvisibility=hidden")
-+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-covered-switch-default -fvisibility=hidden")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -Wno-covered-switch-default -fvisibility=hidden")
  
  include_directories(".")
  include_directories(${MLIR_INCLUDE_DIRS})
-@@ -220,6 +220,6 @@ if(TRITON_BUILD_PYTHON_MODULE AND NOT WIN32)
-   target_link_libraries(triton PRIVATE ${PYTHON_LDFLAGS})
+@@ -290,8 +291,8 @@ if(NOT TRITON_BUILD_PYTHON_MODULE)
  endif()
  
+ add_subdirectory(third_party/f2reduce)
 -add_subdirectory(bin)
 -add_subdirectory(test)
--add_subdirectory(unittest)
-+# add_subdirectory(bin)
-+# add_subdirectory(test)
-+# add_subdirectory(unittest)
-diff --git a/include/triton/Dialect/NVGPU/IR/CMakeLists.txt b/include/triton/Dialect/NVGPU/IR/CMakeLists.txt
-index f8932cd..37fb664 100644
---- a/include/triton/Dialect/NVGPU/IR/CMakeLists.txt
-+++ b/include/triton/Dialect/NVGPU/IR/CMakeLists.txt
++#add_subdirectory(bin)
++#add_subdirectory(test)
+ 
+ if(TRITON_BUILD_UT)
+   add_subdirectory(unittest)
+diff --git a/third_party/amd/CMakeLists.txt b/third_party/amd/CMakeLists.txt
+index 8228c3d39..ccc124c80 100644
+--- a/third_party/amd/CMakeLists.txt
++++ b/third_party/amd/CMakeLists.txt
+@@ -5,6 +5,6 @@ add_subdirectory(lib)
+ if(TRITON_BUILD_PYTHON_MODULE)
+   add_triton_plugin(TritonAMD ${CMAKE_CURRENT_SOURCE_DIR}/python/triton_amd.cc LINK_LIBS TritonAMDGPUToLLVM TritonAMDGPUTransforms TritonAMDGPUDialectToLLVM)
+ endif()
+-if(TRITON_BUILD_UT)
+-  add_subdirectory(unittest)
+-endif()
++#if(TRITON_BUILD_UT)
++#  add_subdirectory(unittest)
++#endif()
+diff --git a/third_party/amd/include/Dialect/TritonAMDGPU/IR/CMakeLists.txt b/third_party/amd/include/Dialect/TritonAMDGPU/IR/CMakeLists.txt
+index 25a57075b..4d23ecf7d 100644
+--- a/third_party/amd/include/Dialect/TritonAMDGPU/IR/CMakeLists.txt
++++ b/third_party/amd/include/Dialect/TritonAMDGPU/IR/CMakeLists.txt
+@@ -1,8 +1,8 @@
+ set(MLIR_BINARY_DIR ${CMAKE_BINARY_DIR})
+ 
+ set(LLVM_TARGET_DEFINITIONS TritonAMDGPUOps.td)
+-mlir_tablegen(Dialect.h.inc -gen-dialect-decls -dialect=amdgpu)
+-mlir_tablegen(Dialect.cpp.inc -gen-dialect-defs -dialect=amdgpu)
++mlir_tablegen(Dialect.h.inc -gen-dialect-decls -dialect=ttamdgpu)
++mlir_tablegen(Dialect.cpp.inc -gen-dialect-defs -dialect=ttamdgpu)
+ mlir_tablegen(OpsConversions.inc -gen-llvmir-conversions)
+ mlir_tablegen(Ops.h.inc -gen-op-decls)
+ mlir_tablegen(Ops.cpp.inc -gen-op-defs)
+diff --git a/third_party/amd/include/Dialect/TritonAMDGPU/IR/TritonAMDGPUDialect.td b/third_party/amd/include/Dialect/TritonAMDGPU/IR/TritonAMDGPUDialect.td
+index c0c18b07e..25f56039a 100644
+--- a/third_party/amd/include/Dialect/TritonAMDGPU/IR/TritonAMDGPUDialect.td
++++ b/third_party/amd/include/Dialect/TritonAMDGPU/IR/TritonAMDGPUDialect.td
+@@ -27,7 +27,7 @@
+ include "mlir/IR/OpBase.td"
+ 
+ def TritonAMDGPU_Dialect : Dialect {
+-  let name = "amdgpu";
++  let name = "ttamdgpu";
+   let cppNamespace = "::mlir::triton::amdgpu";
+ 
+   let description = [{
+diff --git a/third_party/nvidia/include/Dialect/NVGPU/IR/CMakeLists.txt b/third_party/nvidia/include/Dialect/NVGPU/IR/CMakeLists.txt
+index f8932cdc4..37fb66417 100644
+--- a/third_party/nvidia/include/Dialect/NVGPU/IR/CMakeLists.txt
++++ b/third_party/nvidia/include/Dialect/NVGPU/IR/CMakeLists.txt
 @@ -1,8 +1,8 @@
  set(MLIR_BINARY_DIR ${CMAKE_BINARY_DIR})
  
@@ -45,10 +87,10 @@ index f8932cd..37fb664 100644
  mlir_tablegen(OpsConversions.inc -gen-llvmir-conversions)
  mlir_tablegen(Ops.h.inc -gen-op-decls)
  mlir_tablegen(Ops.cpp.inc -gen-op-defs)
-diff --git a/include/triton/Dialect/NVGPU/IR/NVGPUDialect.td b/include/triton/Dialect/NVGPU/IR/NVGPUDialect.td
-index 6978173..3b76e10 100644
---- a/include/triton/Dialect/NVGPU/IR/NVGPUDialect.td
-+++ b/include/triton/Dialect/NVGPU/IR/NVGPUDialect.td
+diff --git a/third_party/nvidia/include/Dialect/NVGPU/IR/NVGPUDialect.td b/third_party/nvidia/include/Dialect/NVGPU/IR/NVGPUDialect.td
+index 6978173d4..3b76e10c7 100644
+--- a/third_party/nvidia/include/Dialect/NVGPU/IR/NVGPUDialect.td
++++ b/third_party/nvidia/include/Dialect/NVGPU/IR/NVGPUDialect.td
 @@ -25,7 +25,7 @@
  include "mlir/IR/OpBase.td"
  
