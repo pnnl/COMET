@@ -11,13 +11,16 @@ Comprehensive documentation of the COMET compiler can be found [here](https://pn
 
 These commands can be used to setup COMET project:
 
-1) **Install Dependencies** To install COMET and LLVM/MLIR, the following dependencies need to be installed:
+1) **Requirements.** 
+To install COMET and LLVM/MLIR, the following dependencies need to be already installed:
 * [CMake (3.25 or later)](https://cmake.org/download)
 * [Ninja (1.5 or later)](https://ninja-build.org/)
 * C++ compiler toolchain as [mentioned here](https://llvm.org/docs/GettingStarted.html#requirements)
 * [Python3 (3.9 or later)](https://www.python.org/downloads/)
 * [Git (1.8.4 or later)](https://www.git-scm.com/)
 * [pkg-config (0.29.2 or later)](https://www.freedesktop.org/wiki/Software/pkg-config/)
+
+When targeting GPUs or/and FPGAs you will also need the drivers and runtimes of the respective vendors (Nvidia/CUDA, AMD/ROCm, Xilinx/XRT,Vitis).
 
    1.a **[Optional but recommended] Create a new python environment**
    ```bash
@@ -26,99 +29,70 @@ These commands can be used to setup COMET project:
    $ source comet/bin/activate
    ```
 
-2) **Get submodules required for COMET.**  COMET contains LLVM and blis as a git
-submodule.  The LLVM repo here includes staged changes to MLIR which
-may be necessary to support COMET.  It also represents the version of
-LLVM that has been tested.  MLIR is still changing relatively rapidly,
-so feel free to use the current version of LLVM, but APIs may have
-changed. BLIS is an award-winning portable software framework for instantiating high-performance 
+2) **Build COMET.**  
+LLVM and blis are dependencies included in this repo as git submodules that point to the respective versions of the libraries that COMET has been tested with. LLVM/MLIR are changing relatively rapidly, so feel free to use the current version of LLVM, but APIs may have changed. 
+
+BLIS is an award-winning portable software framework for instantiating high-performance 
 BLAS-like dense linear algebra libraries. COMET generates a call to BLIS microkernel 
-after some optimizations.
+after some optimizations. Also, blis is patched with changes specific to COMET, so an existing installation may not be used. 
 
+To build COMET for CPU execution only, run the following commands:
 ```bash
-$ git clone https://github.com/pnnl/COMET.git
-$ export COMET_SRC=`pwd`/COMET
-$ cd $COMET_SRC
-$ git submodule update --init --depth=1 .
-```
-
-3) **Build and test LLVM/MLIR:**
-
-```bash
-$ export PYTHON_EXECUTABLE=$(which python3.x) # Replace 3.x with your version. Skip if already run in step 1.a
-$ cd $COMET_SRC
-$ mkdir llvm/build
-$ cd llvm/build
-# AArch64 for ARM architectures, X86 for X86
-# -DCMAKE_OSX_ARCHITECTURES="arm64" if using a ARM-based Mac
-# NVPTX/AMDGPU is only required if targetting Nvidia/AMD GPUs
-$ cmake -G Ninja ../llvm \
-    -DLLVM_ENABLE_PROJECTS="mlir;openmp;clang" \
-    -DLLVM_TARGETS_TO_BUILD="AArch64;X86;NVPTX;AMDGPU" \
-    -DCMAKE_OSX_ARCHITECTURES="arm64" \
-    -DPython3_EXECUTABLE=${PYTHON_EXECUTABLE} \
-    -DLLVM_ENABLE_ASSERTIONS=ON \
-    -DCMAKE_BUILD_TYPE=Release
-$ ninja
-$ ninja check-mlir
-```
-
-4) **Apply BLIS patch to meet COMET requirements:**
-
-```bash
-$ cd $COMET_SRC
-$ patch -s -p0 < comet-blis.patch
-```
-
-5) **Build and test BLIS:**
-
-```bash
-$ cd $COMET_SRC
-$ cd blis
-$ ./configure --prefix=$COMET_SRC/install --disable-shared auto
-$ make [-j]
-$ make check [-j]
-$ make install [-j]
-```
-
-6) **(If targetting GPUs) Patch Triton:**
-
-```bash
-$ cd $COMET_SRC
-$ cd triton
-$ git apply ${COMET_SRC}/triton.patch
-```
-
-7) **Build and test COMET:**
-
-```bash
-$ cd $COMET_SRC
 $ mkdir build
 $ cd build
-# Omit -DENABLE_GPU_TARGET, -DCUDA_COMPUTE_CAPABILITY and -DTRITON_PATH
-# if only targetting CPUs
-# In -DDEVICE_COMPUTE_CAPABILITY=sm_70 replace sm_70 with the desired value:
-# sm_<numeric> for Nvidia, specific architecture for AMD e.g., gfx908
-$ cmake -G Ninja .. \
-    -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
-    -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
-    -DENABLE_GPU_TARGET=ON \
-    -DDEVICE_COMPUTE_CAPABILITY=sm_70 \
-    -DTRITON_PATH=$PWD/../triton/ \
-    -DLLVM_ENABLE_ASSERTIONS=ON \
-    -DCMAKE_BUILD_TYPE=Release
-$ ninja
-$ ninja check-comet-integration # Run the integration tests.
+$ cmake ../
+$ make
+```
+
+This will fetch and build the LLVM and blis dependencies automatically, and build COMET. Once the command completes COMET will be installed in `build/comet/`. 
+You may also specify a custom LLVM installation, instead of downloading a fresh copy, by passing its path to the `cmake` command:
+```bash
+$ cmake ../ -DLLVM_CUSTOM_BUILD_PATH=/path/to/llvm/build/
+```
+
+*Note*: The LLVM installation should have enabled the `mlir, openmp, clang` projects.
+Once complete, you can run the integration tests using the following commands:
+```bash
+$ cd comet
+$ ninja check-comet-integration
 ```
 
 The `-DCMAKE_BUILD_TYPE=DEBUG` flag enables debug information, which makes the
-whole tree compile slower, but allows you to step through code into the LLVM
-and MLIR frameworks.
+whole tree compile slower, but allows you to step through code into COMET.
 
 To get something that runs fast, use `-DCMAKE_BUILD_TYPE=Release` or
 `-DCMAKE_BUILD_TYPE=RelWithDebInfo` if you want to go fast and optionally if
 you want debug info to go with it.  `Release` mode makes a very large difference
 in performance.
+
+3) **Enabling GPU Support.**
+To enable support for Nvidia, AMD GPUs you need to set the respective option in `cmake`:
+```bash
+# NVIDIA GPU
+$ cmake ../ -DENABLE_NVIDIA_GPU_BACKEND=ON
+$ make
+
+# AMD GPU
+$ cmake ../ -DENABLE_AMD_GPU_BACKEND=ON
+$ make
+```
+
+This will download and install [Triton](https://github.com/triton-lang/triton), a MLIR dialect for targeting GPUs used by COMET as a backend, and enable the GPU-related options in `comet-opt`.  
+You can also specify a default target device capability by passing the option
+`-DDEVICE_COMPUTE_CAPABILITY=<gpu-capability>` in cmake. You can specify the same attribute later at the `comet-opt` command using the flag `--gpu-compute-capability`
+Example options include `sm_80, sm_90` for Nvidia and `gfx908` for AMD.  For example:
+```bash
+# Example for NVIDIA GPU
+$ cmake ../ -DENABLE_NVIDIA_GPU_BACKEND=ON -DDEVICE_COMPUTE_CAPABILITY=sm_90
+$ make
+
+# Example for AMD GPU
+$ cmake ../ -DENABLE_AMD_GPU_BACKEND=ON -DDEVICE_COMPUTE_CAPABILITY=gfx908
+$ make
+```
+
+4) **Enabling FPGA Support.**
+To enable support for FPGAs, (currently only Xilinx/AMD), you need to set the flag `-DENABLE_FPGA_TARGET=ON` in `cmake`. The FPGA support relies on other dependencies including an older version of LLVM found as a submodule in `tools/llvm-spirv` and a LLVM-SPIRV translator found in `tools/spriv-llvm-translate`. Setting the above flag will automatically download and install these dependencies, as well as [MCL](https://minos-computing.github.io/) the runtime system used to issue interact with the FPGA. For more information see [here](tools/README.md).
 
 ## License
 

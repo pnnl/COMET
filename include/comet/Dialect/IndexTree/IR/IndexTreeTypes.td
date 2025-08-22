@@ -23,7 +23,7 @@
 #define INDEXTREE_TYPES
 
 include "mlir/IR/AttrTypeBase.td"
-include "comet/Dialect/IndexTree/IR/IndexTreeBase.td"
+include "IndexTreeBase.td"
 
 class IndexTree_Type<string name, string typeMnemonic, list<Trait> traits = []>
     : TypeDef<IndexTreeDialect, name, traits> {

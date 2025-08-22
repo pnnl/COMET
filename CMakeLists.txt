@@ -1,250 +1,143 @@
-##===- CMakeLists.txt - COMET cmake root ----------------------*- cmake -*-===//
-##
-## Configure the COMET build.
-##
-##===----------------------------------------------------------------------===//
-
 cmake_minimum_required(VERSION 3.25)
+project(comet_super_build LANGUAGES CXX C)
+include(ExternalProject)
 
-# If we are not building as a part of LLVM, build COMET as an
-# standalone project, using LLVM as an external library:
-if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
+# Adopted from https://gist.github.com/scivision/bb1d47a9529e153617414e91ff5390af
+find_package(Git REQUIRED)
 
-#-------------------------------------------------------------------------------
-# Project setup and globals
-#-------------------------------------------------------------------------------
-project(comet LANGUAGES CXX C)
-  
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED YES)
-set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules) 
+function(init_git_submodule dir)
+# Init a Git submodule 
+# 
+# include(AddGitSubmodule.cmake)
+# add_git_submodule(mysubmod_dir)
 
+if(NOT EXISTS ${dir}/README.md)
+  execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive --depth 1 -- ${dir}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    COMMAND_ERROR_IS_FATAL ANY)
+endif()
+
+endfunction(init_git_submodule)
 #-------------------------------------------------------------------------------
-# Options and settings
-#-------------------------------------------------------------------------------
+
+message(STATUS "Running on ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm|aarch64")
+  set(DETECTED_CPU_ARCH "AArch64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
+  set(DETECTED_CPU_ARCH "X86")
+else()
+  message(FATAL_ERROR "Unsupported CPU architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
+init_git_submodule(${CMAKE_SOURCE_DIR}/blis)
+ExternalProject_Add(
+    blis
+    PREFIX ${CMAKE_BINARY_DIR}/blis
+    BINARY_DIR ${CMAKE_BINARY_DIR}/blis
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/blis
+    CONFIGURE_COMMAND cd ${CMAKE_SOURCE_DIR}/blis && ./configure --prefix=${CMAKE_BINARY_DIR}/blis  --disable-shared auto
+    PATCH_COMMAND cd ${CMAKE_SOURCE_DIR} && patch -s  -p0 < ${CMAKE_SOURCE_DIR}/comet-blis.patch
+    BUILD_COMMAND cd ${CMAKE_SOURCE_DIR}/blis && make -j && make install
+    INSTALL_COMMAND ""
+)
+
+set(LLVM_CUSTOM_BUILD_PATH "" CACHE PATH "Path to existing LLVM build directory")
+set(LLVM_PROJECTS "mlir,openmp,clang" CACHE STRING "LLVM projects to build")
+set(LLVM_TARGETS "${DETECTED_CPU_ARCH}" CACHE STRING "LLVM targets to build")
 option(ENABLE_AMD_GPU_BACKEND OFF) 
 option(ENABLE_NVIDIA_GPU_BACKEND OFF) 
-option(ENABLE_FPGA_TARGET OFF) 
-
-option(LLVM_INCLUDE_TOOLS "Generate build targets for the LLVM tools." ON)
-option(LLVM_BUILD_TOOLS "Build the LLVM tools. If OFF, just generate build targets." ON)
-
-set(CODEGEN_BACKENDS "" CACHE INTERNAL "TRITON BACKENDS")
-if (MSVC)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHs-c- /GR-")
-else ()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
-endif ()
-
-if(${ENABLE_AMD_GPU_BACKEND})
-  add_definitions(-DENABLE_AMD_GPU_BACKEND)
-  set(CODEGEN_BACKENDS ${CODEGEN_BACKENDS}amd;nvidia) # Triton is looking for some NVGPUIR library 
-                                                      # even if we only enable AMDGPU
-  set(ENABLE_GPU_TARGET ON)
+option(ENABLE_FPGA_TARGET OFF)
+if(ENABLE_AMD_GPU_BACKEND)
+    set(LLVM_TARGETS "${LLVM_TARGETS},AMDGPU")
 endif()
 
-if(${ENABLE_NVIDIA_GPU_BACKEND})
-  if(NOT ENABLE_AMD_GPU_BACKEND)
-  set(CODEGEN_BACKENDS ${CODEGEN_BACKENDS}nvidia;)
-  endif()
-  add_definitions(-DENABLE_NVIDIA_GPU_BACKEND)
-  set(ENABLE_GPU_TARGET ON)
+if(ENABLE_NVIDIA_GPU_BACKEND)
+    set(LLVM_TARGETS "${LLVM_TARGETS},NVPTX")
 endif()
-
-if(${ENABLE_FPGA_TARGET})
-  add_definitions(-DENABLE_FPGA_TARGET)
-endif()
-
-if(${ENABLE_GPU_TARGET})
-  add_definitions(-DENABLE_GPU_TARGET)
-endif()
-
-
-#-------------------------------------------------------------------------------
-# MLIR/LLVM Configuration
-#-------------------------------------------------------------------------------
-  
-  find_package(MLIR REQUIRED CONFIG)
-  
-  message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
-  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
-  
-  set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin)
-  set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib)
-  
-  list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
-  list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
-  
-  include(TableGen)
-  include(AddLLVM)
-  include(AddMLIR)
-  include(HandleLLVMOptions)
-
-  set(COMET_BUILT_STANDALONE 1)
-  set(BACKEND_PACKAGE_STRING "LLVM ${LLVM_PACKAGE_VERSION}")
+set(DEPENDENCIES llvm blis)
+if(NOT LLVM_CUSTOM_BUILD_PATH)
+    init_git_submodule(${CMAKE_SOURCE_DIR}/llvm)
+    message(STATUS "Building LLVM from source with projects: ${LLVM_PROJECTS} and targets: ${LLVM_TARGETS}")
+    ExternalProject_Add(
+        llvm
+        LIST_SEPARATOR ","
+        PREFIX ${CMAKE_BINARY_DIR}/llvm
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llvm/
+        CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_CURRENT_SOURCE_DIR}/llvm/llvm -DLLVM_ENABLE_PROJECTS=${LLVM_PROJECTS} -DLLVM_TARGETS_TO_BUILD=${LLVM_TARGETS} -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release
+        BUILD_COMMAND cmake --build . -- -j 8
+        INSTALL_COMMAND ""
+    )
+    set(LLVM_BUILD_PATH ${CMAKE_BINARY_DIR}/llvm/src/llvm-build)
 else()
-  set(MLIR_MAIN_SRC_DIR ${LLVM_MAIN_SRC_DIR}/../mlir ) # --src-root
-  set(MLIR_INCLUDE_DIR ${MLIR_MAIN_SRC_DIR}/include ) # --includedir
-  set(MLIR_TABLEGEN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/tools/mlir/include)
-  set(MLIR_TABLEGEN_EXE $<TARGET_FILE:mlir-tblgen>)
-  include_directories(SYSTEM ${MLIR_INCLUDE_DIR})
-  include_directories(SYSTEM ${MLIR_TABLEGEN_OUTPUT_DIR})
-
-  set(BACKEND_PACKAGE_STRING "${PACKAGE_STRING}")
+    message(STATUS "Using existing LLVM build at: ${LLVM_CUSTOM_BUILD_PATH}")
+    ExternalProject_Add(
+        llvm
+        BINARY_DIR ${LLVM_CUSTOM_BUILD_PATH}
+        SOURCE_DIR ${LLVM_CUSTOM_BUILD_PATH}
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND ""
+        INSTALL_COMMAND ""
+    )
+    
+    set(LLVM_BUILD_PATH ${LLVM_CUSTOM_BUILD_PATH})
 endif()
 
-# Define the default arguments to use with 'lit', and an option for the user to
-# override.
-set(LIT_ARGS_DEFAULT "-sv")
-if (MSVC_IDE OR XCODE)
-  set(LIT_ARGS_DEFAULT "${LIT_ARGS_DEFAULT} --no-progress-bar")
-endif()
-set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
-
-
-#-------------------------------------------------------------------------------
-# BLIS Configuration
-#-------------------------------------------------------------------------------
-  set(BLA_STATIC ON) #linking with BLIS static library
-  set(BLA_VENDOR FLAME)
-  set(BLA_PREFER_PKGCONFIG TRUE)
-  set(BLA_PKGCONFIG_BLAS blis)
-  set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/install")
-  find_package(BLAS REQUIRED)
-
-#-------------------------------------------------------------------------------
-# MCL include paths
-#-------------------------------------------------------------------------------
-if(${ENABLE_FPGA_TARGET})
-  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/runtimes/mcl/build/include/")
+if(ENABLE_AMD_GPU_BACKEND OR ENABLE_NVIDIA_GPU_BACKEND)
+    init_git_submodule(${CMAKE_SOURCE_DIR}/triton)
+    set(DEVICE_COMPUTE_CAPABILITY "" CACHE STRING "Device compute capability for Triton codegen")
+    ExternalProject_Add(
+        triton
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/triton
+        BINARY_DIR ${CMAKE_BINARY_DIR}/triton
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND ""
+        INSTALL_COMMAND ""
+        PATCH_COMMAND git apply ${CMAKE_SOURCE_DIR}/triton.patch
+    )
+    set(TRITON_PATH ${CMAKE_SOURCE_DIR}/triton)
+    set(TRITON_BUILD_PATH ${CMAKE_BINARY_DIR}/triton)
+    list(APPEND DEPENDENCIES triton)
 endif()
 
-#-------------------------------------------------------------------------------
-# Triton Setup
-#-------------------------------------------------------------------------------
-if(${ENABLE_GPU_TARGET})
-  set(TRITON_PATH "" CACHE PATH "Path to Triton")
-  set(TRITON_BUILD_PATH "${CMAKE_BINARY_DIR}/triton" CACHE INTERNAL "Path to Triton Build")
-  set(TRITON_BUILD_UT OFF CACHE BOOL "Disable triton unittests" FORCE)
-  set(TRITON_CODEGEN_BACKENDS "${CODEGEN_BACKENDS}" CACHE STRING "Enable different codegen backends" FORCE)
-  if(NOT DEFINED DEVICE_COMPUTE_CAPABILITY)
-    message(FATAL_ERROR "Please specify cuda compute capability requested")
-  endif()
-  add_compile_definitions(DEVICE_COMPUTE_CAPABILITY="${DEVICE_COMPUTE_CAPABILITY}")
+if(ENABLE_FPGA_TARGET)
+    init_git_submodule(${CMAKE_SOURCE_DIR}/tools/llvm-spirv)
+    init_git_submodule(${CMAKE_SOURCE_DIR}/tools/spirv-llvm-translate)
+    file(CREATE_LINK ${CMAKE_SOURCE_DIR}/tools/spirv-llvm-translate ${CMAKE_SOURCE_DIR}/tools/llvm-spirv/llvm/projects/spirv-llvm-translate SYMBOLIC)
+    # ADD_CUSTOM_TARGET(link_spirv_translate ALL
+    #               COMMAND ${CMAKE_COMMAND} -E create_symlink ${target} ${link})
+    ExternalProject_Add(
+        llvm-spirv
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/tools/llvm-spirv
+        BINARY_DIR ${CMAKE_BINARY_DIR}/tools/llvm-spirv
+        CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_SOURCE_DIR}/tools/llvm-spirv/llvm/ -DLLVM_ENABLE_PROJECTS=clang -DLLVM_TARGETS_TO_BUILD=host
+        BUILD_COMMAND ninja llvm-spirv && ninja llvm-dis
+        INSTALL_COMMAND ""
+    )
 
-  add_subdirectory(${TRITON_PATH} ${TRITON_BUILD_PATH})
-  get_property(triton_libs GLOBAL PROPERTY TRITON_LIBS)
-  include_directories("${TRITON_PATH}")
-  include_directories("${TRITON_PATH}/include/")
-  include_directories("${TRITON_PATH}/third_party/")
-  include_directories("${TRITON_BUILD_PATH}/include/")
-  include_directories("${TRITON_BUILD_PATH}/third_party/")
-endif()
-
-#-------------------------------------------------------------------------------
-# COMET configuration
-#-------------------------------------------------------------------------------
-
-# COMET project.
-set(COMET_MAIN_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR} ) # --src-root
-set(COMET_MAIN_INCLUDE_DIR ${COMET_MAIN_SRC_DIR}/include)
-
-set(COMET_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-set(COMET_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
-set(COMET_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include )
-set(COMET_TOOLS_DIR ${CMAKE_BINARY_DIR}/bin)
-
-list(APPEND CMAKE_MODULE_PATH "${MLIR_MAIN_SRC_DIR}/cmake/modules")
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
-
-
-# Installing the headers and docs needs to depend on generating any public
-# tablegen'd targets.
-add_custom_target(comet-headers)
-set_target_properties(comet-headers PROPERTIES FOLDER "Misc")
-add_custom_target(comet-doc)
-
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-# Add MLIR, LLVM and BLIS headers to the include path
-include_directories(${LLVM_INCLUDE_DIRS})
-include_directories(${MLIR_INCLUDE_DIRS})
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/install/include/blis/")
-
-# Add COMET files to the include path
-include_directories(${COMET_MAIN_INCLUDE_DIR})
-include_directories(${COMET_INCLUDE_DIR})
-
-#-------------------------------------------------------------------------------
-# Directory setup
-#-------------------------------------------------------------------------------
-add_subdirectory(include/comet)
-add_subdirectory(lib)
-add_subdirectory(frontends/comet_dsl)
-add_subdirectory(test/integration)
-
-
-option(COMET_INCLUDE_DOCS "Generate build targets for the COMET docs.")
-if (COMET_INCLUDE_DOCS)
-  add_subdirectory(docs)
+    init_git_submodule(${CMAKE_SOURCE_DIR}/runtimes/mcl)
+    ExternalProject_Add(
+        mcl
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/runtimes/mcl
+        BINARY_DIR ${CMAKE_BINARY_DIR}/runtimes/mcl
+        CONFIGURE_COMMAND cd ${CMAKE_SOURCE_DIR}/runtimes/mcl && autoreconf --install && ./configure --prefix=${CMAKE_BINARY_DIR}/runtimes/mcl 
+        BUILD_COMMAND cd ${CMAKE_SOURCE_DIR}/runtimes/mcl && make -j && make install
+        INSTALL_COMMAND ""
+    )
+    set(MCL_BUILD_PATH ${CMAKE_BINARY_DIR}/runtimes/mcl)
+    list(APPEND DEPENDENCIES llvm-spirv mcl)
 endif()
 
 
-
-install(DIRECTORY include/comet
-  DESTINATION include
-  COMPONENT comet-headers
-  FILES_MATCHING
-  PATTERN "*.def"
-  PATTERN "*.h"
-  PATTERN "*.inc"
-  PATTERN "*.td"
-  PATTERN "*.sv"
-  PATTERN "LICENSE.TXT"
-  )
-
-install(DIRECTORY ${COMET_INCLUDE_DIR}/comet
-  DESTINATION include
-  COMPONENT comet-headers
-  FILES_MATCHING
-  PATTERN "*.def"
-  PATTERN "*.h"
-  PATTERN "*.gen"
-  PATTERN "*.inc"
-  PATTERN "*.td"
-  PATTERN "CMakeFiles" EXCLUDE
-  PATTERN "config.h" EXCLUDE
-  )
-
-if (NOT LLVM_ENABLE_IDE)
-  add_llvm_install_targets(install-comet-headers
-                           DEPENDS comet-headers
-                           COMPONENT comet-headers)
-endif()
-
-set(CMAKE_INSTALL_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/install/lib/")
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-
-# Set RPATH to $ORIGIN on all targets.
-function(set_rpath_all_targets dir)
-  get_property(subdirectories DIRECTORY ${dir} PROPERTY SUBDIRECTORIES)
-  foreach(subdir ${subdirectories})
-    set_rpath_all_targets(${subdir})
-  endforeach()
-
-  get_directory_property(LCL_TARGETS DIRECTORY ${dir} BUILDSYSTEM_TARGETS)
-  set_property(TARGET ${LCL_TARGETS} PROPERTY INSTALL_RPATH "$ORIGIN/../lib")
-endfunction()
-
-option(STANDALONE_INSTALL "Create an 'install' for packaging which doesn't \
-         require installation" off)
-if (STANDALONE_INSTALL)
-  message(STATUS "Setting an $ORIGIN-based RPATH on all executables")
-  set_rpath_all_targets(${CMAKE_CURRENT_SOURCE_DIR})
-endif()
-
-option(DEBUG_MODE "Create a installation with debug information" off)
-if (DEBUG_MODE)
-  message(STATUS "Building comet in debug mode")
-  add_compile_options(-DCOMET_DEBUG_MODE)
-endif()
+ExternalProject_Add(
+    comet
+    BINARY_DIR ${CMAKE_BINARY_DIR}/comet
+    LIST_SEPARATOR ","
+    PREFIX ${CMAKE_BINARY_DIR}
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
+    CONFIGURE_COMMAND cmake -G Ninja ${CMAKE_CURRENT_SOURCE_DIR}/cmake -DMLIR_DIR=${LLVM_BUILD_PATH}/lib/cmake/mlir -DLLVM_DIR=${LLVM_BUILD_PATH}/lib/cmake/llvm -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/blis/ -DBLAS_INCLUDE_DIRS=${CMAKE_BINARY_DIR}/blis/include/blis/ -DENABLE_AMD_GPU_BACKEND=${ENABLE_AMD_GPU_BACKEND} -DENABLE_NVIDIA_GPU_BACKEND=${ENABLE_NVIDIA_GPU_BACKEND} -DENABLE_FPGA_TARGET=${ENABLE_FPGA_TARGET} -DDEVICE_COMPUTE_CAPABILITY=${DEVICE_COMPUTE_CAPABILITY} -DTRITON_PATH=${TRITON_PATH} -DTRITON_BUILD_PATH=${TRITON_BUILD_PATH} -DMCL_BUILD_PATH=${MCL_BUILD_PATH} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    BUILD_COMMAND cmake --build . -- -j 8
+    BUILD_ALWAYS TRUE
+    INSTALL_COMMAND ""
+    DEPENDS ${DEPENDENCIES}
+)
