@@ -79,7 +79,7 @@ using llvm::SmallDenseMap;
 #define DEBUG_TYPE "lowering-it-to-scf"
 
 // *********** For debug purpose *********//
-#define COMET_DEBUG_MODE
+//#define COMET_DEBUG_MODE
 #include "comet/Utils/debug.h"
 // *********** For debug purpose *********//
 
@@ -2875,6 +2875,144 @@ namespace
     comet_debug() << "\n";
   }
 
+  void UpdateElementwiseNumericForallInParallel(scf::ForallOp new_forall_loop,
+                                                scf::WhileOp new_inner_while_loop,
+                                                NumericSparseTensorInfo &sparseTensorInfo,
+                                                NumericSparseTensorInfo &innerSparseTensorInfo,
+                                                Type sparseTensorType,
+                                                mlir::IRRewriter &rewriter,
+                                                mlir::Location &loc)
+  {
+    scf::InParallelOp old_terminator = new_forall_loop.getTerminator();
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(old_terminator);
+
+    /// Get the sparse tensor returned by the while loop.
+    Value sparse_tensor = new_inner_while_loop.getResult(0);
+    llvm::SmallVector<Type> result_types = GetUnpackedTypesFromSparseTensorType(llvm::cast<tensorAlgebra::SparseTensorType>(sparseTensorType));
+    mlir::UnrealizedConversionCastOp unpacked_sparse_tensor =
+        rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
+                                                          result_types,
+                                                          sparse_tensor);
+
+    /// Create extract slice for `crds` and `vals`.
+    Value old_crds = unpacked_sparse_tensor.getResult(5);
+    Value old_vals = unpacked_sparse_tensor.getResult(6);
+    Value index = new_forall_loop.getInductionVar(0);
+    Value pos = sparseTensorInfo.A2_pos;
+    Type pos_element_type = mlir::getElementTypeOrSelf(pos);
+    Value offset = rewriter.create<tensor::ExtractOp>(loc,
+        /*return_type=*/pos_element_type,
+        /*tensor=*/pos,
+        /*index=*/index);
+    Value offset_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset);
+//    auto oneAttr = rewriter.getIntegerAttr(pos_element_type, 1);
+    Value const_one = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
+    Value index_plus_one = rewriter.create<arith::AddIOp>(loc, index, const_one);
+    Value offset_next = rewriter.create<tensor::ExtractOp>(loc,
+                                                           pos_element_type,
+                                                           pos,
+                                                           index_plus_one);
+    Value offset_next_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset_next);
+    Value size = rewriter.create<arith::SubIOp>(loc, offset_next_index, offset_index);
+    Type crds_element_type = mlir::getElementTypeOrSelf(old_crds);
+    Type vals_element_type = mlir::getElementTypeOrSelf(old_vals);
+    RankedTensorType crds_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/crds_element_type);
+    RankedTensorType vals_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/vals_element_type);
+    llvm::SmallVector<Value> dynamic_offsets = {offset_index};
+    llvm::SmallVector<Value> dynamic_sizes = {size};
+    llvm::SmallVector<Value> dynamic_strides;
+    llvm::SmallVector<int64_t> static_offsets = {ShapedType::kDynamic};
+    llvm::SmallVector<int64_t> static_sizes = {ShapedType::kDynamic};
+    llvm::SmallVector<int64_t> static_strides = {1};
+    Value crds_new_extract_slice = rewriter.create<tensor::ExtractSliceOp>(
+        loc,
+        /*result_type=*/crds_tensor_type,
+        /*tensor_source=*/old_crds,
+        /*dynamic_offsets=*/dynamic_offsets,
+        /*dynamic_sizes=*/dynamic_sizes,
+        /*dynamic_strides=*/dynamic_strides,
+        /*static_offsets=*/static_offsets,
+        /*static_sizes=*/static_sizes,
+        /*static_strides=*/static_strides);
+    Value vals_new_extract_slice = rewriter.create<tensor::ExtractSliceOp>(
+        loc,
+        /*result_type=*/vals_tensor_type,
+        /*tensor_source=*/old_vals,
+        /*dynamic_offsets=*/dynamic_offsets,
+        /*dynamic_sizes=*/dynamic_sizes,
+        /*dynamic_strides=*/dynamic_strides,
+        /*static_offsets=*/static_offsets,
+        /*static_sizes=*/static_sizes,
+        /*static_strides=*/static_strides);
+
+    /// Update the parallel_insert_slice
+    tensor::ParallelInsertSliceOp old_insert_slice = nullptr;
+    old_terminator.walk([&](tensor::ParallelInsertSliceOp op) {
+      old_insert_slice = op;
+    });
+    assert(old_insert_slice && "Expected at least one tensor.parallel_insert_slice op.");
+    rewriter.setInsertionPoint(old_insert_slice);
+    Value crds_arg = new_forall_loop.getRegionIterArgs()[0];
+    Value vals_arg = new_forall_loop.getRegionIterArgs()[1];
+    rewriter.create<tensor::ParallelInsertSliceOp>(
+        loc,
+        /*src_tensor=*/crds_new_extract_slice,
+        /*dst_tensor=*/crds_arg,
+        /*dynamic_offsets=*/dynamic_offsets,
+        /*dynamic_sizes=*/dynamic_sizes,
+        /*dynamic_strides=*/dynamic_strides,
+        /*static_offsets=*/static_offsets,
+        /*static_sizes=*/static_sizes,
+        /*static_strides=*/static_strides);
+    rewriter.create<tensor::ParallelInsertSliceOp>(
+        loc,
+        /*src_tensor=*/vals_new_extract_slice,
+        /*dst_tensor=*/vals_arg,
+        /*dynamic_offsets=*/dynamic_offsets,
+        /*dynamic_sizes=*/dynamic_sizes,
+        /*dynamic_strides=*/dynamic_strides,
+        /*static_offsets=*/static_offsets,
+        /*static_sizes=*/static_sizes,
+        /*static_strides=*/static_strides);
+    rewriter.eraseOp(old_insert_slice);
+
+
+    comet_vdump(new_forall_loop);
+    comet_debug() << "\n";
+  }
+
+  void UpdateElementwiseNumericITreeYieldOp(scf::ForallOp new_forall_loop,
+                                            NumericSparseTensorInfo &sparseTensorInfo,
+                                            Type sparseTensorType,
+                                            mlir::IRRewriter &rewriter,
+                                            mlir::Location &loc)
+  {
+    Value crds_updated = new_forall_loop.getResult(0);
+    Value vals_updated = new_forall_loop.getResult(1);
+
+    Operation *old_yield_op = new_forall_loop->getParentOfType<indexTree::IndexTreeOp>().getRegion().front().getTerminator();
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(old_yield_op);
+
+    mlir::UnrealizedConversionCastOp output_sparse_tensor =
+        rewriter.create<mlir::UnrealizedConversionCastOp>(
+            loc,
+            /*result_types=*/sparseTensorType,
+            /*input=*/llvm::SmallVector<Value>{
+                /*dim_sizes=*/sparseTensorInfo.dim_sizes,
+                /*A1_insert_pos=*/sparseTensorInfo.A1_insert_pos,
+                /*A1_pos=*/sparseTensorInfo.A1_pos,
+                /*A2_insert_pos=*/sparseTensorInfo.A2_insert_pos,
+                /*A2_pos=*/sparseTensorInfo.A2_pos,
+                /*A2_crd=*/crds_updated,
+                /*vals=*/vals_updated});
+    indexTree::YieldOp new_yield_op = rewriter.create<indexTree::YieldOp>(
+        loc,
+        llvm::SmallVector<Value>{output_sparse_tensor.getResult(0)});
+    rewriter.replaceOp(old_yield_op, new_yield_op);
+  }
+
   void LegalizeNumericForallOp(func::FuncOp func)
   {
     /// Found the numeric forall
@@ -3032,7 +3170,22 @@ namespace
 //                                           /*inner_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
                                            rewriter,
                                            loc);
+
+      UpdateElementwiseNumericForallInParallel(new_forall_loop,
+                                               new_inner_while_loop,
+                                               sparseTensorInfo,
+                                               innerSparseTensorInfo,
+                                               sparseTensorType,
+                                               rewriter,
+                                               loc);
       comet_vdump(new_forall_loop);
+
+      UpdateElementwiseNumericITreeYieldOp(new_forall_loop,
+                                           sparseTensorInfo,
+                                           sparseTensorType,
+                                           rewriter,
+                                           loc);
+      comet_vdump(new_forall_loop->getParentOfType<ModuleOp>());
       comet_debug() << "\n";
     }
 
