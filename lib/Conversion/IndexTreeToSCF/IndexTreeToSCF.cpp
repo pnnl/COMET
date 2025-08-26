@@ -2157,7 +2157,7 @@ namespace
     Type sparse_tensor_type = sparseTensorInfo.sparseTensor.getType();
     comet_vdump(sparse_tensor_type);
 //    llvm::SmallVector<Value> inputs = {pos, crds_new_extract_slice, vals_new_extract_slice};
-    Value cst_index_0 = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
+    Value cst_index_0 = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(0));
     llvm::SmallVector<Value> inputs = {
         /*dim_sizes=*/sparseTensorInfo.dim_sizes,
         /*A1_insert_pos=*/sparseTensorInfo.A1_insert_pos,  /// TODO: is this (and below) correct?
@@ -2608,61 +2608,11 @@ namespace
     return new_forall_loop;
   }
 
-  void CreateNumericElementwiseInnerSparseTensor(scf::ForallOp new_forall_loop,
-                                                  const NumericSparseTensorInfo &sparseTensorInfo,
-                                                  mlir::IRRewriter &rewriter,
-                                                  mlir::Location &loc,
-                                                  NumericSparseTensorInfo &innerSparseTensorInfo/*out*/)
-  {
-    Value crds_arg = new_forall_loop.getRegionIterArgs()[0];
-    Value vals_arg = new_forall_loop.getRegionIterArgs()[1];
-    auto FindTensorExtractSliceOp = [&](Value op) {
-      Operation *result = nullptr;
-      for (auto user : op.getUsers()) {
-        if (llvm::isa<tensor::ExtractSliceOp>(user)) {
-          result = user;
-          break;
-        }
-      }
-      return result;
-    };
-    Operation *vals_old_extract_slice = FindTensorExtractSliceOp(vals_arg);
-    mlir::OpBuilder::InsertionGuard guard(rewriter);
-    rewriter.setInsertionPoint(vals_old_extract_slice);
-
-    /// Pack the inner sparse tensor
-    Type sparse_tensor_type = sparseTensorInfo.sparseTensor.getType();
-    Value cst_index_0 = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
-    llvm::SmallVector<Value> inputs = {
-        /*dim_sizes=*/sparseTensorInfo.dim_sizes,
-        /*A1_insert_pos=*/sparseTensorInfo.A1_insert_pos,  /// TODO: is this (and below) correct?
-        /*A1_pos=*/sparseTensorInfo.A1_pos,
-        /*A2_insert_pos=*/cst_index_0,
-        /*A2_pos=*/sparseTensorInfo.A2_pos,
-        /*A2_crd=*/crds_arg,
-        /*vals=*/vals_arg
-    };
-    mlir::UnrealizedConversionCastOp unrealized_op =
-        rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
-                                                          sparse_tensor_type,
-                                                          inputs);
-    rewriter.replaceAllUsesWith(vals_old_extract_slice->getResult(0), unrealized_op.getResult(0));
-    rewriter.eraseOp(vals_old_extract_slice);
-    innerSparseTensorInfo.dim_sizes = sparseTensorInfo.dim_sizes;
-    innerSparseTensorInfo.A1_insert_pos = sparseTensorInfo.A1_insert_pos;
-    innerSparseTensorInfo.A1_pos = sparseTensorInfo.A1_pos;
-    innerSparseTensorInfo.A2_insert_pos = cst_index_0;
-    innerSparseTensorInfo.A2_pos = sparseTensorInfo.A2_pos;
-    innerSparseTensorInfo.A2_crd = crds_arg;
-    innerSparseTensorInfo.vals = vals_arg;
-    innerSparseTensorInfo.sparseTensor = unrealized_op.getResult(0);
-  }
-
-  scf::WhileOp GetElementwiseNumericInnerWhileOp(Value inner_sparse_tensor)
+  scf::WhileOp GetElementwiseNumericInnerWhileOp(Value old_val_extract_slice)
   {
     scf::WhileOp inner_while_loop = nullptr;
-    for (auto user : inner_sparse_tensor.getUsers()) {
-      if (inner_while_loop = llvm::dyn_cast<scf::WhileOp>(user)) {
+    for (auto user : old_val_extract_slice.getUsers()) {
+      if ((inner_while_loop = llvm::dyn_cast<scf::WhileOp>(user))) {
         break;
       }
     }
@@ -2748,7 +2698,7 @@ namespace
     }
     /// test
     comet_vdump(new_inner_while_loop);
-    for (auto &arg : new_inner_while_loop.getAfter().getArguments()) {
+    for ([[maybe_unused]] auto &arg : new_inner_while_loop.getAfter().getArguments()) {
       comet_vdump(arg);
     }
     comet_vdump(old_inner_while_loop);
@@ -2826,7 +2776,7 @@ namespace
     /// Replace the yield op
     scf::YieldOp old_yield_op = nullptr;
     for (Operation *user : old_tensor_insert_op->getUsers()) {
-      if (old_yield_op = llvm::dyn_cast<scf::YieldOp>(user)) {
+      if ((old_yield_op = llvm::dyn_cast<scf::YieldOp>(user))) {
         break;
       }
     }
@@ -2895,9 +2845,9 @@ namespace
                                                           result_types,
                                                           sparse_tensor);
 
-    /// Create extract slice for `crds` and `vals`.
-    Value old_crds = unpacked_sparse_tensor.getResult(5);
-    Value old_vals = unpacked_sparse_tensor.getResult(6);
+    /// The crds and vals are from the unpacked sparse tensor returned by the while loop.
+    Value crds_returned = unpacked_sparse_tensor.getResult(5);
+    Value vals_returned = unpacked_sparse_tensor.getResult(6);
     Value index = new_forall_loop.getInductionVar(0);
     Value pos = sparseTensorInfo.A2_pos;
     Type pos_element_type = mlir::getElementTypeOrSelf(pos);
@@ -2906,7 +2856,6 @@ namespace
         /*tensor=*/pos,
         /*index=*/index);
     Value offset_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset);
-//    auto oneAttr = rewriter.getIntegerAttr(pos_element_type, 1);
     Value const_one = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
     Value index_plus_one = rewriter.create<arith::AddIOp>(loc, index, const_one);
     Value offset_next = rewriter.create<tensor::ExtractOp>(loc,
@@ -2915,36 +2864,16 @@ namespace
                                                            index_plus_one);
     Value offset_next_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset_next);
     Value size = rewriter.create<arith::SubIOp>(loc, offset_next_index, offset_index);
-    Type crds_element_type = mlir::getElementTypeOrSelf(old_crds);
-    Type vals_element_type = mlir::getElementTypeOrSelf(old_vals);
-    RankedTensorType crds_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/crds_element_type);
-    RankedTensorType vals_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/vals_element_type);
+//    Type crds_element_type = mlir::getElementTypeOrSelf(crds_returned);
+//    Type vals_element_type = mlir::getElementTypeOrSelf(vals_returned);
+//    RankedTensorType crds_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/crds_element_type);
+//    RankedTensorType vals_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/vals_element_type);
     llvm::SmallVector<Value> dynamic_offsets = {offset_index};
     llvm::SmallVector<Value> dynamic_sizes = {size};
     llvm::SmallVector<Value> dynamic_strides;
     llvm::SmallVector<int64_t> static_offsets = {ShapedType::kDynamic};
     llvm::SmallVector<int64_t> static_sizes = {ShapedType::kDynamic};
     llvm::SmallVector<int64_t> static_strides = {1};
-    Value crds_new_extract_slice = rewriter.create<tensor::ExtractSliceOp>(
-        loc,
-        /*result_type=*/crds_tensor_type,
-        /*tensor_source=*/old_crds,
-        /*dynamic_offsets=*/dynamic_offsets,
-        /*dynamic_sizes=*/dynamic_sizes,
-        /*dynamic_strides=*/dynamic_strides,
-        /*static_offsets=*/static_offsets,
-        /*static_sizes=*/static_sizes,
-        /*static_strides=*/static_strides);
-    Value vals_new_extract_slice = rewriter.create<tensor::ExtractSliceOp>(
-        loc,
-        /*result_type=*/vals_tensor_type,
-        /*tensor_source=*/old_vals,
-        /*dynamic_offsets=*/dynamic_offsets,
-        /*dynamic_sizes=*/dynamic_sizes,
-        /*dynamic_strides=*/dynamic_strides,
-        /*static_offsets=*/static_offsets,
-        /*static_sizes=*/static_sizes,
-        /*static_strides=*/static_strides);
 
     /// Update the parallel_insert_slice
     tensor::ParallelInsertSliceOp old_insert_slice = nullptr;
@@ -2957,7 +2886,7 @@ namespace
     Value vals_arg = new_forall_loop.getRegionIterArgs()[1];
     rewriter.create<tensor::ParallelInsertSliceOp>(
         loc,
-        /*src_tensor=*/crds_new_extract_slice,
+        /*src_tensor=*/crds_returned,
         /*dst_tensor=*/crds_arg,
         /*dynamic_offsets=*/dynamic_offsets,
         /*dynamic_sizes=*/dynamic_sizes,
@@ -2967,7 +2896,7 @@ namespace
         /*static_strides=*/static_strides);
     rewriter.create<tensor::ParallelInsertSliceOp>(
         loc,
-        /*src_tensor=*/vals_new_extract_slice,
+        /*src_tensor=*/vals_returned,
         /*dst_tensor=*/vals_arg,
         /*dynamic_offsets=*/dynamic_offsets,
         /*dynamic_sizes=*/dynamic_sizes,
@@ -3139,27 +3068,21 @@ namespace
       NumericSparseTensorInfo innerSparseTensorInfo;
       Value row_offset = nullptr;
       Value row_size = nullptr;
-//      llvm::SmallVector<Value> new_extract_slice_ops = UpdateExtractSliceOps(new_forall_loop,
-//                            sparseTensorInfo,
-//                            rewriter,
-//                            loc,
-//                            innerSparseTensorInfo/*out*/,
-//                            row_offset/*out*/,
-//                            row_size/*out*/);
-      CreateNumericElementwiseInnerSparseTensor(new_forall_loop,
-                                                sparseTensorInfo,
-                                                rewriter,
-                                                loc,
-                                                innerSparseTensorInfo/*out*/);
+      llvm::SmallVector<Value> new_extract_slice_ops = UpdateExtractSliceOps(new_forall_loop,
+                            sparseTensorInfo,
+                            rewriter,
+                            loc,
+                            innerSparseTensorInfo/*out*/,
+                            row_offset/*out*/,
+                            row_size/*out*/);
 
       /// Find the while loop and replace it with a new one.
-      scf::WhileOp old_inner_while_loop = GetElementwiseNumericInnerWhileOp(/*inner_sparse_tensor=*/innerSparseTensorInfo.sparseTensor);
+      scf::WhileOp old_inner_while_loop = GetElementwiseNumericInnerWhileOp(/*old_val_extract_slice=*/new_extract_slice_ops[0]);
       comet_vdump(old_inner_while_loop);
 
       scf::WhileOp new_inner_while_loop = UpdateElementwiseNumericInnerWhileOp(
           old_inner_while_loop,
           /*inner_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
-//          /*new_extract_slice_op=*/new_extract_slice_ops[0],
           sparseTensorType,
           rewriter,
           loc);
@@ -3167,7 +3090,6 @@ namespace
       UpdateElementwiseNumericIfBody(/*new_inner_while_loop=*/new_inner_while_loop,
                                            /*new_forall_loop=*/new_forall_loop,
                                            /*sparseTensorType=*/sparseTensorType,
-//                                           /*inner_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
                                            rewriter,
                                            loc);
 
