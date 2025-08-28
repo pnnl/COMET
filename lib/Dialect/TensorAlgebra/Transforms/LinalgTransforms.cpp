@@ -284,8 +284,8 @@ static void addPatternForTiling(MLIRContext *context,
   SmallVector<OpFoldResult> tileSizesOfr =
       getAsIndexOpFoldResult(context, tileSizes);
   tilingOptions.setTileSizes(tileSizesOfr).setInterchange(interchange);
-  tilingOptions.setLoopType(
-    parallel ? scf::SCFTilingOptions::LoopType::ForallOp: scf::SCFTilingOptions::LoopType::ForOp);
+//  tilingOptions.setLoopType(
+//    parallel ? scf::SCFTilingOptions::LoopType::ForallOp: scf::SCFTilingOptions::LoopType::ForOp);
   LinalgTransformationFilter filter(StringAttr::get(context, filterName),
                                     StringAttr::get(context, updatedFilterName));
   patterns.add<LinalgTilingLoops>(context, tilingOptions, filter);
@@ -304,14 +304,30 @@ namespace
       RewritePatternSet tilingPatterns(ctx);
 
       int mc, kc, nc, mr, nr = 0;
-      get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
+//      get_level3_blocksizes(&mc, &kc, &nc, &mr, &nr, sizeof(double));
+//
+//      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, false, {1, 2, 0});
+//      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr, kc}, true, {1, 0, 2});
 
-      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, false, {1, 2, 0});
-      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr, kc}, true, {1, 0, 2});
+      {
+        mc = 512;
+        kc = 512;
+        nc = 512;
+        mr = 512;
+        nr = 512;
+      }
+      comet_debug() << "mc: " << mc << " kc: " << kc << " nc: " << nc << " mr: " << mr << " nr: " << nr << "\n";
+      /// C[i,k] = A[i,j] * B[j,k];
+      /// i: 0, j: 2, k: 1
+//      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, false, {1, 2, 0});
+      addPatternForTiling(ctx, tilingPatterns, "__with_tiling__", "__L2__with_tiling__", {mc, nc, kc}, false, {0, 2, 1});
+//      addPatternForTiling(ctx, tilingPatterns, "__L2__with_tiling__", "__micro_kernel__", {mr, nr, kc}, true, {0, 2, 1});
 
       if (failed(applyPatternsAndFoldGreedily(getOperation(),
                                               std::move(tilingPatterns))))
         return signalPassFailure();
+      comet_vdump(func->getParentOfType<ModuleOp>());
+      comet_debug() << "\n";
     }
   };
 } /// end anonymous namespace
