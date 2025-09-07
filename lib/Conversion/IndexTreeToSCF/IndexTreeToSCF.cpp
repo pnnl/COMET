@@ -1798,7 +1798,7 @@ namespace
 
   void LegalizeSymbolicForallOp(func::FuncOp func)
   {
-    scf::ForallOp old_forall_loop = nullptr;
+    llvm::SmallVector<scf::ForallOp> old_forall_loop_list;
     func.walk([&](scf::ForallOp op) {
       int count = 0;
       for (auto &arg : op.getOutputsMutable()) {
@@ -1806,35 +1806,34 @@ namespace
         if (count > 1 || !llvm::isa<indexTree::SymbolicDomainType>(arg.get().getType())) {
           return;
         } else {
-          old_forall_loop = op;
+          old_forall_loop_list.push_back(op);
         }
       }
     });
 
-    if (!old_forall_loop) {
-      return;
-    }
-    comet_vdump(old_forall_loop);
-    comet_debug() << "\n";
-    SymbolicDomainInfo symbolic_domain_info;
-    mlir::OpBuilder builder(old_forall_loop);
-    mlir::IRRewriter rewriter(builder);
-    mlir::Location loc = old_forall_loop->getLoc();
+    for (scf::ForallOp old_forall_loop : old_forall_loop_list)
+    {
+      comet_vdump(old_forall_loop);
+      comet_debug() << "\n";
+      SymbolicDomainInfo symbolic_domain_info;
+      mlir::OpBuilder builder(old_forall_loop);
+      mlir::IRRewriter rewriter(builder);
+      mlir::Location loc = old_forall_loop->getLoc();
 
-    /// Create a new scf.forall taking the vector `pos` as its operand
-    scf::ForallOp new_forall_loop = CreateNewForallOp(old_forall_loop,
-                                                      rewriter,
-                                                      loc,
-                                                      symbolic_domain_info/*out*/);
+      /// Create a new scf.forall taking the vector `pos` as its operand
+      scf::ForallOp new_forall_loop = CreateNewForallOp(old_forall_loop,
+                                                        rewriter,
+                                                        loc,
+                                                        symbolic_domain_info/*out*/);
 
-    /// Generate the new symbolic_domain.
-    mlir::UnrealizedConversionCastOp symbolic_domain_inner =
-        CreateInnerSymbolicDomain(new_forall_loop,
-                                  rewriter,
-                                  loc,
-                                  symbolic_domain_info);
-    comet_vdump(symbolic_domain_inner);
-    comet_vdump(new_forall_loop);
+      /// Generate the new symbolic_domain.
+      mlir::UnrealizedConversionCastOp symbolic_domain_inner =
+          CreateInnerSymbolicDomain(new_forall_loop,
+                                    rewriter,
+                                    loc,
+                                    symbolic_domain_info);
+      comet_vdump(symbolic_domain_inner);
+      comet_vdump(new_forall_loop);
 
 //    /// Find the inner for-loop
 //    scf::ForOp inner_for_loop = GetInnerForOp(new_forall_loop);
@@ -1846,34 +1845,36 @@ namespace
 //                      rewriter,
 //                      loc);
 
-    /// Replace the uses of the old symbolic_domain to the new symbolic_domain
-    ReplaceUsesOfOldSymbolicDomain(/*new_forall_loop=*/new_forall_loop, /*The old symbolic_domain was the 0-th argument*/
-                                   /*new_symbolic_domain=*/symbolic_domain_inner.getResult(0),
-                                   rewriter,
-                                   loc);
+      /// Replace the uses of the old symbolic_domain to the new symbolic_domain
+      ReplaceUsesOfOldSymbolicDomain(/*new_forall_loop=*/
+          new_forall_loop, /*The old symbolic_domain was the 0-th argument*/
+          /*new_symbolic_domain=*/symbolic_domain_inner.getResult(0),
+          rewriter,
+          loc);
 
-    /// Use unrealized_cast to unpack the finished symbolic_domain, so that we can get the vector `pos`,
-    /// create `extract_slice` from this new `pos`, then do `parallel_insert_slice` from the slice to
-    /// the input scf.forall's argumet `pos`
-    InsertExtractSliceForPos(new_forall_loop,
+      /// Use unrealized_cast to unpack the finished symbolic_domain, so that we can get the vector `pos`,
+      /// create `extract_slice` from this new `pos`, then do `parallel_insert_slice` from the slice to
+      /// the input scf.forall's argumet `pos`
+      InsertExtractSliceForPos(new_forall_loop,
+                               rewriter,
+                               loc);
+
+      /// Insert the accumulating for-loop for vector `pos` after the new-forall-loop, and also
+      /// get the final `crd_size`
+      mlir::ValueRange acc_for_loop_results = InsertAccumulatingLoopForPos(new_forall_loop,
+                                                                           rewriter,
+                                                                           loc);
+
+      /// Generate unrealized_cast from the `crd_size` and vector `final-pos` to a `final-symbolic-domain`.
+      /// The `itree` will yield this `final-symbolic-domain`.
+      FinalizeSymbolicDomain(new_forall_loop,
+                             symbolic_domain_info,
+                             acc_for_loop_results,
                              rewriter,
                              loc);
-
-    /// Insert the accumulating for-loop for vector `pos` after the new-forall-loop, and also
-    /// get the final `crd_size`
-    mlir::ValueRange acc_for_loop_results = InsertAccumulatingLoopForPos(new_forall_loop,
-                          rewriter,
-                          loc);
-
-    /// Generate unrealized_cast from the `crd_size` and vector `final-pos` to a `final-symbolic-domain`.
-    /// The `itree` will yield this `final-symbolic-domain`.
-    FinalizeSymbolicDomain(new_forall_loop,
-                           symbolic_domain_info,
-                           acc_for_loop_results,
-                           rewriter,
-                           loc);
-    comet_vdump(new_forall_loop->getParentOfType<ModuleOp>());
-    comet_debug() << "\n";
+      comet_vdump(new_forall_loop->getParentOfType<ModuleOp>());
+      comet_debug() << "\n";
+    }
   }
 
 
@@ -2616,9 +2617,99 @@ namespace
         break;
       }
     }
-    assert(inner_while_loop && "Error: Expected at least one scf.while inside the scf.forall.");
+//    assert(inner_while_loop && "Error: Expected at least one scf.while inside the scf.forall.");
 
     return inner_while_loop;
+  }
+
+  scf::ForOp GetElementwiseNumericInnerForOp(Value old_val_extract_slice)
+  {
+    scf::ForOp inner_for_loop = nullptr;
+    for (auto user : old_val_extract_slice.getUsers()) {
+      if ((inner_for_loop = llvm::dyn_cast<scf::ForOp>(user))) {
+        break;
+      }
+    }
+
+    return inner_for_loop;
+  }
+
+  scf::ForOp UpdateElementwiseNumericInnerForOp(scf::ForOp old_inner_for_loop,
+                                                Value inner_sparse_tensor,
+                                                Type sparse_tensor_type,
+                                                mlir::IRRewriter &rewriter,
+                                                mlir::Location &loc)
+  {
+    scf::ForOp new_inner_for_loop = ReplaceInnerForOp(
+        old_inner_for_loop,
+        /*inputs=*/llvm::SmallVector<Value>{inner_sparse_tensor},
+        rewriter,
+        loc);
+
+    return new_inner_for_loop;
+  }
+
+  void UpdateElementwiseNumericInnerForLoopBody(scf::ForOp new_inner_for_loop,
+                                                scf::ForallOp new_forall_loop,
+                                                Type sparseTensorType,
+                                                mlir::IRRewriter &rewriter,
+                                                mlir::Location &loc)
+  {
+    Value sparse_tensor_arg = new_inner_for_loop.getRegionIterArg(0);
+    tensor::ExtractOp old_tensor_extract_op = nullptr;
+    tensor::InsertOp old_tensor_insert_op = nullptr;
+
+    for (Operation *user : sparse_tensor_arg.getUsers()) {
+      if (llvm::isa<tensor::ExtractOp>(user)) {
+        old_tensor_extract_op = llvm::dyn_cast<tensor::ExtractOp>(user);
+      } else if (llvm::isa<tensor::InsertOp>(user)) {
+        old_tensor_insert_op = llvm::dyn_cast<tensor::InsertOp>(user);
+      }
+    }
+    assert(old_tensor_extract_op && "Error: expected a tensor::ExtractOp op that takes the sparse tensor.");
+    assert(old_tensor_insert_op && "Error: expected a tensor::InsertOp op that takes the sparse tensor.");
+
+    rewriter.eraseOp(old_tensor_extract_op);
+
+    /// Create a tensorAlgebra::TensorFindPos
+    mlir::OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(old_tensor_insert_op);
+
+    Value crd = old_tensor_insert_op.getOperand(3);
+    uint32_t dim = 1;
+    tensorAlgebra::TensorFindPos tensor_find_pos_op = rewriter.create<tensorAlgebra::TensorFindPos>(
+        loc,
+        rewriter.getIndexType(),
+        sparse_tensor_arg,
+        crd,
+        rewriter.getI32IntegerAttr(dim),
+        rewriter.getBoolAttr(true));
+
+    llvm::SmallVector<Value> pos = {new_forall_loop.getInductionVar(0), tensor_find_pos_op};
+    llvm::SmallVector<Value> crds = {new_forall_loop.getInductionVar(0), crd};
+    Value multiply_result = old_tensor_insert_op.getOperand(0);
+
+    Value new_tensor_insert_op = rewriter.create<tensorAlgebra::TensorInsertOp>(
+        loc,
+        sparseTensorType,
+        sparse_tensor_arg,
+        pos,
+        crds,
+        multiply_result);
+
+    /// Replace the yield op
+    scf::YieldOp old_yield_op = nullptr;
+    for (Operation *user : old_tensor_insert_op->getUsers()) {
+      if ((old_yield_op = llvm::dyn_cast<scf::YieldOp>(user))) {
+        break;
+      }
+    }
+    assert(old_yield_op && "Error: expected at least one scf.yield op.");
+    rewriter.setInsertionPointAfter(old_yield_op);
+    llvm::SmallVector<Value> yield_inputs{new_tensor_insert_op};
+    rewriter.create<scf::YieldOp>(loc, yield_inputs);
+    rewriter.eraseOp(old_yield_op);
+    rewriter.eraseOp(old_tensor_insert_op);
   }
 
   void CloneBlock(Block *src_block,
@@ -2719,14 +2810,14 @@ namespace
                                                     mlir::IRRewriter &rewriter,
                                                     mlir::Location &loc)
   {
-    scf::WhileOp new_inner_for_loop = ReplaceInnerWhileOp(
+    scf::WhileOp new_inner_while_loop = ReplaceInnerWhileOp(
         old_inner_while_loop,
         /*inputs=*/llvm::SmallVector<Value>{inner_sparse_tensor},
         /*sparse_tensor_type=*/sparse_tensor_type,
         rewriter,
         loc);
 
-    return new_inner_for_loop;
+    return new_inner_while_loop;
   }
 
   void UpdateElementwiseNumericIfBody(scf::WhileOp new_inner_while_loop,
@@ -2826,7 +2917,8 @@ namespace
   }
 
   void UpdateElementwiseNumericForallInParallel(scf::ForallOp new_forall_loop,
-                                                scf::WhileOp new_inner_while_loop,
+//                                                scf::WhileOp new_inner_while_loop,
+                                                Value inner_returned_sparse_tensor,
                                                 NumericSparseTensorInfo &sparseTensorInfo,
                                                 NumericSparseTensorInfo &innerSparseTensorInfo,
                                                 Type sparseTensorType,
@@ -2838,12 +2930,12 @@ namespace
     rewriter.setInsertionPoint(old_terminator);
 
     /// Get the sparse tensor returned by the while loop.
-    Value sparse_tensor = new_inner_while_loop.getResult(0);
+//    Value sparse_tensor = new_inner_while_loop.getResult(0);
     llvm::SmallVector<Type> result_types = GetUnpackedTypesFromSparseTensorType(llvm::cast<tensorAlgebra::SparseTensorType>(sparseTensorType));
     mlir::UnrealizedConversionCastOp unpacked_sparse_tensor =
         rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
                                                           result_types,
-                                                          sparse_tensor);
+                                                          inner_returned_sparse_tensor);
 
     /// The crds and vals are from the unpacked sparse tensor returned by the while loop.
     Value crds_returned = unpacked_sparse_tensor.getResult(5);
@@ -2944,79 +3036,79 @@ namespace
 
   void LegalizeNumericForallOp(func::FuncOp func)
   {
+    comet_vdump(func->getParentOfType<ModuleOp>());
     /// Found the numeric forall
-    scf::ForallOp old_forall_loop = nullptr;
+    llvm::SmallVector<scf::ForallOp> old_forall_loop_list;
+    llvm::SmallDenseMap<scf::ForallOp, uint32_t> count_workspace_arg_map;
     Type sparseTensorType = nullptr;
-//    Type workspaceType = nullptr;
-    int count_sparse_tensor_arg = 0;
-    int count_workspace_arg = 0;
     func.walk([&](scf::ForallOp op) {
-//      int count = 0;
+      int count_sparse_tensor_arg = 0;
+      int count_workspace_arg = 0;
       for (auto &arg : op.getOutputsMutable()) {
         if (llvm::isa<tensorAlgebra::SparseTensorType>(arg.get().getType())) {
           sparseTensorType = arg.get().getType();
-//          ++count;
           ++count_sparse_tensor_arg;
         }
         else if (llvm::isa<tensorAlgebra::WorkspaceType>(arg.get().getType())) {
-//          ++count;
           ++count_workspace_arg;
         }
       }
-//      if (2 == count) {
       if (1 == count_sparse_tensor_arg) {
-        old_forall_loop = op;
+        old_forall_loop_list.push_back(op);
+        count_workspace_arg_map[op] = count_workspace_arg;
       }
     });
 
-    if (!old_forall_loop) {
-      return;
-    }
-    comet_vdump(old_forall_loop);
-    comet_debug() << "\n";
-    mlir::OpBuilder builder(old_forall_loop);
-    mlir::IRRewriter rewriter(builder);
-    mlir::Location loc = old_forall_loop->getLoc();
+    comet_debug() << "old_forall_loop_list.size(): " << old_forall_loop_list.size() << "\n";
 
-    if (count_workspace_arg)
-    { /// SpGEMM, has a workspace
-      Value workspace = GetNumericWorkspace(old_forall_loop);
-      NumericSparseTensorInfo sparseTensorInfo;
-      scf::ForallOp new_forall_loop = CreateNumericNewForallOp(old_forall_loop,
-                                                               workspace,
-                                                               sparseTensorType,
-                                                               rewriter,
-                                                               loc,
-                                                               sparseTensorInfo/*out*/);
-      NumericSparseTensorInfo innerSparseTensorInfo;
-      Value row_offset = nullptr;
-      Value row_size = nullptr;
-      UpdateExtractSliceOps(new_forall_loop,
-                            sparseTensorInfo,
-                            rewriter,
-                            loc,
-                            innerSparseTensorInfo/*out*/,
-                            row_offset/*out*/,
-                            row_size/*out*/);
+    for (scf::ForallOp old_forall_loop : old_forall_loop_list)
+    {
+      comet_vdump(old_forall_loop);
+      comet_debug() << "\n";
+      mlir::OpBuilder builder(old_forall_loop);
+      mlir::IRRewriter rewriter(builder);
+      mlir::Location loc = old_forall_loop->getLoc();
 
-      /// Update the ta.WorkspaceClear op to use the correct workspace
-      Value clear_workspace = UpdateWorkspaceClearOp(new_forall_loop,
-                                                     workspace,
-                                                     rewriter,
-                                                     loc);
-      comet_vdump(new_forall_loop);
+      uint32_t count_workspace_arg = count_workspace_arg_map[old_forall_loop];
+      if (count_workspace_arg)
+      { /// SpGEMM, has a workspace
+        Value workspace = GetNumericWorkspace(old_forall_loop);
+        NumericSparseTensorInfo sparseTensorInfo;
+        scf::ForallOp new_forall_loop = CreateNumericNewForallOp(old_forall_loop,
+                                                                 workspace,
+                                                                 sparseTensorType,
+                                                                 rewriter,
+                                                                 loc,
+                                                                 sparseTensorInfo/*out*/);
+        NumericSparseTensorInfo innerSparseTensorInfo;
+        Value row_offset = nullptr;
+        Value row_size = nullptr;
+        UpdateExtractSliceOps(new_forall_loop,
+                              sparseTensorInfo,
+                              rewriter,
+                              loc,
+                              innerSparseTensorInfo/*out*/,
+                              row_offset/*out*/,
+                              row_size/*out*/);
 
-      /// Find the inner for-loop
-      scf::ForOp old_inner_for_loop = GetNumericInnerForOp(/*workspaceClearOp=*/clear_workspace);
-      comet_vdump(old_inner_for_loop);
+        /// Update the ta.WorkspaceClear op to use the correct workspace
+        Value clear_workspace = UpdateWorkspaceClearOp(new_forall_loop,
+                                                       workspace,
+                                                       rewriter,
+                                                       loc);
+        comet_vdump(new_forall_loop);
 
-      /// Update the inner for loop to take the new packed sparse tensor.
-      scf::ForOp new_inner_for_loop = UpdateNumericInnerForOp(
-          old_inner_for_loop,
-          /*inner_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
-          clear_workspace,
-          rewriter,
-          loc);
+        /// Find the inner for-loop
+        scf::ForOp old_inner_for_loop = GetNumericInnerForOp(/*workspaceClearOp=*/clear_workspace);
+        comet_vdump(old_inner_for_loop);
+
+        /// Update the inner for loop to take the new packed sparse tensor.
+        scf::ForOp new_inner_for_loop = UpdateNumericInnerForOp(
+            old_inner_for_loop,
+            /*inner_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
+            clear_workspace,
+            rewriter,
+            loc);
 
 //    Operation *use_of_new_sparse_tensor = ReplaceUsesOfOldSparseTensor(/*new_forall_loop=*/new_forall_loop,
 //                                 /*new_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
@@ -3024,91 +3116,120 @@ namespace
 //                                 loc);
 //    comet_pdump(use_of_new_sparse_tensor);
 
-      /// Update the workspace for-loop
-      Value updated_sparse_tensor = nullptr;
-      scf::ForOp new_workspace_for_loop = UpdateWorkspaceForLoop(new_inner_for_loop,
+        /// Update the workspace for-loop
+        Value updated_sparse_tensor = nullptr;
+        scf::ForOp new_workspace_for_loop = UpdateWorkspaceForLoop(new_inner_for_loop,
 //    llvm::SmallVector<Value> results_of_new_workspace_for_loop = UpdateWorkspaceForLoop(use_of_new_sparse_tensor,
-                                                                 sparseTensorType,
+                                                                   sparseTensorType,
 //                           workspaceType,
 //                           /*row_index=*/new_forall_loop.getInductionVar(0),
 //                           /*pos=*/innerSparseTensorInfo.pos,
-                                                                 rewriter,
-                                                                 loc,
-                                                                 updated_sparse_tensor/*out*/);
+                                                                   rewriter,
+                                                                   loc,
+                                                                   updated_sparse_tensor/*out*/);
 
-      /// Update the `scf.forall.in_parallel` (terminator)
-      UpdateNumericTerminator(new_forall_loop,
-                              updated_sparse_tensor,
-                              new_workspace_for_loop,
+        /// Update the `scf.forall.in_parallel` (terminator)
+        UpdateNumericTerminator(new_forall_loop,
+                                updated_sparse_tensor,
+                                new_workspace_for_loop,
 //                            results_of_new_workspace_for_loop,
-                              row_offset,
-                              row_size,
-                              rewriter,
-                              loc);
+                                row_offset,
+                                row_size,
+                                rewriter,
+                                loc);
 
-      /// Pack the result as the output  of itree
-      ReplaceITreeOutputs(new_forall_loop,
+        /// Pack the result as the output  of itree
+        ReplaceITreeOutputs(new_forall_loop,
 //                        /*pos=*/sparseTensorInfo.pos,
-                          sparseTensorInfo,
-                          workspace,
-                          sparseTensorType,
-                          rewriter,
-                          loc);
-      comet_pdump(new_forall_loop->getParentOp());
-      comet_debug() << "\n";
-    }
-    else
-    { /// Elementwise, no workspace.
-      NumericSparseTensorInfo sparseTensorInfo;
-      scf::ForallOp new_forall_loop = CreateNumericElementwiseNewForallOp(old_forall_loop,
-                                                               sparseTensorType,
-                                                               rewriter,
-                                                               loc,
-                                                               sparseTensorInfo/*out*/);
-      NumericSparseTensorInfo innerSparseTensorInfo;
-      Value row_offset = nullptr;
-      Value row_size = nullptr;
-      llvm::SmallVector<Value> new_extract_slice_ops = UpdateExtractSliceOps(new_forall_loop,
                             sparseTensorInfo,
+                            workspace,
+                            sparseTensorType,
                             rewriter,
-                            loc,
-                            innerSparseTensorInfo/*out*/,
-                            row_offset/*out*/,
-                            row_size/*out*/);
+                            loc);
+        comet_pdump(new_forall_loop->getParentOp());
+        comet_debug() << "\n";
+      }
+      else
+      { /// Elementwise, no workspace.
+        NumericSparseTensorInfo sparseTensorInfo;
+        scf::ForallOp new_forall_loop = CreateNumericElementwiseNewForallOp(old_forall_loop,
+                                                                            sparseTensorType,
+                                                                            rewriter,
+                                                                            loc,
+                                                                            sparseTensorInfo/*out*/);
+        NumericSparseTensorInfo innerSparseTensorInfo;
+        Value row_offset = nullptr;
+        Value row_size = nullptr;
+        llvm::SmallVector<Value> new_extract_slice_ops = UpdateExtractSliceOps(new_forall_loop,
+                                                                               sparseTensorInfo,
+                                                                               rewriter,
+                                                                               loc,
+                                                                               innerSparseTensorInfo/*out*/,
+                                                                               row_offset/*out*/,
+                                                                               row_size/*out*/);
 
-      /// Find the while loop and replace it with a new one.
-      scf::WhileOp old_inner_while_loop = GetElementwiseNumericInnerWhileOp(/*old_val_extract_slice=*/new_extract_slice_ops[0]);
-      comet_vdump(old_inner_while_loop);
+        /// Find the while loop and replace it with a new one.
+        Value inner_returned_sparse_tensor = nullptr;
+        if (scf::WhileOp old_inner_while_loop =
+            GetElementwiseNumericInnerWhileOp(/*old_val_extract_slice=*/new_extract_slice_ops[0]))
+        { /// CSRxCSR_oCSR
+          comet_vdump(old_inner_while_loop);
 
-      scf::WhileOp new_inner_while_loop = UpdateElementwiseNumericInnerWhileOp(
-          old_inner_while_loop,
-          /*inner_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
-          sparseTensorType,
-          rewriter,
-          loc);
+          scf::WhileOp new_inner_while_loop = UpdateElementwiseNumericInnerWhileOp(
+              old_inner_while_loop,
+              /*inner_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
+              sparseTensorType,
+              rewriter,
+              loc);
 
-      UpdateElementwiseNumericIfBody(/*new_inner_while_loop=*/new_inner_while_loop,
-                                           /*new_forall_loop=*/new_forall_loop,
-                                           /*sparseTensorType=*/sparseTensorType,
-                                           rewriter,
-                                           loc);
+          UpdateElementwiseNumericIfBody(
+              /*new_inner_while_loop=*/new_inner_while_loop,
+              /*new_forall_loop=*/new_forall_loop,
+              /*sparseTensorType=*/sparseTensorType,
+                                       rewriter,
+                                       loc);
+          inner_returned_sparse_tensor = new_inner_while_loop.getResult(0);
+        }
+        else if (scf::ForOp old_inner_for_loop =
+            GetElementwiseNumericInnerForOp(/*old_val_extract_slice=*/new_extract_slice_ops[0]))
+        {
+          scf::ForOp new_inner_for_loop = UpdateElementwiseNumericInnerForOp(
+              old_inner_for_loop,
+              /*inner_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
+              sparseTensorType,
+              rewriter,
+              loc);
 
-      UpdateElementwiseNumericForallInParallel(new_forall_loop,
-                                               new_inner_while_loop,
-                                               sparseTensorInfo,
-                                               innerSparseTensorInfo,
-                                               sparseTensorType,
-                                               rewriter,
-                                               loc);
-      comet_vdump(new_forall_loop);
+          UpdateElementwiseNumericInnerForLoopBody(
+              /*new_inner_for_loop=*/new_inner_for_loop,
+              /*new_forall_loop=*/new_forall_loop,
+              /*sparseTensorType=*/sparseTensorType,
+                                     rewriter,
+                                     loc);
+          inner_returned_sparse_tensor = new_inner_for_loop.getResult(0);
+        }
+        else
+        {
+          assert(false && "Error: unexpected loop structure");
+        }
 
-      UpdateElementwiseNumericITreeYieldOp(new_forall_loop,
-                                           sparseTensorInfo,
-                                           sparseTensorType,
-                                           rewriter,
-                                           loc);
-      comet_vdump(new_forall_loop->getParentOfType<ModuleOp>());
-      comet_debug() << "\n";
+        UpdateElementwiseNumericForallInParallel(new_forall_loop,
+            /*inner_returned_sparse_tensor=*/inner_returned_sparse_tensor,
+                                                 sparseTensorInfo,
+                                                 innerSparseTensorInfo,
+                                                 sparseTensorType,
+                                                 rewriter,
+                                                 loc);
+        comet_vdump(new_forall_loop);
+
+        UpdateElementwiseNumericITreeYieldOp(new_forall_loop,
+                                             sparseTensorInfo,
+                                             sparseTensorType,
+                                             rewriter,
+                                             loc);
+        comet_vdump(new_forall_loop->getParentOfType<ModuleOp>());
+        comet_debug() << "\n";
+      }
     }
 
   }
