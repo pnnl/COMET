@@ -223,14 +223,14 @@ struct CreateFillMaskOp : public mlir::OpRewritePattern<IndexTreeMaskedDomainOp>
     Value init_bit_tensor = rewriter.create<tensor::SplatOp>(loc, bit_tensor_type, f, mask_domain.getDimensionSize());
     SmallVector<Value> tree_temps(tree_op.getIntermediates());
     SmallVector<Type> tree_types(tree_op->getResultTypes());
-    tree_temps.push_back(init_bit_tensor);
-    tree_types.push_back(bit_tensor_type);
+    // tree_temps.push_back(init_bit_tensor);
+    // tree_types.push_back(bit_tensor_type);
     auto new_op = rewriter.create<IndexTreeOp>(loc, tree_types, tree_op.getInputs(), tree_temps);
     rewriter.inlineRegionBefore(tree_op.getRegion(), new_op.getRegion(), new_op.getRegion().end());
 
     rewriter.restoreInsertionPoint(cur);
-    rewriter.modifyOpInPlace(new_op, [&](){new_op.getBody()->addArgument(bit_tensor_type, loc);});
-    init_bit_tensor = new_op.getBody()->getArgument(new_op.getBody()->getNumArguments() - 1);
+    // rewriter.modifyOpInPlace(new_op, [&](){new_op.getBody()->addArgument(bit_tensor_type, loc);});
+    // init_bit_tensor = new_op.getBody()->getArgument(new_op.getBody()->getNumArguments() - 1);
 
     Value domain = op.getMask();
     Value mask_tensor = rewriter.create<indexTree::IndexTreeFillMaskOp>(loc, bit_tensor_type, op.getParentNode(), domain, init_bit_tensor);
@@ -238,7 +238,7 @@ struct CreateFillMaskOp : public mlir::OpRewritePattern<IndexTreeMaskedDomainOp>
     indexTree::YieldOp yield = llvm::cast<indexTree::YieldOp>(new_op.getBody()->getTerminator());
     rewriter.setInsertionPoint(yield);
     mask_tensor = rewriter.create<indexTree::IndexTreeZeroMaskOp>(loc, bit_tensor_type, op.getParentNode(), domain, mask_tensor);
-    rewriter.modifyOpInPlace(new_op, [&](){yield.getResultsMutable().append(ValueRange(mask_tensor));});
+    // rewriter.modifyOpInPlace(new_op, [&](){yield.getResultsMutable().append(ValueRange(mask_tensor));});
 
     for(unsigned i = 0; i < tree_op.getNumResults(); i++){
       rewriter.replaceAllUsesWith(tree_op.getResult(i), new_op.getResult(i));

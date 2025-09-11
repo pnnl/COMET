@@ -38,8 +38,12 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/TypeUtilities.h"
+#include "mlir/IR/Value.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/IR/Dominance.h"
@@ -47,6 +51,7 @@
 #include "mlir/Analysis/SliceAnalysis.h"
 
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/ADT/StringSet.h"
@@ -56,6 +61,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <optional>
 #include <ostream>
 #include <vector>
 #include <limits>
@@ -91,6 +97,11 @@ namespace comet
 
 namespace
 {
+  bool isI1(mlir::Type inT) 
+  {
+    auto intT = mlir::dyn_cast<mlir::IntegerType>(getElementTypeOrSelf(inT)); 
+    return intT && intT.getWidth() == 1 ;
+  }
 
   /// Valid semiring operators.
   static const llvm::StringSet<> Semiring_ops{
@@ -714,6 +725,7 @@ namespace
         }
 
         IRMapping map;
+        
         if (inputs.size() == 1 && llvm::isa<indexTree::SymbolicDomainType>(inputs.front().getType()))
         { /// Use the symbolic_domain argument as the inputs.
           return new DenseParallelLoopInfo(input_for_loop_args, for_loop.getResults(), par_op, map, inductionVar,
@@ -3109,6 +3121,24 @@ namespace
             clear_workspace,
             rewriter,
             loc);
+        {
+
+          mlir::OpBuilder::InsertionGuard guard(rewriter);
+
+          mlir::scf::IfOp ifOp;
+          new_inner_for_loop->walk([&](scf::IfOp foundifOp){
+            ifOp = foundifOp;
+          });
+          // This is the case for SPGEMM + Masking
+          if(ifOp)
+          {
+            rewriter.setInsertionPoint(ifOp);
+            auto new_if_op = rewriter.create<scf::IfOp>(ifOp->getLoc(), ifOp.getThenRegion().front().getTerminator()->getOperandTypes(), ifOp.getCondition(), true, true);
+            rewriter.mergeBlocks(&ifOp.getThenRegion().front(), &new_if_op.getThenRegion().front());
+            rewriter.mergeBlocks(&ifOp.getElseRegion().front(), &new_if_op.getElseRegion().front());
+            rewriter.replaceOp(ifOp, new_if_op);
+          }
+        }
 
 //    Operation *use_of_new_sparse_tensor = ReplaceUsesOfOldSparseTensor(/*new_forall_loop=*/new_forall_loop,
 //                                 /*new_sparse_tensor=*/innerSparseTensorInfo.sparseTensor,
@@ -3450,14 +3480,15 @@ namespace
       Value updated_tensor = rewriter.create<tensor::InsertOp>(loc, fill_loop->getInput(0).getType(), t, fill_loop->getInput(0), crd);
       fill_loop->updateOutput(rewriter, 0, updated_tensor);
       rewriter.restoreInsertionPoint(after_fill_loop);
+      rewriter.replaceAllUsesWith(fill_mask_op, fill_loop->getResults().front());
 
-      updateOutput(
-        fill_mask_op.getInit(), 
-        fill_mask_op.getResult(), 
-        fill_loop->getResults()[0], 
-        parent_info, 
-        rewriter
-      );
+      // updateOutput(
+      //   fill_mask_op.getInit(), 
+      //   fill_mask_op.getResult(), 
+      //   fill_loop->getResults()[0], 
+      //   parent_info, 
+      //   rewriter
+      // );
       
       delete fill_loop;
       return success();
@@ -3512,13 +3543,13 @@ namespace
       Value updated_tensor = rewriter.create<tensor::InsertOp>(loc, zero_loop->getInput(0).getType(), f, zero_loop->getInput(0), crd);
       zero_loop->updateOutput(rewriter, 0, updated_tensor);
       rewriter.restoreInsertionPoint(after_zero_loop);
-      updateOutput(
-        zero_mask_op.getInit(), 
-        zero_mask_op.getResult(), 
-        zero_loop->getResults()[0], 
-        parent_info, 
-        rewriter
-      );
+      // updateOutput(
+      //   zero_mask_op.getInit(), 
+      //   zero_mask_op.getResult(), 
+      //   zero_loop->getResults()[0], 
+      //   parent_info, 
+      //   rewriter
+      // );
       
       delete zero_loop;
       return success();
@@ -3769,7 +3800,6 @@ namespace
         }      
       }
 
-      TypeConverter typeConverter;
       mlir::ConversionTarget target(getContext());
       target.addLegalDialect<scf::SCFDialect, tensor::TensorDialect>();
 
