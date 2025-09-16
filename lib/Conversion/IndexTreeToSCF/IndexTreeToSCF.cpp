@@ -1410,10 +1410,13 @@ namespace
     return new_forall_loop;
   }
 
-  mlir::UnrealizedConversionCastOp CreateInnerSymbolicDomain(scf::ForallOp forall_loop,
-                                 mlir::IRRewriter &rewriter,
-                                 mlir::Location &loc,
-                                 SymbolicDomainInfo symbolic_domain_info)
+  mlir::UnrealizedConversionCastOp CreateInnerSymbolicDomain(
+      scf::ForallOp forall_loop,
+      mlir::IRRewriter &rewriter,
+      mlir::Location &loc,
+      SymbolicDomainInfo symbolic_domain_info,
+      Value &slice_offset/*out*/,
+      Value &slice_size/*out*/)
   {
     /// Generate the new symbolic_domain.
     /// %pos_new_2 = scf.for_all ... %i, %arg1=%pos:
@@ -1423,26 +1426,79 @@ namespace
     ///                                                  /*constant*/ %dim_size,
     ///                                                  /*pos=*/ %arg_1,
     ///                                                  /*private*/ %mark)
+
+    /// %i_plus_one = arith.addi %arg1, %c1 : index
+    /// %extracted_slice_arg = tensor.extract_slice %arg2[%i_plus_one] [%c1] [1] : tensor<?xi64> to tensor<?xi64>
+    /// %pos_new_2 = scf.for_all ... %i, %arg1=%pos:
+    ///    %symbolic_domain_inner = mlir.unrealized_cast(/*pos_size=*/ %i,
+    ///                                                  /*constant for now*/ %pos_alloc_size,
+    ///                                                  /*crd_size=*/ %zero,
+    ///                                                  /*constant*/ %dim_size,
+    ///                                                  /*pos=*/ %extracted_slice_arg,
+    ///                                                  /*private*/ %mark)
     mlir::OpBuilder::InsertionGuard guard(rewriter);
     rewriter.setInsertionPointToStart(forall_loop.getBody());
+
+    /// Create the extract_slice for the argument tensor pos
+    Value one = rewriter.create<ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
+    Value index = forall_loop.getInductionVar(0);
+    Value index_plus_one = rewriter.create<arith::AddIOp>(loc, index, one);
+    Value pos_arg = forall_loop.getRegionIterArgs()[0];
+    Type pos_element_type = mlir::getElementTypeOrSelf(pos_arg);
+    RankedTensorType pos_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic},
+                                                                   /*elementType=*/pos_element_type);
+    llvm::SmallVector<Value> dynamic_offsets = {index_plus_one};
+    llvm::SmallVector<Value> dynamic_sizes = {one};
+    llvm::SmallVector<Value> dynamic_strides;
+    llvm::SmallVector<int64_t> static_offsets = {ShapedType::kDynamic};
+    llvm::SmallVector<int64_t> static_sizes = {ShapedType::kDynamic};
+    llvm::SmallVector<int64_t> static_strides = {1};
+    Value pos_extracted_slice = rewriter.create<tensor::ExtractSliceOp>(
+        loc,
+        /*result_type=*/pos_tensor_type,
+        /*tensor_source=*/pos_arg,
+        /*dynamic_offsets=*/dynamic_offsets,
+        /*dynamic_sizes=*/dynamic_sizes,
+        /*dynamic_strides=*/dynamic_strides,
+        /*static_offsets=*/static_offsets,
+        /*static_sizes=*/static_sizes,
+        /*static_strides=*/static_strides);
+
+    /// Create unrealized_conversion_cast
     auto result_type = indexTree::SymbolicDomainType::get(rewriter.getContext(), 64);
     llvm::SmallVector<Value> inputs;
-    for (auto var : forall_loop.getInductionVars()) {
-      inputs.push_back(var);
-    }  /// SymbolicDomain.pos_size
+    inputs.push_back(index);
     inputs.push_back(symbolic_domain_info.pos_alloc_size);  /// SymbolicDomain.pos_alloc_size
     Value zero = rewriter.create<arith::ConstantIndexOp>(loc, 0);  /// SymbolicDomain.crd_size
     inputs.push_back(zero);
     inputs.push_back(symbolic_domain_info.dim_size);  /// SymbolicDomain.dim_size
-    for (auto arg : forall_loop.getRegionIterArgs()) {
-      inputs.push_back(arg);
-    }  /// SymbolicDomain.pos
+    inputs.push_back(pos_extracted_slice);
     inputs.push_back(symbolic_domain_info.mark_array);
     mlir::UnrealizedConversionCastOp symbolic_domain_inner =
         rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
                                                           result_type,
                                                           inputs);
 
+//    auto result_type = indexTree::SymbolicDomainType::get(rewriter.getContext(), 64);
+//    llvm::SmallVector<Value> inputs;
+//    for (auto var : forall_loop.getInductionVars()) {
+//      inputs.push_back(var);
+//    }  /// SymbolicDomain.pos_size
+//    inputs.push_back(symbolic_domain_info.pos_alloc_size);  /// SymbolicDomain.pos_alloc_size
+//    Value zero = rewriter.create<arith::ConstantIndexOp>(loc, 0);  /// SymbolicDomain.crd_size
+//    inputs.push_back(zero);
+//    inputs.push_back(symbolic_domain_info.dim_size);  /// SymbolicDomain.dim_size
+//    for (auto arg : forall_loop.getRegionIterArgs()) {
+//      inputs.push_back(arg);
+//    }  /// SymbolicDomain.pos
+//    inputs.push_back(symbolic_domain_info.mark_array);
+//    mlir::UnrealizedConversionCastOp symbolic_domain_inner =
+//        rewriter.create<mlir::UnrealizedConversionCastOp>(loc,
+//                                                          result_type,
+//                                                          inputs);
+
+    slice_offset = index_plus_one;
+    slice_size = one;
     return symbolic_domain_inner;
   }
 
@@ -1557,12 +1613,18 @@ namespace
 //        preservedUsers.insert(user);
 //        comet_pdump(user);
 //      }
+      mlir::DominanceInfo dominanceInfo(user->getParentOp());
       if (llvm::isa<tensor::ExtractSliceOp>(user) && user->use_empty())
       { /// "tensor.extract_slice" op keeps using the tensor, rather than using the new symbolic_domain.
         comet_pdump(user);
         toBeDeleted.insert(user);
       }
       else if (llvm::isa<tensor::ParallelInsertSliceOp>(user))
+      {
+        preservedUsers.insert(user);
+        comet_pdump(user);
+      }
+      else if (dominanceInfo.dominates(user, new_symbolic_domain.getDefiningOp()))
       {
         preservedUsers.insert(user);
         comet_pdump(user);
@@ -1591,6 +1653,8 @@ namespace
     }
    */
   void InsertExtractSliceForPos(scf::ForallOp forall_loop,
+                                Value slice_offset,
+                                Value slice_size,
                                 mlir::IRRewriter &rewriter,
                                 mlir::Location &loc)
   {
@@ -1601,7 +1665,8 @@ namespace
     });
     assert(symbolic_domain_end_row_op && "Expected at least one indexTree::SymbolicDomainEndRowOp");
     comet_vdump(symbolic_domain_end_row_op);
-    Value symbolic_domain_inner = symbolic_domain_end_row_op.getResult();
+//    Value symbolic_domain_inner = symbolic_domain_end_row_op.getResult();
+    Value symbolic_domain_inner = symbolic_domain_end_row_op->getOperand(0);
 
     /// Unpack the symbolic_domain
     mlir::OpBuilder::InsertionGuard guard(rewriter);
@@ -1628,33 +1693,49 @@ namespace
     inner_symbolic_domain_info.pos = unpack_symbolic_domain.getResult(4);
     inner_symbolic_domain_info.mark_array = unpack_symbolic_domain.getResult(5);
 
-    /// Insert the extract_slice
-    Value input = inner_symbolic_domain_info.pos;
-    llvm::SmallVector<Value> dynamic_offsets = {inner_symbolic_domain_info.pos_size};
-    int64_t os_dim = 0;
-    int64_t nDims = rankedTensorType.getRank();
-    llvm::SmallVector<Value> sizes;
-    for (int64_t i = 0; i < nDims; ++i) {
-      if (i != os_dim && rankedTensorType.getDimSize(i) == ShapedType::kDynamic) {
-        Value idx = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(i));
-        sizes.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), input, idx));
-      }
-    }
-    SmallVector<int64_t> static_offsets(nDims, 0);
-    static_offsets[os_dim] = ShapedType::kDynamic;
-    llvm::SmallVector<int64_t> static_sizes(rankedTensorType.getShape());
-    static_sizes[os_dim] = 1;
-    auto slice = rewriter.create<tensor::ExtractSliceOp>(
+//    /// Insert the extract_slice
+//    Value input = inner_symbolic_domain_info.pos;
+//    llvm::SmallVector<Value> dynamic_offsets = {inner_symbolic_domain_info.pos_size};
+//    int64_t os_dim = 0;
+//    int64_t nDims = rankedTensorType.getRank();
+//    llvm::SmallVector<Value> sizes;
+//    for (int64_t i = 0; i < nDims; ++i) {
+//      if (i != os_dim && rankedTensorType.getDimSize(i) == ShapedType::kDynamic) {
+//        Value idx = rewriter.create<index::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(i));
+//        sizes.push_back(rewriter.create<tensor::DimOp>(loc, rewriter.getIndexType(), input, idx));
+//      }
+//    }
+//    SmallVector<int64_t> static_offsets(nDims, 0);
+//    static_offsets[os_dim] = ShapedType::kDynamic;
+//    llvm::SmallVector<int64_t> static_sizes(rankedTensorType.getShape());
+//    static_sizes[os_dim] = 1;
+//    auto slice = rewriter.create<tensor::ExtractSliceOp>(
+//        loc,
+//        /*result_type=*/RankedTensorType::get(static_sizes, rankedTensorType.getElementType()),
+//        /*tensor_source=*/input,
+//        /*dynamic_offsets=*/dynamic_offsets,
+//        /*dynamic_sizes=*/sizes,
+//        /*dynamic_strides=*/ValueRange(),
+//        /*static_offsets=*/rewriter.getDenseI64ArrayAttr(static_offsets),
+//        /*static_sizes=*/rewriter.getDenseI64ArrayAttr(static_sizes),
+//        /*static_strides=*/rewriter.getDenseI64ArrayAttr(llvm::SmallVector<int64_t>(nDims, 1))
+//        );
+    /// Prepare the crd_size
+    Type pos_element_type = mlir::getElementTypeOrSelf(inner_symbolic_domain_info.pos);
+    RankedTensorType pos_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic},
+        /*elementType=*/pos_element_type);
+    Value crd_size = rewriter.createOrFold<arith::IndexCastOp>(loc,
+                                                               rewriter.getI64Type(),
+                                                               inner_symbolic_domain_info.crd_size);
+    Value zero = rewriter.create<arith::ConstantOp>(loc,
+                                                    rewriter.getIndexType(),
+                                                    rewriter.getIndexAttr(0));
+    Value pos_tensor_inserted = rewriter.create<tensor::InsertOp>(
         loc,
-        /*result_type=*/RankedTensorType::get(static_sizes, rankedTensorType.getElementType()),
-        /*tensor_source=*/input,
-        /*dynamic_offsets=*/dynamic_offsets,
-        /*dynamic_sizes=*/sizes,
-        /*dynamic_strides=*/ValueRange(),
-        /*static_offsets=*/rewriter.getDenseI64ArrayAttr(static_offsets),
-        /*static_sizes=*/rewriter.getDenseI64ArrayAttr(static_sizes),
-        /*static_strides=*/rewriter.getDenseI64ArrayAttr(llvm::SmallVector<int64_t>(nDims, 1))
-        );
+        /*return_type=*/pos_tensor_type,
+        /*element=*/crd_size,
+        /*tensor=*/inner_symbolic_domain_info.pos,
+        /*index=*/zero);
 
     /// Replace the element in the scf.forall.in_parallel
     auto par_op = forall_loop.getTerminator();
@@ -1668,19 +1749,19 @@ namespace
     rewriter.setInsertionPoint(old_insert_slice);
     auto new_insert_slice = rewriter.create<tensor::ParallelInsertSliceOp>(
         loc,
-        /*src_tensor=*/slice,
+        /*src_tensor=*/pos_tensor_inserted,
         /*dst_tensor=*/arg_tensor,
-        /*dynamic_offsets=*/dynamic_offsets,
-        /*dynamic_sizes=*/sizes,
+        /*dynamic_offsets=*/ValueRange{slice_offset},
+        /*dynamic_sizes=*/ValueRange{slice_size},
         /*dynamic_strides=*/ValueRange(),
-        /*static_offsets=*/rewriter.getDenseI64ArrayAttr(static_offsets),
-        /*static_sizes=*/rewriter.getDenseI64ArrayAttr(static_sizes),
-        /*static_strides=*/rewriter.getDenseI64ArrayAttr(llvm::SmallVector<int64_t>(nDims, 1))
-        );
+        /*static_offsets=*/llvm::SmallVector<int64_t>{ShapedType::kDynamic},
+        /*static_sizes=*/llvm::SmallVector<int64_t>{ShapedType::kDynamic},
+        /*static_strides=*/llvm::SmallVector<int64_t>{1});
     rewriter.replaceOp(old_insert_slice, new_insert_slice);
+    rewriter.eraseOp(symbolic_domain_end_row_op);
 
-    comet_vdump(slice.getResult());
-    comet_vdump(new_insert_slice);
+//    comet_vdump(slice.getResult());
+//    comet_vdump(new_insert_slice);
     comet_vdump(forall_loop);
     comet_debug() << "\n";
   }
@@ -1839,11 +1920,15 @@ namespace
                                                         symbolic_domain_info/*out*/);
 
       /// Generate the new symbolic_domain.
+      Value slice_offset;
+      Value slice_size;
       mlir::UnrealizedConversionCastOp symbolic_domain_inner =
           CreateInnerSymbolicDomain(new_forall_loop,
                                     rewriter,
                                     loc,
-                                    symbolic_domain_info);
+                                    symbolic_domain_info,
+                                    slice_offset/*out*/,
+                                    slice_size/*out*/);
       comet_vdump(symbolic_domain_inner);
       comet_vdump(new_forall_loop);
 
@@ -1868,6 +1953,8 @@ namespace
       /// create `extract_slice` from this new `pos`, then do `parallel_insert_slice` from the slice to
       /// the input scf.forall's argumet `pos`
       InsertExtractSliceForPos(new_forall_loop,
+                               slice_offset,
+                               slice_size,
                                rewriter,
                                loc);
 
@@ -2934,6 +3021,8 @@ namespace
                                                 NumericSparseTensorInfo &sparseTensorInfo,
                                                 NumericSparseTensorInfo &innerSparseTensorInfo,
                                                 Type sparseTensorType,
+                                                Value row_offset,
+                                                Value row_size,
                                                 mlir::IRRewriter &rewriter,
                                                 mlir::Location &loc)
   {
@@ -2952,28 +3041,30 @@ namespace
     /// The crds and vals are from the unpacked sparse tensor returned by the while loop.
     Value crds_returned = unpacked_sparse_tensor.getResult(5);
     Value vals_returned = unpacked_sparse_tensor.getResult(6);
-    Value index = new_forall_loop.getInductionVar(0);
-    Value pos = sparseTensorInfo.A2_pos;
-    Type pos_element_type = mlir::getElementTypeOrSelf(pos);
-    Value offset = rewriter.create<tensor::ExtractOp>(loc,
-        /*return_type=*/pos_element_type,
-        /*tensor=*/pos,
-        /*index=*/index);
-    Value offset_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset);
-    Value const_one = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
-    Value index_plus_one = rewriter.create<arith::AddIOp>(loc, index, const_one);
-    Value offset_next = rewriter.create<tensor::ExtractOp>(loc,
-                                                           pos_element_type,
-                                                           pos,
-                                                           index_plus_one);
-    Value offset_next_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset_next);
-    Value size = rewriter.create<arith::SubIOp>(loc, offset_next_index, offset_index);
+//    Value index = new_forall_loop.getInductionVar(0);
+//    Value pos = sparseTensorInfo.A2_pos;
+//    Type pos_element_type = mlir::getElementTypeOrSelf(pos);
+//    Value offset = rewriter.create<tensor::ExtractOp>(loc,
+//        /*return_type=*/pos_element_type,
+//        /*tensor=*/pos,
+//        /*index=*/index);
+//    Value offset_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset);
+//    Value const_one = rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexType(), rewriter.getIndexAttr(1));
+//    Value index_plus_one = rewriter.create<arith::AddIOp>(loc, index, const_one);
+//    Value offset_next = rewriter.create<tensor::ExtractOp>(loc,
+//                                                           pos_element_type,
+//                                                           pos,
+//                                                           index_plus_one);
+//    Value offset_next_index = rewriter.createOrFold<arith::IndexCastOp>(loc, rewriter.getIndexType(), offset_next);
+//    Value size = rewriter.create<arith::SubIOp>(loc, offset_next_index, offset_index);
 //    Type crds_element_type = mlir::getElementTypeOrSelf(crds_returned);
 //    Type vals_element_type = mlir::getElementTypeOrSelf(vals_returned);
 //    RankedTensorType crds_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/crds_element_type);
 //    RankedTensorType vals_tensor_type = mlir::RankedTensorType::get(/*shape=*/{ShapedType::kDynamic}, /*elementType=*/vals_element_type);
-    llvm::SmallVector<Value> dynamic_offsets = {offset_index};
-    llvm::SmallVector<Value> dynamic_sizes = {size};
+//    llvm::SmallVector<Value> dynamic_offsets = {offset_index};
+//    llvm::SmallVector<Value> dynamic_sizes = {size};
+    llvm::SmallVector<Value> dynamic_offsets = {row_offset};
+    llvm::SmallVector<Value> dynamic_sizes = {row_size};
     llvm::SmallVector<Value> dynamic_strides;
     llvm::SmallVector<int64_t> static_offsets = {ShapedType::kDynamic};
     llvm::SmallVector<int64_t> static_sizes = {ShapedType::kDynamic};
@@ -3248,6 +3339,8 @@ namespace
                                                  sparseTensorInfo,
                                                  innerSparseTensorInfo,
                                                  sparseTensorType,
+                                                 row_offset,
+                                                 row_size,
                                                  rewriter,
                                                  loc);
         comet_vdump(new_forall_loop);
