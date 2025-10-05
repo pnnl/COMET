@@ -17,7 +17,8 @@ set(SOURCES
   StatUtils.cpp
   SparseUtils.cpp
   TransposeUtils.cpp
-  
+  DoubleBufferUtils.cpp
+
 )
 
 if(ENABLE_NVIDIA_GPU_BACKEND)
