@@ -76,6 +76,19 @@ void comet_print_memref_to_memref_f64(int64_t A_memref_size, void *A_memref)
   _milr_ciface_comet_print_memref_to_memref_f64(&A_unranked);
 }
 
+
+void comet_print_matrix_f64(int64_t A_memref_size, void *A_memref, int64_t A1, int64_t A2)
+{
+  double *data = get_pointer_from_memref<double>(A_memref_size, A_memref);
+//  std::cout << "memref_size: " << A_memref_size << std::endl;
+  for (int64_t i = 0; i < A1; ++i) {
+    for (int64_t j = 0; j < A2; ++j) {
+      std::cout << data[i * A2 + j] << " ";
+    }
+    std::cout << std::endl;
+  }
+}
+
 int8_t comet_atomic_load_n_i8(int64_t memref_size, void *memref)
 {
 //  UnrankedMemRefType<int8_t> flag_unranked = {memref_size, memref};
@@ -227,59 +240,59 @@ void _background_process_v1(
 //  return;
 //  /// end test
 
-//  for (int64_t ii = 0; ii < A1; ii += A1_tile) {
-//    int64_t A_block_rows = std::min(A1_tile, A1 - ii);
-//    for (int64_t kk = 0; kk < A2; kk += A2_tile) {
-//      int64_t A_block_cols = std::min(A2_tile, A2 - kk);
-//      int64_t B_block_rows = A_block_cols;
-//
-//      DynamicMemRefType<double> A_buffer2_inside_dynamic(A_buffer2_dynamic.data[0]);
-//      double *A_buffer2 = A_buffer2_inside_dynamic.data;
-////      _copy_to_buffer(A,
-////                      A1, A2,
-////                      /*A1_offset=*/ii, /*A2_offset=*/kk,
-////                      A_buffer2,
-////                      A1_tile, A2_tile,
-////                      A_block_rows, A_block_cols);
-//////      while (A_buffer_is_ready->load(std::memory_order_acquire)) {
-////      while (_atomic_load_n_i8(A_buffer_is_ready)) {
-////        /// test
-////        std::cout << "A_buffer_is_ready. Spin in C++." << std::endl;
-////        std::this_thread::sleep_for(std::chrono::seconds(1));
-////        /// end test
-////        ;  /// Spin
-////      }
-//////      _swap_buffer(A_buffer1, A_buffer2);
-////      _swap_buffer(A_buffer1_dynamic, A_buffer2_dynamic);
-//////      A_buffer_is_ready->store(true, std::memory_order_release);
-////      _atomic_store_n_i8(A_buffer_is_ready, (int8_t) 1);
-//
-////      for (int64_t jj = 0; jj < B2; jj += B2_tile) {
-////        int64_t B_block_cols = std::min(B2_tile, B2 - jj);
-////
-////        DynamicMemRefType<double> B_buffer2_inside_dynamic(B_buffer2_dynamic.data[0]);
-////        double *B_buffer2 = B_buffer2_inside_dynamic.data;
-////        _copy_to_buffer(B,
-////                        B1, B2,
-////                        /*B1_offset=*/kk, /*B2_offset=*/jj,
-////                        B_buffer2,
-////                        B1_tile, B2_tile,
-////                        B_block_rows, B_block_cols);
-//////        while (B_buffer_is_ready->load(std::memory_order_acquire)) {
-////        while (_atomic_load_n_i8(B_buffer_is_ready)) {
-////          /// test
-////          std::cout << "B_buffer_is_ready. Spin in C++." << std::endl;
-////          std::this_thread::sleep_for(std::chrono::seconds(1));
-////          /// end test
-////          ; /// Spin
-////        }
-//////        _swap_buffer(B_buffer1, B_buffer2);
-////        _swap_buffer(B_buffer1_dynamic, B_buffer2_dynamic);
-//////        B_buffer_is_ready->store(true, std::memory_order_release);
-////        _atomic_store_n_i8(B_buffer_is_ready, (int8_t) 1);
-////      }
-//    }
-//  }
+  for (int64_t ii = 0; ii < A1; ii += A1_tile) {
+    int64_t A_block_rows = std::min(A1_tile, A1 - ii);
+    for (int64_t kk = 0; kk < A2; kk += A2_tile) {
+      int64_t A_block_cols = std::min(A2_tile, A2 - kk);
+      int64_t B_block_rows = A_block_cols;
+
+      DynamicMemRefType<double> A_buffer2_inside_dynamic(A_buffer2_dynamic.data[0]);
+      double *A_buffer2 = A_buffer2_inside_dynamic.data;
+      _copy_to_buffer(A,
+                      A1, A2,
+                      /*A1_offset=*/ii, /*A2_offset=*/kk,
+                      A_buffer2,
+                      A1_tile, A2_tile,
+                      A_block_rows, A_block_cols);
+//      while (A_buffer_is_ready->load(std::memory_order_acquire)) {
+      while (_atomic_load_n_i8(A_buffer_is_ready)) {
+        /// test
+        std::cout << "A_buffer_is_ready. Spin in C++." << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        /// end test
+        ;  /// Spin
+      }
+//      _swap_buffer(A_buffer1, A_buffer2);
+      _swap_buffer(A_buffer1_dynamic, A_buffer2_dynamic);
+//      A_buffer_is_ready->store(true, std::memory_order_release);
+      _atomic_store_n_i8(A_buffer_is_ready, (int8_t) 1);
+
+      for (int64_t jj = 0; jj < B2; jj += B2_tile) {
+        int64_t B_block_cols = std::min(B2_tile, B2 - jj);
+
+        DynamicMemRefType<double> B_buffer2_inside_dynamic(B_buffer2_dynamic.data[0]);
+        double *B_buffer2 = B_buffer2_inside_dynamic.data;
+        _copy_to_buffer(B,
+                        B1, B2,
+                        /*B1_offset=*/kk, /*B2_offset=*/jj,
+                        B_buffer2,
+                        B1_tile, B2_tile,
+                        B_block_rows, B_block_cols);
+//        while (B_buffer_is_ready->load(std::memory_order_acquire)) {
+        while (_atomic_load_n_i8(B_buffer_is_ready)) {
+          /// test
+          std::cout << "B_buffer_is_ready. Spin in C++." << std::endl;
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+          /// end test
+          ; /// Spin
+        }
+//        _swap_buffer(B_buffer1, B_buffer2);
+        _swap_buffer(B_buffer1_dynamic, B_buffer2_dynamic);
+//        B_buffer_is_ready->store(true, std::memory_order_release);
+        _atomic_store_n_i8(B_buffer_is_ready, (int8_t) 1);
+      }
+    }
+  }
 }
 
 void comet_initialize_double_buffer_thread(
@@ -300,10 +313,28 @@ void comet_initialize_double_buffer_thread(
     /* uint64_t B2_tile */          int64_t B2_tile,
     /* int8_t *B_buffer_is_ready */ int64_t B_buffer_flag_memref_size, void *B_buffer_flag_memref)
 {
-//  std::thread background_thread(background_process, std::ref(A_buffer1_dynamic));
-//  background_thread.join();
-  std::thread background_thread(
-  /* function_name */             _background_process_v1,
+//  std::thread background_thread(
+//  /* function_name */             _background_process_v1,
+//  /* double *A */                 A_memref_size, A_memref,
+//  /* uint64_t A1 */               A1,
+//  /* uint64_t A2 */               A2,
+//  /* double **A_buffer1 */        A_buffer1_mm_size, A_buffer1_mm,
+//  /* double **A_buffer2 */        A_buffer2_mm_size, A_buffer2_mm,
+//  /* uint64_t A1_tile */          A1_tile,
+//  /* uint64_t A2_tile */          A2_tile,
+//  /* int8_t *A_buffer_is_ready */ A_buffer_flag_memref_size, A_buffer_flag_memref,
+//  /* double *B */                 B_memref_size, B_memref,
+//  /* uint64_t B1 */               B1,
+//  /* uint64_t B2 */               B2,
+//  /* double **B_buffer1 */        B_buffer1_mm_size, B_buffer1_mm,
+//  /* double **B_buffer2 */        B_buffer2_mm_size, B_buffer2_mm,
+//  /* uint64_t B1_tile */          B1_tile,
+//  /* uint64_t B2_tile */          B2_tile,
+//  /* int8_t *B_buffer_is_ready */ B_buffer_flag_memref_size, B_buffer_flag_memref);
+//  background_thread.detach();
+
+  /// Called in MLIR by async dialect, so no C++ thread is needed.
+  _background_process_v1(
   /* double *A */                 A_memref_size, A_memref,
   /* uint64_t A1 */               A1,
   /* uint64_t A2 */               A2,
@@ -320,5 +351,4 @@ void comet_initialize_double_buffer_thread(
   /* uint64_t B1_tile */          B1_tile,
   /* uint64_t B2_tile */          B2_tile,
   /* int8_t *B_buffer_is_ready */ B_buffer_flag_memref_size, B_buffer_flag_memref);
-  background_thread.join();
 }

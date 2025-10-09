@@ -35,6 +35,7 @@ void comet_initialize_double_buffer_thread(
     /* uint64_t B2_tile */          int64_t B2_tile,
     /* int8_t *B_buffer_is_ready */ int64_t B_buffer_flag_memref_size, void *B_buffer_flag_memref);
 void comet_print_memref_to_memref_f64(int64_t A_memref_size, void *A_memref);
+void comet_print_matrix_f64(int64_t A_memref_size, void *A_memref, int64_t A1, int64_t A2);
 int8_t comet_atomic_load_n_i8(int64_t memref_size, void *memref);
 void comet_atomic_store_n_i8(int64_t memref_size, void *memref, int8_t value);
 void comet_swap_buffers(int64_t memref1_size, void *memref1, int64_t memref2_size, void *memref2);
