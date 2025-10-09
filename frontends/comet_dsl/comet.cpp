@@ -770,6 +770,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     /// Convert Func to LLVM (always needed).
     pm.addPass(mlir::createConvertControlFlowToLLVMPass());
     pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
+    pm.addPass(mlir::createAsyncToAsyncRuntimePass());
+    pm.addPass(mlir::createAsyncRuntimeRefCountingPass());
+    pm.addPass(mlir::createConvertAsyncToLLVMPass());
     pm.addPass(mlir::createConvertFuncToLLVMPass());
     /// Convert Index to LLVM (always needed).
     pm.addPass(mlir::createConvertIndexToLLVMPass());
