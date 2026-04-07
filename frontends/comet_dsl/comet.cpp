@@ -146,11 +146,11 @@ mlir::OwningOpRef<mlir::ModuleOp> createModuleFromString(mlir::MLIRContext &cont
     llvm::SourceMgr sourceMgr;
     sourceMgr.AddNewSourceBuffer(
         llvm::MemoryBuffer::getMemBuffer(moduleStr), llvm::SMLoc());
-    
+
     mlir::OwningOpRef<mlir::ModuleOp> module = mlir::parseSourceFile<mlir::ModuleOp>(sourceMgr, &context);
     if (!module)
         llvm::errs() << "Error: failed to parse module from string.\n";
-    
+
     return module;
 }
 
@@ -191,15 +191,15 @@ static cl::opt<bool> emitLLVM("emit-llvm", cl::desc("output the LLVM dialect dum
 /// Godegen Target
 /// =============================================================================
 
-static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Code generation target"), 
+static cl::opt<TargetDevice> CodegenTarget("target", cl::init(CPU), cl::desc("Code generation target"),
   cl::values(
       clEnumVal(CPU, "Codegen target is CPU")
       #ifdef ENABLE_GPU_TARGET
-      , 
+      ,
       clEnumVal(GPU, "Codegen target is GPU")
       #endif
       #ifdef ENABLE_FPGA_TARGET
-      , 
+      ,
       clEnumVal(FPGA, "Codegen target is FPGA")
       #endif
   )
@@ -314,9 +314,21 @@ static cl::opt<bool> IsLoweringToTriton("convert-to-triton",
                                      cl::desc("Output Triton dialect after lowering all operations"));
 
 static cl::opt<bool> IsGeneratingGpuAllocsAndTransfers("gpu-generate-allocs-transfers", cl::init(true),
-  
+
   cl::desc("Whether to generate GPU allocations and transfers"));
 #endif
+
+///  =============================================================================
+///  Double Buffer optimization for GEMM
+///  =============================================================================
+static cl::opt<bool> OptDoubleBuffer("opt-double-buffer", cl::init(false),
+                                     cl::desc("Enable double buffer transformation for GEMM operations"));
+static cl::opt<int> DoubleBufferNumComputeWorkers("double-buffer-compute-workers", cl::init(4),
+                                                   cl::desc("Number of compute workers for double buffer"));
+static cl::opt<int> DoubleBufferNumAuxWorkers("double-buffer-aux-workers", cl::init(1),
+                                               cl::desc("Number of auxiliary workers for double buffer"));
+static cl::opt<int> DoubleBufferTileSize("double-buffer-tile-size", cl::init(2),
+                                          cl::desc("Tile size for double buffer blocking"));
 
 /// =============================================================================
 /// Lowering to LLVM
@@ -548,7 +560,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   /// Lowering all the operations to loops
   /// =============================================================================
   if (IsLoweringtoSCF || emitLoops || emitLLVM || emitTriton_)
-  { 
+  {
     /// =============================================================================
     /// Lowering of other operations such as transpose, sum, etc. to SCF dialect
     /// =============================================================================
@@ -560,6 +572,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     /// Finally lowering index tree to SCF dialect
     optPM.addPass(mlir::comet::createLowerIndexTreeToSCFPass());
+
+    /// Double buffer transformation for GEMM (optional)
+    if (OptDoubleBuffer) {
+      optPM.addPass(mlir::comet::createConvertToDoubleBufferPass(
+          DoubleBufferNumComputeWorkers, DoubleBufferNumAuxWorkers, DoubleBufferTileSize));
+    }
+
     optPM.addPass(mlir::comet::createWorkspaceOptimizationsPass());
     optPM.addPass(mlir::comet::createConvertSymbolicDomainsPass());
     optPM.addPass(mlir::comet::createSparseTensorConversionPass());
@@ -606,7 +625,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   mlir::OpPassManager &late_lowering_pm = pm.nest<mlir::func::FuncOp>();
   late_lowering_pm.addPass(mlir::comet::createSTCRemoveDeadOpsPass());
   late_lowering_pm.addPass(mlir::comet::createLateLoweringPass());
-  
+
   pm.addPass(mlir::createCanonicalizerPass());
   pm.addPass(mlir::createCSEPass());
   pm.addPass(mlir::memref::createFoldMemRefAliasOpsPass());
@@ -677,7 +696,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
   #endif
 
 #endif
-  
+
 #ifdef ENABLE_FPGA_TARGET
 
   if (CodegenTarget == TargetDevice::FPGA && (isLoweringToLLVM || emitLLVM))
@@ -688,7 +707,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     {
       pm.addPass(mlir::comet::createConvertGPUKernelToOCLSPIRVPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, inputFilename.c_str()));
     }
-    else 
+    else
     {
       pm.addPass(mlir::comet::createConvertGPUKernelToOCLSPIRVPass(GPUBlockSizeX, GPUBlockSizeY, GPUBlockSizeR, sprirvBinOutPath.c_str()));
     }
@@ -831,11 +850,11 @@ int main(int argc, char **argv)
   registerBuiltinDialectTranslation(context);
   mlir::registerGPUDialectTranslation(context);
   #endif
-  
+
   #ifdef ENABLE_AMD_GPU_BACKEND
   mlir::registerROCDLDialectTranslation(context);
   #endif
-  
+
   #ifdef ENABLE_NVIDIA_GPU_BACKEND
   registerNVVMDialectTranslation(context);
   LLVMInitializeNVPTXTargetInfo();

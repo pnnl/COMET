@@ -1,6 +1,7 @@
 add_subdirectory(IndexTreeToSCF)
 add_subdirectory(TensorAlgebraToIndexTree)
 add_subdirectory(TensorAlgebraToSCF)
+add_subdirectory(DoubleBuffer)
 if(ENABLE_FPGA_TARGET)
 add_subdirectory(ParallelLoopsToGpuFPGA)
 add_subdirectory(GpuToOCLSPIRV)

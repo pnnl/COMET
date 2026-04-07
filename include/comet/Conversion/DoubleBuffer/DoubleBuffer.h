@@ -1,4 +1,4 @@
-//===- Passes.h - Conversion Pass Construction and Registration -----------===//
+//===- DoubleBuffer.h - Double Buffer Pass --------------------*- C++ -*-===//
 //
 // Copyright 2022 Battelle Memorial Institute
 //
@@ -20,23 +20,40 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //===----------------------------------------------------------------------===//
+//
+// This file declares the pass to convert dense GEMM operations to
+// double-buffered parallel execution with compute and auxiliary workers.
+//
+//===----------------------------------------------------------------------===//
 
-#ifndef COMET_CONVERSION_PASSES_H
-#define COMET_CONVERSION_PASSES_H
+#ifndef COMET_CONVERSION_DOUBLEBUFFER_H
+#define COMET_CONVERSION_DOUBLEBUFFER_H
 
-#include "comet/Conversion/IndexTreeToSCF/IndexTreeToSCF.h"
-#include "comet/Conversion/TensorAlgebraToIndexTree/TensorAlgebraToIndexTree.h"
-#include "comet/Conversion/TensorAlgebraToSCF/TensorAlgebraToSCF.h"
-#include "comet/Conversion/DoubleBuffer/DoubleBuffer.h"
+#include "mlir/Support/LLVM.h"
 
 namespace mlir
 {
+    class Pass;
+
     namespace comet
     {
-/// Generate the code for registering conversion passes.
-#define GEN_PASS_REGISTRATION
-#include "comet/Conversion/Passes.h.inc"
-    }
-}
 
-#endif // COMET_CONVERSION_PASSES_H
+    #define GEN_PASS_DECL_CONVERTTODOUBLEBUFFER
+    #include "comet/Conversion/Passes.h.inc"
+
+    /// Create a pass that converts dense GEMM to double-buffered parallel execution
+    /// using default parameters.
+    std::unique_ptr<Pass> createConvertToDoubleBufferPass();
+
+    /// Create a pass that converts dense GEMM to double-buffered parallel execution
+    /// with custom parameters.
+    /// @param numComputeWorkers Number of compute workers to spawn
+    /// @param numAuxWorkers Number of auxiliary (prefetch) workers to spawn
+    /// @param tileSize Tile size for blocking the matrices
+    std::unique_ptr<Pass> createConvertToDoubleBufferPass(
+        int32_t numComputeWorkers, int32_t numAuxWorkers, int32_t tileSize);
+
+    } // namespace comet
+} // namespace mlir
+
+#endif // COMET_CONVERSION_DOUBLEBUFFER_H

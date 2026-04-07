@@ -105,4 +105,33 @@ def SparseTensorConversionPass : Pass<"convert-sparse-tensor"> {
   ];
 }
 
+///===----------------------------------------------------------------------===//
+/// DoubleBuffer - Convert GEMM to double-buffered parallel execution
+///===----------------------------------------------------------------------===//
+
+def ConvertToDoubleBuffer : Pass<"convert-to-double-buffer"> {
+  let summary = "Convert dense GEMM to double-buffered parallel execution";
+  let description = [{
+    This pass transforms dense matrix multiplication (GEMM) operations into
+    a double-buffered parallel execution pattern with compute workers and
+    auxiliary (data prefetch) workers.
+  }];
+  let constructor = "comet::createConvertToDoubleBufferPass()";
+  let dependentDialects = [
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "arith::ArithDialect",
+    "func::FuncDialect",
+    "async::AsyncDialect"
+  ];
+  let options = [
+    Option<"numComputeWorkers", "num-compute-workers", "int32_t",
+           /*default*/"4", "Number of compute workers">,
+    Option<"numAuxWorkers", "num-aux-workers", "int32_t",
+           /*default*/"1", "Number of auxiliary workers">,
+    Option<"tileSize", "tile-size", "int32_t",
+           /*default*/"2", "Tile size for blocking">
+  ];
+}
+
 #endif /// COMET_CONVERSION_PASSES
